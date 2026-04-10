@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Aptos", "Avenir Next", "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", "Book Antiqua", "Palatino Linotype", serif;
+  --olive-deepest: #1c2209;
+  --olive-deep: #2e3a10;
+  --olive-mid: #4a5e1a;
+  --olive-bright: #6b8526;
+  --olive-light: #96b83d;
+  --olive-pale: #c4d97a;
+  --olive-wash: #e8f0c2;
+  --olive-cream: #f4f1e4;
+  --gold: #c9a227;
+  --gold-light: #e8c84a;
+  --cream: #fdfaf0;
+  --text-dark: #1a1f0a;
+  --text-mid: #3d4a1e;
+  --text-muted: #6b7a3d;
+  --white: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--text-dark);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+  color: var(--text-dark);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
