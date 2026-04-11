@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Headroom — Cash Flow Intelligence for SMBs</title>
+<style>
+:root{--olive-deepest:#1c2209;--olive-deep:#2e3a10;--olive-mid:#4a5e1a;--olive-bright:#6b8526;--olive-light:#96b83d;--olive-pale:#c4d97a;--olive-wash:#e8f0c2;--olive-cream:#f4f1e4;--gold:#c9a227;--gold-light:#e8c84a;--cream:#fdfaf0;--text-dark:#1a1f0a;--text-mid:#3d4a1e;--text-muted:#6b7a3d;--white:#ffffff;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background-color:var(--cream);color:var(--text-dark);font-family:"Aptos","Avenir Next","Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4,h5,h6{font-family:"Iowan Old Style","Book Antiqua","Palatino Linotype",serif;letter-spacing:-0.01em;color:var(--text-dark);}
+a{text-decoration:none;color:inherit;}
+.container{max-width:1280px;margin:0 auto;padding:0 2rem;}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:.75rem 1.5rem;border-radius:.5rem;font-weight:600;font-size:.875rem;cursor:pointer;transition:opacity .2s;}
+.btn:hover{opacity:.9;}
+.btn-primary{background-color:var(--olive-mid);color:var(--cream);}
+.btn-gold{background-color:var(--gold);color:var(--olive-deepest);}
+.btn-outline{background:transparent;border:1.5px solid var(--olive-mid);color:var(--text-mid);}
+/* Nav */
+nav{position:sticky;top:0;z-index:50;background-color:var(--olive-deepest);border-bottom:1px solid var(--olive-deep);}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px;}
+.nav-logo{font-family:"Iowan Old Style","Book Antiqua","Palatino Linotype",serif;font-size:1.25rem;font-weight:700;color:#fff;letter-spacing:-.02em;}
+.nav-links{display:flex;align-items:center;gap:1.5rem;}
+.nav-links a{font-size:.875rem;color:var(--olive-wash);transition:color .2s;}
+.nav-links a:hover{color:#fff;}
+.nav-actions{display:flex;align-items:center;gap:1rem;}
+.nav-actions a{font-size:.875rem;color:var(--olive-wash);}
+/* Hero */
+.hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#F4F1E4 0%,#E8F0C2 50%,#F4F1E4 100%);}
+.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;padding:6rem 0;}
+.hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.375rem .75rem;border-radius:9999px;font-size:.75rem;font-weight:600;background-color:rgba(201,162,39,.15);border:1px solid rgba(201,162,39,.4);color:#8B6A0A;margin-bottom:1.5rem;}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background-color:var(--gold);}
+.hero-title{font-size:3.5rem;line-height:1.1;margin-bottom:1.5rem;color:var(--text-dark);}
+.hero-title span{display:block;color:var(--olive-mid);}
+.hero-subtitle{font-size:1.125rem;line-height:1.7;color:var(--text-muted);max-width:480px;margin-bottom:2rem;}
+.hero-btns{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:2rem;}
+.hero-social{display:flex;align-items:center;gap:1.5rem;}
+.avatars{display:flex;}
+.avatar{width:28px;height:28px;border-radius:50%;background-color:var(--olive-mid);color:#fff;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin-right:-6px;border:2px solid var(--olive-cream);}
+.social-text{font-size:.75rem;color:var(--text-muted);margin-left:10px;}
+/* Dashboard Mockup */
+.mockup{border-radius:1rem;padding:1.25rem;background:linear-gradient(145deg,#2E3A10 0%,#1C2209 100%);border:1px solid #4A5E1A;}
+.mockup-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;}
+.mockup-label{font-size:.75rem;color:var(--olive-pale);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
+.mockup-sublabel{font-size:.75rem;color:var(--olive-mid);margin-top:2px;}
+.live-dot{display:flex;align-items:center;gap:6px;}
+.live-dot span:first-child{width:8px;height:8px;border-radius:50%;background-color:var(--olive-light);}
+.live-dot span:last-child{font-size:.75rem;color:var(--olive-light);}
+.mockup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.25rem;}
+.mockup-stat{border-radius:.75rem;padding:.75rem;background-color:rgba(74,94,26,.4);}
+.mockup-stat.danger{background-color:rgba(180,60,60,.25);border:1px solid rgba(239,68,68,.3);}
+.mockup-stat-label{font-size:.75rem;color:var(--olive-pale);margin-bottom:4px;}
+.mockup-stat-value{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.125rem;font-weight:700;color:var(--gold-light);}
+.mockup-stat-value.green{color:var(--olive-light);}
+.mockup-stat-value.red{color:#f87171;}
+.chart-wrap{border-radius:.75rem;padding:.75rem;background-color:rgba(28,34,9,.6);margin-bottom:1rem;}
+.chart-title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;}
+.chart-legend{display:flex;gap:.75rem;}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:.75rem;color:var(--olive-mid);}
+.legend-dot{width:8px;height:8px;border-radius:2px;}
+.bar-chart{display:flex;align-items:flex-end;gap:3px;height:80px;width:100%;padding:0 4px;}
+.bar{flex:1;border-radius:2px;min-width:0;}
+.mockup-alert{border-radius:.75rem;padding:.75rem;background-color:rgba(201,162,39,.15);border:1px solid rgba(201,162,39,.35);display:flex;gap:.75rem;}
+.alert-icon{width:24px;height:24px;border-radius:50%;background-color:rgba(201,162,39,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+.alert-title{font-size:.75rem;font-weight:600;color:var(--gold-light);}
+.alert-text{font-size:.75rem;color:var(--olive-pale);margin-top:2px;line-height:1.5;}
+/* Stats Strip */
+.stats-strip{background-color:var(--olive-deepest);padding:3rem 0;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;text-align:center;}
+.stat-value{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:2.25rem;font-weight:700;color:var(--gold-light);margin-bottom:.25rem;}
+.stat-label{font-size:.875rem;color:var(--olive-pale);}
+/* Features Grid */
+.features{padding:5rem 0;background-color:var(--olive-cream);}
+.section-eyebrow{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--olive-bright);margin-bottom:.75rem;}
+.section-title{font-size:2.25rem;margin-bottom:1rem;}
+.section-subtitle{font-size:1.125rem;color:var(--text-muted);max-width:600px;margin:0 auto 3.5rem;}
+.text-center{text-align:center;}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;}
+.feature-card{background:var(--white);border:1px solid var(--olive-wash);border-radius:1rem;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;transition:box-shadow .2s,transform .2s;}
+.feature-card:hover{box-shadow:0 8px 32px rgba(28,34,9,.1);transform:translateY(-2px);}
+.feature-icon{width:48px;height:48px;border-radius:.75rem;background-color:var(--olive-wash);display:flex;align-items:center;justify-content:center;}
+.feature-icon svg{width:24px;height:24px;color:var(--olive-mid);}
+.feature-tag{display:inline-block;font-size:.75rem;font-weight:600;padding:.25rem .625rem;border-radius:9999px;background-color:rgba(74,94,26,.15);color:#4A5E1A;align-self:flex-start;}
+.feature-title{font-size:1.125rem;font-family:"Iowan Old Style","Book Antiqua",serif;}
+.feature-desc{font-size:.875rem;color:var(--text-muted);line-height:1.65;}
+/* Credit Section */
+.credit{padding:5rem 0;background-color:var(--cream);}
+.credit-grid{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:start;}
+.credit-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2.5rem;}
+.credit-stat{background-color:var(--olive-cream);border:1px solid var(--olive-wash);border-radius:.75rem;padding:1rem;text-align:center;}
+.credit-stat-value{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.5rem;font-weight:700;color:var(--olive-mid);margin-bottom:.25rem;}
+.credit-stat-label{font-size:.75rem;color:var(--text-muted);}
+.credit-cards{display:flex;flex-direction:column;gap:1rem;}
+.credit-card{background:var(--white);border:1px solid var(--olive-wash);border-radius:.75rem;padding:1.25rem;display:flex;justify-content:space-between;align-items:center;}
+.credit-card-type{font-size:.875rem;font-weight:600;color:var(--text-dark);margin-bottom:.25rem;}
+.credit-badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.125rem .5rem;border-radius:9999px;margin-left:.5rem;}
+.credit-card-detail{font-size:.75rem;color:var(--text-muted);}
+.credit-card-amount{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.25rem;font-weight:700;color:var(--olive-mid);}
+.credit-info{background-color:rgba(201,162,39,.08);border:1px solid rgba(201,162,39,.3);border-radius:.75rem;padding:1.25rem;display:flex;gap:.75rem;}
+/* How It Works */
+.hiw{padding:5rem 0;background-color:var(--cream);}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;position:relative;}
+.steps::before{content:"";position:absolute;top:40px;left:5%;right:5%;height:2px;background:linear-gradient(to right,transparent,var(--olive-wash),transparent);}
+.step{display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;z-index:1;}
+.step-circle{width:80px;height:80px;border-radius:50%;background-color:var(--olive-deepest);border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;}
+.step-circle svg{width:28px;height:28px;color:var(--gold);}
+.step-num{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--olive-bright);margin-bottom:.5rem;}
+.step-title{font-size:1.25rem;font-family:"Iowan Old Style","Book Antiqua",serif;margin-bottom:.75rem;}
+.step-desc{font-size:.875rem;color:var(--text-muted);line-height:1.65;}
+/* Testimonials */
+.testimonials{padding:5rem 0;background-color:var(--olive-cream);}
+.testimonials-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;}
+.testimonial-card{background:var(--white);border:1px solid var(--olive-wash);border-radius:1rem;padding:1.75rem;display:flex;flex-direction:column;gap:1.25rem;box-shadow:0 2px 16px rgba(28,34,9,.06);}
+.stars{display:flex;gap:4px;}
+.stars svg{width:16px;height:16px;color:var(--gold);fill:var(--gold);}
+.testimonial-quote{font-family:"Iowan Old Style","Book Antiqua",serif;font-style:italic;font-size:1rem;color:var(--text-mid);line-height:1.7;}
+.testimonial-author{display:flex;align-items:center;gap:.75rem;margin-top:auto;}
+.author-avatar{width:40px;height:40px;border-radius:50%;background-color:var(--olive-mid);color:#fff;font-size:.875rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.author-name{font-size:.875rem;font-weight:600;color:var(--text-dark);}
+.author-role{font-size:.75rem;color:var(--text-muted);}
+/* CTA */
+.cta{padding:5rem 0;position:relative;overflow:hidden;background:radial-gradient(ellipse at center,#2E3A10 0%,#1C2209 70%);}
+.cta-inner{max-width:700px;margin:0 auto;text-align:center;position:relative;z-index:1;}
+.cta-eyebrow{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--gold);margin-bottom:1rem;}
+.cta-title{font-size:2.5rem;color:#fff;margin-bottom:1.25rem;}
+.cta-subtitle{font-size:1.125rem;color:var(--olive-pale);max-width:480px;margin:0 auto 2.5rem;}
+.cta-form{display:flex;gap:.75rem;max-width:440px;margin:0 auto;}
+.cta-input{flex:1;padding:.875rem 1rem;border-radius:.5rem;font-size:.875rem;background-color:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;outline:none;}
+.cta-input::placeholder{color:rgba(255,255,255,.4);}
+.cta-fine{font-size:.75rem;color:var(--olive-mid);margin-top:1.25rem;}
+/* Footer */
+footer{background-color:var(--olive-deepest);color:var(--olive-wash);padding:4rem 0;}
+.footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2.5rem;margin-bottom:3rem;}
+.footer-brand{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.25rem;font-weight:700;color:#fff;display:block;margin-bottom:1rem;}
+.footer-tagline{font-size:.875rem;color:var(--olive-pale);line-height:1.65;margin-bottom:1rem;}
+.footer-copy{font-size:.75rem;color:var(--olive-mid);}
+.footer-col-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#fff;margin-bottom:1rem;}
+.footer-links{list-style:none;display:flex;flex-direction:column;gap:.75rem;}
+.footer-links a,.footer-links span{font-size:.875rem;color:var(--olive-pale);transition:color .2s;}
+.footer-links a:hover{color:#fff;}
+.footer-bottom{border-top:1px solid var(--olive-deep);padding-top:2rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;}
+.footer-bottom-text{font-size:.75rem;color:var(--olive-mid);}
+.footer-socials{display:flex;gap:1.5rem;}
+.footer-socials a{font-size:.75rem;color:var(--olive-mid);transition:color .2s;}
+.footer-socials a:hover{color:var(--olive-pale);}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">Head<span style="color:var(--gold)">room</span></a>
+      <div class="nav-links">
+        <a href="features.html">Platform</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="credit.html">Credit rescue</a>
+        <a href="capital.html">Capital raise</a>
+        <a href="#">For advisors</a>
+      </div>
+      <div class="nav-actions">
+        <a href="#">Sign in</a>
+        <a href="#trial" class="btn btn-gold" style="padding:.5rem 1rem;border-radius:.375rem;">Start free trial</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Headroom cash flow intelligence
+        </div>
+        <h1 class="hero-title">
+          See your cash flow
+          <span>before the pressure hits.</span>
+        </h1>
+        <p class="hero-subtitle">
+          Headroom gives SMB owners an honest 90-day forecast with confidence bands, plain-language alerts, and fast access to credit or capital when timing gets tight.
+        </p>
+        <div class="hero-btns">
+          <a href="#trial" class="btn btn-primary">
+            Get my free forecast
+            <svg style="margin-left:8px;width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </a>
+          <a href="features.html" class="btn btn-outline">
+            Explore the 10 layers
+            <svg style="margin-left:8px;width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          </a>
+        </div>
+        <div class="hero-social">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="avatars">
+              <div class="avatar">CF</div>
+              <div class="avatar">AR</div>
+              <div class="avatar">FD</div>
+            </div>
+            <span class="social-text">Built for operators who need clarity before a cash crunch</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Mockup -->
+      <div>
+        <div class="mockup">
+          <div class="mockup-header">
+            <div>
+              <div class="mockup-label">Cash Flow Dashboard</div>
+              <div class="mockup-sublabel">Next 90 days</div>
+            </div>
+            <div class="live-dot">
+              <span></span>
+              <span>Live</span>
+            </div>
+          </div>
+          <div class="mockup-stats">
+            <div class="mockup-stat">
+              <div class="mockup-stat-label">Current Balance</div>
+              <div class="mockup-stat-value">$42.6K</div>
+            </div>
+            <div class="mockup-stat">
+              <div class="mockup-stat-label">Runway</div>
+              <div class="mockup-stat-value green">68 days</div>
+            </div>
+            <div class="mockup-stat danger">
+              <div class="mockup-stat-label">Low Point</div>
+              <div class="mockup-stat-value red">Day 41</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title-row">
+              <span style="font-size:.75rem;color:var(--olive-pale);">Cash flow (90 days)</span>
+              <div class="chart-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#96B83D;"></div>Healthy</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#C9A227;"></div>Caution</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Risk</div>
+              </div>
+            </div>
+            <div class="bar-chart">
+              <!-- Past bars (50% opacity): i0-9 -->
+              <div class="bar" style="height:97%;background:#96B83D80;"></div>
+              <div class="bar" style="height:92%;background:#96B83D80;"></div>
+              <div class="bar" style="height:100%;background:#96B83D80;"></div>
+              <div class="bar" style="height:88%;background:#96B83D80;"></div>
+              <div class="bar" style="height:82%;background:#96B83D80;"></div>
+              <div class="bar" style="height:73%;background:#C9A22780;"></div>
+              <div class="bar" style="height:65%;background:#C9A22780;"></div>
+              <div class="bar" style="height:56%;background:#ef444480;"></div>
+              <div class="bar" style="height:47%;background:#ef444480;"></div>
+              <div class="bar" style="height:41%;background:#ef444480;"></div>
+              <!-- Future bars (full opacity): i10-19 -->
+              <div class="bar" style="height:49%;background:#ef4444;"></div>
+              <div class="bar" style="height:59%;background:#C9A227;"></div>
+              <div class="bar" style="height:68%;background:#C9A227;"></div>
+              <div class="bar" style="height:76%;background:#96B83D;"></div>
+              <div class="bar" style="height:82%;background:#96B83D;"></div>
+              <div class="bar" style="height:80%;background:#96B83D;"></div>
+              <div class="bar" style="height:85%;background:#96B83D;"></div>
+              <div class="bar" style="height:92%;background:#96B83D;"></div>
+              <div class="bar" style="height:94%;background:#96B83D;"></div>
+              <div class="bar" style="height:89%;background:#96B83D;"></div>
+            </div>
+          </div>
+          <div class="mockup-alert">
+            <div class="alert-icon">
+              <svg width="14" height="14" fill="var(--gold)" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            </div>
+            <div>
+              <div class="alert-title">Threshold Alert</div>
+              <div class="alert-text">You fall below your safety threshold in 41 days. Follow up on invoices or compare capital options now.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS STRIP -->
+<section class="stats-strip">
+  <div class="container">
+    <div class="stats-grid">
+      <div><div class="stat-value">90 days</div><div class="stat-label">forward cash visibility</div></div>
+      <div><div class="stat-value">10 layers</div><div class="stat-label">from live data to capital access</div></div>
+      <div><div class="stat-value">500M+</div><div class="stat-label">SMBs in the global market</div></div>
+      <div><div class="stat-value">$75M</div><div class="stat-label">maximum annual Reg A+ raise path</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES GRID -->
+<section class="features">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:3.5rem;">
+      <p class="section-eyebrow">What Headroom covers</p>
+      <h2 class="section-title">Cash flow intelligence built for real SMB decisions</h2>
+      <p class="section-subtitle">From forecasting to rescue capital, each layer works together so you can see risk early, understand it clearly, and act before cash gets tight.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+        <span class="feature-tag">Forecasting layer</span>
+        <h3 class="feature-title">90-Day Forecast With Confidence Bands</h3>
+        <p class="feature-desc">Headroom turns live bank and accounting data into a rolling view of the next 90 days, so you can see likely cash gaps before they become operating problems.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+        <span class="feature-tag">Alert layer</span>
+        <h3 class="feature-title">Plain-Language Alerts And Insights</h3>
+        <p class="feature-desc">Instead of dashboard noise, Headroom explains what changed, why it matters, and what to do next in language owners and finance teams can actually use.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
+        <span class="feature-tag">Decision layer</span>
+        <h3 class="feature-title">Scenario Planning Before You Commit</h3>
+        <p class="feature-desc">Test hiring, inventory, payment delays, big contracts, or a slow month before making the move. Headroom shows the cash impact so you can decide with more confidence.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg></div>
+        <span class="feature-tag">Rescue layer</span>
+        <h3 class="feature-title">Embedded Credit Rescue</h3>
+        <p class="feature-desc">When a shortfall is coming, Headroom can surface financing options inside the workflow instead of forcing you to scramble after the fact.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
+        <span class="feature-tag">Capital layer</span>
+        <h3 class="feature-title">Community And Public Capital</h3>
+        <p class="feature-desc">Headroom goes beyond debt. The platform supports community-backed and public capital paths so SMBs can raise aligned growth funding when the time is right.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></div>
+        <span class="feature-tag">Platform layer</span>
+        <h3 class="feature-title">One Operating System For Cash Decisions</h3>
+        <p class="feature-desc">Forecasting, alerts, rescue financing, and capital planning work better together. Headroom brings the full operating loop into one place for SMB teams.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CREDIT SECTION -->
+<section class="credit">
+  <div class="container">
+    <div class="credit-grid">
+      <div>
+        <p class="section-eyebrow">Credit rescue</p>
+        <h2 style="font-size:2.25rem;margin-bottom:1.5rem;">Capital when you need it, not after the damage is done</h2>
+        <p style="font-size:1.125rem;color:var(--text-muted);line-height:1.7;margin-bottom:2rem;">Headroom's credit layer connects directly to your forecast. When a cash gap is coming, we surface pre-qualified options in context and show what repayment would do to the next 90 days.</p>
+        <div class="credit-stats">
+          <div class="credit-stat"><div class="credit-stat-value">48 hrs</div><div class="credit-stat-label">Average decision time</div></div>
+          <div class="credit-stat"><div class="credit-stat-value">$20K</div><div class="credit-stat-label">Typical rescue amount</div></div>
+          <div class="credit-stat"><div class="credit-stat-value">0</div><div class="credit-stat-label">Hard pulls to preview fit</div></div>
+        </div>
+        <a href="credit.html" class="btn btn-primary">
+          Explore credit rescue
+          <svg style="margin-left:8px;width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+        </a>
+        <p style="margin-top:.75rem;font-size:.75rem;color:var(--text-muted);">No hard credit pull to preview options</p>
+      </div>
+      <div class="credit-cards">
+        <div class="credit-card">
+          <div>
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem;">
+              <span class="credit-card-type">Revenue-based advance</span>
+              <span class="credit-badge" style="color:var(--olive-light);background:rgba(150,184,61,.15);">Fastest</span>
+            </div>
+            <div class="credit-card-detail">Repay from monthly revenue until the target return is met</div>
+          </div>
+          <div class="credit-card-amount">$35K</div>
+        </div>
+        <div class="credit-card">
+          <div>
+            <div style="margin-bottom:.25rem;"><span class="credit-card-type">Invoice financing</span></div>
+            <div class="credit-card-detail">Advance against unpaid invoices and settle on collection</div>
+          </div>
+          <div class="credit-card-amount">$18K</div>
+        </div>
+        <div class="credit-card">
+          <div>
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem;">
+              <span class="credit-card-type">Revolving credit line</span>
+              <span class="credit-badge" style="color:var(--gold);background:rgba(201,162,39,.12);">Flexible</span>
+            </div>
+            <div class="credit-card-detail">Draw as needed and pay interest only on what you use</div>
+          </div>
+          <div class="credit-card-amount">$50K</div>
+        </div>
+        <div class="credit-info">
+          <div style="flex-shrink:0;margin-top:2px;">
+            <svg width="20" height="20" fill="var(--gold)" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+          </div>
+          <div>
+            <p style="font-size:.875rem;font-weight:600;color:var(--gold);margin-bottom:.25rem;">How Headroom credit works</p>
+            <p style="font-size:.75rem;color:var(--text-muted);line-height:1.65;">We use your real cash flow data, not just a bureau score, to match you with lending partners that fit the business. Every offer is shown with its expected impact on runway.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="hiw">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:4rem;">
+      <p class="section-eyebrow">How it works</p>
+      <h2 class="section-title">From connected accounts to confident action</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-circle"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+        <p class="step-num">Step 01</p>
+        <h3 class="step-title">Connect</h3>
+        <p class="step-desc">Link bank accounts, QuickBooks, Xero, and manual cash commitments so Headroom starts with the real operating picture.</p>
+      </div>
+      <div class="step">
+        <div class="step-circle"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+        <p class="step-num">Step 02</p>
+        <h3 class="step-title">Normalize</h3>
+        <p class="step-desc">We clean transactions, map merchants, tag inflows and outflows, and detect recurring cash patterns in the background.</p>
+      </div>
+      <div class="step">
+        <div class="step-circle"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        <p class="step-num">Step 03</p>
+        <h3 class="step-title">Forecast</h3>
+        <p class="step-desc">The 90-day engine projects daily cash with confidence bands so you can see expected, downside, and upside outcomes.</p>
+      </div>
+      <div class="step">
+        <div class="step-circle"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg></div>
+        <p class="step-num">Step 04</p>
+        <h3 class="step-title">Act</h3>
+        <p class="step-desc">Get alerts, test scenarios, compare financing impact, and prepare for a raise before a timing problem turns into a crisis.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:3.5rem;">
+      <p class="section-eyebrow">What our customers say</p>
+      <h2 class="section-title">SMBs that sleep better at night</h2>
+      <p style="font-size:1.125rem;color:var(--text-muted);max-width:480px;margin:0 auto;">Real operators. Real cash decisions made earlier.</p>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card">
+        <div class="stars"><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></div>
+        <blockquote class="testimonial-quote">"Headroom changed how we run the restaurant. Instead of checking the bank balance and hoping, we now see the cash gap coming weeks ahead and can adjust staffing or vendor timing before it becomes urgent."</blockquote>
+        <div class="testimonial-author"><div class="author-avatar">MT</div><div><div class="author-name">Maya Torres</div><div class="author-role">Owner, Harborline Bistro</div></div></div>
+      </div>
+      <div class="testimonial-card">
+        <div class="stars"><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></div>
+        <blockquote class="testimonial-quote">"The scenario planner alone is worth it. We modeled hiring our next account manager, saw what it would do to runway, and made the decision with data instead of instinct."</blockquote>
+        <div class="testimonial-author"><div class="author-avatar">EB</div><div><div class="author-name">Evan Brooks</div><div class="author-role">Founder, Northstar Creative</div></div></div>
+      </div>
+      <div class="testimonial-card">
+        <div class="stars"><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg><svg viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></div>
+        <blockquote class="testimonial-quote">"When Headroom flagged a crunch around a delayed customer payment, we compared invoice financing inside the forecast and closed the gap without guessing what repayment would do to the next month."</blockquote>
+        <div class="testimonial-author"><div class="author-avatar">DR</div><div><div class="author-name">Danielle Reed</div><div class="author-role">Principal, Reed &amp; Sons Contracting</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="trial">
+  <div class="cta-inner">
+    <p class="cta-eyebrow">Free for your first 90 days</p>
+    <h2 class="cta-title">Get your first Headroom forecast</h2>
+    <p class="cta-subtitle">Connect your accounts, get your first 90-day forecast, and find out your runway in under 5 minutes. No credit card required.</p>
+    <form class="cta-form" onsubmit="this.innerHTML='<div style=\'color:var(--olive-light);font-weight:600;\'>You\'re on the list. We\'ll be in touch shortly.</div>';return false;">
+      <input class="cta-input" type="email" placeholder="your@email.com" required>
+      <button type="submit" class="btn btn-gold">Get my forecast</button>
+    </form>
+    <p class="cta-fine">No credit card | Cancel any time | Connect only the accounts you choose</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <span class="footer-brand">Head<span style="color:var(--gold)">room</span></span>
+        <p class="footer-tagline">Cash flow intelligence for SMBs with honest forecasting, embedded credit rescue, and capital readiness when timing matters.</p>
+        <p class="footer-copy">Copyright 2025 Headroom</p>
+      </div>
+      <div>
+        <h4 class="footer-col-title">Product</h4>
+        <ul class="footer-links">
+          <li><a href="features.html">Platform overview</a></li>
+          <li><a href="features.html">Forecasting</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="credit.html">Credit rescue</a></li>
+          <li><a href="capital.html">Capital raise</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-col-title">Platform</h4>
+        <ul class="footer-links">
+          <li><span>90-day forecast</span></li>
+          <li><span>Confidence bands</span></li>
+          <li><span>Alert engine</span></li>
+          <li><span>Credit rescue</span></li>
+          <li><span>Repayment simulation</span></li>
+          <li><span>Public capital workflows</span></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-col-title">Company</h4>
+        <ul class="footer-links">
+          <li><a href="#">About</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Careers</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="footer-bottom-text">Built for SMB operators who need clearer cash decisions before they need emergency financing.</p>
+      <div class="footer-socials">
+        <a href="#">Twitter / X</a>
+        <a href="#">LinkedIn</a>
+        <a href="#">Instagram</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

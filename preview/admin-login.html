@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login | Headroom</title>
+<style>
+:root{--olive-deepest:#1c2209;--olive-deep:#2e3a10;--olive-mid:#4a5e1a;--olive-bright:#6b8526;--olive-light:#96b83d;--olive-pale:#c4d97a;--olive-wash:#e8f0c2;--gold:#c9a227;--white:#ffffff;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem;background-color:var(--olive-deepest);font-family:"Aptos","Avenir Next","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;}
+.card{width:100%;max-width:360px;background-color:var(--olive-deep);border:1px solid #2e3a10;border-radius:1rem;padding:2rem;}
+.logo{text-align:center;margin-bottom:2rem;}
+.logo-text{font-family:"Iowan Old Style","Book Antiqua","Palatino Linotype",serif;font-size:1.5rem;font-weight:700;color:#fff;letter-spacing:-.02em;}
+.logo-sub{font-size:.875rem;color:var(--olive-wash);margin-top:.375rem;}
+label{display:block;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--olive-pale);margin-bottom:.375rem;}
+input{width:100%;padding:.625rem 1rem;border-radius:.5rem;font-size:.875rem;background-color:var(--olive-deepest);border:1px solid #3a4a1a;color:#fff;outline:none;transition:border-color .2s;}
+input::placeholder{color:rgba(255,255,255,.3);}
+input:focus{border-color:var(--gold);}
+.field{margin-bottom:1rem;}
+.error-box{background-color:rgba(180,40,40,.15);border:1px solid rgba(180,40,40,.4);color:#f87171;font-size:.75rem;padding:.625rem .75rem;border-radius:.5rem;margin-bottom:1rem;}
+.submit-btn{width:100%;margin-top:.5rem;padding:.75rem;border-radius:.5rem;font-size:.875rem;font-weight:600;background-color:var(--gold);color:var(--olive-deepest);border:none;cursor:pointer;transition:opacity .2s;}
+.submit-btn:hover{opacity:.9;}
+.submit-btn:disabled{opacity:.5;cursor:default;}
+.back-link{display:block;text-align:center;margin-top:1.5rem;font-size:.75rem;color:var(--olive-wash);}
+.back-link a{color:var(--olive-pale);text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-text">Head<span style="color:var(--gold)">room</span></div>
+    <div class="logo-sub">Admin Portal</div>
+  </div>
+
+  <form id="loginForm" onsubmit="handleLogin(event)">
+    <div class="field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" placeholder="admin" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+    </div>
+
+    <div class="error-box" id="errorBox" style="display:none;"></div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">Sign in</button>
+  </form>
+
+  <div class="back-link">
+    <a href="index.html">← Back to site</a> &nbsp;|&nbsp; <a href="admin-dashboard.html">Preview dashboard →</a>
+  </div>
+</div>
+
+<script>
+function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const errorBox = document.getElementById('errorBox');
+  const btn = document.getElementById('submitBtn');
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  errorBox.style.display = 'none';
+
+  // Simulate async login check (preview mode)
+  setTimeout(() => {
+    if (username === 'admin' && password === 'headroom@2024') {
+      btn.textContent = 'Redirecting…';
+      window.location.href = 'admin-dashboard.html';
+    } else {
+      errorBox.textContent = 'Invalid username or password';
+      errorBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  }, 600);
+}
+</script>
+
+</body>
+</html>

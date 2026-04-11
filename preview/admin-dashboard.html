@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard | Headroom</title>
+<style>
+:root{
+  --bg:#0f1505;--sidebar:#1c2209;--card:#1c2209;--border:#2e3a10;
+  --muted:#6b8526;--link:#96b83d;--active:#2e3a10;--active-text:#c4d97a;
+  --text:#e8f0c2;--gold:#c9a227;--gold-light:#e8c84a;
+  --red:#ef4444;--red-bg:rgba(239,68,68,.13);--red-border:rgba(239,68,68,.35);
+  --green:#4ade80;--green-bg:rgba(74,222,128,.1);--green-border:rgba(74,222,128,.28);
+  --yellow:#facc15;--yellow-bg:rgba(250,204,21,.1);--yellow-border:rgba(250,204,21,.28);
+  --blue:#60a5fa;--blue-bg:rgba(96,165,250,.1);--blue-border:rgba(96,165,250,.28);
+  --orange:#f97316;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:"Aptos","Avenir Next","Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;}
+h1,h2,h3{font-family:"Iowan Old Style","Book Antiqua","Palatino Linotype",serif;letter-spacing:-.01em;}
+a{text-decoration:none;color:inherit;}
+button,select,input{font-family:inherit;}
+
+/* ── Top bar ────────────────── */
+.topbar{height:44px;background:var(--sidebar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:1.5rem;flex-shrink:0;z-index:20;}
+.topbar-logo{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1rem;font-weight:700;color:#fff;letter-spacing:-.02em;}
+.topbar-sep{color:var(--border);font-size:1.25rem;}
+.topbar-links{display:flex;gap:1rem;}
+.topbar-links a{font-size:.78rem;color:var(--muted);transition:color .15s;}
+.topbar-links a:hover{color:var(--active-text);}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:1rem;}
+.topbar-user{font-size:.78rem;color:var(--muted);}
+.topbar-logout{font-size:.78rem;color:#fca5a5;cursor:pointer;background:none;border:none;padding:0;}
+
+/* ── Shell ──────────────────── */
+.shell{flex:1;display:flex;overflow:hidden;}
+
+/* ── Sidebar ────────────────── */
+aside{width:210px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;}
+.aside-search{padding:.625rem .75rem;border-bottom:1px solid var(--border);}
+.aside-search input{width:100%;padding:.375rem .625rem;border-radius:.35rem;background:var(--active);border:1px solid var(--border);color:var(--text);font-size:.78rem;outline:none;}
+.aside-search input::placeholder{color:var(--muted);}
+.aside-group-title{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#fff;padding:.625rem .75rem .25rem;background:rgba(150,184,61,.12);border-bottom:1px solid var(--border);margin-top:4px;}
+.aside-group-title:first-of-type{margin-top:0;}
+.aside-item{display:flex;align-items:center;justify-content:space-between;padding:.375rem .75rem;font-size:.78rem;color:var(--text);cursor:pointer;transition:background .1s;}
+.aside-item:hover{background:rgba(46,58,16,.6);}
+.aside-item.active{background:var(--active);color:var(--active-text);}
+.aside-item-label{flex:1;}
+.aside-actions{display:flex;gap:.375rem;opacity:0;transition:opacity .1s;}
+.aside-item:hover .aside-actions{opacity:1;}
+.aside-act{font-size:.7rem;color:var(--green);font-weight:700;cursor:pointer;background:none;border:none;padding:0;}
+.aside-act.view{color:var(--blue);}
+
+/* ── Main content ───────────── */
+main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.breadcrumb{padding:.625rem 1.5rem;font-size:.78rem;color:var(--muted);border-bottom:1px solid var(--border);background:rgba(28,34,9,.5);display:flex;align-items:center;gap:.375rem;flex-shrink:0;}
+.breadcrumb a{color:var(--link);}
+.breadcrumb a:hover{color:var(--active-text);}
+.content{padding:1.5rem;flex:1;}
+
+/* ── Section visibility ─────── */
+.section{display:none;}
+.section.active{display:block;}
+
+/* ── List toolbar ───────────── */
+.list-toolbar{display:flex;align-items:center;gap:.625rem;margin-bottom:1rem;flex-wrap:wrap;}
+.search-inp{padding:.4rem .75rem;border-radius:.35rem;background:var(--active);border:1px solid var(--border);color:var(--text);font-size:.8rem;outline:none;min-width:200px;}
+.search-inp::placeholder{color:var(--muted);}
+.filter-sel{padding:.4rem .75rem;border-radius:.35rem;background:var(--active);border:1px solid var(--border);color:var(--text);font-size:.8rem;outline:none;cursor:pointer;}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:.5rem;}
+.btn{display:inline-flex;align-items:center;gap:.375rem;padding:.375rem .875rem;border-radius:.35rem;font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s,background .15s;}
+.btn:hover{opacity:.85;}
+.btn:disabled{opacity:.4;cursor:default;}
+.btn-gold{background:var(--gold);color:#0f1505;}
+.btn-green{background:rgba(74,222,128,.15);border:1px solid var(--green-border);color:var(--green);}
+.btn-blue{background:rgba(96,165,250,.15);border:1px solid var(--blue-border);color:var(--blue);}
+.btn-red{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-icon{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:.3rem;}
+
+/* ── Bulk action bar ────────── */
+.bulk-bar{background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:.45rem;padding:.5rem .875rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;font-size:.8rem;}
+.bulk-bar-label{color:var(--gold);font-weight:600;}
+.bulk-bar-actions{display:flex;gap:.5rem;}
+
+/* ── Table ─────────────────── */
+.card-table{background:var(--card);border:1px solid var(--border);border-radius:.5rem;overflow:hidden;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:.8rem;}
+thead{background:rgba(46,58,16,.6);}
+thead th{padding:.625rem .75rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;cursor:pointer;user-select:none;}
+thead th:hover{color:var(--active-text);}
+thead th.sorted{color:var(--active-text);}
+thead th .sort-arrow{margin-left:3px;opacity:.6;}
+tbody tr{border-top:1px solid rgba(46,58,16,.5);transition:background .08s;}
+tbody tr:hover{background:rgba(46,58,16,.4);}
+tbody tr.selected{background:rgba(201,162,39,.07);}
+tbody td{padding:.625rem .75rem;vertical-align:middle;}
+.cb-col{width:36px;}
+.actions-col{width:110px;}
+.td-name{font-weight:600;color:#fff;font-size:.8rem;}
+.td-secondary{color:var(--muted);font-size:.73rem;margin-top:.1rem;}
+.td-mono{font-family:monospace;font-size:.75rem;}
+.td-right{text-align:right;}
+
+/* ── Pills ──────────────────── */
+.pill{display:inline-flex;align-items:center;gap:.3rem;padding:.175rem .55rem;border-radius:9999px;font-size:.7rem;font-weight:700;white-space:nowrap;}
+.pill-active{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);}
+.pill-trial{background:var(--yellow-bg);border:1px solid var(--yellow-border);color:var(--yellow);}
+.pill-churned{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);}
+.pill-paused{background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);}
+.pill-plan-starter{background:rgba(150,184,61,.13);border:1px solid rgba(150,184,61,.28);color:var(--link);}
+.pill-plan-growth{background:rgba(201,162,39,.13);border:1px solid rgba(201,162,39,.28);color:var(--gold);}
+.pill-plan-pro{background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);}
+.pill-plan-capital{background:rgba(249,115,22,.13);border:1px solid rgba(249,115,22,.28);color:var(--orange);}
+
+/* ── Pagination ─────────────── */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-top:1px solid var(--border);font-size:.78rem;color:var(--muted);}
+.pag-btns{display:flex;gap:.375rem;}
+.pag-btn{padding:.3rem .625rem;border-radius:.3rem;background:var(--active);border:1px solid var(--border);color:var(--text);font-size:.78rem;cursor:pointer;transition:background .1s;}
+.pag-btn:hover{background:rgba(46,58,16,.8);}
+.pag-btn.active{background:var(--gold);color:#0f1505;border-color:var(--gold);font-weight:700;}
+.pag-btn:disabled{opacity:.35;cursor:default;}
+
+/* ── KPI row ────────────────── */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;margin-bottom:1.25rem;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:1rem;}
+.kpi-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.25rem;}
+.kpi-value{font-size:1.75rem;font-weight:700;color:#fff;font-family:"Iowan Old Style","Book Antiqua",serif;line-height:1.1;}
+.kpi-delta{font-size:.73rem;margin-top:.25rem;}
+.delta-up{color:var(--green);}
+.delta-down{color:var(--red);}
+.delta-n{color:var(--muted);}
+
+/* ── Edit drawer ────────────── */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:flex-start;justify-content:flex-end;}
+.drawer-overlay.open{display:flex;}
+.drawer{width:540px;max-width:96vw;height:100vh;background:#1a2208;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;animation:slideIn .2s ease;}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drawer-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#1c2209;}
+.drawer-title{font-size:1rem;font-weight:700;color:#fff;}
+.drawer-sub{font-size:.78rem;color:var(--muted);margin-top:.1rem;}
+.drawer-header-actions{display:flex;gap:.5rem;align-items:center;}
+.hist-btn{padding:.3rem .75rem;border-radius:.3rem;background:rgba(96,165,250,.12);border:1px solid var(--blue-border);color:var(--blue);font-size:.75rem;font-weight:600;cursor:pointer;}
+.close-btn{width:28px;height:28px;border-radius:.3rem;background:rgba(239,68,68,.1);border:1px solid var(--red-border);color:var(--red);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.drawer-body{flex:1;overflow-y:auto;padding:1.25rem;}
+.form-row{margin-bottom:1.125rem;}
+.form-label{display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.375rem;}
+.form-label .required{color:var(--red);margin-left:2px;}
+.form-input,.form-select,.form-textarea{width:100%;padding:.5rem .75rem;border-radius:.35rem;background:#0f1505;border:1px solid var(--border);color:var(--text);font-size:.85rem;outline:none;transition:border-color .15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--gold);}
+.form-input::placeholder{color:rgba(150,184,61,.4);}
+.form-textarea{min-height:80px;resize:vertical;}
+.form-check{display:flex;align-items:center;gap:.5rem;font-size:.85rem;}
+.form-check input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:pointer;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.875rem;}
+.form-divider{border:none;border-top:1px solid var(--border);margin:1.125rem 0;}
+.form-section-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--link);margin-bottom:.875rem;}
+.drawer-footer{padding:.875rem 1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;background:#1c2209;flex-shrink:0;}
+.drawer-footer .spacer{flex:1;}
+
+/* ── Export modal ───────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:#1a2208;border:1px solid var(--border);border-radius:.625rem;width:460px;max-width:95vw;overflow:hidden;animation:fadeUp .18s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.modal-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.modal-title{font-size:1rem;font-weight:700;color:#fff;}
+.modal-body{padding:1.25rem;}
+.modal-footer{padding:.875rem 1.25rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:.5rem;}
+.format-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.625rem;margin-bottom:1.25rem;}
+.format-card{border:2px solid var(--border);border-radius:.45rem;padding:.75rem;cursor:pointer;transition:border-color .15s,background .15s;text-align:center;}
+.format-card:hover{border-color:rgba(201,162,39,.4);background:rgba(201,162,39,.05);}
+.format-card.selected{border-color:var(--gold);background:rgba(201,162,39,.1);}
+.format-icon{font-size:1.5rem;margin-bottom:.375rem;}
+.format-label{font-size:.8rem;font-weight:600;color:#fff;}
+.format-desc{font-size:.7rem;color:var(--muted);margin-top:.125rem;}
+.export-scope{display:flex;flex-direction:column;gap:.5rem;}
+.radio-row{display:flex;align-items:center;gap:.5rem;font-size:.85rem;cursor:pointer;}
+.radio-row input{accent-color:var(--gold);}
+.import-drop{border:2px dashed var(--border);border-radius:.5rem;padding:2rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;}
+.import-drop:hover,.import-drop.drag{border-color:var(--gold);background:rgba(201,162,39,.05);}
+.import-drop-icon{font-size:2rem;margin-bottom:.5rem;}
+.import-drop-text{font-size:.85rem;color:var(--muted);}
+.import-drop-sub{font-size:.75rem;color:var(--muted);margin-top:.25rem;opacity:.7;}
+
+/* ── History modal ──────────── */
+.history-list{display:flex;flex-direction:column;gap:.625rem;}
+.history-item{background:rgba(46,58,16,.3);border:1px solid rgba(46,58,16,.8);border-radius:.4rem;padding:.75rem;}
+.history-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.375rem;}
+.history-who{font-size:.8rem;font-weight:600;color:#fff;}
+.history-time{font-size:.72rem;color:var(--muted);}
+.history-change{font-size:.78rem;color:var(--text);line-height:1.55;}
+.history-field{display:inline-block;background:var(--active);color:var(--active-text);font-size:.7rem;padding:.1rem .4rem;border-radius:.25rem;font-family:monospace;margin-right:.25rem;}
+.history-old{color:var(--red);text-decoration:line-through;font-size:.78rem;}
+.history-new{color:var(--green);font-size:.78rem;}
+
+/* ── Toast ──────────────────── */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1c2209;border:1px solid var(--border);color:var(--text);font-size:.8rem;padding:.625rem 1rem;border-radius:.45rem;z-index:999;display:none;align-items:center;gap:.5rem;box-shadow:0 4px 20px rgba(0,0,0,.4);}
+.toast.show{display:flex;animation:fadeUp .2s ease;}
+.toast-dot{width:8px;height:8px;border-radius:50%;}
+
+/* ── Confirm modal ──────────── */
+.confirm-modal{width:380px;}
+
+/* ── Bars ───────────────────── */
+.bar-row{display:flex;align-items:center;gap:.625rem;margin-bottom:.625rem;}
+.bar-label{font-size:.75rem;color:var(--text);width:90px;flex-shrink:0;}
+.bar-track{flex:1;height:7px;background:var(--active);border-radius:9999px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:9999px;}
+.bar-val{font-size:.75rem;width:52px;text-align:right;flex-shrink:0;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:1.125rem;}
+.card-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.875rem;}
+</style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ═══════════════════════════════════ -->
+<div class="topbar">
+  <span class="topbar-logo">Head<span style="color:var(--gold)">room</span></span>
+  <span class="topbar-sep">|</span>
+  <div class="topbar-links">
+    <a href="#" onclick="show('overview')">Dashboard</a>
+    <a href="index.html" target="_blank">View Site ↗</a>
+    <a href="#" onclick="show('users')">Users</a>
+    <a href="#" onclick="show('revenue')">Revenue</a>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user">Signed in as <strong style="color:var(--active-text)">admin</strong></span>
+    <button class="topbar-logout" onclick="window.location.href='admin-login.html'">Log out</button>
+  </div>
+</div>
+
+<!-- ═══ SHELL ═══════════════════════════════════ -->
+<div class="shell">
+
+<!-- ── Sidebar ─────────────────────────────────── -->
+<aside>
+  <div class="aside-search">
+    <input type="text" placeholder="Start typing to filter…" oninput="filterSidebar(this.value)">
+  </div>
+
+  <div id="aside-content">
+    <div class="aside-group-title">HEADROOM</div>
+    <div class="aside-item active" onclick="show('overview',this)">
+      <span class="aside-item-label">Overview</span>
+    </div>
+    <div class="aside-item" onclick="show('users',this)">
+      <span class="aside-item-label">Users</span>
+      <div class="aside-actions">
+        <button class="aside-act" onclick="openAddUser(event)">+ Add</button>
+        <button class="aside-act view" onclick="show('users');event.stopPropagation()">Change</button>
+      </div>
+    </div>
+    <div class="aside-item" onclick="show('subscriptions',this)">
+      <span class="aside-item-label">Subscriptions</span>
+      <div class="aside-actions">
+        <button class="aside-act view" onclick="show('subscriptions');event.stopPropagation()">View</button>
+      </div>
+    </div>
+    <div class="aside-item" onclick="show('revenue',this)">
+      <span class="aside-item-label">Revenue</span>
+      <div class="aside-actions">
+        <button class="aside-act view" onclick="show('revenue');event.stopPropagation()">View</button>
+      </div>
+    </div>
+    <div class="aside-item" onclick="show('activity',this)">
+      <span class="aside-item-label">Activity Log</span>
+      <div class="aside-actions">
+        <button class="aside-act view">View</button>
+      </div>
+    </div>
+
+    <div class="aside-group-title">SITE</div>
+    <div class="aside-item" onclick="show('pages',this)">
+      <span class="aside-item-label">Pages</span>
+      <div class="aside-actions"><button class="aside-act view">View</button></div>
+    </div>
+    <div class="aside-item" onclick="show('pricing',this)">
+      <span class="aside-item-label">Pricing Plans</span>
+      <div class="aside-actions"><button class="aside-act view">View</button></div>
+    </div>
+    <div class="aside-item" onclick="show('settings',this)">
+      <span class="aside-item-label">Settings</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────── -->
+<main>
+  <div class="breadcrumb" id="breadcrumb">
+    <a href="#" onclick="show('overview')">Headroom Admin</a>
+    <span>›</span>
+    <span id="bc-page">Overview</span>
+  </div>
+
+  <div class="content">
+
+  <!-- ══ OVERVIEW ════════════════════════════════ -->
+  <div class="section active" id="sec-overview">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+      <div><div style="font-size:1.25rem;font-weight:700;color:#fff;">Dashboard Overview</div><div style="font-size:.8rem;color:var(--muted);margin-top:.15rem;">Apr 11, 2025 · 07:42 AM</div></div>
+      <div style="display:flex;gap:.5rem;">
+        <button class="btn btn-ghost" onclick="openExport('all')">↓ Export Data</button>
+        <button class="btn btn-gold" onclick="openAddUser()">+ Add User</button>
+      </div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">MRR</div><div class="kpi-value">$8,340</div><div class="kpi-delta delta-up">↑ 12.4% vs last month</div></div>
+      <div class="kpi"><div class="kpi-label">Total Users</div><div class="kpi-value">142</div><div class="kpi-delta delta-up">↑ 18 new this month</div></div>
+      <div class="kpi"><div class="kpi-label">Active Trials</div><div class="kpi-value">23</div><div class="kpi-delta delta-n">Trial→Paid conv: 61%</div></div>
+      <div class="kpi"><div class="kpi-label">Churn Rate</div><div class="kpi-value">2.1%</div><div class="kpi-delta delta-down">↑ 0.3pp vs last month</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem;margin-bottom:.875rem;">
+      <div class="card">
+        <div class="card-label">Users by Plan</div>
+        <div class="bar-row"><span class="bar-label">Growth</span><div class="bar-track"><div class="bar-fill" style="width:48%;background:var(--gold);"></div></div><span class="bar-val" style="color:var(--gold);">68</span></div>
+        <div class="bar-row"><span class="bar-label">Starter</span><div class="bar-track"><div class="bar-fill" style="width:32%;background:var(--link);"></div></div><span class="bar-val" style="color:var(--link);">45</span></div>
+        <div class="bar-row"><span class="bar-label">Pro</span><div class="bar-track"><div class="bar-fill" style="width:20%;background:var(--blue);"></div></div><span class="bar-val" style="color:var(--blue);">29</span></div>
+        <div class="bar-row"><span class="bar-label">Trial</span><div class="bar-track"><div class="bar-fill" style="width:16%;background:var(--yellow);"></div></div><span class="bar-val" style="color:var(--yellow);">23</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">MRR Breakdown</div>
+        <div class="bar-row"><span class="bar-label">Growth</span><div class="bar-track"><div class="bar-fill" style="width:64%;background:var(--gold);"></div></div><span class="bar-val" style="color:var(--gold);">$5,372</span></div>
+        <div class="bar-row"><span class="bar-label">Pro</span><div class="bar-track"><div class="bar-fill" style="width:51%;background:var(--blue);"></div></div><span class="bar-val" style="color:var(--blue);">$4,321</span></div>
+        <div class="bar-row"><span class="bar-label">Capital+</span><div class="bar-track"><div class="bar-fill" style="width:25%;background:var(--orange);"></div></div><span class="bar-val" style="color:var(--orange);">$2,093</span></div>
+        <div class="bar-row"><span class="bar-label">Starter</span><div class="bar-track"><div class="bar-fill" style="width:15%;background:var(--link);"></div></div><span class="bar-val" style="color:var(--link);">$1,305</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+        <div class="card-label" style="margin-bottom:0;">Recent Users</div>
+        <button class="btn btn-ghost" style="font-size:.75rem;padding:.25rem .625rem;" onclick="show('users')">View all →</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>User</th><th>Plan</th><th>Status</th><th>Joined</th><th>MRR</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td><div class="td-name">Amara Okafor</div><div class="td-secondary">amara.okafor@harbourbistro.com</div></td><td><span class="pill pill-plan-growth">Growth</span></td><td><span class="pill pill-active">● Active</span></td><td style="color:var(--muted);">Apr 10</td><td style="color:var(--gold);font-weight:600;">$79</td><td><button class="btn btn-ghost btn-icon" onclick="editUser(0)" title="Edit">✎</button></td></tr>
+            <tr><td><div class="td-name">Derek Fontaine</div><div class="td-secondary">derek@northstarcreative.io</div></td><td><span class="pill pill-plan-starter">Starter</span></td><td><span class="pill pill-trial">● Trial</span></td><td style="color:var(--muted);">Apr 9</td><td style="color:var(--muted);">–</td><td><button class="btn btn-ghost btn-icon" onclick="editUser(1)" title="Edit">✎</button></td></tr>
+            <tr><td><div class="td-name">Priya Nair</div><div class="td-secondary">priya.nair@greenleaffoods.com</div></td><td><span class="pill pill-plan-pro">Pro</span></td><td><span class="pill pill-active">● Active</span></td><td style="color:var(--muted);">Apr 8</td><td style="color:var(--gold);font-weight:600;">$149</td><td><button class="btn btn-ghost btn-icon" onclick="editUser(2)" title="Edit">✎</button></td></tr>
+            <tr><td><div class="td-name">Marcus Webb</div><div class="td-secondary">m.webb@webbcontracting.com</div></td><td><span class="pill pill-plan-growth">Growth</span></td><td><span class="pill pill-trial">● Trial</span></td><td style="color:var(--muted);">Apr 7</td><td style="color:var(--muted);">–</td><td><button class="btn btn-ghost btn-icon" onclick="editUser(3)" title="Edit">✎</button></td></tr>
+            <tr><td><div class="td-name">Lucia Morales</div><div class="td-secondary">lucia@cafesolana.co</div></td><td><span class="pill pill-plan-starter">Starter</span></td><td><span class="pill pill-active">● Active</span></td><td style="color:var(--muted);">Apr 6</td><td style="color:var(--gold);font-weight:600;">$29</td><td><button class="btn btn-ghost btn-icon" onclick="editUser(4)" title="Edit">✎</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ USERS ════════════════════════════════════ -->
+  <div class="section" id="sec-users">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div><div style="font-size:1.25rem;font-weight:700;color:#fff;">Select user to change</div><div style="font-size:.8rem;color:var(--muted);margin-top:.15rem;"><span id="users-shown">20</span> of 142 users</div></div>
+      <div style="display:flex;gap:.5rem;">
+        <button class="btn btn-blue" onclick="openImport()">↑ Import</button>
+        <button class="btn btn-green" onclick="openExport('all')">↓ Export</button>
+        <button class="btn btn-gold" onclick="openAddUser()">+ Add user</button>
+      </div>
+    </div>
+
+    <!-- Bulk bar -->
+    <div class="bulk-bar" id="bulk-bar" style="display:none;">
+      <span class="bulk-bar-label" id="bulk-label">0 selected</span>
+      <div class="bulk-bar-actions">
+        <button class="btn btn-green" onclick="openExport('selected')">↓ Export selected</button>
+        <button class="btn btn-red" onclick="bulkDelete()">🗑 Delete selected</button>
+        <button class="btn btn-ghost" onclick="clearSelection()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="list-toolbar">
+      <input class="search-inp" type="text" placeholder="Search name, email, company…" oninput="applyFilters()">
+      <select class="filter-sel" id="f-status" onchange="applyFilters()">
+        <option value="">All status</option>
+        <option value="active">Active</option>
+        <option value="trial">Trial</option>
+        <option value="paused">Paused</option>
+        <option value="churned">Churned</option>
+      </select>
+      <select class="filter-sel" id="f-plan" onchange="applyFilters()">
+        <option value="">All plans</option>
+        <option value="Starter">Starter</option>
+        <option value="Growth">Growth</option>
+        <option value="Pro">Pro</option>
+        <option value="Capital+">Capital+</option>
+      </select>
+      <div class="toolbar-right">
+        <select class="filter-sel" id="f-action" onchange="handleAction(this.value)">
+          <option value="">Action…</option>
+          <option value="export_csv">Export selected as CSV</option>
+          <option value="export_json">Export selected as JSON</option>
+          <option value="export_xlsx">Export selected as Excel</option>
+          <option value="delete">Delete selected</option>
+        </select>
+        <button class="btn btn-ghost" onclick="handleAction(document.getElementById('f-action').value)">Go</button>
+      </div>
+    </div>
+
+    <div class="card-table">
+      <div class="table-wrap">
+        <table id="users-table">
+          <thead>
+            <tr>
+              <th class="cb-col"><input type="checkbox" id="select-all" onchange="toggleAll(this)"></th>
+              <th onclick="sortBy('name')">Name / Email <span class="sort-arrow">↕</span></th>
+              <th onclick="sortBy('plan')">Plan <span class="sort-arrow">↕</span></th>
+              <th onclick="sortBy('status')">Status <span class="sort-arrow">↕</span></th>
+              <th onclick="sortBy('mrr')">MRR <span class="sort-arrow">↕</span></th>
+              <th>Accounts</th>
+              <th onclick="sortBy('joined')">Joined <span class="sort-arrow">↕</span></th>
+              <th>Last Active</th>
+              <th>Location</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination">
+        <span id="pag-info"></span>
+        <div class="pag-btns" id="pag-btns"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SUBSCRIPTIONS ══════════════════════════ -->
+  <div class="section" id="sec-subscriptions">
+    <div style="font-size:1.25rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">Subscriptions</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Paying</div><div class="kpi-value">119</div><div class="kpi-delta delta-up">↑ 15 this month</div></div>
+      <div class="kpi"><div class="kpi-label">Trials</div><div class="kpi-value">23</div><div class="kpi-delta delta-n">Avg 9 days remaining</div></div>
+      <div class="kpi"><div class="kpi-label">Paused</div><div class="kpi-value">4</div><div class="kpi-delta delta-n">$316/mo on hold</div></div>
+      <div class="kpi"><div class="kpi-label">Churned (30d)</div><div class="kpi-value">3</div><div class="kpi-delta delta-down">$237/mo lost</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem;">
+      <div class="card">
+        <div class="card-label">Trials Expiring Soon</div>
+        <table style="width:100%;font-size:.8rem;border-collapse:collapse;">
+          <thead><tr><th style="text-align:left;padding:.375rem 0;font-size:.7rem;color:var(--muted);">User</th><th style="text-align:left;font-size:.7rem;color:var(--muted);">Plan</th><th style="font-size:.7rem;color:var(--muted);">Expires</th><th style="font-size:.7rem;color:var(--muted);">Days</th></tr></thead>
+          <tbody>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Derek Fontaine</div></td><td><span class="pill pill-plan-starter" style="font-size:.68rem;">Starter</span></td><td style="color:var(--muted);">Apr 13</td><td><span style="color:var(--red);font-weight:700;">2</span></td></tr>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Marcus Webb</div></td><td><span class="pill pill-plan-growth" style="font-size:.68rem;">Growth</span></td><td style="color:var(--muted);">Apr 14</td><td><span style="color:var(--yellow);font-weight:700;">3</span></td></tr>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Sofia Henriksen</div></td><td><span class="pill pill-plan-growth" style="font-size:.68rem;">Growth</span></td><td style="color:var(--muted);">Apr 16</td><td><span style="color:var(--yellow);font-weight:700;">5</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-label">Recent Churn</div>
+        <table style="width:100%;font-size:.8rem;border-collapse:collapse;">
+          <thead><tr><th style="text-align:left;padding:.375rem 0;font-size:.7rem;color:var(--muted);">User</th><th style="font-size:.7rem;color:var(--muted);">Plan</th><th style="font-size:.7rem;color:var(--muted);">Reason</th></tr></thead>
+          <tbody>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Theo Ramos</div></td><td><span class="pill pill-plan-starter" style="font-size:.68rem;">Starter</span></td><td style="color:var(--muted);font-size:.75rem;">Too expensive</td></tr>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Ada Osei</div></td><td><span class="pill pill-plan-growth" style="font-size:.68rem;">Growth</span></td><td style="color:var(--muted);font-size:.75rem;">Missing feature</td></tr>
+            <tr style="border-top:1px solid rgba(46,58,16,.4);"><td style="padding:.5rem 0;"><div style="font-weight:600;color:#fff;">Kevin Strand</div></td><td><span class="pill pill-plan-growth" style="font-size:.68rem;">Growth</span></td><td style="color:var(--muted);font-size:.75rem;">No longer needed</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ REVENUE ═════════════════════════════════ -->
+  <div class="section" id="sec-revenue">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+      <div style="font-size:1.25rem;font-weight:700;color:#fff;">Revenue</div>
+      <button class="btn btn-green" onclick="openExport('all')">↓ Export Revenue CSV</button>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">MRR</div><div class="kpi-value">$8,340</div><div class="kpi-delta delta-up">↑ $920 vs Mar</div></div>
+      <div class="kpi"><div class="kpi-label">ARR (projected)</div><div class="kpi-value">$100K</div><div class="kpi-delta delta-up">↑ 12.4% YoY</div></div>
+      <div class="kpi"><div class="kpi-label">Avg Rev / User</div><div class="kpi-value">$70</div><div class="kpi-delta delta-up">↑ $4 vs last month</div></div>
+      <div class="kpi"><div class="kpi-label">Failed Payments</div><div class="kpi-value">3</div><div class="kpi-delta delta-down">$237 at risk</div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">MRR Trend — Last 6 Months</div>
+      <div style="display:flex;align-items:flex-end;gap:.75rem;height:90px;padding:.5rem 0;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:rgba(201,162,39,.2);border-radius:4px 4px 0 0;height:52%;"></div><span style="font-size:.65rem;color:var(--muted);">Nov</span><span style="font-size:.7rem;color:var(--muted);">$4.3K</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:rgba(201,162,39,.3);border-radius:4px 4px 0 0;height:60%;"></div><span style="font-size:.65rem;color:var(--muted);">Dec</span><span style="font-size:.7rem;color:var(--muted);">$5.0K</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:rgba(201,162,39,.4);border-radius:4px 4px 0 0;height:68%;"></div><span style="font-size:.65rem;color:var(--muted);">Jan</span><span style="font-size:.7rem;color:var(--muted);">$5.7K</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:rgba(201,162,39,.5);border-radius:4px 4px 0 0;height:76%;"></div><span style="font-size:.65rem;color:var(--muted);">Feb</span><span style="font-size:.7rem;color:var(--muted);">$6.4K</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:rgba(201,162,39,.65);border-radius:4px 4px 0 0;height:86%;"></div><span style="font-size:.65rem;color:var(--muted);">Mar</span><span style="font-size:.7rem;color:var(--muted);">$7.4K</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.375rem;flex:1;"><div style="width:100%;background:var(--gold);border-radius:4px 4px 0 0;height:100%;"></div><span style="font-size:.65rem;color:var(--muted);">Apr</span><span style="font-size:.7rem;color:var(--gold);font-weight:700;">$8.3K</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ACTIVITY ════════════════════════════════ -->
+  <div class="section" id="sec-activity">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+      <div style="font-size:1.25rem;font-weight:700;color:#fff;">Activity Log</div>
+      <button class="btn btn-green" onclick="openExport('activity')">↓ Export Log</button>
+    </div>
+    <div class="card">
+      <div class="history-list">
+        <div class="history-item"><div class="history-header"><span class="history-who">Amara Okafor upgraded</span><span class="history-time">2 min ago</span></div><div class="history-change">Plan changed: <span class="history-old">Starter</span> → <span class="history-new">Growth</span></div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">Marcus Webb — trial started</span><span class="history-time">18 min ago</span></div><div class="history-change">New trial signup. Plan interest: <span class="history-new">Growth</span>. Trial expires Apr 14, 2025.</div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">Priya Nair — accounts connected</span><span class="history-time">42 min ago</span></div><div class="history-change"><span class="history-field">connected_accounts</span> <span class="history-old">4</span> → <span class="history-new">7</span></div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">admin — user edited</span><span class="history-time">1 hr ago</span></div><div class="history-change">Changed <span class="history-field">plan</span> for Luis Gutierrez: <span class="history-old">Growth</span> → <span class="history-new">Growth + Capital+</span>. MRR: <span class="history-old">$79</span> → <span class="history-new">$378</span></div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">Chloe Kim — payment failed</span><span class="history-time">2 hr ago</span></div><div class="history-change"><span class="history-field">status</span> updated to <span style="color:var(--red);">payment_failed</span>. Plan: Pro ($149). Retry scheduled Apr 14.</div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">admin — user deleted</span><span class="history-time">Yesterday</span></div><div class="history-change">Deleted user <span class="history-field">theo@ramosretail.com</span>. Plan was Starter. Reason: churned.</div></div>
+        <div class="history-item"><div class="history-header"><span class="history-who">admin — bulk export</span><span class="history-time">Yesterday</span></div><div class="history-change">Exported 142 users as <span class="history-new">CSV</span>. Fields: name, email, plan, status, mrr, joined.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGES ════════════════════════════════════ -->
+  <div class="section" id="sec-pages">
+    <div style="font-size:1.25rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">Site Pages</div>
+    <div style="display:flex;flex-direction:column;gap:.625rem;">
+      <div class="card" style="display:flex;align-items:center;gap:1rem;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:.5rem;"><span style="font-weight:600;color:#fff;font-size:.875rem;">Home</span><code style="font-family:monospace;font-size:.73rem;padding:.1rem .45rem;border-radius:.25rem;background:var(--active);color:var(--link);">/</code></div><div style="font-size:.73rem;color:var(--muted);margin-top:.2rem;">Hero, stats, features, credit section, how it works, testimonials, CTA</div></div><a href="index.html" target="_blank" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .625rem;">View ↗</a></div>
+      <div class="card" style="display:flex;align-items:center;gap:1rem;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:.5rem;"><span style="font-weight:600;color:#fff;font-size:.875rem;">Platform</span><code style="font-family:monospace;font-size:.73rem;padding:.1rem .45rem;border-radius:.25rem;background:var(--active);color:var(--link);">/features</code></div><div style="font-size:.73rem;color:var(--muted);margin-top:.2rem;">10-layer platform feature breakdown</div></div><a href="features.html" target="_blank" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .625rem;">View ↗</a></div>
+      <div class="card" style="display:flex;align-items:center;gap:1rem;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:.5rem;"><span style="font-weight:600;color:#fff;font-size:.875rem;">Pricing</span><code style="font-family:monospace;font-size:.73rem;padding:.1rem .45rem;border-radius:.25rem;background:var(--active);color:var(--link);">/pricing</code></div><div style="font-size:.73rem;color:var(--muted);margin-top:.2rem;">Starter $29, Growth $79, Pro $149 + Capital+ $299</div></div><a href="pricing.html" target="_blank" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .625rem;">View ↗</a></div>
+      <div class="card" style="display:flex;align-items:center;gap:1rem;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:.5rem;"><span style="font-weight:600;color:#fff;font-size:.875rem;">Credit Rescue</span><code style="font-family:monospace;font-size:.73rem;padding:.1rem .45rem;border-radius:.25rem;background:var(--active);color:var(--link);">/credit</code></div><div style="font-size:.73rem;color:var(--muted);margin-top:.2rem;">Embedded credit rescue — silent underwriting + repayment simulation</div></div><a href="credit.html" target="_blank" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .625rem;">View ↗</a></div>
+      <div class="card" style="display:flex;align-items:center;gap:1rem;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:.5rem;"><span style="font-weight:600;color:#fff;font-size:.875rem;">Capital Raise</span><code style="font-family:monospace;font-size:.73rem;padding:.1rem .45rem;border-radius:.25rem;background:var(--active);color:var(--link);">/capital</code></div><div style="font-size:.73rem;color:var(--muted);margin-top:.2rem;">Three capital tracks: Rev-share, Reg CF, Reg A+</div></div><a href="capital.html" target="_blank" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .625rem;">View ↗</a></div>
+    </div>
+  </div>
+
+  <!-- ══ PRICING ══════════════════════════════════ -->
+  <div class="section" id="sec-pricing">
+    <div style="font-size:1.25rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">Pricing Plans</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;">
+      <div class="card"><div style="font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--link);margin-bottom:.625rem;">Starter</div><div style="font-size:1.5rem;font-weight:700;color:var(--gold);font-family:'Iowan Old Style','Book Antiqua',serif;">$29/mo</div><div style="font-size:.73rem;color:var(--muted);margin-top:.25rem;">2 accts · Email support · 45 subs</div></div>
+      <div class="card" style="border-color:var(--gold);"><div style="display:flex;justify-content:space-between;margin-bottom:.625rem;"><span style="font-size:.73rem;font-weight:700;text-transform:uppercase;color:var(--active-text);">Growth</span><span style="font-size:.68rem;font-weight:600;background:rgba(201,162,39,.2);color:var(--gold);padding:.1rem .4rem;border-radius:4px;">Popular</span></div><div style="font-size:1.5rem;font-weight:700;color:var(--gold);font-family:'Iowan Old Style','Book Antiqua',serif;">$79/mo</div><div style="font-size:.73rem;color:var(--muted);margin-top:.25rem;">Unlimited · Priority · 68 subs</div></div>
+      <div class="card"><div style="font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--blue);margin-bottom:.625rem;">Pro</div><div style="font-size:1.5rem;font-weight:700;color:var(--gold);font-family:'Iowan Old Style','Book Antiqua',serif;">$149/mo</div><div style="font-size:.73rem;color:var(--muted);margin-top:.25rem;">Unlimited · Advisor · API · 29 subs</div></div>
+      <div class="card"><div style="font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--orange);margin-bottom:.625rem;">Capital+ Add-on</div><div style="font-size:1.5rem;font-weight:700;color:var(--gold);font-family:'Iowan Old Style','Book Antiqua',serif;">$299/mo</div><div style="font-size:.73rem;color:var(--muted);margin-top:.25rem;">Active raise only · 7 active</div></div>
+    </div>
+  </div>
+
+  <!-- ══ SETTINGS ════════════════════════════════ -->
+  <div class="section" id="sec-settings">
+    <div style="font-size:1.25rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">Settings</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem;">
+      <div class="card">
+        <div class="card-label">Authentication</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Admin username</span><span>admin</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Password hashing</span><span>bcrypt (cost 12)</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Session storage</span><span>SQLite — admin_sessions</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;font-size:.8rem;"><span style="color:var(--muted);">Session duration</span><span>8 hours</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Stack</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Framework</span><span>Next.js 14 (App Router)</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Database</span><span>SQLite (better-sqlite3)</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;border-bottom:1px solid rgba(46,58,16,.4);font-size:.8rem;"><span style="color:var(--muted);">Styling</span><span>Tailwind CSS 3.4</span></div>
+          <div style="display:flex;justify-content:space-between;padding:.375rem 0;font-size:.8rem;"><span style="color:var(--muted);">Language</span><span>TypeScript 5</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</main>
+</div><!-- /shell -->
+
+<!-- ═══ EDIT / ADD DRAWER ═════════════════════════ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer(event)">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="drawer-title">Change User</div>
+        <div class="drawer-sub" id="drawer-sub"></div>
+      </div>
+      <div class="drawer-header-actions">
+        <button class="hist-btn" onclick="openHistory()">HISTORY</button>
+        <button class="close-btn" onclick="closeDrawer()">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <div class="form-section-title">Account Details</div>
+      <div class="form-row">
+        <label class="form-label">Email <span class="required">*</span></label>
+        <input class="form-input" type="email" id="f-email" placeholder="user@example.com">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" type="text" id="f-name" placeholder="Jane Smith">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Company</label>
+        <input class="form-input" type="text" id="f-company" placeholder="Acme Co.">
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="form-label">Plan <span class="required">*</span></label>
+          <select class="form-select" id="f-plan-input">
+            <option value="">– Select –</option>
+            <option value="Starter">Starter ($29/mo)</option>
+            <option value="Growth">Growth ($79/mo)</option>
+            <option value="Pro">Pro ($149/mo)</option>
+            <option value="Capital+">Capital+ ($299/mo)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Status <span class="required">*</span></label>
+          <select class="form-select" id="f-status-input">
+            <option value="active">Active</option>
+            <option value="trial">Trial</option>
+            <option value="paused">Paused</option>
+            <option value="churned">Churned</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="form-label">Location</label>
+          <input class="form-input" type="text" id="f-location" placeholder="City, ST">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Connected Accounts</label>
+          <input class="form-input" type="number" id="f-accounts" min="0" max="20" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="f-notes" placeholder="Internal notes about this user…"></textarea>
+      </div>
+      <hr class="form-divider">
+      <div class="form-section-title">Access</div>
+      <div class="form-row"><label class="form-check"><input type="checkbox" id="f-active" checked><span>Is active</span></label></div>
+      <div class="form-row"><label class="form-check"><input type="checkbox" id="f-first-login"><span>Is first login</span></label></div>
+      <hr class="form-divider">
+      <div class="form-section-title">Last Login</div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="form-label">Date</label>
+          <input class="form-input" type="date" id="f-last-login-date">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Time</label>
+          <input class="form-input" type="time" id="f-last-login-time">
+        </div>
+      </div>
+      <hr class="form-divider">
+      <div class="form-section-title">Password</div>
+      <div class="form-row">
+        <label class="form-label">New Password <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(leave blank to keep unchanged)</span></label>
+        <input class="form-input" type="password" id="f-password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-gold" onclick="saveUser()">SAVE</button>
+      <button class="btn btn-ghost" onclick="saveAndAnother()">Save and add another</button>
+      <button class="btn btn-ghost" onclick="saveUser(true)">Save and continue editing</button>
+      <span class="spacer"></span>
+      <button class="btn btn-red" id="delete-btn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HISTORY MODAL ═════════════════════════════ -->
+<div class="modal-overlay" id="history-overlay" onclick="this.classList.remove('open')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Change History</div>
+      <button class="close-btn" onclick="document.getElementById('history-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="history-list" id="history-list"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="document.getElementById('history-overlay').classList.remove('open')">Close</button></div>
+  </div>
+</div>
+
+<!-- ═══ EXPORT MODAL ══════════════════════════════ -->
+<div class="modal-overlay" id="export-overlay" onclick="this.classList.remove('open')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Export Data</div>
+      <button class="close-btn" onclick="document.getElementById('export-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem;">Choose export format and scope.</p>
+      <div class="format-grid">
+        <div class="format-card selected" onclick="selectFormat('csv',this)">
+          <div class="format-icon">📄</div>
+          <div class="format-label">CSV</div>
+          <div class="format-desc">Excel, Sheets</div>
+        </div>
+        <div class="format-card" onclick="selectFormat('json',this)">
+          <div class="format-icon">{ }</div>
+          <div class="format-label">JSON</div>
+          <div class="format-desc">APIs, code</div>
+        </div>
+        <div class="format-card" onclick="selectFormat('xlsx',this)">
+          <div class="format-icon">📊</div>
+          <div class="format-label">Excel</div>
+          <div class="format-desc">.xlsx file</div>
+        </div>
+        <div class="format-card" onclick="selectFormat('xml',this)">
+          <div class="format-icon">🗂</div>
+          <div class="format-label">XML</div>
+          <div class="format-desc">Integrations</div>
+        </div>
+        <div class="format-card" onclick="selectFormat('pdf',this)">
+          <div class="format-icon">📑</div>
+          <div class="format-label">PDF</div>
+          <div class="format-desc">Report</div>
+        </div>
+        <div class="format-card" onclick="selectFormat('tsv',this)">
+          <div class="format-icon">📋</div>
+          <div class="format-label">TSV</div>
+          <div class="format-desc">Tab-separated</div>
+        </div>
+      </div>
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.625rem;">Export Scope</div>
+      <div class="export-scope">
+        <label class="radio-row"><input type="radio" name="scope" value="all" checked> All users (142)</label>
+        <label class="radio-row" id="selected-scope-label"><input type="radio" name="scope" value="selected"> Selected users (<span id="selected-count">0</span>)</label>
+        <label class="radio-row"><input type="radio" name="scope" value="filtered"> Currently filtered results</label>
+      </div>
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:.875rem 0 .625rem;">Fields to export</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;" id="field-checkboxes">
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> Name</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> Email</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> Plan</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> Status</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> MRR</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--gold)"> Joined</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox"> Company</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox"> Location</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox"> Accounts</label>
+        <label style="display:flex;align-items:center;gap:.375rem;font-size:.8rem;cursor:pointer;"><input type="checkbox"> Last Active</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('export-overlay').classList.remove('open')">Cancel</button>
+      <button class="btn btn-green" onclick="doExport()">↓ Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ IMPORT MODAL ══════════════════════════════ -->
+<div class="modal-overlay" id="import-overlay" onclick="this.classList.remove('open')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Import Data</div>
+      <button class="close-btn" onclick="document.getElementById('import-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem;">Upload a file to import users. Existing users matched by email will be updated.</p>
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.625rem;">Accepted Formats</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+        <span style="background:rgba(74,222,128,.1);border:1px solid var(--green-border);color:var(--green);font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:9999px;">.csv</span>
+        <span style="background:rgba(96,165,250,.1);border:1px solid var(--blue-border);color:var(--blue);font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:9999px;">.json</span>
+        <span style="background:rgba(201,162,39,.1);border:1px solid rgba(201,162,39,.28);color:var(--gold);font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:9999px;">.xlsx</span>
+        <span style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.28);color:var(--orange);font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:9999px;">.xml</span>
+        <span style="background:rgba(150,184,61,.1);border:1px solid rgba(150,184,61,.28);color:var(--link);font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:9999px;">.tsv</span>
+      </div>
+      <div class="import-drop" id="import-drop"
+           ondragover="this.classList.add('drag');event.preventDefault()"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('file-input').click()">
+        <div class="import-drop-icon">📂</div>
+        <div class="import-drop-text">Drag &amp; drop your file here, or click to browse</div>
+        <div class="import-drop-sub" id="import-filename">No file selected</div>
+      </div>
+      <input type="file" id="file-input" accept=".csv,.json,.xlsx,.xml,.tsv" style="display:none" onchange="handleFileSelect(this)">
+      <div style="margin-top:1rem;">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.5rem;">On Conflict</div>
+        <select class="filter-sel" style="width:100%;">
+          <option>Update existing users (matched by email)</option>
+          <option>Skip existing users</option>
+          <option>Replace all — delete and re-import</option>
+        </select>
+      </div>
+      <div style="margin-top:.875rem;">
+        <a href="#" onclick="downloadTemplate()" style="font-size:.78rem;color:var(--link);">↓ Download CSV template</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('import-overlay').classList.remove('open')">Cancel</button>
+      <button class="btn btn-gold" onclick="doImport()">↑ Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONFIRM DELETE MODAL ══════════════════════ -->
+<div class="modal-overlay" id="confirm-overlay" onclick="this.classList.remove('open')">
+  <div class="modal confirm-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--red);">Confirm Delete</div>
+      <button class="close-btn" onclick="document.getElementById('confirm-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.875rem;" id="confirm-msg">Are you sure you want to delete this user? This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('confirm-overlay').classList.remove('open')">Cancel</button>
+      <button class="btn btn-red" id="confirm-yes-btn">Yes, delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═════════════════════════════════════ -->
+<div class="toast" id="toast">
+  <div class="toast-dot" id="toast-dot"></div>
+  <span id="toast-msg"></span>
+</div>
+
+<!-- ═══ JAVASCRIPT ════════════════════════════════ -->
+<script>
+// ── Data ─────────────────────────────────────────────
+let USERS = [
+  {id:1,  name:'Amara Okafor',    email:'amara.okafor@harbourbistro.com',  company:'Harbour Bistro',      plan:'Growth',  status:'active',  mrr:79,  accounts:4, joined:'2025-04-10', lastActive:'1h ago',     location:'Chicago, IL',    notes:''},
+  {id:2,  name:'Derek Fontaine',  email:'derek@northstarcreative.io',      company:'Northstar Creative',  plan:'Starter', status:'trial',   mrr:0,   accounts:1, joined:'2025-04-09', lastActive:'3h ago',     location:'Austin, TX',     notes:'Trial expires Apr 13'},
+  {id:3,  name:'Priya Nair',      email:'priya.nair@greenleaffoods.com',   company:'Greenleaf Foods',     plan:'Pro',     status:'active',  mrr:149, accounts:7, joined:'2025-04-08', lastActive:'42m ago',    location:'Seattle, WA',    notes:''},
+  {id:4,  name:'Marcus Webb',     email:'m.webb@webbcontracting.com',      company:'Webb Contracting',    plan:'Growth',  status:'trial',   mrr:0,   accounts:2, joined:'2025-04-07', lastActive:'Today',      location:'Atlanta, GA',    notes:''},
+  {id:5,  name:'Lucia Morales',   email:'lucia@cafesolana.co',             company:'Café Solana',         plan:'Starter', status:'active',  mrr:29,  accounts:2, joined:'2025-04-06', lastActive:'Today',      location:'Miami, FL',      notes:''},
+  {id:6,  name:'Luis Gutierrez',  email:'luis.g@gutierrezmarket.com',      company:'Gutierrez Market',    plan:'Growth',  status:'active',  mrr:79,  accounts:3, joined:'2025-04-03', lastActive:'Yesterday',  location:'San Antonio, TX',notes:''},
+  {id:7,  name:'Sofia Henriksen', email:'sofia@henriksendesign.com',       company:'Henriksen Design',    plan:'Growth',  status:'trial',   mrr:0,   accounts:1, joined:'2025-04-02', lastActive:'2 days ago', location:'Portland, OR',   notes:'Trial expires Apr 16'},
+  {id:8,  name:'James Porter',    email:'james.porter@portergrill.com',    company:'Porter Grill',        plan:'Growth',  status:'paused',  mrr:0,   accounts:3, joined:'2025-03-15', lastActive:'Mar 28',     location:'Denver, CO',     notes:'Payment failed'},
+  {id:9,  name:'Chloe Kim',       email:'chloe.kim@studiochloe.co',        company:'Studio Chloe',        plan:'Pro',     status:'paused',  mrr:0,   accounts:5, joined:'2025-02-20', lastActive:'Mar 31',     location:'Los Angeles, CA',notes:''},
+  {id:10, name:'Maya Torres',     email:'m.torres@harborlinebistro.com',   company:'Harborline Bistro',   plan:'Growth',  status:'active',  mrr:79,  accounts:3, joined:'2025-02-14', lastActive:'Today',      location:'Boston, MA',     notes:''},
+  {id:11, name:'Evan Brooks',     email:'evan@northstarcreative.io',       company:'Northstar Creative',  plan:'Pro',     status:'active',  mrr:149, accounts:6, joined:'2025-01-30', lastActive:'Today',      location:'New York, NY',   notes:''},
+  {id:12, name:'Danielle Reed',   email:'d.reed@reedsonscontracting.com',  company:'Reed & Sons',         plan:'Growth',  status:'active',  mrr:79,  accounts:4, joined:'2025-01-22', lastActive:'Yesterday',  location:'Nashville, TN',  notes:''},
+  {id:13, name:'Oliver Grant',    email:'o.grant@granttechsolutions.com',  company:'Grant Tech',          plan:'Pro',     status:'active',  mrr:448, accounts:8, joined:'2025-01-10', lastActive:'Today',      location:'Chicago, IL',    notes:'Capital+ add-on active'},
+  {id:14, name:'Fatima Hassan',   email:'fatima@hassanbakery.com',         company:'Hassan Bakery',       plan:'Starter', status:'active',  mrr:29,  accounts:2, joined:'2024-12-28', lastActive:'2 days ago', location:'Houston, TX',    notes:''},
+  {id:15, name:'Carlos Ibarra',   email:'carlos@ibarrafood.mx',            company:'Ibarra Foods',        plan:'Starter', status:'trial',   mrr:0,   accounts:1, joined:'2025-04-05', lastActive:'Today',      location:'San Diego, CA',  notes:''},
+  {id:16, name:'Rachel Quinn',    email:'r.quinn@quinnconsulting.io',      company:'Quinn Consulting',    plan:'Pro',     status:'active',  mrr:149, accounts:5, joined:'2025-03-28', lastActive:'Today',      location:'Washington, DC', notes:''},
+  {id:17, name:'David Nwosu',     email:'d.nwosu@nwosusupply.com',         company:'Nwosu Supply Co.',    plan:'Growth',  status:'active',  mrr:79,  accounts:3, joined:'2025-03-20', lastActive:'Yesterday',  location:'Detroit, MI',    notes:''},
+  {id:18, name:'Theo Ramos',      email:'theo@ramosretail.com',            company:'Ramos Retail',        plan:'Starter', status:'churned', mrr:0,   accounts:1, joined:'2024-12-10', lastActive:'Apr 1',      location:'Phoenix, AZ',    notes:'Cancelled: too expensive'},
+  {id:19, name:'Ada Osei',        email:'ada.osei@oseibakery.com',         company:'Osei Bakery',         plan:'Growth',  status:'churned', mrr:0,   accounts:2, joined:'2024-11-18', lastActive:'Apr 3',      location:'Columbus, OH',   notes:''},
+  {id:20, name:'Kevin Strand',    email:'k.strand@strandmedia.co',         company:'Strand Media',        plan:'Growth',  status:'churned', mrr:0,   accounts:2, joined:'2024-10-05', lastActive:'Apr 5',      location:'Minneapolis, MN',notes:''},
+];
+
+let selectedIds = new Set();
+let editingId = null;
+let currentPage = 1;
+const PAGE_SIZE = 12;
+let filtered = [...USERS];
+let sortKey = 'joined', sortDir = -1;
+let exportFormat = 'csv';
+
+// ── Section switch ─────────────────────────────────────
+const BC_NAMES = {overview:'Overview',users:'Users',subscriptions:'Subscriptions',revenue:'Revenue',activity:'Activity Log',pages:'Pages',pricing:'Pricing Plans',settings:'Settings'};
+function show(id, sidebarItem) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.aside-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  document.getElementById('bc-page').textContent = BC_NAMES[id] || id;
+  if (sidebarItem) sidebarItem.classList.add('active');
+  else {
+    document.querySelectorAll('.aside-item').forEach(b => {
+      if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+id+"'")) b.classList.add('active');
+    });
+  }
+  if (id === 'users') renderUsers();
+}
+
+// ── Sidebar filter ─────────────────────────────────────
+function filterSidebar(v) {
+  v = v.toLowerCase();
+  document.querySelectorAll('.aside-item').forEach(el => {
+    el.style.display = !v || el.textContent.toLowerCase().includes(v) ? '' : 'none';
+  });
+  document.querySelectorAll('.aside-group-title').forEach(el => el.style.display = v ? 'none' : '');
+}
+
+// ── Pill helpers ───────────────────────────────────────
+function sPill(s){
+  const m={active:['pill-active','● Active'],trial:['pill-trial','● Trial'],paused:['pill-paused','● Paused'],churned:['pill-churned','● Churned']};
+  return `<span class="pill ${m[s][0]}">${m[s][1]}</span>`;
+}
+function pPill(p){
+  const m={Starter:'pill-plan-starter',Growth:'pill-plan-growth',Pro:'pill-plan-pro','Capital+':'pill-plan-capital'};
+  return `<span class="pill ${m[p]||'pill-plan-growth'}">${p}</span>`;
+}
+
+// ── Render users table ─────────────────────────────────
+function applyFilters() {
+  const q = (document.querySelector('.search-inp')||{value:''}).value.toLowerCase();
+  const fs = (document.getElementById('f-status')||{value:''}).value;
+  const fp = (document.getElementById('f-plan')||{value:''}).value;
+  filtered = USERS.filter(u => {
+    const mq = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.company.toLowerCase().includes(q);
+    return mq && (!fs || u.status === fs) && (!fp || u.plan === fp);
+  });
+  filtered.sort((a,b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') av = av.toLowerCase(), bv = bv.toLowerCase();
+    return av < bv ? sortDir : av > bv ? -sortDir : 0;
+  });
+  currentPage = 1;
+  renderUsers();
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+  applyFilters();
+}
+
+function renderUsers() {
+  const start = (currentPage-1)*PAGE_SIZE, end = start+PAGE_SIZE;
+  const page = filtered.slice(start, end);
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = page.map(u => `
+    <tr class="${selectedIds.has(u.id)?'selected':''}" id="row-${u.id}">
+      <td class="cb-col"><input type="checkbox" ${selectedIds.has(u.id)?'checked':''} onchange="toggleRow(${u.id},this)"></td>
+      <td>
+        <div class="td-name">${u.name}</div>
+        <div class="td-secondary">${u.email}</div>
+        <div class="td-secondary">${u.company}</div>
+      </td>
+      <td>${pPill(u.plan)}</td>
+      <td>${sPill(u.status)}</td>
+      <td style="color:${u.mrr>0?'var(--gold)':'var(--muted)'};font-weight:${u.mrr>0?700:400};">${u.mrr>0?'$'+u.mrr:'–'}</td>
+      <td style="color:var(--muted);text-align:center;">${u.accounts}</td>
+      <td style="color:var(--muted);font-size:.78rem;white-space:nowrap;">${u.joined}</td>
+      <td style="color:var(--muted);font-size:.78rem;white-space:nowrap;">${u.lastActive}</td>
+      <td style="color:var(--muted);font-size:.78rem;">${u.location}</td>
+      <td>
+        <div style="display:flex;gap:.375rem;">
+          <button class="btn btn-ghost btn-icon" onclick="editUser(${USERS.findIndex(x=>x.id===u.id)})" title="Edit">✎</button>
+          <button class="btn btn-red btn-icon" onclick="confirmDeleteId(${u.id})" title="Delete">🗑</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  document.getElementById('users-shown').textContent = filtered.length;
+  renderPagination();
+  updateBulkBar();
+}
+
+// ── Pagination ─────────────────────────────────────────
+function renderPagination() {
+  const total = Math.ceil(filtered.length/PAGE_SIZE);
+  const info = document.getElementById('pag-info');
+  const btns = document.getElementById('pag-btns');
+  if (!info) return;
+  const s=(currentPage-1)*PAGE_SIZE+1, e=Math.min(currentPage*PAGE_SIZE,filtered.length);
+  info.textContent = filtered.length ? `${s}–${e} of ${filtered.length}` : '0 results';
+  btns.innerHTML = `<button class="pag-btn" onclick="goPag(${currentPage-1})" ${currentPage<=1?'disabled':''}>← Prev</button>`;
+  const pages = total <= 7 ? Array.from({length:total},(_,i)=>i+1)
+    : [1,2,'…',currentPage-1,currentPage,currentPage+1,'…',total].filter((v,i,a)=>v>0&&v<=total&&a.indexOf(v)===i);
+  pages.forEach(p => {
+    if (p==='…') btns.innerHTML += `<span class="pag-btn" style="cursor:default;opacity:.4;">…</span>`;
+    else btns.innerHTML += `<button class="pag-btn ${p===currentPage?'active':''}" onclick="goPag(${p})">${p}</button>`;
+  });
+  btns.innerHTML += `<button class="pag-btn" onclick="goPag(${currentPage+1})" ${currentPage>=total?'disabled':''}>Next →</button>`;
+}
+function goPag(p) {
+  const total = Math.ceil(filtered.length/PAGE_SIZE);
+  if (p < 1 || p > total) return;
+  currentPage = p;
+  renderUsers();
+}
+
+// ── Selection ─────────────────────────────────────────
+function toggleRow(id, cb) {
+  if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+  const row = document.getElementById('row-'+id);
+  if (row) row.classList.toggle('selected', cb.checked);
+  updateBulkBar();
+  document.getElementById('select-all').checked = filtered.every(u => selectedIds.has(u.id));
+}
+function toggleAll(cb) {
+  filtered.slice((currentPage-1)*PAGE_SIZE,(currentPage)*PAGE_SIZE).forEach(u => {
+    if (cb.checked) selectedIds.add(u.id); else selectedIds.delete(u.id);
+  });
+  renderUsers();
+}
+function clearSelection() { selectedIds.clear(); renderUsers(); }
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  if (!bar) return;
+  bar.style.display = selectedIds.size > 0 ? 'flex' : 'none';
+  document.getElementById('bulk-label').textContent = `${selectedIds.size} selected`;
+  document.getElementById('selected-count').textContent = selectedIds.size;
+}
+function bulkDelete() {
+  const n = selectedIds.size;
+  document.getElementById('confirm-msg').textContent = `Delete ${n} user${n>1?'s':''}? This cannot be undone.`;
+  document.getElementById('confirm-yes-btn').onclick = () => {
+    USERS = USERS.filter(u => !selectedIds.has(u.id));
+    selectedIds.clear();
+    document.getElementById('confirm-overlay').classList.remove('open');
+    applyFilters();
+    toast(`${n} user${n>1?'s':''} deleted.`, 'red');
+  };
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function handleAction(v) {
+  if (!v) return;
+  document.getElementById('f-action').value = '';
+  if (v.startsWith('export_')) { exportFormat = v.split('_')[1]; openExport('selected'); }
+  else if (v === 'delete') bulkDelete();
+}
+
+// ── Edit / Add ─────────────────────────────────────────
+function openAddUser(e) {
+  if (e) e.stopPropagation();
+  editingId = null;
+  document.getElementById('drawer-title').textContent = 'Add User';
+  document.getElementById('drawer-sub').textContent = '';
+  document.getElementById('delete-btn').style.display = 'none';
+  clearForm();
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+function editUser(idx) {
+  const u = USERS[idx];
+  if (!u) return;
+  editingId = u.id;
+  document.getElementById('drawer-title').textContent = 'Change User';
+  document.getElementById('drawer-sub').textContent = u.email + ' (' + u.name + ')';
+  document.getElementById('delete-btn').style.display = '';
+  document.getElementById('f-email').value = u.email;
+  document.getElementById('f-name').value = u.name;
+  document.getElementById('f-company').value = u.company;
+  document.getElementById('f-plan-input').value = u.plan;
+  document.getElementById('f-status-input').value = u.status;
+  document.getElementById('f-location').value = u.location;
+  document.getElementById('f-accounts').value = u.accounts;
+  document.getElementById('f-notes').value = u.notes || '';
+  document.getElementById('f-active').checked = u.status !== 'churned';
+  document.getElementById('f-first-login').checked = false;
+  const d = u.joined ? new Date(u.joined) : new Date();
+  document.getElementById('f-last-login-date').value = u.joined;
+  document.getElementById('f-last-login-time').value = '09:30';
+  document.getElementById('f-password').value = '';
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+function clearForm() {
+  ['f-email','f-name','f-company','f-location','f-notes','f-password'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-plan-input').value = '';
+  document.getElementById('f-status-input').value = 'active';
+  document.getElementById('f-accounts').value = '1';
+  document.getElementById('f-active').checked = true;
+  document.getElementById('f-first-login').checked = true;
+  document.getElementById('f-last-login-date').value = '';
+  document.getElementById('f-last-login-time').value = '';
+}
+function closeDrawer(e) {
+  if (e && e.target !== document.getElementById('drawer-overlay')) return;
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+function saveUser(keepOpen) {
+  const email = document.getElementById('f-email').value.trim();
+  if (!email) { toast('Email is required.', 'red'); return; }
+  const data = {
+    email, name: document.getElementById('f-name').value.trim(),
+    company: document.getElementById('f-company').value.trim(),
+    plan: document.getElementById('f-plan-input').value || 'Starter',
+    status: document.getElementById('f-status-input').value,
+    location: document.getElementById('f-location').value.trim(),
+    accounts: parseInt(document.getElementById('f-accounts').value)||1,
+    notes: document.getElementById('f-notes').value.trim(),
+    joined: document.getElementById('f-last-login-date').value || new Date().toISOString().slice(0,10),
+    lastActive: 'Just now',
+    mrr: {Starter:29,Growth:79,Pro:149,'Capital+':299}[document.getElementById('f-plan-input').value]||0,
+  };
+  if (data.status==='trial'||data.status==='churned') data.mrr = 0;
+  if (editingId !== null) {
+    const idx = USERS.findIndex(u=>u.id===editingId);
+    if (idx>=0) USERS[idx] = {...USERS[idx],...data};
+    toast('User updated successfully.','green');
+  } else {
+    data.id = Math.max(0,...USERS.map(u=>u.id))+1;
+    USERS.unshift(data);
+    toast('User added successfully.','green');
+  }
+  applyFilters();
+  if (!keepOpen) document.getElementById('drawer-overlay').classList.remove('open');
+}
+function saveAndAnother() {
+  saveUser(false);
+  setTimeout(openAddUser, 200);
+}
+function confirmDelete() {
+  if (editingId===null) return;
+  const u = USERS.find(u=>u.id===editingId);
+  document.getElementById('confirm-msg').textContent = `Delete "${u?u.name:'this user'}"? This cannot be undone.`;
+  document.getElementById('confirm-yes-btn').onclick = () => {
+    USERS = USERS.filter(u=>u.id!==editingId);
+    selectedIds.delete(editingId);
+    document.getElementById('confirm-overlay').classList.remove('open');
+    document.getElementById('drawer-overlay').classList.remove('open');
+    applyFilters();
+    toast('User deleted.','red');
+  };
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function confirmDeleteId(id) {
+  const u = USERS.find(u=>u.id===id);
+  document.getElementById('confirm-msg').textContent = `Delete "${u?u.name:'this user'}"? This cannot be undone.`;
+  document.getElementById('confirm-yes-btn').onclick = () => {
+    USERS = USERS.filter(u=>u.id!==id);
+    selectedIds.delete(id);
+    document.getElementById('confirm-overlay').classList.remove('open');
+    applyFilters();
+    toast('User deleted.','red');
+  };
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+// ── History modal ──────────────────────────────────────
+function openHistory() {
+  const u = editingId !== null ? USERS.find(u=>u.id===editingId) : null;
+  const list = document.getElementById('history-list');
+  list.innerHTML = [
+    {who:'admin',time:'Apr 11, 2025 07:38',change:`Plan changed: <span class="history-old">Starter</span> → <span class="history-new">${u?u.plan:'Growth'}</span>`},
+    {who:'admin',time:'Apr 9, 2025 14:12',change:`Status set to <span class="history-new">${u?u.status:'active'}</span>`},
+    {who:'system',time:'Apr 9, 2025 09:01',change:`Account created. Email: <span class="history-field">${u?u.email:'user@example.com'}</span>`},
+  ].map(h=>`<div class="history-item"><div class="history-header"><span class="history-who">${h.who}</span><span class="history-time">${h.time}</span></div><div class="history-change">${h.change}</div></div>`).join('');
+  document.getElementById('history-overlay').classList.add('open');
+}
+
+// ── Export ─────────────────────────────────────────────
+function openExport(scope) {
+  document.querySelector(`input[name=scope][value=${scope==='selected'?'selected':scope==='activity'?'all':'all'}]`).checked = true;
+  document.getElementById('export-overlay').classList.add('open');
+}
+function selectFormat(fmt, el) {
+  document.querySelectorAll('.format-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  exportFormat = fmt;
+}
+function doExport() {
+  const scope = document.querySelector('input[name=scope]:checked').value;
+  const data = scope==='selected' ? USERS.filter(u=>selectedIds.has(u.id)) : filtered;
+  const fields = ['name','email','plan','status','mrr','joined'];
+  let content, filename, mime;
+  if (exportFormat==='csv'||exportFormat==='tsv') {
+    const sep = exportFormat==='tsv' ? '\t' : ',';
+    const header = fields.join(sep);
+    const rows = data.map(u=>fields.map(f=>`"${String(u[f]).replace(/"/g,'""')}"`).join(sep));
+    content = [header,...rows].join('\n');
+    filename = `headroom-users-${new Date().toISOString().slice(0,10)}.${exportFormat}`;
+    mime = 'text/plain';
+  } else if (exportFormat==='json') {
+    content = JSON.stringify(data.map(u=>Object.fromEntries(fields.map(f=>[f,u[f]]))),null,2);
+    filename = `headroom-users-${new Date().toISOString().slice(0,10)}.json`;
+    mime = 'application/json';
+  } else if (exportFormat==='xml') {
+    content = `<?xml version="1.0" encoding="UTF-8"?>\n<users>\n`+data.map(u=>`  <user>\n${fields.map(f=>`    <${f}>${u[f]}</${f}>`).join('\n')}\n  </user>`).join('\n')+`\n</users>`;
+    filename = `headroom-users-${new Date().toISOString().slice(0,10)}.xml`;
+    mime = 'application/xml';
+  } else {
+    content = fields.join('\t')+'\n'+data.map(u=>fields.map(f=>u[f]).join('\t')).join('\n');
+    filename = `headroom-users-${new Date().toISOString().slice(0,10)}.${exportFormat}`;
+    mime = 'text/plain';
+  }
+  const blob = new Blob([content],{type:mime});
+  const a = Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:filename});
+  a.click();
+  document.getElementById('export-overlay').classList.remove('open');
+  toast(`Exported ${data.length} records as ${exportFormat.toUpperCase()}.`,'green');
+}
+
+// ── Import ─────────────────────────────────────────────
+function openImport() { document.getElementById('import-overlay').classList.add('open'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-drop').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+function handleFileSelect(input) { if (input.files[0]) processImportFile(input.files[0]); }
+function processImportFile(file) {
+  document.getElementById('import-filename').textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
+}
+function doImport() {
+  document.getElementById('import-overlay').classList.remove('open');
+  toast('Import complete. 0 rows added, 0 updated (preview mode).','blue');
+}
+function downloadTemplate() {
+  const content = 'name,email,company,plan,status,mrr,accounts,joined,location\nJane Smith,jane@example.com,Acme Co.,Growth,active,79,3,2025-04-01,"Chicago, IL"';
+  const a = Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([content],{type:'text/csv'})),download:'headroom-import-template.csv'});
+  a.click();
+}
+
+// ── Toast ──────────────────────────────────────────────
+function toast(msg, type) {
+  const t=document.getElementById('toast'), c={green:'var(--green)',red:'var(--red)',blue:'var(--blue)'};
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-dot').style.background = c[type]||'var(--gold)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ── Init ───────────────────────────────────────────────
+applyFilters();
+</script>
+</body>
+</html>

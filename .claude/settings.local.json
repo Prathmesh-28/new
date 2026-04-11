@@ -4,7 +4,8 @@
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(git -C /c/Users/PRATHMESH/Downloads/new status)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(awk '{:*)"
     ]
   }
 }

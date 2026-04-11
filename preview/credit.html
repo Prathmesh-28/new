@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Headroom Credit Rescue | Embedded Capital Support for SMBs</title>
+<style>
+:root{--olive-deepest:#1c2209;--olive-deep:#2e3a10;--olive-mid:#4a5e1a;--olive-bright:#6b8526;--olive-light:#96b83d;--olive-pale:#c4d97a;--olive-wash:#e8f0c2;--olive-cream:#f4f1e4;--gold:#c9a227;--gold-light:#e8c84a;--cream:#fdfaf0;--text-dark:#1a1f0a;--text-mid:#3d4a1e;--text-muted:#6b7a3d;--white:#ffffff;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:linear-gradient(180deg,var(--cream) 0%,#f4eddf 42%,#ece1cc 100%);min-height:100vh;color:var(--text-dark);font-family:"Aptos","Avenir Next","Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+h1,h2,h3{font-family:"Iowan Old Style","Book Antiqua","Palatino Linotype",serif;letter-spacing:-0.01em;}
+a{text-decoration:none;color:inherit;}
+.container{max-width:1152px;margin:0 auto;padding:0 2rem;}
+nav{position:sticky;top:0;z-index:50;background-color:var(--olive-deepest);border-bottom:1px solid var(--olive-deep);}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px;}
+.nav-logo{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.25rem;font-weight:700;color:#fff;letter-spacing:-.02em;}
+.nav-links{display:flex;gap:1.5rem;}
+.nav-links a{font-size:.875rem;color:var(--olive-wash);}
+.nav-links a:hover{color:#fff;}
+.nav-actions{display:flex;align-items:center;gap:1rem;}
+.nav-actions a{font-size:.875rem;color:var(--olive-wash);}
+.btn-gold-sm{background-color:var(--gold);color:var(--olive-deepest);padding:.5rem 1rem;border-radius:.375rem;font-weight:600;font-size:.875rem;}
+.badge{display:inline-flex;border-radius:9999px;border:1px solid rgba(94,82,64,.18);background-color:rgba(255,255,255,.55);color:var(--olive-mid);padding:.25rem .75rem;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.2em;}
+/* Hero */
+.hero{padding:6rem 0 3rem;}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:2.5rem;align-items:center;}
+.hero-grid h1{margin-top:1.5rem;font-size:3.5rem;font-weight:600;letter-spacing:-.02em;line-height:1.1;}
+.hero-grid p{margin-top:1.5rem;font-size:1.125rem;line-height:2;color:rgba(42,36,28,.78);}
+.signal-card{border-radius:2rem;border:1px solid rgba(94,82,64,.14);background-color:rgba(255,255,255,.76);padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.signal-item{border-radius:1rem;border:1px solid rgba(94,82,64,.12);padding:1rem;margin-bottom:1rem;}
+.signal-item:last-child{margin-bottom:0;}
+.signal-label{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--olive-mid);margin-bottom:.5rem;}
+.signal-desc{font-size:.875rem;line-height:1.65;color:rgba(42,36,28,.76);}
+/* Steps */
+.steps-section{padding:0 0 4rem;}
+.steps-header{max-width:600px;margin-bottom:2rem;}
+.steps-header h2{font-size:2.25rem;font-weight:600;letter-spacing:-.02em;margin-bottom:1rem;}
+.steps-header p{font-size:1rem;line-height:1.75;color:rgba(42,36,28,.76);}
+.steps-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;}
+.step-card{border-radius:1.5rem;border:1px solid rgba(94,82,64,.14);background-color:rgba(255,255,255,.76);padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.step-card h3{font-size:1.125rem;font-weight:600;margin-bottom:.75rem;}
+.step-card p{font-size:.875rem;line-height:1.75;color:rgba(42,36,28,.76);}
+/* Repayment box */
+.repay-section{padding:0 0 4rem;}
+.repay-box{border-radius:2rem;border:1px solid rgba(94,82,64,.14);background:linear-gradient(135deg,rgba(64,86,58,.08) 0%,rgba(192,160,98,.14) 100%);padding:2.5rem;}
+.repay-grid{display:grid;grid-template-columns:.95fr 1.05fr;gap:2rem;align-items:center;}
+.repay-grid h2{font-size:2.25rem;font-weight:600;letter-spacing:-.02em;margin-bottom:1rem;}
+.repay-grid p{font-size:1rem;line-height:1.75;color:rgba(42,36,28,.78);}
+.repay-items{display:flex;flex-direction:column;gap:1rem;}
+.repay-item{border-radius:1rem;border:1px solid rgba(94,82,64,.14);background-color:rgba(255,255,255,.64);padding:1rem 1.25rem;font-size:.875rem;line-height:1.65;}
+/* Bottom cards */
+.bottom-section{padding:0 0 6rem;}
+.bottom-grid{display:grid;grid-template-columns:.95fr 1.05fr;gap:1.25rem;}
+.bottom-card{border-radius:1.5rem;border:1px solid rgba(94,82,64,.14);background-color:rgba(255,255,255,.76);padding:1.75rem;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.bottom-card h2{font-size:1.5rem;font-weight:600;margin-bottom:1rem;}
+.bottom-card p{font-size:.875rem;line-height:1.75;color:rgba(42,36,28,.76);}
+.principle-item{border-radius:1rem;border:1px solid rgba(94,82,64,.12);padding:.75rem 1rem;font-size:.875rem;line-height:1.65;margin-bottom:.75rem;}
+.principle-item:last-child{margin-bottom:0;}
+footer{background-color:var(--olive-deepest);color:var(--olive-wash);padding:4rem 0;}
+.footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2.5rem;margin-bottom:3rem;}
+.footer-brand{font-family:"Iowan Old Style","Book Antiqua",serif;font-size:1.25rem;font-weight:700;color:#fff;display:block;margin-bottom:1rem;}
+.footer-col-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#fff;margin-bottom:1rem;}
+.footer-links{list-style:none;display:flex;flex-direction:column;gap:.75rem;}
+.footer-links a,.footer-links span{font-size:.875rem;color:var(--olive-pale);}
+.footer-links a:hover{color:#fff;}
+.footer-bottom{border-top:1px solid var(--olive-deep);padding-top:2rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;}
+.footer-socials{display:flex;gap:1.5rem;}
+.footer-socials a{font-size:.75rem;color:var(--olive-mid);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">Head<span style="color:var(--gold)">room</span></a>
+      <div class="nav-links">
+        <a href="features.html">Platform</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="credit.html" style="color:#fff;">Credit rescue</a>
+        <a href="capital.html">Capital raise</a>
+        <a href="#">For advisors</a>
+      </div>
+      <div class="nav-actions">
+        <a href="#">Sign in</a>
+        <a href="index.html#trial" class="btn-gold-sm">Start free trial</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div>
+          <span class="badge">Embedded credit rescue</span>
+          <h1>Credit support that appears inside the cash flow workflow</h1>
+          <p>Headroom does not treat financing as a separate destination. When a forecast shows real pressure, the platform can surface rescue options in context, evaluate fit with silent underwriting, and model repayment impact before a business commits.</p>
+        </div>
+        <div class="signal-card">
+          <div class="signal-item">
+            <div class="signal-label">Forecast signal</div>
+            <div class="signal-desc">P50 cash crosses your safety threshold or goes negative inside the next 30 days.</div>
+          </div>
+          <div class="signal-item">
+            <div class="signal-label">Rescue evaluation</div>
+            <div class="signal-desc">Headroom checks silent underwriting signals using connected operating data already in the workspace.</div>
+          </div>
+          <div class="signal-item">
+            <div class="signal-label">Decision support</div>
+            <div class="signal-desc">Repayment simulation shows how accepting capital changes runway across the next 90 days.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How the rescue engine works -->
+  <section class="steps-section">
+    <div class="container">
+      <div class="steps-header">
+        <h2>How the rescue engine works</h2>
+        <p>The Headroom credit layer responds to real operating conditions, not generic lead forms. It keeps the financing decision tied to the forecast that made support necessary in the first place.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card">
+          <h3>1. Forecast identifies pressure</h3>
+          <p>Headroom monitors daily cash position, safety threshold, and downside cases to spot a likely gap before it reaches the bank balance.</p>
+        </div>
+        <div class="step-card">
+          <h3>2. Alerts explain what changed</h3>
+          <p>Instead of a generic warning, the alert engine shows whether pressure comes from payroll timing, overdue invoices, inventory, debt service, or revenue softness.</p>
+        </div>
+        <div class="step-card">
+          <h3>3. Silent underwriting runs in the background</h3>
+          <p>When rescue is appropriate, Headroom evaluates inflow consistency, overdraft history, and repayment load using connected data before a formal application starts.</p>
+        </div>
+        <div class="step-card">
+          <h3>4. Repayment impact is simulated before acceptance</h3>
+          <p>Operators can see how a facility changes future cash positions, helping them compare support options without masking downstream strain.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Repayment simulation -->
+  <section class="repay-section">
+    <div class="container">
+      <div class="repay-box">
+        <div class="repay-grid">
+          <div>
+            <h2>Repayment simulation changes the decision quality</h2>
+            <p>Many products stop at eligibility. Headroom goes further by showing how repayment could affect cash flow over time. That helps operators understand whether support genuinely stabilizes the business or simply moves pressure into the next cycle.</p>
+          </div>
+          <div class="repay-items">
+            <div class="repay-item">Compare projected cash positions before and after financing</div>
+            <div class="repay-item">See how repayment timing interacts with payroll, payables, and collections</div>
+            <div class="repay-item">Evaluate whether the rescue option protects or compresses runway</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom cards -->
+  <section class="bottom-section">
+    <div class="container">
+      <div class="bottom-grid">
+        <div class="bottom-card">
+          <h2>Why this approach matters</h2>
+          <p>Embedded credit rescue works best when it stays connected to the operating truth of the business. Headroom uses forecasting and alerting to identify when support may be needed, then frames financing as one option inside a broader cash management workflow.</p>
+        </div>
+        <div class="bottom-card">
+          <h2>Design principles</h2>
+          <div style="margin-top:1rem;">
+            <div class="principle-item">Embedded in the product workflow, not bolted on after the fact</div>
+            <div class="principle-item">Triggered by real operating risk rather than broad acquisition funnels</div>
+            <div class="principle-item">Designed to preserve visibility into future repayment pressure</div>
+            <div class="principle-item">Structured to support smarter decisions, not just faster approvals</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div><span class="footer-brand">Head<span style="color:var(--gold)">room</span></span><p style="font-size:.875rem;color:var(--olive-pale);line-height:1.65;margin-bottom:1rem;">Cash flow intelligence for SMBs with honest forecasting, embedded credit rescue, and capital readiness when timing matters.</p><p style="font-size:.75rem;color:var(--olive-mid);">Copyright 2025 Headroom</p></div>
+      <div><h4 class="footer-col-title">Product</h4><ul class="footer-links"><li><a href="features.html">Platform overview</a></li><li><a href="pricing.html">Pricing</a></li><li><a href="credit.html">Credit rescue</a></li><li><a href="capital.html">Capital raise</a></li></ul></div>
+      <div><h4 class="footer-col-title">Platform</h4><ul class="footer-links"><li><span>90-day forecast</span></li><li><span>Confidence bands</span></li><li><span>Alert engine</span></li><li><span>Credit rescue</span></li><li><span>Public capital workflows</span></li></ul></div>
+      <div><h4 class="footer-col-title">Company</h4><ul class="footer-links"><li><a href="#">About</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li><li><a href="#">Privacy Policy</a></li><li><a href="#">Contact</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><p style="font-size:.75rem;color:var(--olive-mid);">Built for SMB operators who need clearer cash decisions.</p><div class="footer-socials"><a href="#">Twitter / X</a><a href="#">LinkedIn</a><a href="#">Instagram</a></div></div>
+  </div>
+</footer>
+
+</body>
+</html>
