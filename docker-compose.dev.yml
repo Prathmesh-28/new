@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  forecast-service:
+    build:
+      context: ./services/forecast-service
+    container_name: headroom-forecast-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: headroom
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      ENVIRONMENT: development
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - headroom-network
+    ports:
+      - "8001:8001"
+
+  credit-service:
+    build:
+      context: ./services/credit-service
+    container_name: headroom-credit-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: headroom
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      ENVIRONMENT: development
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - headroom-network
+    ports:
+      - "8002:8002"
+
+  capital-service:
+    build:
+      context: ./services/capital-service
+    container_name: headroom-capital-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: headroom
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      ENVIRONMENT: development
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - headroom-network
+    ports:
+      - "8003:8003"
+
+networks:
+  headroom-network:
+    driver: bridge

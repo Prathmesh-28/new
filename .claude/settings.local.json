@@ -5,7 +5,15 @@
       "Bash(npm run:*)",
       "Bash(git -C /c/Users/PRATHMESH/Downloads/new status)",
       "Bash(gh auth:*)",
-      "Bash(awk '{:*)"
+      "Bash(awk '{:*)",
+      "Bash(mkdir -p /Users/prathmeshwalimbe/Downloads/new/services/data-sync/connectors)",
+      "Bash(mkdir -p /Users/prathmeshwalimbe/Downloads/new/services/data-sync/webhooks)",
+      "Bash(python3 -c \"import hmac, hashlib; print\\(hmac.new\\(b'key', b'msg', hashlib.sha256\\).hexdigest\\(\\)\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx --yes tsc --noEmit)",
+      "Bash(chmod +x /Users/prathmeshwalimbe/Downloads/new/node_modules/.bin/tsc)",
+      "Bash(/Users/prathmeshwalimbe/Downloads/new/node_modules/.bin/tsc --noEmit)",
+      "Bash(node /Users/prathmeshwalimbe/Downloads/new/node_modules/typescript/bin/tsc --noEmit --project /Users/prathmeshwalimbe/Downloads/new/tsconfig.json)"
     ]
   }
 }

@@ -1,0 +1,45 @@
+{
+  "name": "headroom-api-gateway",
+  "version": "1.0.0",
+  "description": "Headroom API Gateway - Node.js + Fastify",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --loader tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "lint": "eslint src",
+    "format": "prettier --write src"
+  },
+  "dependencies": {
+    "fastify": "^4.25.0",
+    "fastify-cors": "^8.4.2",
+    "fastify-jwt": "^7.0.1",
+    "fastify-rate-limit": "^9.1.0",
+    "fastify-helmet": "^11.1.1",
+    "zod": "^3.22.4",
+    "@fastify/zod": "^1.2.1",
+    "axios": "^1.6.2",
+    "pg": "^8.11.0",
+    "redis": "^4.6.12",
+    "jsonwebtoken": "^9.1.0",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.3.1",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "tsx": "^4.6.2",
+    "@types/node": "^20.10.5",
+    "@types/fastify": "^3.10.8",
+    "@types/bcrypt": "^5.0.2",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "vitest": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

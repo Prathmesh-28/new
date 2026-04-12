@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  credit-service:
+    build:
+      context: ./services/credit-service
+    ports:
+      - "8002:8002"
+    environment:
+      DB_HOST: host.docker.internal
+      DB_PORT: 5432
+      DB_NAME: headroom
+      DB_USER: postgres
+      DB_PASSWORD: postgres
