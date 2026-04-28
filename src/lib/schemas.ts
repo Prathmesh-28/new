@@ -26,10 +26,10 @@ export type ForecastDatapoint = z.infer<typeof ForecastDatapointSchema>;
 
 export const ForecastSchema = z.object({
   id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
+  tenant_id: z.string().uuid().optional(),
   generated_at: z.string(),
   status: z.enum(["pending", "complete", "error"]),
-  model_version: z.string(),
+  model_version: z.string().optional(),
   datapoints: z.array(ForecastDatapointSchema),
 });
 export type Forecast = z.infer<typeof ForecastSchema>;
@@ -65,27 +65,27 @@ export const LoanDrawParamsSchema = z.object({
   draw_date: IsoDateString,
 });
 
-export const ScenarioCreateSchema = z
-  .object({
-    name: z.string().min(1).max(100),
-    type: ScenarioTypeSchema,
-    parameters: z.record(z.unknown()),
-  })
-  .superRefine((val, ctx) => {
-    try {
-      if (val.type === "new_hire") NewHireParamsSchema.parse(val.parameters);
-      else if (val.type === "contract_won") ContractWonParamsSchema.parse(val.parameters);
-      else if (val.type === "loan_draw") LoanDrawParamsSchema.parse(val.parameters);
-    } catch (e: any) {
-      ctx.addIssue({ code: "custom", message: e.message, path: ["parameters"] });
-    }
-  });
+const ScenarioCreateBaseSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: ScenarioTypeSchema,
+  parameters: z.record(z.unknown()),
+});
+
+export const ScenarioCreateSchema = ScenarioCreateBaseSchema.superRefine((val, ctx) => {
+  try {
+    if (val.type === "new_hire") NewHireParamsSchema.parse(val.parameters);
+    else if (val.type === "contract_won") ContractWonParamsSchema.parse(val.parameters);
+    else if (val.type === "loan_draw") LoanDrawParamsSchema.parse(val.parameters);
+  } catch (e: any) {
+    ctx.addIssue({ code: "custom", message: e.message, path: ["parameters"] });
+  }
+});
 export type ScenarioCreate = z.infer<typeof ScenarioCreateSchema>;
 
-export const ScenarioSchema = ScenarioCreateSchema.extend({
+export const ScenarioSchema = ScenarioCreateBaseSchema.extend({
   id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
-  version: z.number().int(),
+  tenant_id: z.string().uuid().optional(),
+  version: z.number().int().optional(),
   created_at: z.string(),
 });
 export type Scenario = z.infer<typeof ScenarioSchema>;
@@ -107,7 +107,7 @@ export type ScenarioCompare = z.infer<typeof ScenarioCompareSchema>;
 // Alerts
 // ---------------------------------------------------------------------------
 
-export const AlertSeveritySchema = z.enum(["critical", "warning", "info"]);
+export const AlertSeveritySchema = z.enum(["critical", "high", "medium", "low"]);
 export type AlertSeverity = z.infer<typeof AlertSeveritySchema>;
 
 export const AlertSchema = z.object({

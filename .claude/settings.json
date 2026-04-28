@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/prathmeshwalimbe/**)",
+      "Read(//Users/prathmeshwalimbe/Downloads/**)",
+      "Bash(aws ec2 *)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(node -e \"const S = require\\('stripe'\\); console.log\\(Object.keys\\(S.LATEST_API_VERSION || S\\).slice\\(0,3\\)\\)\")",
+      "Bash(node -e \"const S = require\\('/Users/prathmeshwalimbe/Downloads/new/node_modules/stripe'\\); console.log\\(S.API_VERSION\\)\")",
+      "Bash(node node_modules/next/dist/bin/next build)",
+      "Bash(chmod 400 /Users/prathmeshwalimbe/Downloads/new/headroom.pem)",
+      "Bash(ssh -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ec2-user@13.54.2.137 \"uname -a && df -h / && free -m\")",
+      "Bash(ssh -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem -o StrictHostKeyChecking=no ec2-user@13.54.2.137 ' *)",
+      "Bash(ssh -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem -o StrictHostKeyChecking=no ec2-user@13.54.2.137 \"mkdir -p /home/ec2-user/headroom\")",
+      "Bash(rsync -az --progress -e 'ssh -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem -o StrictHostKeyChecking=no' --exclude=.next --exclude=node_modules --exclude=.git '--exclude=*.pem' --exclude=services/api-gateway --exclude=services/alert-engine --exclude=services/data-sync --exclude=services/credit-service --exclude=services/capital-service --exclude=infrastructure /Users/prathmeshwalimbe/Downloads/new/ ec2-user@13.54.2.137:/home/ec2-user/headroom/)",
+      "Bash(rsync -az -e 'ssh -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem -o StrictHostKeyChecking=no' /Users/prathmeshwalimbe/Downloads/new/services/django-backend/apps/core/models.py ec2-user@13.54.2.137:/home/ec2-user/headroom/services/django-backend/apps/core/models.py)",
+      "Bash(ssh -i *)",
+      "Bash(curl -s http://13.54.2.137/health)",
+      "Bash(curl -s -o /dev/null -w 'HTTP %{http_code}' http://13.54.2.137)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://13.54.2.137)",
+      "Bash(curl -s -o /dev/null -w 'home: %{http_code}\\\\n' --max-time 10 http://13.54.2.137)",
+      "Bash(curl -s -o /dev/null -w 'pricing: %{http_code}\\\\n' --max-time 10 http://13.54.2.137/pricing)",
+      "Bash(curl -s -o /dev/null -w 'login: %{http_code}\\\\n' --max-time 10 http://13.54.2.137/admin/login)",
+      "Bash(curl -s -w 'django health: %{http_code} — body: ' --max-time 10 http://13.54.2.137/django-admin/)",
+      "Bash(curl -s --max-time 10 http://13.54.2.137/admin/login)",
+      "Bash(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem ec2-user@13.54.2.137 \"uptime && free -m && echo SSH_OK\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem ec2-user@13.54.2.137 \"echo SSH_OK\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i /Users/prathmeshwalimbe/Downloads/new/headroom.pem ec2-user@13.54.2.137 \"free -m && sudo systemctl is-active headroom-nextjs headroom-django\")"
+    ]
+  }
+}

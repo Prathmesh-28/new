@@ -111,7 +111,7 @@ export async function createSession(
     RETURNING token
   `;
   
-  const result = await queryDb(query, [token, userId, tenantId, expiresAt]);
+  const result = await queryDb(query, [token, userId, tenantId, expiresAt.toISOString()]);
   return result.rows[0].token;
 }
 
@@ -127,7 +127,7 @@ export function generateSessionToken(): string {
 // Legacy admin user authentication
 export async function authAdminUser(email: string, password: string): Promise<any> {
   const query = `
-    SELECT id, email, role, tenant_id
+    SELECT id, email, role, tenant_id, password_hash
     FROM users
     WHERE email = $1
     AND role = 'admin'
@@ -136,18 +136,17 @@ export async function authAdminUser(email: string, password: string): Promise<an
   `;
   
   const result = await queryDb(query, [email]);
-  
+
   if (!result.rows[0]) return null;
-  
+
   const user = result.rows[0];
-  
-  // For now, use a placeholder - in production, password should be stored hashed
-  // and verified through bcryptjs
-  if (password === "headroom@2024") {
-    return user;
-  }
-  
-  return null;
+
+  if (!user.password_hash) return null;
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return null;
+
+  return user;
 }
 
 export async function closeDb(): Promise<void> {

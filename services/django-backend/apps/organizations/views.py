@@ -109,16 +109,18 @@ def forecast_latest(request, org_id):
     datapoints = ForecastDatapoint.objects.filter(forecast=forecast).order_by("date")
     payload = {
         "id": str(forecast.id),
+        "tenant_id": str(forecast.tenant_id),
         "generated_at": forecast.generated_at.isoformat(),
         "status": forecast.status,
+        "model_version": forecast.base_model_version or "1.0",
         "days_forecasted": forecast.days_forecasted,
         "datapoints": [
             {
                 "date": dp.date.isoformat(),
-                "best_case": float(dp.best_case or 0),
-                "expected_case": float(dp.expected_case or 0),
-                "downside_case": float(dp.downside_case or 0),
-                "confidence_level": float(dp.confidence_level or 0),
+                "balance_p90": float(dp.best_case or 0),
+                "balance_p50": float(dp.expected_case or 0),
+                "balance_p10": float(dp.downside_case or 0),
+                "confidence_score": float(dp.confidence_level or 0),
             }
             for dp in datapoints
         ],
@@ -160,14 +162,16 @@ def scenarios(request, org_id):
         return err
 
     if request.method == "GET":
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
-        qs = ForecastScenario.objects.filter(tenant=tenant)[offset: offset + limit]
+        qs = ForecastScenario.objects.filter(tenant=tenant).order_by("-created_at")[:50]
         data = [
-            {"id": str(s.id), "name": s.name, "type": s.type, "parameters": s.parameters, "created_at": s.created_at.isoformat()}
+            {
+                "id": str(s.id), "tenant_id": str(s.tenant_id), "name": s.name,
+                "type": s.type, "parameters": s.parameters, "version": s.version,
+                "created_at": s.created_at.isoformat(),
+            }
             for s in qs
         ]
-        return Response({"data": data, "pagination": {"limit": limit, "offset": offset}})
+        return Response(data)
 
     name = request.data.get("name")
     stype = request.data.get("type")
@@ -178,10 +182,57 @@ def scenarios(request, org_id):
 
     scenario = ForecastScenario.objects.create(tenant=tenant, name=name, type=stype, parameters=params)
     return Response(
-        {"id": str(scenario.id), "name": scenario.name, "type": scenario.type,
-         "parameters": scenario.parameters, "created_at": scenario.created_at.isoformat()},
+        {
+            "id": str(scenario.id), "tenant_id": str(scenario.tenant_id),
+            "name": scenario.name, "type": scenario.type,
+            "parameters": scenario.parameters, "version": scenario.version,
+            "created_at": scenario.created_at.isoformat(),
+        },
         status=status.HTTP_201_CREATED,
     )
+
+
+# ── Scenario compare ───────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def scenario_compare(request, org_id, scenario_id):
+    tenant, err = _check_org_access(request, org_id)
+    if err:
+        return err
+
+    try:
+        scenario = ForecastScenario.objects.get(pk=scenario_id, tenant=tenant)
+    except ForecastScenario.DoesNotExist:
+        return Response({"detail": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        forecast = Forecast.objects.filter(tenant=tenant, status="complete").latest("generated_at")
+    except Forecast.DoesNotExist:
+        return Response({"detail": "No forecast available."}, status=status.HTTP_404_NOT_FOUND)
+
+    datapoints = ForecastDatapoint.objects.filter(forecast=forecast).order_by("date")
+
+    params = scenario.parameters or {}
+    comparison = []
+    for dp in datapoints:
+        base = float(dp.expected_case or 0)
+        scenario_val = base
+        if scenario.type == "new_hire":
+            monthly_cost = float(params.get("salary", 0)) * (1 + float(params.get("benefits_multiplier", 0.15))) / 12
+            scenario_val = base - monthly_cost
+        elif scenario.type == "contract_won":
+            scenario_val = base + float(params.get("amount", 0))
+        elif scenario.type == "loan_draw":
+            scenario_val = base + float(params.get("draw_amount", 0)) - float(params.get("repayment_amount", 0)) / max(int(params.get("term_months", 12)), 1)
+        comparison.append({
+            "date": dp.date.isoformat(),
+            "base": base,
+            "scenario": round(scenario_val, 2),
+            "delta": round(scenario_val - base, 2),
+        })
+
+    return Response({"scenario_name": scenario.name, "comparison": comparison})
 
 
 # ── Alerts ─────────────────────────────────────────────────────────────────────

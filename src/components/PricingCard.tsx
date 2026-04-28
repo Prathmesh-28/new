@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { useState } from "react";
 
 interface PricingCardProps {
   plan: string;
@@ -19,10 +21,34 @@ export default function PricingCard({
   description,
   features,
   cta,
-  href = "/#trial",
   featured = false,
   badge,
 }: PricingCardProps) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    const planKey = plan.toLowerCase();
+    if (!["starter", "growth", "pro"].includes(planKey)) {
+      window.location.href = "/dashboard";
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planKey }),
+      });
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
     <div
       className="relative rounded-2xl p-8 flex flex-col"
@@ -84,9 +110,10 @@ export default function PricingCard({
         {description}
       </p>
 
-      <Link
-        href={href}
-        className="w-full block text-center py-3.5 rounded-lg font-semibold text-sm transition-all hover:opacity-90 mb-8"
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="w-full block text-center py-3.5 rounded-lg font-semibold text-sm transition-all hover:opacity-90 mb-8 disabled:opacity-60 cursor-pointer"
         style={
           featured
             ? {
@@ -100,8 +127,8 @@ export default function PricingCard({
               }
         }
       >
-        {cta}
-      </Link>
+        {loading ? "Loading…" : cta}
+      </button>
 
       <ul className="space-y-3 flex-1">
         {features.map((feature, i) => (

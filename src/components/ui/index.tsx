@@ -62,7 +62,8 @@ export function Badge({
 
 export function severityVariant(severity: string): BadgeVariant {
   if (severity === "critical") return "red";
-  if (severity === "warning")  return "gold";
+  if (severity === "high")     return "red";
+  if (severity === "medium" || severity === "warning") return "gold";
   return "green";
 }
 

@@ -71,7 +71,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="users")
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
+    password_hash = models.CharField(max_length=255, blank=True, null=True)
     full_name = models.CharField(max_length=255, blank=True, null=True)
     role = models.CharField(max_length=50, choices=Role.choices, default=Role.OWNER)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.ACTIVE)

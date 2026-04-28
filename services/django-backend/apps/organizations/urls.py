@@ -7,5 +7,6 @@ urlpatterns = [
     path("<uuid:org_id>/forecast", views.forecast_latest, name="org-forecast"),
     path("<uuid:org_id>/forecast/trigger", views.forecast_trigger, name="org-forecast-trigger"),
     path("<uuid:org_id>/forecast/scenarios", views.scenarios, name="org-scenarios"),
+    path("<uuid:org_id>/forecast/scenarios/<uuid:scenario_id>/compare", views.scenario_compare, name="org-scenario-compare"),
     path("<uuid:org_id>/alerts", views.org_alerts, name="org-alerts"),
 ]

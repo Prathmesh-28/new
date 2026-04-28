@@ -8,10 +8,11 @@ import { Button, Spinner } from "@/components/ui";
 import { useAlerts } from "@/lib/query";
 
 const NAV: { href: string; label: string; icon: string }[] = [
-  { href: "/dashboard",         label: "Overview",  icon: "◈" },
+  { href: "/dashboard",          label: "Overview",  icon: "◈" },
   { href: "/dashboard/forecast", label: "Forecast",  icon: "〜" },
   { href: "/dashboard/credit",   label: "Credit",    icon: "₹" },
   { href: "/dashboard/alerts",   label: "Alerts",    icon: "◉" },
+  { href: "/dashboard/settings", label: "Settings",  icon: "⚙" },
 ];
 
 export default function DashboardLayout({

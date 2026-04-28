@@ -110,8 +110,11 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── Django REST Framework ──────────────────────────────────────────────────────
+DJANGO_SERVICE_KEY = config("DJANGO_SERVICE_KEY", default="")
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "apps.auth_api.service_auth.ServiceKeyAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
@@ -171,6 +174,7 @@ PLAID_SECRET = config("PLAID_SECRET", default="")
 PLAID_ENV = config("PLAID_ENV", default="sandbox")
 
 SARDINE_API_KEY = config("SARDINE_API_KEY", default="")
+DJANGO_API_URL = config("DJANGO_API_URL", default="http://localhost:8000")
 
 LOGGING = {
     "version": 1,

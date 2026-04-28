@@ -48,7 +48,7 @@ export const queryClient = new QueryClient({
 // Base fetch helper
 // ---------------------------------------------------------------------------
 
-const BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? "/api";
+const BASE = "/api/proxy";
 
 export async function apiFetch<T>(
   path: string,
@@ -98,9 +98,8 @@ export function useForecast(tenantId: string | null) {
     queryKey: keys.forecast(tenantId ?? ""),
     queryFn: () =>
       apiFetch<Forecast>(
-        `/forecast/${tenantId}`,
-        undefined,
-        ForecastSchema
+        `/organisations/${tenantId}/forecast`,
+        ForecastSchema,
       ),
     enabled: !!tenantId,
   });
@@ -110,9 +109,8 @@ export function useTriggerForecast(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      apiFetch(`/forecast/${tenantId}/trigger`, { method: "POST" }),
+      apiFetch(`/organisations/${tenantId}/forecast/trigger`, undefined, { method: "POST" }),
     onSuccess: () => {
-      // Invalidate after a short delay to allow background job to start
       setTimeout(() => qc.invalidateQueries({ queryKey: keys.forecast(tenantId) }), 3000);
     },
   });
@@ -126,7 +124,7 @@ export function useScenarios(tenantId: string | null) {
   return useQuery({
     queryKey: keys.scenarios(tenantId ?? ""),
     queryFn: () =>
-      apiFetch<Scenario[]>(`/forecast/${tenantId}/scenarios`),
+      apiFetch<Scenario[]>(`/organisations/${tenantId}/forecast/scenarios`),
     enabled: !!tenantId,
   });
 }
@@ -135,7 +133,7 @@ export function useCreateScenario(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: ScenarioCreate) =>
-      apiFetch<Scenario>(`/forecast/${tenantId}/scenarios`, {
+      apiFetch<Scenario>(`/organisations/${tenantId}/forecast/scenarios`, undefined, {
         method: "POST",
         body: JSON.stringify(data),
       }),
@@ -156,7 +154,7 @@ export function useScenarioCompare(
       apiFetch<{
         comparison: Array<{ date: string; base: number; scenario: number; delta: number }>;
         scenario_name: string;
-      }>(`/forecast/${tenantId}/scenarios/${scenarioId}/compare`),
+      }>(`/organisations/${tenantId}/forecast/scenarios/${scenarioId}/compare`),
     enabled: !!tenantId && !!scenarioId,
     staleTime: 2 * 60 * 1000,
   });
@@ -172,11 +170,10 @@ export function useAlerts(tenantId: string | null, unreadOnly = false) {
     queryFn: () =>
       apiFetch<Alert[]>(
         `/alerts/${tenantId}?unread_only=${unreadOnly}&limit=50`,
-        undefined,
-        z.array(AlertSchema)
+        z.array(AlertSchema),
       ),
     enabled: !!tenantId,
-    refetchInterval: 60 * 1000,   // poll every minute for new alerts
+    refetchInterval: 60 * 1000,
   });
 }
 
@@ -184,7 +181,7 @@ export function useMarkAlertRead(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (alertId: string) =>
-      apiFetch(`/alerts/${tenantId}/${alertId}/read`, { method: "PATCH" }),
+      apiFetch(`/alerts/${tenantId}/${alertId}/read`, undefined, { method: "PATCH" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts", tenantId] });
     },
@@ -195,7 +192,7 @@ export function useMarkAllAlertsRead(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      apiFetch(`/alerts/${tenantId}/read-all`, { method: "PATCH" }),
+      apiFetch(`/alerts/${tenantId}/read-all`, undefined, { method: "PATCH" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts", tenantId] });
     },
@@ -227,10 +224,11 @@ export function useSubmitCreditApplication(tenantId: string) {
     }) =>
       apiFetch<{ offers: CreditOffer[]; underwriting_score: number }>(
         `/credit/applications/${applicationId}/submit`,
+        undefined,
         {
           method: "POST",
           body: JSON.stringify({ tenant_id: tenantId, ...data }),
-        }
+        },
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.creditApplications(tenantId) });
@@ -246,9 +244,9 @@ export function useBankConnections(tenantId: string | null) {
   return useQuery({
     queryKey: keys.bankConnections(tenantId ?? ""),
     queryFn: () =>
-      apiFetch<BankConnection[]>(
-        `/connections?tenant_id=${tenantId}`
-      ),
+      apiFetch<{ data: BankConnection[] }>(
+        `/organisations/${tenantId}/accounts`,
+      ).then((r) => r.data),
     enabled: !!tenantId,
   });
 }
