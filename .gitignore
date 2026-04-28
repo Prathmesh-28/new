@@ -7,3 +7,4 @@ node_modules/
 # SQLite database
 data/
 *firebase-adminsdk*.json
+firebase-debug.log

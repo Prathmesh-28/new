@@ -1,0 +1,94 @@
+[debug] [2026-04-28T21:56:25.902Z] ----------------------------------------------------------------------
+[debug] [2026-04-28T21:56:25.903Z] Command:       /opt/homebrew/Cellar/node/25.9.0_1/bin/node /opt/homebrew/bin/firebase deploy --only hosting --project headroom-fc7e3
+[debug] [2026-04-28T21:56:25.903Z] CLI Version:   15.14.0
+[debug] [2026-04-28T21:56:25.903Z] Platform:      darwin
+[debug] [2026-04-28T21:56:25.903Z] Node Version:  v25.9.0
+[debug] [2026-04-28T21:56:25.903Z] Time:          Wed Apr 29 2026 03:26:25 GMT+0530 (India Standard Time)
+[debug] [2026-04-28T21:56:25.903Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-28T21:56:26.228Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-28T21:56:26.747Z] Running auto auth
+[debug] [2026-04-28T21:56:26.747Z] [iam] checking project headroom-fc7e3 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-04-28T21:56:26.748Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:26.749Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions [none]
+[debug] [2026-04-28T21:56:26.749Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions  x-goog-user-project=headroom-fc7e3
+[debug] [2026-04-28T21:56:26.749Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-28T21:56:28.132Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions 200
+[debug] [2026-04-28T21:56:28.132Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-28T21:56:28.133Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:28.134Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 [none]
+[debug] [2026-04-28T21:56:28.710Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 200
+[debug] [2026-04-28T21:56:28.710Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 {"projectId":"headroom-fc7e3","projectNumber":"468344434438","displayName":"headroom","name":"projects/headroom-fc7e3","resources":{"hostingSite":"headroom-fc7e3","realtimeDatabaseInstance":"headroom-fc7e3-default-rtdb"},"state":"ACTIVE","etag":"1_0b001666-7f81-4790-b229-8760ae0bc870"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-04-28T21:56:30.283Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:30.283Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 [none]
+[debug] [2026-04-28T21:56:31.369Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 200
+[debug] [2026-04-28T21:56:31.369Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 {"name":"projects/headroom-fc7e3/sites/headroom-fc7e3","defaultUrl":"https://headroom-fc7e3.web.app","appId":"1:468344434438:web:965d3dbc19ad6f35d17887","type":"DEFAULT_SITE"}
+[debug] [2026-04-28T21:56:31.372Z] Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:440:11)
+    at Object.spawn (node:child_process:796:9)
+    at spawn (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/cross-spawn/index.js:12:24)
+    at /opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/next/index.js:73:54
+    at new Promise (<anonymous>)
+    at build (/opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/next/index.js:72:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async prepareFrameworks (/opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/index.js:226:33)
+    at async deploy (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/index.js:80:9)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-04-28T21:56:36.706Z] ----------------------------------------------------------------------
+[debug] [2026-04-28T21:56:36.707Z] Command:       /opt/homebrew/Cellar/node/25.9.0_1/bin/node /opt/homebrew/bin/firebase deploy --only hosting --project headroom-fc7e3 --debug
+[debug] [2026-04-28T21:56:36.707Z] CLI Version:   15.14.0
+[debug] [2026-04-28T21:56:36.707Z] Platform:      darwin
+[debug] [2026-04-28T21:56:36.707Z] Node Version:  v25.9.0
+[debug] [2026-04-28T21:56:36.707Z] Time:          Wed Apr 29 2026 03:26:36 GMT+0530 (India Standard Time)
+[debug] [2026-04-28T21:56:36.707Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-28T21:56:37.168Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-28T21:56:37.313Z] Running auto auth
+[debug] [2026-04-28T21:56:37.313Z] [iam] checking project headroom-fc7e3 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-04-28T21:56:37.314Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:37.314Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions [none]
+[debug] [2026-04-28T21:56:37.314Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions  x-goog-user-project=headroom-fc7e3
+[debug] [2026-04-28T21:56:37.314Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-28T21:56:38.752Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions 200
+[debug] [2026-04-28T21:56:38.753Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/headroom-fc7e3:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-28T21:56:38.754Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:38.754Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 [none]
+[debug] [2026-04-28T21:56:39.340Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 200
+[debug] [2026-04-28T21:56:39.340Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/headroom-fc7e3 {"projectId":"headroom-fc7e3","projectNumber":"468344434438","displayName":"headroom","name":"projects/headroom-fc7e3","resources":{"hostingSite":"headroom-fc7e3","realtimeDatabaseInstance":"headroom-fc7e3-default-rtdb"},"state":"ACTIVE","etag":"1_0b001666-7f81-4790-b229-8760ae0bc870"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-04-28T21:56:40.780Z] No OAuth tokens found
+[debug] [2026-04-28T21:56:40.780Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 [none]
+[debug] [2026-04-28T21:56:41.839Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 200
+[debug] [2026-04-28T21:56:41.839Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/headroom-fc7e3/sites/headroom-fc7e3 {"name":"projects/headroom-fc7e3/sites/headroom-fc7e3","defaultUrl":"https://headroom-fc7e3.web.app","appId":"1:468344434438:web:965d3dbc19ad6f35d17887","type":"DEFAULT_SITE"}
+[debug] [2026-04-28T21:56:41.841Z] Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:440:11)
+    at Object.spawn (node:child_process:796:9)
+    at spawn (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/cross-spawn/index.js:12:24)
+    at /opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/next/index.js:73:54
+    at new Promise (<anonymous>)
+    at build (/opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/next/index.js:72:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async prepareFrameworks (/opt/homebrew/lib/node_modules/firebase-tools/lib/frameworks/index.js:226:33)
+    at async deploy (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/index.js:80:9)
+[error] 
+[error] Error: An unexpected error has occurred.
