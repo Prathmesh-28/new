@@ -1,0 +1,68 @@
+runConfig:
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: DJANGO_API_URL
+    value: http://13.54.2.137
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: DJANGO_SERVICE_KEY
+    secret: DJANGO_SERVICE_KEY
+    availability:
+      - RUNTIME
+
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+    availability:
+      - RUNTIME
+
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
+
+  - variable: STRIPE_PRICE_STARTER
+    secret: STRIPE_PRICE_STARTER
+    availability:
+      - RUNTIME
+
+  - variable: STRIPE_PRICE_GROWTH
+    secret: STRIPE_PRICE_GROWTH
+    availability:
+      - RUNTIME
+
+  - variable: STRIPE_PRICE_PRO
+    secret: STRIPE_PRICE_PRO
+    availability:
+      - RUNTIME
+
+  - variable: DB_HOST
+    secret: DB_HOST
+    availability:
+      - RUNTIME
+
+  - variable: DB_PORT
+    value: "5432"
+    availability:
+      - RUNTIME
+
+  - variable: DB_NAME
+    value: headroom
+    availability:
+      - RUNTIME
+
+  - variable: DB_USER
+    secret: DB_USER
+    availability:
+      - RUNTIME
+
+  - variable: DB_PASSWORD
+    secret: DB_PASSWORD
+    availability:
+      - RUNTIME
