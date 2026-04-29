@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import emailjs from "@emailjs/browser";
+import Script from "next/script";
 
 // ── EmailJS config ────────────────────────────────────────────────
 const EMAILJS_PUBLIC_KEY  = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY  ?? "";
@@ -21,7 +22,8 @@ export default function LoginPage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [sentOtp, setSentOtp]   = useState("");   // held client-side for EmailJS template
+  const [sentOtp, setSentOtp]   = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,6 +39,52 @@ export default function LoginPage() {
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [resendIn]);
+
+  // ── Google Sign-In ───────────────────────────────────────────────
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    setError(""); setGoogleLoading(true);
+    try {
+      const res  = await fetch("/api/proxy/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Google sign-in failed"); return; }
+
+      // Create Next.js session from returned user info
+      await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          otp_verified: true,
+          user_id:   data.user.id,
+          tenant_id: data.user.tenant_id,
+        }),
+      });
+
+      setStep("confirmed");
+      setTimeout(() => router.push("/dashboard"), 1800);
+    } catch {
+      setError("Google sign-in failed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, [router]);
+
+  // Initialise Google Identity Services once the script loads
+  const initGoogle = useCallback(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId || !(window as any).google) return;
+    (window as any).google.accounts.id.initialize({
+      client_id: clientId,
+      callback:  (res: any) => handleGoogleCredential(res.credential),
+    });
+    (window as any).google.accounts.id.renderButton(
+      document.getElementById("google-signin-btn"),
+      { theme: "filled_black", size: "large", shape: "rectangular", width: 400 },
+    );
+  }, [handleGoogleCredential]);
 
   // ── Step 1: send OTP ─────────────────────────────────────────────
   const handleSendOtp = useCallback(async (e?: React.FormEvent) => {
@@ -154,6 +202,12 @@ export default function LoginPage() {
 
   // ── Render ───────────────────────────────────────────────────────
   return (
+    <>
+    <Script
+      src="https://accounts.google.com/gsi/client"
+      strategy="afterInteractive"
+      onLoad={initGoogle}
+    />
     <div
       className="min-h-screen flex items-center justify-center px-4"
       style={{ backgroundColor: "var(--olive-deepest)" }}
@@ -193,6 +247,18 @@ export default function LoginPage() {
         {/* ── Step: email ── */}
         {step === "email" && (
           <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
+
+            {/* Google Sign-In */}
+            {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+              <>
+                <div id="google-signin-btn" className="w-full flex justify-center" />
+                <div className="flex items-center gap-3 my-1">
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--olive-mid)" }} />
+                  <span className="text-xs" style={{ color: "var(--olive-pale)" }}>or continue with email</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--olive-mid)" }} />
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider"
                      style={{ color: "var(--olive-pale)" }}>
@@ -339,6 +405,7 @@ export default function LoginPage() {
         .animate-progress { animation: progress linear forwards; }
       `}</style>
     </div>
+    </>
   );
 }
 

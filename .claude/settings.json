@@ -51,7 +51,8 @@
       "Bash(git commit --allow-empty -m ' *)",
       "Bash(gh run *)",
       "Bash(python3 -c ' *)",
-      "Bash(curl -s -X POST https://serviceusage.googleapis.com/v1/projects/headroom-fc7e3/services/cloudfunctions.googleapis.com:enable -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json')"
+      "Bash(curl -s -X POST https://serviceusage.googleapis.com/v1/projects/headroom-fc7e3/services/cloudfunctions.googleapis.com:enable -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json')",
+      "Bash(xargs ls *)"
     ]
   }
 }
