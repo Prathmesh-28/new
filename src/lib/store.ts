@@ -19,8 +19,10 @@ import type { SessionUser, Tenant, ScenarioCreate } from "./schemas";
 interface AuthSlice {
   user: SessionUser | null;
   tenant: Tenant | null;
+  token: string | null;
   setUser: (user: SessionUser | null) => void;
   setTenant: (tenant: Tenant | null) => void;
+  setToken: (token: string | null) => void;
   clearAuth: () => void;
 }
 
@@ -72,9 +74,11 @@ export const useAppStore = create<AppStore>()(
       // ── Auth ──────────────────────────────────────────────────────────
       user: null,
       tenant: null,
+      token: null,
       setUser: (user) => set({ user }),
       setTenant: (tenant) => set({ tenant }),
-      clearAuth: () => set({ user: null, tenant: null }),
+      setToken: (token) => set({ token }),
+      clearAuth: () => set({ user: null, tenant: null, token: null }),
 
       // ── UI ────────────────────────────────────────────────────────────
       activeView: "overview",
@@ -95,8 +99,9 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: "headroom-app",
-      // Only persist non-sensitive UI preferences, not auth (handled by server cookie)
       partialize: (s) => ({
+        user: s.user,
+        token: s.token,
         activeView: s.activeView,
         sidebarOpen: s.sidebarOpen,
       }),

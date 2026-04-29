@@ -25,6 +25,7 @@ import {
   type BankConnection,
 } from "./schemas";
 import { z } from "zod";
+import { useAppStore } from "./store";
 
 // ---------------------------------------------------------------------------
 // QueryClient singleton (used in providers.tsx)
@@ -33,7 +34,7 @@ import { z } from "zod";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000,          // 1 minute — matches Redis TTL logic
+      staleTime: 60 * 1000,
       gcTime: 5 * 60 * 1000,
       retry: 2,
       refetchOnWindowFocus: false,
@@ -45,21 +46,35 @@ export const queryClient = new QueryClient({
 });
 
 // ---------------------------------------------------------------------------
-// Base fetch helper
+// Base fetch helper — calls Django directly with JWT from Zustand store
 // ---------------------------------------------------------------------------
 
-const BASE = "/api/proxy";
+export const DJANGO_URL =
+  process.env.NEXT_PUBLIC_DJANGO_API_URL ?? "http://13.54.2.137:8000";
 
 export async function apiFetch<T>(
   path: string,
   schema?: z.ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${BASE}${path}`;
+  const url = path.startsWith("http") ? path : `${DJANGO_URL}${path}`;
+  const token = useAppStore.getState().token;
+
+  const { headers: extraHeaders, ...restInit } = init ?? {};
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
+    ...restInit,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(extraHeaders as Record<string, string> ?? {}),
+    },
   });
+
+  if (res.status === 401) {
+    useAppStore.getState().clearAuth();
+    if (typeof window !== "undefined") window.location.href = "/admin/login/";
+    throw new Error("Session expired");
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);

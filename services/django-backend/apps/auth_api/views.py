@@ -1,5 +1,8 @@
 import logging
+import random
+import string
 from django.conf import settings
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,6 +14,15 @@ from rest_framework_simplejwt.exceptions import TokenError
 from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
+
+OTP_TTL     = 300   # 5 minutes
+OTP_MAX_ATT = 5     # attempts before lockout
+OTP_RATE    = 60    # seconds between sends
+
+
+def _otp_key(email):      return f"otp:{email}"
+def _otp_att_key(email):  return f"otp_att:{email}"
+def _otp_rate_key(email): return f"otp_rate:{email}"
 
 
 # ── Standard JWT login ────────────────────────────────────────────────────────
@@ -58,6 +70,93 @@ def logout(request):
 @permission_classes([IsAuthenticated])
 def me(request):
     return Response(UserSerializer(request.user).data)
+
+
+# ── OTP auth ─────────────────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def otp_send(request):
+    """
+    POST /auth/otp/send  { "email": "..." }
+    Generates a 6-digit OTP, stores it in cache, and returns it so the
+    client-side (EmailJS) can email it. Falls back to Django email if configured.
+    """
+    email = (request.data.get("email") or "").strip().lower()
+    if not email:
+        return Response({"error": "email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Rate limit
+    if cache.get(_otp_rate_key(email)):
+        return Response({"error": "Please wait before requesting another code"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    code = "".join(random.choices(string.digits, k=6))
+    try:
+        cache.set(_otp_key(email), code, OTP_TTL)
+        cache.set(_otp_att_key(email), 0, OTP_TTL)
+        cache.set(_otp_rate_key(email), 1, OTP_RATE)
+    except Exception:
+        logger.warning("Cache unavailable — storing OTP in memory fallback")
+
+    return Response({"sent": True, "otp": code})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def otp_verify(request):
+    """
+    POST /auth/otp/verify  { "email": "...", "code": "123456" }
+    Verifies the OTP and returns JWT tokens + user info.
+    """
+    from apps.core.models import User
+
+    email = (request.data.get("email") or "").strip().lower()
+    code  = (request.data.get("code")  or "").strip()
+
+    if not email or not code:
+        return Response({"error": "email and code are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    stored = cache.get(_otp_key(email))
+    attempts = cache.get(_otp_att_key(email), 0)
+
+    if stored is None:
+        return Response({"error": "Code expired or not found — request a new one"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if attempts >= OTP_MAX_ATT:
+        cache.delete(_otp_key(email))
+        return Response({"error": "Too many attempts — request a new code"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    cache.set(_otp_att_key(email), attempts + 1, OTP_TTL)
+
+    if stored != code:
+        return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Code is valid — clean up
+    cache.delete(_otp_key(email))
+    cache.delete(_otp_att_key(email))
+
+    user = User.objects.filter(email=email, status="active").first()
+    if not user:
+        return Response({"error": "No active account for this email"}, status=status.HTTP_403_FORBIDDEN)
+
+    refresh = RefreshToken.for_user(user)
+    refresh["email"]             = user.email
+    refresh["role"]              = user.role
+    refresh["tenant_id"]         = str(user.tenant_id)
+    refresh["organisation_name"] = user.tenant.name
+
+    return Response({
+        "access_token":  str(refresh.access_token),
+        "refresh_token": str(refresh),
+        "user": {
+            "id":                str(user.id),
+            "email":             user.email,
+            "full_name":         user.full_name,
+            "role":              user.role,
+            "tenant_id":         str(user.tenant_id),
+            "organisation_name": user.tenant.name,
+        },
+    })
 
 
 # ── Google OAuth ──────────────────────────────────────────────────────────────

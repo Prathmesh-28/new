@@ -52,7 +52,10 @@
       "Bash(gh run *)",
       "Bash(python3 -c ' *)",
       "Bash(curl -s -X POST https://serviceusage.googleapis.com/v1/projects/headroom-fc7e3/services/cloudfunctions.googleapis.com:enable -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json')",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(python3 -c \"import secrets; print\\('SERVICE_KEY:', secrets.token_urlsafe\\(48\\)\\); print\\('JWT_SECRET:', secrets.token_urlsafe\\(48\\)\\)\")",
+      "Bash(git commit *)",
+      "Bash(gcloud version *)"
     ]
   }
 }

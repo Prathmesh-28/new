@@ -31,27 +31,14 @@ export default function DashboardLayout({
   const { data: unreadAlerts } = useAlerts(user?.tenant_id ?? null, true);
   const unreadCount = unreadAlerts?.length ?? 0;
 
-  // Guard: redirect if not authenticated
+  // Guard: redirect if not authenticated (JWT stored in Zustand + localStorage)
   useEffect(() => {
-    if (user === null) {
-      // Check server session before redirecting
-      fetch("/api/admin/session")
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.user) {
-            useAppStore.getState().setUser(d.user);
-          } else {
-            router.push("/admin/login");
-          }
-        })
-        .catch(() => router.push("/admin/login"));
-    }
+    if (user === null) router.push("/admin/login/");
   }, [user, router]);
 
-  async function handleLogout() {
-    await fetch("/api/admin/logout", { method: "POST" });
+  function handleLogout() {
     clearAuth();
-    router.push("/admin/login");
+    router.push("/admin/login/");
   }
 
   if (!user) {
