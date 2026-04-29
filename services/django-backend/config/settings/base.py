@@ -185,7 +185,7 @@ CELERY_TASK_TIME_LIMIT      = 600
 # ── CORS ───────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://13.54.2.137",
+    default="https://headroom-fc7e3.web.app,https://headroom-fc7e3.firebaseapp.com,http://localhost:3000",
     cast=Csv(),
 )
 CORS_ALLOW_CREDENTIALS = True
@@ -263,7 +263,7 @@ SARDINE_ENVIRONMENT = config("SARDINE_ENVIRONMENT", default="sandbox")
 
 # ── Internal ───────────────────────────────────────────────────────────────────
 DJANGO_API_URL = config("DJANGO_API_URL", default="http://localhost:8000")
-FRONTEND_URL   = config("FRONTEND_URL",   default="http://localhost:3000")
+FRONTEND_URL   = config("FRONTEND_URL",   default="https://headroom-fc7e3.web.app")
 SUPPORT_EMAIL  = config("SUPPORT_EMAIL",  default="support@headroom.finance")
 APP_NAME       = config("APP_NAME",       default="Headroom")
 

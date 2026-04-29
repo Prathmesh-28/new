@@ -22,17 +22,28 @@ jobs:
 
       - name: Build Next.js
         env:
+          # Server-side (Next.js API routes — not exposed to browser)
           DJANGO_API_URL: ${{ secrets.DJANGO_API_URL }}
           DJANGO_SERVICE_KEY: ${{ secrets.DJANGO_SERVICE_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: headroom
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          # Public (baked into the browser bundle at build time)
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_EMAILJS_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY }}
+          NEXT_PUBLIC_EMAILJS_SERVICE_ID: ${{ secrets.NEXT_PUBLIC_EMAILJS_SERVICE_ID }}
+          NEXT_PUBLIC_EMAILJS_OTP_TEMPLATE: ${{ secrets.NEXT_PUBLIC_EMAILJS_OTP_TEMPLATE }}
+          NEXT_PUBLIC_EMAILJS_CONFIRM_TEMPLATE: ${{ secrets.NEXT_PUBLIC_EMAILJS_CONFIRM_TEMPLATE }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+          # Stripe (server-side)
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
           STRIPE_PRICE_GROWTH: ${{ secrets.STRIPE_PRICE_GROWTH }}
           STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: headroom
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          STRIPE_PRICE_CAPITAL: ${{ secrets.STRIPE_PRICE_CAPITAL }}
         run: npm run build
 
       - name: Deploy to Firebase Hosting
