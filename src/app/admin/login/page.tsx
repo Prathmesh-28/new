@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import emailjs from "@emailjs/browser";
 import Script from "next/script";
 import { useAppStore } from "@/lib/store";
@@ -16,7 +16,9 @@ const EMAILJS_CONFIRM_TEMPLATE = process.env.NEXT_PUBLIC_EMAILJS_CONFIRM_TEMPLAT
 type Step = "email" | "otp" | "confirmed";
 
 export default function LoginPage() {
-  const router  = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const isTrial      = searchParams.get("mode") === "trial";
   const setUser  = useAppStore((s) => s.setUser);
   const setToken = useAppStore((s) => s.setToken);
 
@@ -211,7 +213,7 @@ export default function LoginPage() {
             Head<span style={{ color: "var(--gold)" }}>room</span>
           </span>
           <p className="text-xs mt-1.5 font-medium tracking-widest uppercase" style={{ color: "var(--olive-wash)" }}>
-            {step === "email" ? "Sign in to your workspace" :
+            {step === "email" ? (isTrial ? "Start your free 14-day trial" : "Sign in to your workspace") :
              step === "otp"   ? "Enter verification code" :
                                 "You're in — redirecting…"}
           </p>

@@ -135,9 +135,27 @@ def otp_verify(request):
     cache.delete(_otp_key(email))
     cache.delete(_otp_att_key(email))
 
+    from apps.core.models import Tenant
+
     user = User.objects.filter(email=email, status="active").first()
     if not user:
-        return Response({"error": "No active account for this email"}, status=status.HTTP_403_FORBIDDEN)
+        # Auto-provision: create tenant + owner account for new sign-ups
+        domain   = email.split("@")[-1]
+        org_name = domain.split(".")[0].capitalize() + "'s Workspace"
+        tenant, _ = Tenant.objects.get_or_create(
+            name=org_name,
+            defaults={"company_name": org_name},
+        )
+        user = User.objects.create(
+            email=email,
+            full_name="",
+            tenant=tenant,
+            role=User.Role.OWNER,
+            status=User.Status.ACTIVE,
+        )
+        user.set_unusable_password()
+        user.save()
+        logger.info("Auto-provisioned OTP user %s", email)
 
     refresh = RefreshToken.for_user(user)
     refresh["email"]             = user.email

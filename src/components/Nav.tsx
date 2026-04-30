@@ -20,47 +20,32 @@ export default function Nav() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6">
-            <Link
-              href="/features"
-              className="text-sm text-olive-wash hover:text-white transition-colors"
-            >
+            <Link href="/features/" className="text-sm text-olive-wash hover:text-white transition-colors">
               Platform
             </Link>
-            <Link
-              href="/pricing"
-              className="text-sm text-olive-wash hover:text-white transition-colors"
-            >
+            <Link href="/pricing/" className="text-sm text-olive-wash hover:text-white transition-colors">
               Pricing
             </Link>
-            <Link
-              href="/credit"
-              className="text-sm text-olive-wash hover:text-white transition-colors"
-            >
+            <Link href="/credit/" className="text-sm text-olive-wash hover:text-white transition-colors">
               Credit rescue
             </Link>
-            <Link
-              href="/capital"
-              className="text-sm text-olive-wash hover:text-white transition-colors"
-            >
+            <Link href="/capital/" className="text-sm text-olive-wash hover:text-white transition-colors">
               Capital raise
             </Link>
-            <Link
-              href="#"
-              className="text-sm text-olive-wash hover:text-white transition-colors"
-            >
+            <Link href="/advisors/" className="text-sm text-olive-wash hover:text-white transition-colors">
               For advisors
             </Link>
           </div>
 
           <div className="hidden md:flex items-center gap-4">
             <Link
-              href="#"
+              href="/admin/login/"
               className="text-sm text-olive-wash hover:text-white transition-colors"
             >
               Sign in
             </Link>
             <Link
-              href="/#trial"
+              href="/admin/login/?mode=trial"
               className="px-4 py-2 rounded-md text-sm font-semibold text-olive-deepest transition-all hover:opacity-90"
               style={{ backgroundColor: "var(--gold)" }}
             >
@@ -108,43 +93,14 @@ export default function Nav() {
 
       {mobileOpen && (
         <div className="md:hidden bg-olive-deep border-t border-olive-mid px-4 py-4 flex flex-col gap-4">
+          <Link href="/features/" className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>Platform</Link>
+          <Link href="/pricing/"  className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>Pricing</Link>
+          <Link href="/credit/"   className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>Credit rescue</Link>
+          <Link href="/capital/"  className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>Capital raise</Link>
+          <Link href="/advisors/" className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>For advisors</Link>
+          <Link href="/admin/login/" className="text-sm text-olive-wash hover:text-white" onClick={() => setMobileOpen(false)}>Sign in</Link>
           <Link
-            href="/features"
-            className="text-sm text-olive-wash hover:text-white"
-            onClick={() => setMobileOpen(false)}
-          >
-            Platform
-          </Link>
-          <Link
-            href="/pricing"
-            className="text-sm text-olive-wash hover:text-white"
-            onClick={() => setMobileOpen(false)}
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/credit"
-            className="text-sm text-olive-wash hover:text-white"
-            onClick={() => setMobileOpen(false)}
-          >
-            Credit rescue
-          </Link>
-          <Link
-            href="/capital"
-            className="text-sm text-olive-wash hover:text-white"
-            onClick={() => setMobileOpen(false)}
-          >
-            Capital raise
-          </Link>
-          <Link
-            href="#"
-            className="text-sm text-olive-wash hover:text-white"
-            onClick={() => setMobileOpen(false)}
-          >
-            For advisors
-          </Link>
-          <Link
-            href="/#trial"
+            href="/admin/login/?mode=trial"
             className="px-4 py-2 rounded-md text-sm font-semibold text-olive-deepest text-center"
             style={{ backgroundColor: "var(--gold)" }}
             onClick={() => setMobileOpen(false)}
