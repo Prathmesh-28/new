@@ -53,7 +53,7 @@ export default function AdminDashboard() {
   const [creditData, setCreditData]       = useState<CreditApplication[]>([]);
   const [capitalData, setCapitalData]     = useState<CapitalRaise[]>([]);
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   const loadData = useCallback(async (tenantId: string) => {
     setLoading(true);
