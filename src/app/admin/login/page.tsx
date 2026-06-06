@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import emailjs from "@emailjs/browser";
 import Script from "next/script";
@@ -16,6 +16,14 @@ const EMAILJS_CONFIRM_TEMPLATE = process.env.NEXT_PUBLIC_EMAILJS_CONFIRM_TEMPLAT
 type Step = "email" | "otp" | "confirmed";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const isTrial      = searchParams.get("mode") === "trial";
