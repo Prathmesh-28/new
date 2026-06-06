@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -81,18 +82,23 @@ TEMPLATES = [
 ]
 
 # ── Database ───────────────────────────────────────────────────────────────────
-DATABASES = {
-    "default": {
-        "ENGINE":       "django.db.backends.postgresql",
-        "NAME":         config("DB_NAME",     default="headroom"),
-        "USER":         config("DB_USER",     default="postgres"),
-        "PASSWORD":     config("DB_PASSWORD", default="postgres"),
-        "HOST":         config("DB_HOST",     default="localhost"),
-        "PORT":         config("DB_PORT",     default="5432"),
-        "OPTIONS":      {"options": "-c search_path=public"},
-        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
+_DATABASE_URL = config("DATABASE_URL", default="")
+if _DATABASE_URL:
+    DATABASES = {"default": dj_database_url.parse(_DATABASE_URL, conn_max_age=60)}
+    DATABASES["default"]["OPTIONS"] = {"options": "-c search_path=public"}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE":       "django.db.backends.postgresql",
+            "NAME":         config("DB_NAME",     default="headroom"),
+            "USER":         config("DB_USER",     default="postgres"),
+            "PASSWORD":     config("DB_PASSWORD", default="postgres"),
+            "HOST":         config("DB_HOST",     default="localhost"),
+            "PORT":         config("DB_PORT",     default="5432"),
+            "OPTIONS":      {"options": "-c search_path=public"},
+            "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
+        }
     }
-}
 
 AUTH_USER_MODEL = "core.User"
 
