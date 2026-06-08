@@ -51,7 +51,7 @@ function splitByNs(store: AppStore): Record<string, Partial<AppStore>> {
   const out: Record<string, Partial<AppStore>> = {};
   for (const [field, ns] of Object.entries(FIELD_NAMESPACE)) {
     if (!out[ns]) out[ns] = {};
-    (out[ns] as Record<string, unknown>)[field] = (store as Record<string, unknown>)[field];
+    (out[ns] as unknown as Record<string, unknown>)[field] = (store as unknown as Record<string, unknown>)[field];
   }
   return out;
 }
