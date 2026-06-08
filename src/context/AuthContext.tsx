@@ -33,13 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${BASE}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: rt }),
+        body: JSON.stringify({ refresh: rt }),
       });
       if (!res.ok) return null;
-      const { accessToken, refreshToken } = await res.json();
-      localStorage.setItem("hr_access", accessToken);
-      localStorage.setItem("hr_refresh", refreshToken);
-      return accessToken;
+      const { access, refresh } = await res.json();
+      localStorage.setItem("hr_access", access);
+      localStorage.setItem("hr_refresh", refresh);
+      return access;
     } catch { return null; }
   }, []);
 
@@ -69,9 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const err = await res.json().catch(() => ({ error: "Login failed" }));
       throw new Error(err.error ?? "Login failed");
     }
-    const { accessToken, refreshToken, user: u } = await res.json();
-    localStorage.setItem("hr_access", accessToken);
-    localStorage.setItem("hr_refresh", refreshToken);
+    const { access, refresh, user: u } = await res.json();
+    localStorage.setItem("hr_access", access);
+    localStorage.setItem("hr_refresh", refresh);
     setUser(u);
   }, []);
 
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetch(`${BASE}/auth/logout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: rt }),
+        body: JSON.stringify({ refresh: rt }),
       }).catch(() => {});
     }
     localStorage.removeItem("hr_access");
