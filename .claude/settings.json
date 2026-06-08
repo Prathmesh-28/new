@@ -71,7 +71,12 @@
       "Bash(git rm *)",
       "Bash(node_modules/.bin/vercel --prod --yes)",
       "Bash(vercel project *)",
-      "Bash(vercel --prod --yes --framework=\"\")"
+      "Bash(vercel --prod --yes --framework=\"\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/Users/prathmeshwalimbe/Library/Application Support/com.vercel.cli/auth.json'\\)\\); print\\(d.get\\('token',''\\)\\)\")",
+      "Bash(curl -s -X PATCH https://api.vercel.com/v9/projects/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"framework\": null}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('framework'\\), d.get\\('name'\\)\\)\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }
