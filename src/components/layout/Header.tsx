@@ -5,7 +5,7 @@ import { LayoutDashboard, TrendingUp, CreditCard, Rocket, Settings, LogOut } fro
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/",         label: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
   { to: "/forecast", label: "Forecast",  icon: TrendingUp,      tab: "forecast"  },
   { to: "/credit",   label: "Credit",    icon: CreditCard,      tab: "credit"    },
   { to: "/capital",  label: "Capital",   icon: Rocket,          tab: "capital"   },
@@ -36,7 +36,7 @@ export default function Header() {
             <NavLink
               key={to}
               to={to}
-              end={to === "/"}
+              end={to === "/dashboard"}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",

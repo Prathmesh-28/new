@@ -25,7 +25,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return <PageLoader />;
-  if (!user) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  if (!user) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname === "/" ? "/dashboard" : location.pathname)}`} replace />;
   return <>{children}</>;
 }
 
@@ -36,12 +36,12 @@ function AppShell() {
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/"         element={<Dashboard />} />
-            <Route path="/forecast" element={<Forecast />} />
-            <Route path="/credit"   element={<Credit />} />
-            <Route path="/capital"  element={<Capital />} />
-            <Route path="/admin"    element={<AdminPage />} />
-            <Route path="*"         element={<Navigate to="/" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/forecast"  element={<Forecast />} />
+            <Route path="/credit"    element={<Credit />} />
+            <Route path="/capital"   element={<Capital />} />
+            <Route path="/admin"     element={<AdminPage />} />
+            <Route path="*"          element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
       </main>
@@ -57,8 +57,8 @@ export default function App() {
           <Toaster position="top-right" theme="dark" richColors />
           <Suspense fallback={<PageLoader />}>
             <Routes>
+              <Route path="/"      element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/home"  element={<HomePage />} />
               <Route path="/*"     element={<RequireAuth><AppShell /></RequireAuth>} />
             </Routes>
           </Suspense>

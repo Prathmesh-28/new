@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError(""); setLoading(true);
     try {
       await login(email, password);
-      navigate(params.get("redirect") ?? "/", { replace: true });
+      navigate(params.get("redirect") ?? "/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
