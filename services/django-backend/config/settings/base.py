@@ -14,11 +14,9 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*", cast=Csv())
 
 # ── Installed apps ─────────────────────────────────────────────────────────────
 DJANGO_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
-    "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
 
@@ -30,7 +28,6 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "django_celery_beat",
     "django_celery_results",
-    "storages",
 ]
 
 LOCAL_APPS = [
@@ -57,7 +54,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -75,7 +71,6 @@ TEMPLATES = [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
@@ -124,41 +119,9 @@ MEDIA_URL   = "/media/"
 MEDIA_ROOT  = BASE_DIR / "media"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
-# ── AWS ────────────────────────────────────────────────────────────────────────
-AWS_ACCESS_KEY_ID       = config("AWS_ACCESS_KEY_ID",       default="")
-AWS_SECRET_ACCESS_KEY   = config("AWS_SECRET_ACCESS_KEY",   default="")
-AWS_REGION              = config("AWS_REGION",              default="ap-southeast-2")
-AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
-AWS_S3_CUSTOM_DOMAIN    = config("AWS_S3_CUSTOM_DOMAIN",    default="")
-AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
-AWS_DEFAULT_ACL          = "private"
-AWS_S3_FILE_OVERWRITE    = False
-AWS_QUERYSTRING_AUTH     = True
-AWS_S3_SIGNATURE_VERSION = "s3v4"
-
-# Use S3 for media when bucket is set
-if AWS_STORAGE_BUCKET_NAME:
-    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-    MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN or f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'}/"
-
-# AWS SES
-AWS_SES_REGION_NAME       = config("AWS_SES_REGION_NAME",       default=AWS_REGION)
-AWS_SES_FROM_EMAIL        = config("AWS_SES_FROM_EMAIL",        default="noreply@headroom.finance")
-AWS_SES_CONFIGURATION_SET = config("AWS_SES_CONFIGURATION_SET", default="")
-AWS_SES_SMTP_USER         = config("AWS_SES_SMTP_USER",         default="")
-AWS_SES_SMTP_PASSWORD     = config("AWS_SES_SMTP_PASSWORD",     default="")
-
-if AWS_SES_SMTP_USER and AWS_SES_SMTP_PASSWORD:
-    EMAIL_BACKEND       = "django.core.mail.backends.smtp.EmailBackend"
-    EMAIL_HOST          = f"email-smtp.{AWS_SES_REGION_NAME}.amazonaws.com"
-    EMAIL_PORT          = 587
-    EMAIL_USE_TLS       = True
-    EMAIL_HOST_USER     = AWS_SES_SMTP_USER
-    EMAIL_HOST_PASSWORD = AWS_SES_SMTP_PASSWORD
-    DEFAULT_FROM_EMAIL  = AWS_SES_FROM_EMAIL
-else:
-    EMAIL_BACKEND      = "django.core.mail.backends.console.EmailBackend"
-    DEFAULT_FROM_EMAIL = "noreply@headroom.local"
+# ── Email (via EmailJS on frontend — no server-side email needed) ───────────────
+EMAIL_BACKEND      = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "noreply@headroom.local"
 
 # ── Redis / Cache ──────────────────────────────────────────────────────────────
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")

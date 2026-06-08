@@ -20,7 +20,3 @@ bcrypt==4.2.0
 # Google OAuth
 google-auth==2.35.0
 google-auth-oauthlib==1.2.1
-
-# AWS
-boto3==1.35.0
-django-storages[s3]==1.14.4

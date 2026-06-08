@@ -8,3 +8,4 @@ node_modules/
 data/
 *firebase-adminsdk*.json
 firebase-debug.log
+.vercel

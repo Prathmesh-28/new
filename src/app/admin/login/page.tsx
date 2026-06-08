@@ -74,7 +74,8 @@ function LoginPageInner() {
         tenant_id: data.user.tenant_id,
       });
       setStep("confirmed");
-      setTimeout(() => router.push("/dashboard/"), 1800);
+      const dest = data.user.role === "admin" || data.user.is_staff ? "/admin/panel" : "/dashboard/";
+      setTimeout(() => router.push(dest), 1800);
     } catch {
       setError("Google sign-in failed. Please try again.");
     } finally {
@@ -188,7 +189,8 @@ function LoginPageInner() {
       }
 
       setStep("confirmed");
-      setTimeout(() => router.push("/dashboard/"), 1800);
+      const dest = data.user.role === "admin" || data.user.is_staff ? "/admin/panel" : "/dashboard/";
+      setTimeout(() => router.push(dest), 1800);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

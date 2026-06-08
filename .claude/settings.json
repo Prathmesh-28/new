@@ -55,7 +55,12 @@
       "Bash(xargs ls *)",
       "Bash(python3 -c \"import secrets; print\\('SERVICE_KEY:', secrets.token_urlsafe\\(48\\)\\); print\\('JWT_SECRET:', secrets.token_urlsafe\\(48\\)\\)\")",
       "Bash(git commit *)",
-      "Bash(gcloud version *)"
+      "Bash(gcloud version *)",
+      "WebSearch",
+      "Bash(vercel --version)",
+      "Bash(gh --version)",
+      "Bash(vercel whoami *)",
+      "Bash(vercel env *)"
     ]
   }
 }
