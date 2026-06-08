@@ -16,20 +16,30 @@ app.use(express.json({ limit: "10mb" }));
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// Routes
-app.use("/auth",      require("./routes/auth"));
-app.use("/api/kv",    require("./routes/kv"));
-app.use("/api/users", require("./routes/users"));
-app.use("/api/notes", require("./routes/notes"));
-app.use("/api/files", require("./routes/files"));
-app.use("/api/ai",    require("./routes/ai"));
+// Auth
+app.use("/auth",                   require("./routes/auth"));
+
+// Core API
+app.use("/api/kv",                 require("./routes/kv"));
+app.use("/api/users",              require("./routes/users"));
+app.use("/api/notes",              require("./routes/notes"));
+app.use("/api/files",              require("./routes/files"));
+app.use("/api/ai",                 require("./routes/ai"));
+
+// New domain routes
+app.use("/api/accounts",           require("./routes/accounts"));
+app.use("/api/transactions",       require("./routes/transactions"));
+app.use("/api/forecast",           require("./routes/forecast"));
+app.use("/api/alerts",             require("./routes/alerts"));
+app.use("/api/credit",             require("./routes/credit"));
+app.use("/api/capital",            require("./routes/capital"));
 
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
 // Error handler
 app.use((err, _req, res, _next) => {
-  console.error(err);
+  console.error("[error]", err.message);
   res.status(500).json({ error: "Internal server error" });
 });
 
@@ -44,11 +54,11 @@ async function seed() {
       "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,'super_admin','default',false)",
       [adminEmail, hash]
     );
-    console.log(`[seed] super_admin created: ${adminEmail}`);
+    console.log(`[seed] super_admin: ${adminEmail}`);
   }
 }
 
 initDb()
   .then(seed)
-  .then(() => app.listen(PORT, () => console.log(`[server] running on :${PORT}`)))
+  .then(() => app.listen(PORT, () => console.log(`[server] :${PORT}`)))
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

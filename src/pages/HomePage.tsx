@@ -1,477 +1,392 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BarChart3, CreditCard, Rocket, ShieldCheck, Zap, Cpu,
-  CheckCircle2, ChevronDown, ArrowRight, Building2, Users,
-  FileText, Menu, X, TrendingDown, AlertTriangle, Landmark,
-  Star, Quote,
-} from "lucide-react";
-import {
-  AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip,
-} from "recharts";
+import { CheckCircle2, ChevronDown } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 
-/* ── Intersection-observer scroll animation ── */
-function useInView(threshold = 0.12) {
+/* ─── Colour tokens matching the mockup ─── */
+const C = {
+  deepest: "#1C2209", deep: "#2E3A10", mid: "#4A5E1A",
+  bright: "#6B8526", light: "#96B83D", pale: "#C4D97A",
+  wash: "#E8F0C2",   cream: "#F4F1E4", creamW: "#FDFAF0",
+  gold: "#C9A227",   goldL: "#E8C84A",
+  txt: "#1A1F0A",    txtMid: "#3D4A1E", txtMut: "#6B7A3D",
+};
+
+/* ─── Scroll-reveal ─── */
+function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
   const [vis, setVis] = useState(false);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const el = ref.current; if (!el) return;
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVis(true); }, { threshold });
-    io.observe(el);
-    return () => io.disconnect();
+    io.observe(el); return () => io.disconnect();
   }, [threshold]);
   return { ref, vis };
 }
-
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const { ref, vis } = useInView();
   return (
-    <div
-      ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"} ${className}`}
-    >
+    <div ref={ref} style={{ transitionDelay: `${delay}ms` }}
+      className={`transition-all duration-700 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"} ${className}`}>
       {children}
     </div>
   );
 }
 
-/* ── Fake sparkline data for the product mockup ── */
-const MOCK_CHART = Array.from({ length: 45 }, (_, i) => ({
-  d: i,
-  p50: 28 + Math.sin(i * 0.18) * 6 + i * 0.15,
-  p90: 34 + Math.sin(i * 0.18) * 6 + i * 0.15,
-  p10: 22 + Math.sin(i * 0.18) * 6 + i * 0.15,
+/* ─── Bar chart data for hero mockup ─── */
+const BAR_DATA = [82,78,85,75,70,62,55,48,40,35,42,50,58,65,70,68,72,78,80,76];
+const AREA_DATA = Array.from({ length: 45 }, (_, i) => ({
+  i, p50: 28 + Math.sin(i*0.18)*5 + i*0.14,
+  p90: 35 + Math.sin(i*0.18)*5 + i*0.14,
+  p10: 21 + Math.sin(i*0.18)*5 + i*0.14,
 }));
 
-/* ── Dashboard product mockup ── */
-function ProductMockup() {
+/* ─── Dashboard hero mockup ─── */
+function DashMockup() {
   return (
-    <div className="relative w-full max-w-2xl mx-auto rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-2xl shadow-black/50 bg-[var(--color-surface)]">
-      {/* Mockup header */}
-      <div className="bg-[var(--color-bg)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-          <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-          <span className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
-        </div>
-        <span className="text-xs font-bold">Head<span className="text-[var(--color-primary)]">room</span></span>
-        <div className="flex gap-3 text-[10px] text-[var(--color-muted)]">
-          {["Dashboard","Forecast","Credit","Capital"].map(t => (
-            <span key={t} className={t === "Dashboard" ? "text-[var(--color-primary)] font-semibold" : ""}>{t}</span>
+    <div style={{ background: C.deep, border: `1px solid rgba(196,217,122,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+      {/* window chrome */}
+      <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
+        {["#E24B4A","#EF9F27","#6B8526"].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c, opacity: 0.8 }} />)}
+        <span style={{ fontFamily: "system-ui,sans-serif", fontSize: 11, color: "rgba(196,217,122,0.45)", marginLeft: 6 }}>Headroom — 90-day forecast</span>
+      </div>
+
+      <div style={{ padding: 18 }}>
+        {/* stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+          {[
+            { label: "Current Balance", val: "₹4.2L",  sub: "+8% vs last month",  subC: C.light },
+            { label: "Runway",          val: "68 days", sub: "at current burn",    subC: C.light },
+            { label: "Low Point",       val: "Day 41",  sub: "₹80K warning",       subC: C.gold  },
+          ].map(s => (
+            <div key={s.label} style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "11px 12px" }}>
+              <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 9, color: "rgba(196,217,122,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>{s.label}</div>
+              <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 19, fontWeight: 600, color: C.pale }}>{s.val}</div>
+              <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 9, color: s.subC, marginTop: 2 }}>{s.sub}</div>
+            </div>
           ))}
         </div>
-      </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-3 p-4">
-        {[
-          { label: "Cash Balance",  value: "₹42.6L",  color: "text-[var(--color-primary)]" },
-          { label: "Monthly Burn",  value: "₹8.2L",   color: "text-red-400"               },
-          { label: "Runway",        value: "156 days", color: "text-green-400"             },
-          { label: "Alerts",        value: "2 new",    color: "text-orange-400"            },
-        ].map(c => (
-          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl p-3">
-            <p className="text-[9px] text-[var(--color-muted)] mb-1.5">{c.label}</p>
-            <p className={`text-sm font-bold ${c.color}`}>{c.value}</p>
+        {/* bar chart */}
+        <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 9, color: "rgba(196,217,122,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position — next 90 days</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
+            {BAR_DATA.map((h, i) => (
+              <div key={i} style={{
+                flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7,
+                height: `${Math.round(h * 0.72)}%`,
+                background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright,
+                opacity: i < 10 ? 0.5 : 0.85,
+              }} />
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Chart */}
-      <div className="px-4 pb-4">
-        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl p-3">
-          <p className="text-[9px] text-[var(--color-muted)] mb-2">60-Day Cash Forecast (₹L) · P10 / P50 / P90</p>
-          <ResponsiveContainer width="100%" height={100}>
-            <AreaChart data={MOCK_CHART} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#C9A227" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#C9A227" stopOpacity={0}    />
-                </linearGradient>
-              </defs>
-              <XAxis hide />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{ background: "#1e1e14", border: "1px solid #2e2e1a", borderRadius: 6, fontSize: 10 }}
-                formatter={(v: number) => [`₹${v.toFixed(0)}L`, ""]}
-              />
-              <Area type="monotone" dataKey="p90" stroke="#C9A227" strokeWidth={1} strokeDasharray="3 2" fill="transparent" />
-              <Area type="monotone" dataKey="p50" stroke="#C9A227" strokeWidth={2}                      fill="url(#mg)"     />
-              <Area type="monotone" dataKey="p10" stroke="#C9A227" strokeWidth={1} strokeDasharray="3 2" fill="transparent" />
-            </AreaChart>
-          </ResponsiveContainer>
+        {/* alert */}
+        <div style={{ background: "rgba(201,162,39,0.1)", border: "1px solid rgba(201,162,39,0.22)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(201,162,39,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.gold, flexShrink: 0, marginTop: 1 }}>!</div>
+          <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 11, color: C.goldL, lineHeight: 1.45 }}>
+            You go below your safety threshold in <strong>41 days</strong>. A ₹1.5L revenue advance would keep you positive through October. <span style={{ color: C.goldL, textDecoration: "underline" }}>See options →</span>
+          </div>
         </div>
       </div>
-
-      {/* Glow overlay at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[var(--color-surface)] to-transparent pointer-events-none" />
     </div>
   );
 }
 
-/* ── Copy data ── */
-const PAIN_POINTS = [
-  { before: "Spreadsheet updated once a month", after: "Live cash position, updated every 5 seconds"  },
-  { before: "\"How much runway do we have?\" takes a call", after: "Runway on your dashboard, always"  },
-  { before: "Bank loan process takes 4–6 weeks", after: "Competing offers in seconds, from your own data" },
-  { before: "Investors ask for updates by email", after: "Investors get a live portal with their own login" },
-];
-
-const FEATURES = [
-  {
-    icon: BarChart3, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20",
-    title: "Cash Flow Forecasting",
-    tagline: "90-day visibility, zero guesswork",
-    desc: "Probabilistic P10/P50/P90 projections built from your actual bank transactions. No manual entry. Stack scenarios — new hire, contract, loan — before you commit.",
-    points: ["P10/P50/P90 confidence bands", "What-if scenario builder", "Daily burn & runway counter", "Cash obligation calendar"],
-  },
-  {
-    icon: CreditCard, color: "text-blue-400", bg: "bg-blue-950/30 border-blue-800/20",
-    title: "Embedded Credit Marketplace",
-    tagline: "Get funded in minutes, not months",
-    desc: "Your transaction history becomes your credit score. Submit once, receive competing offers from multiple lenders. No paperwork. No branch visits. No waiting.",
-    points: ["Live underwriting from your transactions", "3+ lender offers simultaneously", "Terms 3 – 36 months", "Score improves as cash flow improves"],
-  },
-  {
-    icon: Rocket, color: "text-purple-400", bg: "bg-purple-950/30 border-purple-800/20",
-    title: "Capital Raising Module",
-    tagline: "Raise from investors on your terms",
-    desc: "Choose Revenue Share, Reg CF equity, or Reg A+ mini-IPO. Manage the full investor lifecycle — commitment to cap table — from a single dashboard.",
-    points: ["Rev Share, Reg CF, Reg A+ tracks", "Investor portal with live progress", "Equity % auto-calculated", "Commitment → confirmation workflow"],
-  },
-  {
-    icon: ShieldCheck, color: "text-green-400", bg: "bg-green-950/30 border-green-800/20",
-    title: "Role-Based Workspace",
-    tagline: "One platform, four access levels",
-    desc: "Owners see everything. Accountants see cash flow. Investors see their holdings. Data is isolated at the database level — not just hidden in the UI.",
-    points: ["Owner, accountant, investor, super admin", "Namespace-isolated at DB level", "Invite by email, set role instantly", "Audit trail on every action"],
-  },
-  {
-    icon: Zap, color: "text-yellow-400", bg: "bg-yellow-950/30 border-yellow-800/20",
-    title: "Local-First Real-Time Sync",
-    tagline: "Instant UI. Team always in sync.",
-    desc: "Writes hit the screen instantly — no spinners while you type. Changes sync to the server in 400ms and broadcast to all teammates every 5 seconds.",
-    points: ["Zero-latency local writes", "400ms debounced server sync", "5-second multi-user broadcast", "Works offline, syncs on reconnect"],
-  },
-  {
-    icon: Cpu, color: "text-orange-400", bg: "bg-orange-950/30 border-orange-800/20",
-    title: "AI Financial Assistant",
-    tagline: "Ask anything. Get numbers, not jargon.",
-    desc: "Powered by Claude (Anthropic). Ask \"how long can we survive if revenue drops 30%?\" and get a precise answer from your own data — not a generic template.",
-    points: ["Context-aware of your transactions", "Plain-language answers", "Actionable recommendations", "Optional — bring your own API key"],
-  },
-];
-
-const TESTIMONIALS = [
-  { name: "Priya Sharma",    co: "Founder, NutriBox",          quote: "We used to guess our runway every month. Now I open Headroom on my phone every morning. Closed a ₹25L credit line in 3 days.",           stars: 5 },
-  { name: "Arjun Mehta",     co: "CFO, TechBridge Solutions",  quote: "The scenario builder alone saved us from a bad hiring decision. We saw it would push runway under 60 days before we ever signed an offer.", stars: 5 },
-  { name: "Sneha Kapoor",    co: "Co-founder, GreenThread",    quote: "Our investors now check the portal themselves instead of emailing us. That's 3 hours a week back. The Reg CF raise was seamless.",         stars: 5 },
-];
-
-const PLANS = [
-  {
-    name: "Starter", price: "Free", sub: "forever",
-    desc: "For early-stage founders exploring their numbers.",
-    features: ["Cash flow dashboard", "30-day forecast", "1 bank account", "2 team members", "Basic alerts"],
-    cta: "Start free", highlight: false,
-  },
-  {
-    name: "Growth", price: "₹4,999", sub: "/ month",
-    desc: "For growing SMBs that need full visibility and credit.",
-    features: ["Everything in Starter", "90-day P10/P50/P90 forecast", "Scenario builder", "Credit marketplace", "Unlimited bank accounts", "5 team members", "AI assistant"],
-    cta: "Start 14-day trial", highlight: true,
-  },
-  {
-    name: "Scale", price: "₹12,999", sub: "/ month",
-    desc: "For businesses actively raising capital or managing investors.",
-    features: ["Everything in Growth", "Capital raising module", "Unlimited investors", "Reg CF & Reg A+ support", "Unlimited team members", "Priority support", "Custom onboarding"],
-    cta: "Talk to us", highlight: false,
-  },
-];
-
-const FAQS = [
-  { q: "Do I need to be an accountant to use Headroom?",     a: "No. Headroom is built for founders. It translates raw transactions into plain language — runway, burn, risk. Your CA can also get their own login with accountant access." },
-  { q: "How does Headroom get my transaction data?",          a: "You connect your bank accounts through our secure integration. Headroom reads transaction history to power forecasting and underwriting. No manual entry needed." },
-  { q: "How is my credit score calculated?",                  a: "Headroom computes a live underwriting score from your monthly revenue, burn rate, runway, and business age. The higher your score, the better offers you receive from lenders." },
-  { q: "Which lenders are in the credit marketplace?",        a: "We route applications to Stripe Capital, OnDeck, Lendingkart, and other NBFC partners. You see all offers side-by-side and pick the best terms." },
-  { q: "Can investors access our sensitive financial data?",  a: "No. Investors get a dedicated portal that shows only the capital raise they're part of — their investment, equity %, and raise progress. All other data is invisible to them." },
-  { q: "Is there a free trial for paid plans?",               a: "Yes — Growth plan comes with a 14-day free trial, no credit card required. You keep your data if you downgrade to Starter." },
-];
-
-/* ── FAQ accordion ── */
+/* ─── FAQ accordion ─── */
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-[var(--color-border)] last:border-0">
-      <button onClick={() => setOpen(v => !v)} className="w-full flex items-start justify-between py-5 text-left gap-6 group">
-        <span className="text-sm font-medium group-hover:text-[var(--color-primary)] transition-colors">{q}</span>
-        <ChevronDown size={16} className={`shrink-0 mt-0.5 text-[var(--color-muted)] transition-transform duration-200 ${open ? "rotate-180 text-[var(--color-primary)]" : ""}`} />
+    <div style={{ borderBottom: `1px solid rgba(74,94,26,0.12)` }}>
+      <button onClick={() => setOpen(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 0", background: "none", border: "none", cursor: "pointer", textAlign: "left", gap: 16 }}>
+        <span style={{ fontFamily: "system-ui,sans-serif", fontSize: 14, fontWeight: 500, color: C.txt }}>{q}</span>
+        <ChevronDown size={15} style={{ flexShrink: 0, color: C.txtMut, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }} />
       </button>
-      <div className={`overflow-hidden transition-all duration-300 ${open ? "max-h-48 pb-5" : "max-h-0"}`}>
-        <p className="text-sm text-[var(--color-muted)] leading-relaxed">{a}</p>
+      <div style={{ overflow: "hidden", maxHeight: open ? 160 : 0, transition: "max-height 0.3s ease", paddingBottom: open ? 16 : 0 }}>
+        <p style={{ fontFamily: "system-ui,sans-serif", fontSize: 13, color: C.txtMut, lineHeight: 1.7 }}>{a}</p>
       </div>
     </div>
   );
 }
 
-/* ── Main page ── */
+/* ─── Main ─── */
 export default function HomePage() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 24);
+    const fn = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", fn, { passive: true });
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  return (
-    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+  const serif  = "Georgia,'Times New Roman',serif";
+  const sans   = "system-ui,-apple-system,'Segoe UI',sans-serif";
 
-      {/* ─── NAV ─── */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-[var(--color-bg)]/90 backdrop-blur-xl border-b border-[var(--color-border)] shadow-xl shadow-black/30" : ""}`}>
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-xl font-black tracking-tight cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            Head<span className="text-[var(--color-primary)]">room</span>
-          </span>
-          <nav className="hidden md:flex items-center gap-8 text-sm">
-            {[["Product","#product"],["How it works","#how"],["Pricing","#pricing"],["FAQ","#faq"]].map(([l, h]) => (
-              <a key={l} href={h} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">{l}</a>
-            ))}
-          </nav>
-          <div className="hidden md:flex items-center gap-3">
-            <button onClick={() => navigate("/login")} className="text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-3 py-2">Sign in</button>
-            <button onClick={() => navigate("/login")} className="text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-[var(--color-primary)]/20">
-              Start free →
-            </button>
-          </div>
-          <button className="md:hidden p-2 text-[var(--color-muted)]" onClick={() => setMenuOpen(v => !v)}>
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+  return (
+    <div style={{ background: C.creamW, color: C.txt, fontFamily: sans, overflowX: "hidden" }}>
+
+      {/* ═══════════ NAV ═══════════ */}
+      <nav style={{
+        background: scrolled ? `${C.deepest}f0` : C.deepest,
+        backdropFilter: scrolled ? "blur(16px)" : "none",
+        padding: "0 48px", display: "flex", alignItems: "center",
+        justifyContent: "space-between", height: 64,
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        transition: "all 0.3s",
+        borderBottom: scrolled ? `1px solid rgba(196,217,122,0.1)` : "none",
+      }}>
+        <div style={{ fontFamily: serif, fontSize: 22, color: C.pale, letterSpacing: -0.5, cursor: "pointer" }}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          Head<span style={{ color: C.gold }}>room</span>
+        </div>
+
+        {/* desktop links */}
+        <ul style={{ display: "flex", gap: 32, listStyle: "none", margin: 0, padding: 0 }} className="hidden md:flex">
+          {[["Product","#product"],["Features","#features"],["Credit","#credit"],["Pricing","#pricing"],["For Accountants","#roles"]].map(([l,h]) => (
+            <li key={l}><a href={h} style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.7)", textDecoration: "none", letterSpacing: 0.3 }}
+              onMouseOver={e => (e.currentTarget.style.color = C.pale)}
+              onMouseOut={e  => (e.currentTarget.style.color = "rgba(196,217,122,0.7)")}>{l}</a></li>
+          ))}
+        </ul>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => navigate("/login")}
+            style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.6)", background: "none", border: "none", cursor: "pointer" }}>
+            Sign in
+          </button>
+          <button onClick={() => navigate("/login")}
+            style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 20px", borderRadius: 6, border: "none", cursor: "pointer", letterSpacing: 0.2 }}>
+            Start free trial
           </button>
         </div>
-        {menuOpen && (
-          <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-6 py-4 flex flex-col gap-4 text-sm">
-            {[["Product","#product"],["How it works","#how"],["Pricing","#pricing"],["FAQ","#faq"]].map(([l, h]) => (
-              <a key={l} href={h} onClick={() => setMenuOpen(false)} className="text-[var(--color-muted)]">{l}</a>
-            ))}
-            <button onClick={() => navigate("/login")} className="mt-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-3 rounded-xl">Start free →</button>
-          </div>
-        )}
-      </header>
+      </nav>
 
-      {/* ─── HERO ─── */}
-      <section className="relative pt-40 pb-20 px-6 overflow-hidden">
-        {/* Background glows */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-[var(--color-primary)]/8 blur-[140px] rounded-full pointer-events-none" />
-        <div className="absolute top-60 right-0 w-[400px] h-[400px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
+      {/* ═══════════ HERO ═══════════ */}
+      <section style={{ background: C.deepest, paddingTop: 128, paddingBottom: 80, paddingLeft: 48, paddingRight: 48, position: "relative", overflow: "hidden" }}>
+        {/* geometric right panel */}
+        <div style={{ position: "absolute", top: 0, right: 0, width: "50%", height: "100%", background: C.deep, clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0% 100%)", zIndex: 0 }} />
 
-        <div className="relative max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
-          {/* Left — copy */}
-          <div>
-            <div className="animate-fade-up">
-              <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-primary)] border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-4 py-1.5 rounded-full mb-6">
-                <span className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-pulse" />
-                Financial OS for Indian SMBs
-              </span>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+          {/* Left copy */}
+          <div className="animate-fade-up">
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.15)", border: "1px solid rgba(201,162,39,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 28 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />
+              <span style={{ fontFamily: sans, fontSize: 12, color: C.goldL, letterSpacing: 0.4 }}>Now live in India &amp; US</span>
             </div>
-            <h1 className="text-5xl sm:text-6xl font-black leading-[1.08] tracking-tight mb-6 animate-fade-up delay-100">
-              Stop guessing.<br />
-              Start knowing<br />
-              <span className="text-[var(--color-primary)]">your cash flow.</span>
+
+            <h1 style={{ fontFamily: serif, fontSize: 52, lineHeight: 1.05, color: C.creamW, marginBottom: 20, letterSpacing: -1.5 }}>
+              Know your cash.<br /><em style={{ fontStyle: "normal", color: C.pale }}>Before</em> it matters.
             </h1>
-            <p className="text-lg text-[var(--color-muted)] leading-relaxed mb-8 max-w-lg animate-fade-up delay-200">
-              Headroom gives SMB founders a real-time dashboard for cash flow forecasting, embedded credit, and capital raising — all from your actual bank data.
+
+            <p style={{ fontFamily: sans, fontSize: 16, lineHeight: 1.65, color: "rgba(244,241,228,0.65)", marginBottom: 36, maxWidth: 420 }}>
+              Headroom connects your bank and accounting software to show you exactly where your cash will be in 90 days — and what to do about it.
             </p>
-            <div className="flex flex-wrap items-center gap-3 mb-10 animate-fade-up delay-300">
-              <button onClick={() => navigate("/login")} className="flex items-center gap-2 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-7 py-3.5 rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-[var(--color-primary)]/25">
-                Open dashboard free <ArrowRight size={15} />
+
+            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 32 }}>
+              <button onClick={() => navigate("/login")}
+                style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "14px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+                Get your forecast free
               </button>
-              <a href="#product" className="flex items-center gap-2 border border-[var(--color-border)] text-[var(--color-muted)] px-7 py-3.5 rounded-xl hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] transition-all text-sm font-medium">
-                See how it works
+              <a href="#product" style={{ fontFamily: sans, fontSize: 14, color: C.pale, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                Watch 2-min demo
+                <span style={{ width: 22, height: 22, borderRadius: "50%", border: `1px solid ${C.light}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>▶</span>
               </a>
             </div>
-            <div className="flex flex-wrap gap-5 text-xs text-[var(--color-muted)] animate-fade-up delay-400">
-              {["Free to start", "No credit card", "Setup in 5 minutes", "Bank-level encryption"].map(t => (
-                <span key={t} className="flex items-center gap-1.5"><CheckCircle2 size={12} className="text-green-400" />{t}</span>
+
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+              {["No credit card required", "Setup in 3 minutes", "SOC 2 certified"].map(t => (
+                <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)" }}>
+                  <CheckCircle2 size={12} style={{ color: C.light }} />{t}
+                </span>
               ))}
             </div>
           </div>
 
           {/* Right — product mockup */}
           <div className="animate-fade-up delay-200">
-            {/* Outer glow ring */}
-            <div className="absolute inset-0 rounded-2xl bg-[var(--color-primary)]/5 blur-2xl scale-110 pointer-events-none" />
-            <div className="relative">
-              <ProductMockup />
-              {/* Floating badges */}
-              <div className="absolute -top-4 -right-4 bg-green-900/80 border border-green-700/50 text-green-400 text-xs font-bold px-3 py-1.5 rounded-xl shadow-lg backdrop-blur animate-fade-in delay-500">
-                ✓ 156 days runway
-              </div>
-              <div className="absolute -bottom-4 -left-4 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-semibold px-3 py-2 rounded-xl shadow-lg animate-fade-in delay-600">
-                <span className="text-[var(--color-muted)]">New offer from </span>
-                <span className="text-[var(--color-primary)]">Lendingkart — ₹20L</span>
-              </div>
-            </div>
+            <DashMockup />
           </div>
         </div>
       </section>
 
-      {/* ─── SOCIAL PROOF BAR ─── */}
-      <Reveal>
-        <div className="border-y border-[var(--color-border)] bg-[var(--color-surface)]">
-          <div className="max-w-5xl mx-auto px-6 py-8">
-            <p className="text-xs text-center text-[var(--color-muted)] uppercase tracking-widest mb-6">Trusted by growing Indian businesses</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+      {/* ═══════════ STATS STRIP ═══════════ */}
+      <div style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0 }}>
+        {[
+          { n: "₹340Cr+",  d: "Forecasted cash flow tracked" },
+          { n: "12,000+",  d: "SMBs on the platform"         },
+          { n: "91%",      d: "Forecast accuracy at 30 days" },
+          { n: "4.8 days", d: "Avg time to first insight"    },
+        ].map(({ n, d }, i) => (
+          <div key={d} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.15)" : "none" }}>
+            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}>{n}</div>
+            <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.55)", marginTop: 3 }}>{d}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ═══════════ PROBLEM ═══════════ */}
+      <section style={{ background: C.cream, padding: "72px 48px" }}>
+        <Reveal>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "#C0392B", marginBottom: 14 }}>The problem</div>
+            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>82% of SMBs fail because of cash flow — not bad products.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 560, lineHeight: 1.7, marginBottom: 48 }}>The tools to prevent this exist. They just weren't built for founders. Headroom changes that.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
               {[
-                { v: "₹2.4Cr+", l: "Credit facilitated" },
-                { v: "90 days",  l: "Forecast horizon"   },
-                { v: "< 5 min",  l: "Time to first insight" },
-                { v: "4 roles",  l: "Access control levels" },
-              ].map(({ v, l }) => (
-                <div key={l}>
-                  <p className="text-2xl font-black text-[var(--color-primary)]">{v}</p>
-                  <p className="text-xs text-[var(--color-muted)] mt-1">{l}</p>
+                { before: "Spreadsheet updated once a month", after: "Live cash position, refreshed every 5 seconds" },
+                { before: '"How much runway?" takes a phone call', after: "Runway on your dashboard, always visible" },
+                { before: "Bank loan process takes 4–6 weeks", after: "Competing credit offers in 48 hours from your own data" },
+                { before: "Investors ask for updates by email", after: "Investors get a live portal with their own login" },
+              ].map(({ before, after }) => (
+                <div key={before} style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                    <span style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, background: "#FEE2E2", color: "#C0392B", padding: "2px 8px", borderRadius: 12, flexShrink: 0, marginTop: 1 }}>Before</span>
+                    <p style={{ fontFamily: sans, fontSize: 13, color: C.txtMut, textDecoration: "line-through", lineHeight: 1.5, opacity: 0.7 }}>{before}</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <span style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, background: C.wash, color: C.mid, padding: "2px 8px", borderRadius: 12, flexShrink: 0, marginTop: 1 }}>After</span>
+                    <p style={{ fontFamily: sans, fontSize: 13, color: C.txt, fontWeight: 500, lineHeight: 1.5 }}>{after}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </Reveal>
+        </Reveal>
+      </section>
 
-      {/* ─── PROBLEM SECTION ─── */}
-      <section className="max-w-5xl mx-auto px-6 py-24">
+      {/* ═══════════ FEATURES ═══════════ */}
+      <section id="features" style={{ background: C.creamW, padding: "80px 48px" }}>
         <Reveal>
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-3">The problem</p>
-            <h2 className="text-3xl sm:text-4xl font-black mb-4">Most SMBs fly blind on cash flow</h2>
-            <p className="text-[var(--color-muted)] max-w-xl mx-auto text-sm leading-relaxed">
-              82% of small business failures are caused by cash flow problems — not bad products. The tools exist to prevent this. They just weren't built for founders.
-            </p>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.bright, marginBottom: 14 }}>What Headroom does</div>
+            <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>Every tool your cash needs.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 480, lineHeight: 1.7 }}>From 90-day forecasts to instant credit to raising money from your community — all in one dashboard.</p>
           </div>
         </Reveal>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {PAIN_POINTS.map(({ before, after }, i) => (
-            <Reveal key={before} delay={i * 80}>
-              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="text-xs bg-red-950/40 text-red-400 border border-red-800/30 px-2 py-0.5 rounded-full shrink-0 mt-0.5">Before</span>
-                  <p className="text-sm text-[var(--color-muted)] line-through decoration-red-500/40">{before}</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-xs bg-green-950/40 text-green-400 border border-green-800/30 px-2 py-0.5 rounded-full shrink-0 mt-0.5">After</span>
-                  <p className="text-sm font-medium">{after}</p>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
 
-      {/* ─── PRODUCT / FEATURES ─── */}
-      <section id="product" className="border-t border-[var(--color-border)]">
-        <div className="max-w-6xl mx-auto px-6 py-24">
-          <Reveal>
-            <div className="text-center mb-16">
-              <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">The product</p>
-              <h2 className="text-3xl sm:text-4xl font-black mb-4">Six modules. One dashboard.</h2>
-              <p className="text-[var(--color-muted)] max-w-xl mx-auto text-sm leading-relaxed">
-                Everything your finance operation needs, purpose-built for lean SMBs. No integrations to configure. No consultants needed.
-              </p>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <Reveal key={f.title} delay={i * 70}>
-                  <div className="group h-full flex flex-col bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 hover:border-[var(--color-primary)]/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30 transition-all duration-250">
-                    <div className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-4 ${f.bg} group-hover:scale-110 transition-transform`}>
-                      <Icon size={20} className={f.color} />
-                    </div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-muted)] mb-1">{f.tagline}</p>
-                    <h3 className="text-base font-bold mb-3">{f.title}</h3>
-                    <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-5 flex-1">{f.desc}</p>
-                    <ul className="space-y-1.5 border-t border-[var(--color-border)] pt-4">
-                      {f.points.map(p => (
-                        <li key={p} className="flex items-start gap-2 text-xs text-[var(--color-muted)]">
-                          <CheckCircle2 size={11} className={`mt-0.5 shrink-0 ${f.color}`} />
-                          {p}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── HOW IT WORKS ─── */}
-      <section id="how" className="border-y border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="max-w-5xl mx-auto px-6 py-24">
-          <Reveal>
-            <div className="text-center mb-16">
-              <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">Simple setup</p>
-              <h2 className="text-3xl sm:text-4xl font-black mb-4">Live in under 5 minutes</h2>
-              <p className="text-[var(--color-muted)] text-sm">No onboarding call. No 30-page setup guide.</p>
-            </div>
-          </Reveal>
-          <div className="relative">
-            {/* Connector line */}
-            <div className="hidden lg:block absolute top-8 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/30 to-transparent" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { n: "01", t: "Connect your bank",       d: "Link accounts securely. Headroom imports real transaction history automatically."          },
-                { n: "02", t: "See your numbers",         d: "Your dashboard fills with live burn rate, runway, and 90-day forecast instantly."           },
-                { n: "03", t: "Forecast & scenario-plan", d: "Model hires, contracts, and loans before committing. See the runway impact live."           },
-                { n: "04", t: "Access capital",           d: "Apply for credit or launch a capital raise directly from your dashboard — no paperwork."    },
-              ].map(({ n, t, d }, i) => (
-                <Reveal key={n} delay={i * 100}>
-                  <div className="text-center">
-                    <div className="w-14 h-14 rounded-full bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/25 flex items-center justify-center mx-auto mb-4">
-                      <span className="text-lg font-black text-[var(--color-primary)]">{n}</span>
-                    </div>
-                    <h3 className="font-bold mb-2 text-sm">{t}</h3>
-                    <p className="text-xs text-[var(--color-muted)] leading-relaxed">{d}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── WHO IT'S FOR ─── */}
-      <section className="max-w-5xl mx-auto px-6 py-24">
-        <Reveal>
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">Access control</p>
-            <h2 className="text-3xl sm:text-4xl font-black mb-4">One workspace, four roles</h2>
-            <p className="text-[var(--color-muted)] text-sm">Invite your whole team. Everyone sees only what they need.</p>
-          </div>
-        </Reveal>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div style={{ maxWidth: 1100, margin: "48px auto 0", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 22 }}>
           {[
-            { role: "Founder / Owner", icon: Building2, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20", tabs: ["Dashboard","Forecast","Credit","Capital","Admin"], note: "Full access" },
-            { role: "Accountant / CA",  icon: FileText,   color: "text-blue-400",              bg: "bg-blue-950/30 border-blue-800/20",                              tabs: ["Dashboard","Forecast"],                              note: "Finance view" },
-            { role: "Investor",         icon: Users,      color: "text-purple-400",            bg: "bg-purple-950/30 border-purple-800/20",                          tabs: ["Dashboard","Capital"],                               note: "Portfolio view" },
-            { role: "Super Admin",      icon: ShieldCheck,color: "text-green-400",             bg: "bg-green-950/30 border-green-800/20",                            tabs: ["All tabs","User management","Audit log"],            note: "Platform admin" },
-          ].map(({ role, icon: Icon, color, bg, tabs, note }, i) => (
-            <Reveal key={role} delay={i * 80}>
-              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 h-full">
-                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center mb-3 ${bg}`}>
-                  <Icon size={16} className={color} />
+            { icon: "📈", title: "90-day cash forecast",       tag: "Core feature", tagStyle: { background: C.wash, color: "#3D5010" },        desc: "See your exact cash position for every day of the next 90 days. Recurring expenses auto-detected. Confidence bands show best and worst case." },
+            { icon: "📊", title: "Scenario planner",           tag: "Growth tool",  tagStyle: { background: "rgba(107,133,38,0.12)", color: "#3D5010" }, desc: "Model what happens if you hire, win a contract, or hit a slow month. See the impact instantly — before you commit." },
+            { icon: "🔄", title: "Live bank + books sync",     tag: "Automated",    tagStyle: { background: C.wash, color: "#3D5010" },        desc: "Connects to Tally, Zoho Books, QuickBooks, Xero and 50+ platforms. Real-time sync. No manual uploads. No spreadsheets." },
+            { icon: "🔔", title: "Smart alert engine",         tag: "AI-powered",   tagStyle: { background: "rgba(201,162,39,0.12)", color: "#7A5A0A" }, desc: 'Alerts that say "you go negative in 18 days" — not just "cash flow warning." Specific. Actionable. Sent 45 days before the problem.' },
+            { icon: "💳", title: "Credit rescue",              tag: "Instant",      tagStyle: { background: "rgba(201,162,39,0.12)", color: "#7A5A0A" }, desc: "When a gap approaches, Headroom shows pre-approved credit options and the repayment impact on your forecast before you accept." },
+            { icon: "🚀", title: "Community capital",          tag: "Reg CF ready", tagStyle: { background: "rgba(107,133,38,0.12)", color: "#3D5010" }, desc: "Raise from your customers and community. Revenue-share, equity, or mini-IPO. Investors see your live dashboard. Trust built in." },
+          ].map(({ icon, title, tag, tagStyle, desc }, i) => (
+            <Reveal key={title} delay={i * 60}>
+              <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 28, height: "100%", cursor: "default", transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s" }}
+                onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(107,133,38,0.4)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 32px rgba(44,58,16,0.08)"; }}
+                onMouseOut={e  => { (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(74,94,26,0.12)";  (e.currentTarget as HTMLDivElement).style.transform = "none";             (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, fontSize: 20 }}>{icon}</div>
+                <h3 style={{ fontFamily: serif, fontSize: 18, color: C.txt, marginBottom: 8, letterSpacing: -0.3 }}>{title}</h3>
+                <p style={{ fontFamily: sans, fontSize: 13, color: C.txtMut, lineHeight: 1.65 }}>{desc}</p>
+                <span style={{ display: "inline-block", fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 10px", borderRadius: 12, marginTop: 14, ...tagStyle }}>{tag}</span>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ═══════════ HOW IT WORKS ═══════════ */}
+      <section id="product" style={{ background: C.deepest, padding: "80px 48px" }}>
+        <Reveal>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.pale, marginBottom: 14 }}>How it works</div>
+            <h2 style={{ fontFamily: serif, fontSize: 38, color: C.creamW, letterSpacing: -1, marginBottom: 14 }}>Up and running in 10 minutes.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: "rgba(196,217,122,0.5)", maxWidth: 440, lineHeight: 1.7 }}>No onboarding call. No accountant needed. Connect your bank and get your first forecast immediately.</p>
+          </div>
+        </Reveal>
+        <div style={{ maxWidth: 1100, margin: "56px auto 0", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, position: "relative" }}>
+          {/* connector line */}
+          <div style={{ position: "absolute", top: 28, left: "12.5%", right: "12.5%", height: 1, background: "rgba(196,217,122,0.12)" }} />
+          {[
+            { n:"1", t:"Connect",   d:"Link your bank and Tally/Zoho/QuickBooks. Headroom imports 12 months of history automatically." },
+            { n:"2", t:"Forecast",  d:"Your 90-day cash forecast is built and updated live. Confidence bands show best and worst case." },
+            { n:"3", t:"Act early", d:"Receive alerts 45 days before a cash gap. Model scenarios. Access credit before you need it." },
+            { n:"4", t:"Grow",      d:"Raise capital from your community. Build credit history. Unlock better rates over time." },
+          ].map(({ n, t, d }, i) => (
+            <Reveal key={n} delay={i * 100}>
+              <div style={{ textAlign: "center", padding: "0 20px" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", border: "1px solid rgba(196,217,122,0.2)", background: C.deep, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontFamily: sans, fontSize: 15, fontWeight: 600, color: C.pale, position: "relative", zIndex: 1 }}>{n}</div>
+                <h4 style={{ fontFamily: serif, fontSize: 16, color: C.pale, marginBottom: 8 }}>{t}</h4>
+                <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.45)", lineHeight: 1.6 }}>{d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ═══════════ CREDIT SECTION ═══════════ */}
+      <section id="credit" style={{ background: C.cream, padding: "80px 48px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 72, alignItems: "center" }}>
+          <Reveal>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.bright, marginBottom: 14 }}>Credit rescue</div>
+            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.txt, letterSpacing: -1, lineHeight: 1.15, marginBottom: 16 }}>Money when you need it.<br />Terms you can see.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, lineHeight: 1.7, marginBottom: 32 }}>When Headroom detects a cash gap, it pre-qualifies you instantly from your own financial data — then shows exactly how repayment affects your forecast before you accept a rupee.</p>
+            <div style={{ display: "flex", gap: 24, marginBottom: 36 }}>
+              {[{ n:"48 hrs", d:"Avg to first offer"},{ n:"₹5L", d:"Starting amount"},{ n:"0", d:"Bureau pulls"}].map(({ n, d }, i) => (
+                <div key={d} style={{ display: "flex", flexDirection: "column", paddingRight: i < 2 ? 24 : 0, borderRight: i < 2 ? `1px solid rgba(74,94,26,0.15)` : "none" }}>
+                  <span style={{ fontFamily: serif, fontSize: 28, color: C.mid }}>{n}</span>
+                  <span style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, marginTop: 2 }}>{d}</span>
                 </div>
-                <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${color}`}>{note}</p>
-                <h3 className="font-bold text-sm mb-3">{role}</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {tabs.map(t => (
-                    <span key={t} className="text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-0.5 rounded-full text-[var(--color-muted)]">{t}</span>
-                  ))}
+              ))}
+            </div>
+            <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+              Check my eligibility
+            </button>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: "1px", textTransform: "uppercase", color: C.txtMut, marginBottom: 4 }}>Your pre-approved options</div>
+              {[
+                { icon: "📈", bg: C.wash,     title: "Revenue-based advance", desc: "Repay as % of monthly revenue. No fixed EMI.",    amount: "₹8L",      iconC: "#3D5010" },
+                { icon: "📄", bg: "#FFF9E6",  title: "Invoice financing",      desc: "Get paid on outstanding invoices today.",          amount: "₹3.2L",    iconC: "#7A5A0A" },
+                { icon: "🔒", bg: C.wash,     title: "Revolving credit line",  desc: "Draw what you need. Pay interest only on usage.", amount: "₹5L limit", iconC: "#3D5010" },
+              ].map(({ icon, bg, title, desc, amount }) => (
+                <div key={title} style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 9, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>{icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 600, color: C.txt, marginBottom: 2 }}>{title}</div>
+                    <div style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.4 }}>{desc}</div>
+                  </div>
+                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.mid, whiteSpace: "nowrap" }}>{amount}</div>
+                </div>
+              ))}
+              <div style={{ background: "rgba(201,162,39,0.06)", border: "1px solid rgba(201,162,39,0.2)", borderRadius: 12, padding: "13px 16px" }}>
+                <p style={{ fontFamily: sans, fontSize: 12, color: "#7A5A0A", lineHeight: 1.5 }}>Taking ₹8L now keeps you positive for <strong>74 days</strong> and costs ₹96K total (12% effective rate). Repayment shown in your forecast.</p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════ ROLES ═══════════ */}
+      <section id="roles" style={{ background: C.deepest, padding: "80px 48px" }}>
+        <Reveal>
+          <div style={{ maxWidth: 1100, margin: "0 auto", textAlign: "center", marginBottom: 56 }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.pale, marginBottom: 14 }}>Access control</div>
+            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.creamW, letterSpacing: -1, marginBottom: 14 }}>One platform. Four roles.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: "rgba(196,217,122,0.5)", maxWidth: 420, margin: "0 auto", lineHeight: 1.7 }}>Invite your whole team. Everyone sees only what they need to.</p>
+          </div>
+        </Reveal>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+          {[
+            { role: "Founder / Owner",  emoji: "🏢", tabs: ["Dashboard","Forecast","Credit","Capital","Admin"],   note: "Full access"    },
+            { role: "Accountant / CA",  emoji: "📋", tabs: ["Dashboard","Forecast"],                               note: "Finance view"   },
+            { role: "Investor",         emoji: "👥", tabs: ["Dashboard","Capital"],                                note: "Portfolio view" },
+            { role: "Super Admin",      emoji: "🛡", tabs: ["All tabs","User mgmt","Audit log"],                  note: "Platform admin" },
+          ].map(({ role, emoji, tabs, note }, i) => (
+            <Reveal key={role} delay={i * 80}>
+              <div style={{ background: C.deep, border: "1px solid rgba(196,217,122,0.1)", borderRadius: 14, padding: 22 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(196,217,122,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginBottom: 14 }}>{emoji}</div>
+                <div style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, color: C.bright, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 4 }}>{note}</div>
+                <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale, marginBottom: 12 }}>{role}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {tabs.map(t => <span key={t} style={{ fontFamily: sans, fontSize: 10, background: "rgba(196,217,122,0.06)", border: "1px solid rgba(196,217,122,0.1)", padding: "2px 8px", borderRadius: 10, color: "rgba(196,217,122,0.5)" }}>{t}</span>)}
                 </div>
               </div>
             </Reveal>
@@ -479,73 +394,93 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS ─── */}
-      <section className="border-y border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="max-w-5xl mx-auto px-6 py-24">
-          <Reveal>
-            <div className="text-center mb-14">
-              <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">Social proof</p>
-              <h2 className="text-3xl sm:text-4xl font-black mb-4">Founders trust their numbers again</h2>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((t, i) => (
-              <Reveal key={t.name} delay={i * 100}>
-                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-6 flex flex-col h-full">
-                  <Quote size={20} className="text-[var(--color-primary)]/40 mb-4" />
-                  <p className="text-sm text-[var(--color-muted)] leading-relaxed flex-1 mb-5">"{t.quote}"</p>
+      {/* ═══════════ TESTIMONIALS ═══════════ */}
+      <section style={{ background: C.deep, padding: "80px 48px" }}>
+        <Reveal>
+          <div style={{ maxWidth: 1100, margin: "0 auto 48px" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.pale, marginBottom: 14 }}>What owners say</div>
+            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.creamW, letterSpacing: -1 }}>The tool I wish I had in year one.</h2>
+          </div>
+        </Reveal>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
+          {[
+            { initials:"RK", name:"Rajiv Kumar",    biz:"Spice Route Restaurant, Mumbai",         quote:"I knew something was wrong in March but I couldn't see it until it hit. Headroom showed me the problem in January. I had two months to fix it." },
+            { initials:"AP", name:"Aditi Patel",    biz:"Meridian Creative Agency, Bangalore",    quote:"We run the business like it was a guessing game. Clients pay in 60 days, payroll every two weeks. Headroom made that manageable." },
+            { initials:"VS", name:"Vikram Shah",    biz:"Shah Construction, Pune",                quote:"The credit feature saved us during the monsoon gap. Headroom offered us options before it hit, and we got through it clean." },
+          ].map(({ initials, name, biz, quote }, i) => (
+            <Reveal key={name} delay={i * 80}>
+              <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.1)", borderRadius: 14, padding: 24 }}>
+                <div style={{ display: "flex", gap: 3, marginBottom: 12 }}>
+                  {Array.from({length:5}).map((_,s) => <span key={s} style={{ width: 11, height: 11, background: C.gold, clipPath: "polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)", display: "inline-block" }} />)}
+                </div>
+                <p style={{ fontFamily: serif, fontSize: 15, lineHeight: 1.65, color: "rgba(244,241,228,0.8)", fontStyle: "italic", marginBottom: 20 }}>"{quote}"</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.mid, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.pale, flexShrink: 0 }}>{initials}</div>
                   <div>
-                    <div className="flex gap-0.5 mb-2">
-                      {Array.from({ length: t.stars }).map((_, s) => (
-                        <Star key={s} size={11} className="text-[var(--color-primary)] fill-[var(--color-primary)]" />
-                      ))}
-                    </div>
-                    <p className="text-sm font-bold">{t.name}</p>
-                    <p className="text-xs text-[var(--color-muted)]">{t.co}</p>
+                    <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale }}>{name}</div>
+                    <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.4)" }}>{biz}</div>
                   </div>
                 </div>
-              </Reveal>
-            ))}
-          </div>
+              </div>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* ─── PRICING ─── */}
-      <section id="pricing" className="max-w-5xl mx-auto px-6 py-24">
+      {/* ═══════════ PRICING ═══════════ */}
+      <section id="pricing" style={{ background: C.creamW, padding: "80px 48px", textAlign: "center" }}>
         <Reveal>
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">Pricing</p>
-            <h2 className="text-3xl sm:text-4xl font-black mb-4">Simple, transparent pricing</h2>
-            <p className="text-[var(--color-muted)] text-sm">Start free. Upgrade when you need more. Cancel any time.</p>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.bright, marginBottom: 14 }}>Pricing</div>
+            <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>Simple. No surprises.</h2>
+            <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, marginBottom: 52, maxWidth: 440, margin: "0 auto 52px" }}>Start free. Upgrade when you need credit access or raise capital. No hidden fees, no per-seat nonsense.</p>
           </div>
         </Reveal>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-start">
-          {PLANS.map((plan, i) => (
-            <Reveal key={plan.name} delay={i * 80}>
-              <div className={`relative rounded-2xl p-6 border flex flex-col ${plan.highlight ? "bg-[var(--color-primary)]/5 border-[var(--color-primary)]/50 shadow-xl shadow-[var(--color-primary)]/10" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[var(--color-primary)] text-[var(--color-bg)] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
-                    Most popular
-                  </div>
-                )}
-                <div className="mb-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-muted)] mb-1">{plan.name}</p>
-                  <p className="text-3xl font-black">{plan.price}<span className="text-sm font-normal text-[var(--color-muted)]"> {plan.sub}</span></p>
-                  <p className="text-xs text-[var(--color-muted)] mt-2 leading-relaxed">{plan.desc}</p>
-                </div>
-                <ul className="space-y-2.5 mb-6 flex-1 border-t border-[var(--color-border)] pt-5">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-xs">
-                      <CheckCircle2 size={12} className="text-[var(--color-primary)] shrink-0 mt-0.5" />
-                      <span className="text-[var(--color-muted)]">{f}</span>
+        <div style={{ maxWidth: 860, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
+          {[
+            {
+              name:"Starter", price:"₹0", period:"forever free", featured: false,
+              desc: "For founders exploring their numbers.",
+              features:["90-day cash forecast","2 bank accounts","Basic email alerts","Tally + Zoho Books"],
+              disabled:["Scenario planner","Credit access"],
+              cta:"Get started free",
+            },
+            {
+              name:"Growth", price:"₹2,999", period:"per month, billed annually", featured: true,
+              desc: "For growing SMBs that need full visibility and credit.",
+              features:["Everything in Starter","Unlimited accounts","Scenario planner","AI weekly insights","Credit rescue access","50+ integrations"],
+              disabled:[],
+              cta:"Start 14-day trial",
+            },
+            {
+              name:"Pro", price:"₹5,999", period:"per month, billed annually", featured: false,
+              desc: "For businesses raising capital or managing investors.",
+              features:["Everything in Growth","Community capital raise","Investor portal","Accountant dashboard","API access","Priority support"],
+              disabled:[],
+              cta:"Contact sales",
+            },
+          ].map(({ name, price, period, featured, desc, features, disabled, cta }, i) => (
+            <Reveal key={name} delay={i * 80}>
+              <div style={{ background: featured ? C.deepest : "#fff", border: `1px solid ${featured ? C.mid : "rgba(74,94,26,0.12)"}`, borderRadius: 16, padding: "32px 28px", textAlign: "left", display: "flex", flexDirection: "column", position: "relative" }}>
+                {featured && <div style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", background: C.gold, color: C.deepest, padding: "3px 12px", borderRadius: 12, display: "inline-block", marginBottom: 16 }}>Most popular</div>}
+                <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 600, color: featured ? C.pale : C.txt, marginBottom: 6 }}>{name}</div>
+                <div style={{ fontFamily: serif, fontSize: 36, color: featured ? C.gold : C.mid, letterSpacing: -1, margin: "12px 0 4px" }}>{price}</div>
+                <div style={{ fontFamily: sans, fontSize: 12, color: featured ? "rgba(196,217,122,0.45)" : C.txtMut, marginBottom: 8 }}>{period}</div>
+                <div style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.55)" : C.txtMut, marginBottom: 24, lineHeight: 1.5 }}>{desc}</div>
+                <ul style={{ listStyle: "none", marginBottom: 28, flex: 1 }}>
+                  {features.map(f => (
+                    <li key={f} style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.7)" : C.txtMut, padding: "6px 0", borderBottom: `1px solid ${featured ? "rgba(196,217,122,0.08)" : "rgba(74,94,26,0.06)"}`, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 14, height: 14, borderRadius: "50%", background: featured ? "rgba(107,133,38,0.3)" : C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 9, color: featured ? C.pale : C.mid }}>✓</span>{f}
+                    </li>
+                  ))}
+                  {disabled.map(f => (
+                    <li key={f} style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.25)" : "rgba(107,107,107,0.4)", padding: "6px 0", borderBottom: "1px solid rgba(74,94,26,0.06)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 14, height: 14, borderRadius: "50%", background: "rgba(200,200,200,0.15)", flexShrink: 0, display: "inline-block" }} />{f}
                     </li>
                   ))}
                 </ul>
-                <button
-                  onClick={() => navigate("/login")}
-                  className={`w-full py-3 rounded-xl text-sm font-bold transition-all active:scale-95 ${plan.highlight ? "bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 shadow-lg shadow-[var(--color-primary)]/20" : "border border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-primary)]/40"}`}
-                >
-                  {plan.cta}
+                <button onClick={() => navigate("/login")} style={{ width: "100%", padding: 12, borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(74,94,26,0.2)"}`, color: featured ? C.deepest : C.mid }}>
+                  {cta}
                 </button>
               </div>
             </Reveal>
@@ -553,56 +488,73 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── FAQ ─── */}
-      <section id="faq" className="border-y border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="max-w-2xl mx-auto px-6 py-24">
-          <Reveal>
-            <div className="text-center mb-12">
-              <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3">FAQ</p>
-              <h2 className="text-3xl font-black">Common questions</h2>
-            </div>
-            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl px-6">
-              {FAQS.map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─── FINAL CTA ─── */}
+      {/* ═══════════ FAQ ═══════════ */}
       <Reveal>
-        <section className="relative overflow-hidden border-b border-[var(--color-border)]">
-          <div className="absolute inset-0 bg-[var(--color-primary)]/4 pointer-events-none" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[var(--color-primary)]/10 blur-[130px] rounded-full pointer-events-none" />
-          <div className="relative max-w-2xl mx-auto px-6 py-28 text-center">
-            <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-4">Get started today</p>
-            <h2 className="text-4xl sm:text-5xl font-black mb-5 leading-tight">
-              Your cash flow.<br />
-              <span className="text-[var(--color-primary)]">Your decisions.</span>
-            </h2>
-            <p className="text-[var(--color-muted)] mb-10 text-sm leading-relaxed max-w-md mx-auto">
-              Join founders who replaced guesswork with real-time financial intelligence. Free to start. No credit card. Up in 5 minutes.
-            </p>
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              <button onClick={() => navigate("/login")} className="flex items-center gap-2 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-9 py-4 rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-2xl shadow-[var(--color-primary)]/25">
-                Open dashboard free <ArrowRight size={15} />
-              </button>
+        <section style={{ background: C.cream, padding: "72px 48px" }}>
+          <div style={{ maxWidth: 680, margin: "0 auto" }}>
+            <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: C.bright, marginBottom: 14 }}>FAQ</div>
+            <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
+            <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: "0 24px" }}>
+              {[
+                { q: "Do I need an accountant to use Headroom?",        a: "No. Headroom is built for founders. It translates raw transactions into plain language — runway, burn, risk. Your CA can also get their own login with accountant-level access." },
+                { q: "Which accounting software does Headroom connect to?", a: "Tally ERP, Zoho Books, QuickBooks, Xero, and 50+ others via direct API. Bank feeds work with most Indian and international banks through secure open-banking APIs." },
+                { q: "How does the credit eligibility work?",           a: "Headroom computes a live underwriting score from your monthly revenue, burn rate, runway, and business age — using your own data. No bureau pull. The higher your score, the better the offers." },
+                { q: "Can investors see my sensitive financial data?",   a: "No. Investors get a dedicated portal showing only the capital raise they're part of — their investment, equity %, and progress. All other financials are invisible to them." },
+                { q: "Is there a free trial for paid plans?",           a: "Yes — Growth comes with a 14-day free trial, no credit card required. You keep your data and forecast history if you downgrade to Starter." },
+              ].map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
             </div>
           </div>
         </section>
       </Reveal>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-[var(--color-muted)]">
-          <span className="text-base font-black">Head<span className="text-[var(--color-primary)]">room</span></span>
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
-            {[["Cash Flow","#product"],["Credit","#product"],["Capital","#product"],["Pricing","#pricing"],["FAQ","#faq"]].map(([l, h]) => (
-              <a key={l} href={h} className="hover:text-[var(--color-text)] transition-colors">{l}</a>
+      {/* ═══════════ CTA ═══════════ */}
+      <section style={{ background: C.deepest, padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(107,133,38,0.25) 0%, transparent 65%)", pointerEvents: "none" }} />
+        <div style={{ position: "relative" }}>
+          <h2 style={{ fontFamily: serif, fontSize: 44, color: C.creamW, letterSpacing: -1.5, marginBottom: 16 }}>See your next 90 days.<br />Start free today.</h2>
+          <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(196,217,122,0.55)", marginBottom: 40 }}>No credit card. No accountant needed. Connect your bank in under 3 minutes.</p>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(196,217,122,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
+            <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+              Get my forecast →
+            </button>
+          </div>
+          <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.25)", marginTop: 20 }}>
+            Trusted by 12,000+ SMBs across India and US &nbsp;·&nbsp; SOC 2 Type II certified &nbsp;·&nbsp; RBI LSP registered
+          </p>
+        </div>
+      </section>
+
+      {/* ═══════════ FOOTER ═══════════ */}
+      <footer style={{ background: C.deepest, borderTop: "1px solid rgba(196,217,122,0.08)", padding: 48, display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48 }}>
+        <div>
+          <div style={{ fontFamily: serif, fontSize: 20, color: C.pale, marginBottom: 10 }}>Head<span style={{ color: C.gold }}>room</span></div>
+          <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.35)", lineHeight: 1.6, maxWidth: 200 }}>Cash flow intelligence for the businesses that keep the world running.</p>
+        </div>
+        {[
+          { h:"Product",      links:["Forecasting","Scenario planner","Alert engine","Credit rescue","Community capital"] },
+          { h:"Integrations", links:["Tally ERP","Zoho Books","QuickBooks","Xero","All integrations"] },
+          { h:"Company",      links:["About","Blog","Careers","Press","Contact"] },
+        ].map(({ h, links }) => (
+          <div key={h}>
+            <h5 style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(196,217,122,0.4)", marginBottom: 16 }}>{h}</h5>
+            {links.map(l => (
+              <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/login"); }}
+                style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)", textDecoration: "none", marginBottom: 10 }}
+                onMouseOver={e => (e.currentTarget.style.color = C.pale)}
+                onMouseOut={e  => (e.currentTarget.style.color = "rgba(196,217,122,0.5)")}>{l}</a>
             ))}
           </div>
-          <span>© {new Date().getFullYear()} Headroom. All rights reserved.</span>
-        </div>
+        ))}
       </footer>
+      <div style={{ background: C.deepest, borderTop: "1px solid rgba(196,217,122,0.06)", padding: "18px 48px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
+        <div style={{ display: "flex", gap: 24 }}>
+          {["Privacy","Terms","Security"].map(l => (
+            <a key={l} href="#" style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.25)", textDecoration: "none" }}>{l}</a>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
