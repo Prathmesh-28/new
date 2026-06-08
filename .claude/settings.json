@@ -60,7 +60,13 @@
       "Bash(vercel --version)",
       "Bash(gh --version)",
       "Bash(vercel whoami *)",
-      "Bash(vercel env *)"
+      "Bash(vercel env *)",
+      "Bash(env)",
+      "Bash(render --version)",
+      "Bash(render whoami *)",
+      "Bash(node_modules/.bin/tsc --version)",
+      "Bash(tsc --noEmit)",
+      "Bash(node node_modules/vite/bin/vite.js build)"
     ]
   }
 }
