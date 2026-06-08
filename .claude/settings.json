@@ -66,7 +66,12 @@
       "Bash(render whoami *)",
       "Bash(node_modules/.bin/tsc --version)",
       "Bash(tsc --noEmit)",
-      "Bash(node node_modules/vite/bin/vite.js build)"
+      "Bash(node node_modules/vite/bin/vite.js build)",
+      "Bash(git restore *)",
+      "Bash(git rm *)",
+      "Bash(node_modules/.bin/vercel --prod --yes)",
+      "Bash(vercel project *)",
+      "Bash(vercel --prod --yes --framework=\"\")"
     ]
   }
 }

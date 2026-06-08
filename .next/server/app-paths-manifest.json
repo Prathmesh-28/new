@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/admin/logout/route": "app/api/admin/logout/route.js",
+  "/api/admin/session/route": "app/api/admin/session/route.js",
+  "/api/admin/login/route": "app/api/admin/login/route.js",
+  "/api/billing/checkout/route": "app/api/billing/checkout/route.js",
+  "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
+  "/api/billing/webhook/route": "app/api/billing/webhook/route.js",
+  "/(site)/page": "app/(site)/page.js",
+  "/dashboard/alerts/page": "app/dashboard/alerts/page.js",
+  "/dashboard/credit/page": "app/dashboard/credit/page.js",
+  "/(site)/pricing/page": "app/(site)/pricing/page.js",
+  "/(site)/credit/page": "app/(site)/credit/page.js",
+  "/dashboard/forecast/page": "app/dashboard/forecast/page.js",
+  "/(site)/features/page": "app/(site)/features/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/(site)/capital/page": "app/(site)/capital/page.js",
+  "/admin/login/page": "app/admin/login/page.js",
+  "/admin/page": "app/admin/page.js"
+}

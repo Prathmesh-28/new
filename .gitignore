@@ -1,11 +1,16 @@
 node_modules/
-.next/
+dist/
+.vercel
+
+# env files
 .env
 .env.local
 .env.*.local
+backend/.env
 
-# SQLite database
-data/
-*firebase-adminsdk*.json
+# secrets / credentials
+*.pem
+*.key
+*-adminsdk-*.json
+*service-account*.json
 firebase-debug.log
-.vercel
