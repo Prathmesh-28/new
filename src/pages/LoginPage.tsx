@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 
 export default function LoginPage() {
-  const { login }   = useAuth();
+  const { login, serverReady } = useAuth();
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
   const [email, setEmail]       = useState("");
@@ -49,9 +49,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <p className="relative text-xs text-[var(--color-muted)]">
-          Financial OS for lean SMBs
-        </p>
+        <p className="relative text-xs text-[var(--color-muted)]">Financial OS for lean SMBs</p>
       </div>
 
       {/* Right panel — form */}
@@ -63,6 +61,18 @@ export default function LoginPage() {
           >
             <ArrowLeft size={12} /> Back to home
           </button>
+
+          {/* Server status pill */}
+          <div className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border mb-6 transition-all ${
+            serverReady
+              ? "bg-green-950/30 border-green-800/30 text-green-400"
+              : "bg-yellow-950/30 border-yellow-800/30 text-yellow-500"
+          }`}>
+            {serverReady
+              ? <><Wifi size={11} /> Server ready</>
+              : <><WifiOff size={11} /> Server waking up — may take ~30 s on first sign-in</>
+            }
+          </div>
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
@@ -105,7 +115,7 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-[var(--color-bg)] border-t-transparent rounded-full animate-spin" />
-                  Signing in…
+                  {serverReady ? "Signing in…" : "Waking server… (~30 s)"}
                 </span>
               ) : "Sign in →"}
             </button>
