@@ -13,7 +13,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Server is waking up — please try again in a few seconds.");
     }
-    throw new Error("Unable to reach the server. Check your connection.");
+    throw new Error("Cannot connect to server. If this is your first visit, the server may still be deploying — try again in 60 seconds.");
   } finally {
     clearTimeout(timer);
   }
