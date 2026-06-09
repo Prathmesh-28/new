@@ -205,9 +205,96 @@ async function initDb() {
       invested_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    -- ── Account lockout columns (added after initial schema) ────────────────
+    -- ── Account lockout columns ───────────────────────────────────────────────
     ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+    -- ── Connectors ───────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS connector_consents (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      provider        TEXT NOT NULL,
+      account_name    TEXT NOT NULL DEFAULT '',
+      status          TEXT NOT NULL DEFAULT 'pending',
+      consent_id      TEXT,
+      access_token    TEXT,
+      consent_expiry  TIMESTAMPTZ,
+      last_sync       TIMESTAMPTZ,
+      account_count   INTEGER NOT NULL DEFAULT 0,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, provider, account_name)
+    );
+
+    -- ── Advisor links ─────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS advisor_client_links (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      advisor_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_tenant_id TEXT NOT NULL,
+      client_label     TEXT,
+      linked_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(advisor_id, client_tenant_id)
+    );
+
+    -- ── Operations: Orders ────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS orders (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      order_number TEXT NOT NULL,
+      source       TEXT NOT NULL DEFAULT 'manual',
+      buyer_name   TEXT,
+      buyer_phone  TEXT,
+      buyer_email  TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      total_value  NUMERIC(15,2) NOT NULL DEFAULT 0,
+      notes        TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_id     UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_name TEXT NOT NULL,
+      sku          TEXT,
+      quantity     INTEGER NOT NULL DEFAULT 1,
+      unit_price   NUMERIC(15,2) NOT NULL DEFAULT 0
+    );
+
+    -- ── Operations: Inventory ─────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS inventory (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      product_name  TEXT NOT NULL,
+      sku           TEXT,
+      category      TEXT NOT NULL DEFAULT 'general',
+      quantity      INTEGER NOT NULL DEFAULT 0,
+      unit          TEXT NOT NULL DEFAULT 'units',
+      unit_cost     NUMERIC(15,2) NOT NULL DEFAULT 0,
+      reorder_level INTEGER NOT NULL DEFAULT 10,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, product_name)
+    );
+
+    -- ── Operations: Procurement ───────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS procurement_orders (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      supplier_name TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'draft',
+      total_value   NUMERIC(15,2) NOT NULL DEFAULT 0,
+      expected_date DATE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS procurement_items (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      po_id        UUID NOT NULL REFERENCES procurement_orders(id) ON DELETE CASCADE,
+      product_name TEXT NOT NULL,
+      sku          TEXT,
+      quantity     INTEGER NOT NULL DEFAULT 1,
+      unit_cost    NUMERIC(15,2) NOT NULL DEFAULT 0
+    );
 
     -- ── Indexes ───────────────────────────────────────────────────────────────
     CREATE INDEX IF NOT EXISTS kv_tenant_ns         ON kv_store(tenant_id, namespace);
@@ -220,6 +307,11 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS loans_tenant         ON active_loans(tenant_id);
     CREATE INDEX IF NOT EXISTS raises_tenant        ON capital_raises(tenant_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS investors_raise      ON investors(raise_id);
+    CREATE INDEX IF NOT EXISTS orders_tenant        ON orders(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS inventory_tenant     ON inventory(tenant_id);
+    CREATE INDEX IF NOT EXISTS po_tenant            ON procurement_orders(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS advisor_links        ON advisor_client_links(advisor_id);
+    CREATE INDEX IF NOT EXISTS connector_tenant     ON connector_consents(tenant_id);
   `);
 }
 

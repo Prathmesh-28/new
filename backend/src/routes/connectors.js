@@ -1,0 +1,120 @@
+const router    = require("express").Router();
+const { pool }  = require("../db");
+const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { normaliseMany } = require("../lib/normalise");
+
+// GET /api/connectors
+router.get("/", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM connector_consents WHERE tenant_id=$1 ORDER BY created_at",
+    [req.user.tenant_id]
+  );
+  res.json(rows);
+});
+
+// POST /api/connectors
+router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { provider, account_name = "", consent_id, access_token, consent_expiry } = req.body;
+  if (!provider) return res.status(400).json({ error: "provider required" });
+
+  const { rows } = await pool.query(
+    `INSERT INTO connector_consents
+       (tenant_id, provider, account_name, status, consent_id, access_token, consent_expiry)
+     VALUES($1,$2,$3,'pending',$4,$5,$6)
+     ON CONFLICT(tenant_id, provider, account_name) DO UPDATE SET
+       status        = EXCLUDED.status,
+       consent_id    = COALESCE(EXCLUDED.consent_id,    connector_consents.consent_id),
+       access_token  = COALESCE(EXCLUDED.access_token,  connector_consents.access_token),
+       consent_expiry= COALESCE(EXCLUDED.consent_expiry,connector_consents.consent_expiry)
+     RETURNING *`,
+    [req.user.tenant_id, provider, account_name, consent_id ?? null, access_token ?? null, consent_expiry ?? null]
+  );
+  res.status(201).json(rows[0]);
+});
+
+// PATCH /api/connectors/:id
+router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { status, account_count } = req.body;
+  const updates = []; const vals = []; let i = 1;
+  if (status        !== undefined) { updates.push(`status=$${i++}`);        vals.push(status); }
+  if (account_count !== undefined) { updates.push(`account_count=$${i++}`); vals.push(account_count); }
+  if (!updates.length) return res.status(400).json({ error: "Nothing to update" });
+  vals.push(req.params.id, req.user.tenant_id);
+  const { rows } = await pool.query(
+    `UPDATE connector_consents SET ${updates.join(",")}, last_sync=now() WHERE id=$${i++} AND tenant_id=$${i} RETURNING *`,
+    vals
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Not found" });
+  res.json(rows[0]);
+});
+
+// DELETE /api/connectors/:id
+router.delete("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  await pool.query("DELETE FROM connector_consents WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
+  res.json({ ok: true });
+});
+
+// POST /api/connectors/:id/sync — trigger provider sync
+router.post("/:id/sync", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { rows: c } = await pool.query(
+    "SELECT * FROM connector_consents WHERE id=$1 AND tenant_id=$2",
+    [req.params.id, req.user.tenant_id]
+  );
+  if (!c[0]) return res.status(404).json({ error: "Not found" });
+
+  switch (c[0].provider) {
+    case "finbox":
+      if (!process.env.FINBOX_API_KEY) return res.status(503).json({ error: "Set FINBOX_API_KEY to enable Finbox sync" });
+      break;
+    case "aa_network":
+      if (!process.env.AA_CLIENT_ID) return res.status(503).json({ error: "Set AA_CLIENT_ID to enable Account Aggregator sync" });
+      break;
+    case "tally":
+      // Tally pushes via webhook; this just marks last_sync
+      break;
+    case "zoho_books":
+      if (!process.env.ZOHO_CLIENT_ID) return res.status(503).json({ error: "Set ZOHO_CLIENT_ID to enable Zoho sync" });
+      break;
+    case "quickbooks":
+      if (!process.env.QB_CLIENT_ID) return res.status(503).json({ error: "Set QB_CLIENT_ID to enable QuickBooks sync" });
+      break;
+    default:
+      break;
+  }
+
+  await pool.query(
+    "UPDATE connector_consents SET last_sync=now(), status='connected' WHERE id=$1",
+    [c[0].id]
+  );
+  res.json({ ok: true, synced: 0 });
+});
+
+// POST /api/connectors/normalise — normalise a batch of raw transactions
+router.post("/normalise", authenticate, (req, res) => {
+  const { transactions } = req.body;
+  if (!Array.isArray(transactions)) return res.status(400).json({ error: "transactions array required" });
+  res.json(normaliseMany(transactions));
+});
+
+// POST /api/connectors/tally/webhook — Tally sync push
+router.post("/tally/webhook", async (req, res) => {
+  const { tenant_id, transactions: txns } = req.body;
+  if (!tenant_id || !Array.isArray(txns)) return res.status(400).json({ error: "tenant_id and transactions required" });
+
+  const normalised = normaliseMany(txns);
+  for (const t of normalised) {
+    const date = t.date || t.transaction_date || new Date().toISOString().slice(0, 10);
+    await pool.query(
+      `INSERT INTO transactions(tenant_id, amount, description_raw, merchant_name, category, transaction_date, source)
+       VALUES($1,$2,$3,$4,$5,$6,'tally') ON CONFLICT DO NOTHING`,
+      [tenant_id, t.amount, t.description || t.description_raw, t.merchant_name, t.category, date]
+    );
+  }
+  await pool.query(
+    "UPDATE connector_consents SET last_sync=now(), status='connected' WHERE tenant_id=$1 AND provider='tally'",
+    [tenant_id]
+  );
+  res.json({ ok: true, imported: normalised.length });
+});
+
+module.exports = router;

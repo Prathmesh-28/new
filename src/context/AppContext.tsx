@@ -44,6 +44,22 @@ interface AppCtx {
   addCapitalRaise:        (x: AppStore["capitalRaises"][0])      => void;
   updateCapitalRaise:     (x: AppStore["capitalRaises"][0])      => void;
   addCapitalInvestment:   (x: AppStore["capitalInvestments"][0]) => void;
+  // Connectors
+  addConnector:           (x: AppStore["connectors"][0])         => void;
+  updateConnector:        (x: AppStore["connectors"][0])         => void;
+  deleteConnector:        (id: string)                           => void;
+  // Operations — Orders
+  addOrder:               (x: AppStore["orders"][0])             => void;
+  updateOrder:            (x: AppStore["orders"][0])             => void;
+  deleteOrder:            (id: string)                           => void;
+  // Operations — Inventory
+  addInventoryItem:       (x: AppStore["inventory"][0])          => void;
+  updateInventoryItem:    (x: AppStore["inventory"][0])          => void;
+  deleteInventoryItem:    (id: string)                           => void;
+  // Operations — Procurement
+  addProcurement:         (x: AppStore["procurement"][0])        => void;
+  updateProcurement:      (x: AppStore["procurement"][0])        => void;
+  deleteProcurement:      (id: string)                           => void;
 }
 
 const Ctx = createContext<AppCtx | null>(null);
@@ -168,6 +184,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCapitalRaise:         add("capitalRaises"),
     updateCapitalRaise:      update("capitalRaises"),
     addCapitalInvestment:    add("capitalInvestments"),
+    addConnector:            add("connectors"),
+    updateConnector:         update("connectors"),
+    deleteConnector:         del("connectors"),
+    addOrder:                add("orders"),
+    updateOrder:             update("orders"),
+    deleteOrder:             del("orders"),
+    addInventoryItem:        add("inventory"),
+    updateInventoryItem:     update("inventory"),
+    deleteInventoryItem:     del("inventory"),
+    addProcurement:          add("procurement"),
+    updateProcurement:       update("procurement"),
+    deleteProcurement:       del("procurement"),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

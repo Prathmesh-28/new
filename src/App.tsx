@@ -16,6 +16,10 @@ const Dashboard          = lazy(() => import("@/features/dashboard/DashboardPage
 const Forecast           = lazy(() => import("@/features/forecast/ForecastPage"));
 const Credit             = lazy(() => import("@/features/credit/CreditPage"));
 const Capital            = lazy(() => import("@/features/capital/CapitalPage"));
+const Operations         = lazy(() => import("@/features/operations/OperationsPage"));
+const AdvisorPage        = lazy(() => import("@/features/advisor/AdvisorPage"));
+const InvestorPage       = lazy(() => import("@/features/investor/InvestorPage"));
+const ConnectorsPage     = lazy(() => import("@/features/connectors/ConnectorsPage"));
 const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
 const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage"));
 
@@ -44,14 +48,18 @@ function AppShell() {
         <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route path="/set-password" element={<SetPasswordPage />} />
-              <Route path="/dashboard"    element={<Dashboard />} />
-              <Route path="/forecast"     element={<Forecast />} />
-              <Route path="/credit"       element={<Credit />} />
-              <Route path="/capital"      element={<Capital />} />
-              <Route path="/settings"     element={<SettingsPage />} />
-              <Route path="/admin"        element={<AdminPage />} />
-              <Route path="*"             element={<NotFoundPage />} />
+              <Route path="/set-password"  element={<SetPasswordPage />} />
+              <Route path="/dashboard"     element={<Dashboard />} />
+              <Route path="/forecast"      element={<Forecast />} />
+              <Route path="/credit"        element={<Credit />} />
+              <Route path="/capital"       element={<Capital />} />
+              <Route path="/operations"    element={<Operations />} />
+              <Route path="/advisor"       element={<AdvisorPage />} />
+              <Route path="/investor"      element={<InvestorPage />} />
+              <Route path="/connectors"    element={<ConnectorsPage />} />
+              <Route path="/settings"      element={<SettingsPage />} />
+              <Route path="/admin"         element={<AdminPage />} />
+              <Route path="*"              element={<NotFoundPage />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>

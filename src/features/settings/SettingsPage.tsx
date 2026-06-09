@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 type TeamUser = {
@@ -34,6 +34,17 @@ export default function SettingsPage() {
   const [email,    setEmail]    = useState("");
   const [role,     setRole]     = useState("accountant");
   const [inviting, setInviting] = useState(false);
+  const [copied,   setCopied]   = useState(false);
+
+  const tenantId = users.find(u => u.id === user.id)?.tenant_id ?? "Loading…";
+
+  const copyTenantId = () => {
+    navigator.clipboard.writeText(tenantId).then(() => {
+      setCopied(true);
+      toast.success("Tenant ID copied");
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   if (!user || !["super_admin", "owner"].includes(user.role)) return <Navigate to="/dashboard" replace />;
 
@@ -175,15 +186,34 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Tenant ID card */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+        <h2 className="text-sm font-semibold mb-1">Your Tenant ID</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Share this with your CA, CFO, or banker so they can link your account to their Advisor Portal and get live cash visibility.</p>
+        <div className="flex items-center gap-3">
+          <code className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm font-mono tracking-wide truncate">
+            {tenantId}
+          </code>
+          <button onClick={copyTenantId}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2.5 rounded-lg font-semibold hover:opacity-90 shrink-0">
+            {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mt-3">
+          Your advisor will use this in their <strong className="text-[var(--color-text)]">My Clients</strong> panel to add you to their portfolio. You can revoke access at any time by contacting support.
+        </p>
+      </div>
+
       {/* Role reference */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
         <h2 className="text-sm font-semibold mb-4">Role Permissions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { r: "owner",       label: "Business Owner",        perms: ["Dashboard", "Forecast", "Credit", "Capital", "Invite users"] },
-            { r: "accountant",  label: "Accountant / CA / CFO", perms: ["Dashboard (read)", "Forecast (read)", "Export reports"] },
-            { r: "investor",    label: "Investor / Banker",      perms: ["Capital raises", "View funding progress"] },
-            { r: "super_admin", label: "Super Admin",            perms: ["Everything", "All tenants", "Admin panel"] },
+            { r: "owner",       label: "Business Owner",        perms: ["Dashboard", "Forecast", "Credit", "Capital", "Operations", "Connectors", "Invite users"] },
+            { r: "accountant",  label: "Accountant / CA / CFO", perms: ["Dashboard", "Forecast", "Operations", "Advisor portal (My Clients)"] },
+            { r: "investor",    label: "Investor / Banker",      perms: ["Investor portfolio", "Live raises marketplace"] },
+            { r: "super_admin", label: "Super Admin",            perms: ["All tabs", "All tenants", "Admin panel", "Connectors"] },
           ].map(({ r, label, perms }) => (
             <div key={r} className="border border-[var(--color-border)] rounded-xl p-4">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${ROLE_BADGE[r] ?? ""}`}>

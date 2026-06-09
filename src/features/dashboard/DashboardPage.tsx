@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload } from "lucide-react";
@@ -134,6 +135,7 @@ function AddTransactionModal({ accountId, onClose, onAdd }: { accountId: string;
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction } = useApp();
   const { bankAccounts, transactions, alerts, forecast } = store;
+  const navigate = useNavigate();
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddTx, setShowAddTx]           = useState(false);
   const [showImport,    setShowImport]      = useState(false);
@@ -200,6 +202,20 @@ export default function DashboardPage() {
             <StatCard label="Cash Runway"    raw={runway}                              display={`${runway} days`}             icon={AlertTriangle} color={runway < 30 ? "text-red-400" : runway < 90 ? "text-yellow-400" : "text-green-400"} trend={runway < 30 ? "down" : "up"} />
             <StatCard label="Unread Alerts"  raw={unread}                              display={unread.toString()}            icon={Bell}          color="text-orange-400" />
           </div>
+
+          {/* Credit rescue CTA */}
+          {runway > 0 && runway < 45 && (
+            <div className="bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                <p className="text-sm">Your cash runway is <strong className="text-red-400">{runway} days</strong> — balance pressure detected. Act now before it becomes critical.</p>
+              </div>
+              <button onClick={() => navigate("/credit")}
+                className="text-xs bg-red-900/40 text-red-300 border border-red-800/40 px-3 py-1.5 rounded-lg hover:bg-red-900/60 shrink-0 whitespace-nowrap">
+                See rescue options →
+              </button>
+            </div>
+          )}
 
           {/* Chart */}
           {forecast.length > 0 ? (

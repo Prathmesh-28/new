@@ -1,13 +1,5 @@
 import type { AppStore } from "./types";
 
-const today = new Date();
-const d = (offset: number) => {
-  const dt = new Date(today);
-  dt.setDate(dt.getDate() + offset);
-  return dt.toISOString().split("T")[0];
-};
-const ts = (offset = 0) => new Date(Date.now() + offset * 86400000).toISOString();
-
 export const defaultConfig: AppStore = {
   firm: {
     name: "Headroom",
@@ -20,35 +12,35 @@ export const defaultConfig: AppStore = {
     {
       id: "super_admin",
       label: "Super Admin",
-      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "settings", "admin"],
-      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "settings", "admin"],
+      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "operations", "settings", "admin", "advisor"],
+      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "operations", "settings", "admin"],
       canExport: true,
       canAddNotes: true,
-      namespaces: ["app", "forecast", "credit", "capital"],
+      namespaces: ["app", "forecast", "credit", "capital", "operations"],
     },
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "settings"],
-      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "settings"],
+      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "operations", "settings"],
+      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "operations", "settings"],
       canExport: true,
       canAddNotes: true,
-      namespaces: ["app", "forecast", "credit", "capital"],
+      namespaces: ["app", "forecast", "credit", "capital", "operations"],
     },
     {
       id: "accountant",
-      label: "Accountant",
-      accessibleTabs: ["dashboard", "forecast"],
-      visibleTabs:    ["dashboard", "forecast"],
+      label: "Accountant / CA / CFO",
+      accessibleTabs: ["dashboard", "forecast", "operations", "advisor"],
+      visibleTabs:    ["dashboard", "forecast", "operations", "advisor"],
       canExport: true,
       canAddNotes: false,
-      namespaces: ["app", "forecast"],
+      namespaces: ["app", "forecast", "operations"],
     },
     {
       id: "investor",
       label: "Investor",
-      accessibleTabs: ["capital"],
-      visibleTabs:    ["capital"],
+      accessibleTabs: ["investor"],
+      visibleTabs:    ["investor"],
       canExport: false,
       canAddNotes: false,
       namespaces: ["app", "capital"],
@@ -65,4 +57,8 @@ export const defaultConfig: AppStore = {
   creditOffers:       [],
   capitalRaises:      [],
   capitalInvestments: [],
+  connectors:         [],
+  orders:             [],
+  inventory:          [],
+  procurement:        [],
 };

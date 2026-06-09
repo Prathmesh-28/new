@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { Plus, Trash2, Eye, EyeOff, TrendingUp, RefreshCw } from "lucide-react";
@@ -22,7 +23,11 @@ export default function ForecastPage() {
   const [oblAmount, setOblAmount] = useState("");
   const [oblDate,   setOblDate]   = useState("");
 
+  const navigate = useNavigate();
   const activeScenario = scenarios.find(s => s.active);
+
+  // Detect P10 dipping below 0 within 45 days
+  const pressureDay = forecast.slice(0, 45).findIndex(f => f.p10 < 0);
 
   const chartData = forecast.slice(0, 90).map((f, i) => {
     const adj = activeScenario ? (
@@ -119,6 +124,20 @@ export default function ForecastPage() {
         </div>
       ) : (
         <>
+          {/* Pressure alert */}
+          {pressureDay !== -1 && (
+            <div className="bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <TrendingUp size={16} className="text-red-400 shrink-0" />
+                <p className="text-sm">Your P10 scenario goes below zero in <strong className="text-red-400">{pressureDay + 1} days</strong> — downside risk is high. Consider a credit buffer.</p>
+              </div>
+              <button onClick={() => navigate("/credit")}
+                className="text-xs bg-red-900/40 text-red-300 border border-red-800/40 px-3 py-1.5 rounded-lg hover:bg-red-900/60 shrink-0 whitespace-nowrap">
+                See options →
+              </button>
+            </div>
+          )}
+
           {/* Chart */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 md:p-6">
             <h2 className="text-sm font-semibold mb-4">90-Day Projection (₹L) · P10 / P50 / P90</h2>

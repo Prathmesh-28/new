@@ -57,6 +57,9 @@ app.use("/api/forecast",           require("./routes/forecast"));
 app.use("/api/alerts",             require("./routes/alerts"));
 app.use("/api/credit",             require("./routes/credit"));
 app.use("/api/capital",            require("./routes/capital"));
+app.use("/api/connectors",         require("./routes/connectors"));
+app.use("/api/advisor",            require("./routes/advisor"));
+app.use("/api/operations",         require("./routes/operations"));
 
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
