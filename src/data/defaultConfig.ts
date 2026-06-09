@@ -20,8 +20,8 @@ export const defaultConfig: AppStore = {
     {
       id: "super_admin",
       label: "Super Admin",
-      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "admin"],
-      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "admin"],
+      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "settings", "admin"],
+      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "settings", "admin"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital"],
@@ -29,8 +29,8 @@ export const defaultConfig: AppStore = {
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "forecast", "credit", "capital"],
-      visibleTabs:    ["dashboard", "forecast", "credit", "capital"],
+      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "settings"],
+      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "settings"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital"],

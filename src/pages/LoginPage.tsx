@@ -16,8 +16,13 @@ export default function LoginPage() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      await login(email, password);
-      navigate(params.get("redirect") ?? "/dashboard", { replace: true });
+      const u = await login(email, password);
+      if (u.first_login) {
+        navigate("/set-password", { replace: true });
+      } else {
+        const defaultHome = u.role === "investor" ? "/capital" : "/dashboard";
+        navigate(params.get("redirect") ?? defaultHome, { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

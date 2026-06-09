@@ -5,13 +5,15 @@ import { AppProvider } from "@/context/AppContext";
 import { Toaster } from "sonner";
 import Header from "@/components/layout/Header";
 
-const HomePage     = lazy(() => import("@/pages/HomePage"));
-const LoginPage    = lazy(() => import("@/pages/LoginPage"));
-const Dashboard    = lazy(() => import("@/features/dashboard/DashboardPage"));
-const Forecast     = lazy(() => import("@/features/forecast/ForecastPage"));
-const Credit       = lazy(() => import("@/features/credit/CreditPage"));
-const Capital      = lazy(() => import("@/features/capital/CapitalPage"));
-const AdminPage    = lazy(() => import("@/features/admin/AdminPage"));
+const HomePage       = lazy(() => import("@/pages/HomePage"));
+const LoginPage      = lazy(() => import("@/pages/LoginPage"));
+const SetPasswordPage = lazy(() => import("@/pages/SetPasswordPage"));
+const Dashboard      = lazy(() => import("@/features/dashboard/DashboardPage"));
+const Forecast       = lazy(() => import("@/features/forecast/ForecastPage"));
+const Credit         = lazy(() => import("@/features/credit/CreditPage"));
+const Capital        = lazy(() => import("@/features/capital/CapitalPage"));
+const AdminPage      = lazy(() => import("@/features/admin/AdminPage"));
+const SettingsPage   = lazy(() => import("@/features/settings/SettingsPage"));
 
 function PageLoader() {
   return (
@@ -26,6 +28,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname === "/" ? "/dashboard" : location.pathname)}`} replace />;
+  if (user.first_login && location.pathname !== "/set-password") return <Navigate to="/set-password" replace />;
   return <>{children}</>;
 }
 
@@ -36,12 +39,14 @@ function AppShell() {
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/forecast"  element={<Forecast />} />
-            <Route path="/credit"    element={<Credit />} />
-            <Route path="/capital"   element={<Capital />} />
-            <Route path="/admin"     element={<AdminPage />} />
-            <Route path="*"          element={<Navigate to="/dashboard" replace />} />
+            <Route path="/set-password" element={<SetPasswordPage />} />
+            <Route path="/dashboard"    element={<Dashboard />} />
+            <Route path="/forecast"     element={<Forecast />} />
+            <Route path="/credit"       element={<Credit />} />
+            <Route path="/capital"      element={<Capital />} />
+            <Route path="/settings"     element={<SettingsPage />} />
+            <Route path="/admin"        element={<AdminPage />} />
+            <Route path="*"             element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
       </main>

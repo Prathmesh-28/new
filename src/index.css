@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* App dashboard colours */
   --color-primary: #C9A227;
   --color-primary-light: #e0b830;
   --color-accent: #3a3820;
@@ -9,6 +10,22 @@
   --color-border: #2e2e1a;
   --color-text: #f0ead6;
   --color-muted: #8a8060;
+
+  /* Olive marketing palette (homepage) */
+  --ol-deepest: #1C2209;
+  --ol-deep:    #2E3A10;
+  --ol-mid:     #4A5E1A;
+  --ol-bright:  #6B8526;
+  --ol-light:   #96B83D;
+  --ol-pale:    #C4D97A;
+  --ol-wash:    #E8F0C2;
+  --ol-cream:   #F4F1E4;
+  --ol-gold:    #C9A227;
+  --ol-gold-l:  #E8C84A;
+  --ol-cream-w: #FDFAF0;
+  --ol-txt:     #1A1F0A;
+  --ol-txt-mid: #3D4A1E;
+  --ol-txt-mut: #6B7A3D;
 }
 
 * { box-sizing: border-box; }

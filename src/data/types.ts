@@ -4,9 +4,9 @@ export type UserRole = "super_admin" | "owner" | "accountant" | "investor";
 export interface AuthUser {
   id: string;
   email: string;
-  name: string;
   role: UserRole;
-  is_active: boolean;
+  tenant_id: string;
+  first_login: boolean;
 }
 
 // ── Role config ───────────────────────────────────────────────────────────────

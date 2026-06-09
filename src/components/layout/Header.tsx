@@ -1,15 +1,16 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
-import { LayoutDashboard, TrendingUp, CreditCard, Rocket, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
-  { to: "/forecast", label: "Forecast",  icon: TrendingUp,      tab: "forecast"  },
-  { to: "/credit",   label: "Credit",    icon: CreditCard,      tab: "credit"    },
-  { to: "/capital",  label: "Capital",   icon: Rocket,          tab: "capital"   },
-  { to: "/admin",    label: "Admin",     icon: Settings,        tab: "admin"     },
+  { to: "/forecast",  label: "Forecast",  icon: TrendingUp,      tab: "forecast"  },
+  { to: "/credit",    label: "Credit",    icon: CreditCard,      tab: "credit"    },
+  { to: "/capital",   label: "Capital",   icon: Rocket,          tab: "capital"   },
+  { to: "/settings",  label: "Settings",  icon: Settings2,       tab: "settings"  },
+  { to: "/admin",     label: "Admin",     icon: ShieldCheck,     tab: "admin"     },
 ];
 
 export default function Header() {

@@ -28,7 +28,7 @@ interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   serverReady: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [fetchMe, tryRefresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
     const res = await fetchWithTimeout(
       `${BASE}/auth/login`,
       {
@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("hr_refresh", refresh);
     setReady(true);
     setUser(u);
+    return u as AuthUser;
   }, []);
 
   const logout = useCallback(async () => {
