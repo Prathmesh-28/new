@@ -7,8 +7,22 @@ const { initDb, pool } = require("./db");
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
+const ALLOWED_ORIGINS = new Set([
+  process.env.FRONTEND_URL,
+  "https://headroom-pi.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+].filter(Boolean));
+
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || "http://localhost:5173", /localhost:\d+/],
+  origin: (origin, cb) => {
+    // No origin = server-to-server (Vercel proxy, curl) — always allow
+    if (!origin) return cb(null, true);
+    // Allow any *.vercel.app for preview deployments
+    if (origin.endsWith(".vercel.app")) return cb(null, true);
+    if (ALLOWED_ORIGINS.has(origin) || /^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
+    cb(new Error("CORS origin not allowed"));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
