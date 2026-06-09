@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Users, Plus, X, AlertTriangle, TrendingUp, CheckCircle2, CreditCard, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ function RunwayBadge({ days }: { days: number | null }) {
 
 export default function AdvisorPage() {
   const { user } = useAuth();
+  const { setSelectedClient } = useApp();
   const navigate = useNavigate();
   if (!user || !["accountant", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
 
@@ -199,7 +201,7 @@ export default function AdvisorPage() {
             <div>
               <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><AlertTriangle size={11} /> Needs Attention ({atRisk.length})</h2>
               <div className="space-y-2">
-                {atRisk.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink} onNavigate={() => navigate("/forecast")} />)}
+                {atRisk.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink} onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }} />)}
               </div>
             </div>
           )}
@@ -207,7 +209,7 @@ export default function AdvisorPage() {
             <div>
               <h2 className="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><CheckCircle2 size={11} /> Healthy ({healthy.length})</h2>
               <div className="space-y-2">
-                {healthy.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink} onNavigate={() => navigate("/forecast")} />)}
+                {healthy.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink} onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }} />)}
               </div>
             </div>
           )}

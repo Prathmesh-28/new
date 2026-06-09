@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import type { Scenario, CashObligation } from "@/data/types";
 
 export default function ForecastPage() {
-  const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore } = useApp();
+  const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
   const { forecast, scenarios, obligations, transactions, bankAccounts } = store;
   const [generating, setGenerating] = useState(false);
   const [showForm,   setShowForm]   = useState(false);
@@ -106,8 +106,9 @@ export default function ForecastPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Cash Flow Forecast</h1>
-        <button onClick={handleGenerate} disabled={generating}
-          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
+        <button onClick={handleGenerate} disabled={generating || isReadOnly}
+          title={isReadOnly ? "Read-only in client view" : undefined}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
           <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
           {generating ? "Generating…" : forecast.length ? "Refresh" : "Generate Forecast"}
         </button>

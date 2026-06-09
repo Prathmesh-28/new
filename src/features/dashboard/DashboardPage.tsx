@@ -133,7 +133,7 @@ function AddTransactionModal({ accountId, onClose, onAdd }: { accountId: string;
 }
 
 export default function DashboardPage() {
-  const { store, markAlertRead, addBankAccount, addTransaction } = useApp();
+  const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast } = store;
   const navigate = useNavigate();
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -160,17 +160,20 @@ export default function DashboardPage() {
         <h1 className="text-xl font-bold">Dashboard</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowAddAccount(true)}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
+            disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <Building2 size={12} /> Add Account
           </button>
           {bankAccounts.length > 0 && (
             <>
               <button onClick={() => setShowImport(true)}
-                className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
+                disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
+                className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                 <Upload size={12} /> Import CSV
               </button>
               <button onClick={() => setShowAddTx(true)}
-                className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+                disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
+                className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
                 <Plus size={12} /> Add Transaction
               </button>
             </>

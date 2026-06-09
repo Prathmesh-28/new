@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
+import { Eye } from "lucide-react";
 import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   LogOut, Menu, X, Package, Users, Briefcase, PlugZap, FileText, Bell,
@@ -44,10 +45,11 @@ const NAV_BY_ROLE: Record<string, { to: string; label: string; icon: React.Eleme
 };
 
 export default function Header() {
-  const { user, logout }  = useAuth();
-  const { canAccess }     = useApp();
-  const navigate          = useNavigate();
-  const [open, setOpen]   = useState(false);
+  const { user, logout }                          = useAuth();
+  const { canAccess, selectedClientTenantId,
+          selectedClientLabel, setSelectedClient } = useApp();
+  const navigate                                  = useNavigate();
+  const [open, setOpen]                           = useState(false);
 
   const role = user?.role ?? "owner";
   const nav  = (NAV_BY_ROLE[role] ?? NAV_BY_ROLE.owner).filter(n => canAccess(n.tab));
@@ -96,6 +98,25 @@ export default function Header() {
           {open ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
+
+      {/* Client view banner */}
+      {selectedClientTenantId && (
+        <div className="bg-blue-950/60 border-t border-blue-800/40 px-4 md:px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-blue-300 min-w-0">
+            <Eye size={12} className="shrink-0" />
+            <span className="truncate">
+              Viewing client: <strong className="text-blue-100">{selectedClientLabel || selectedClientTenantId}</strong>
+              <span className="ml-2 opacity-60">— read-only</span>
+            </span>
+          </div>
+          <button
+            onClick={() => { setSelectedClient(null); navigate("/advisor"); }}
+            className="shrink-0 text-xs bg-blue-900/60 text-blue-200 border border-blue-700/50 px-3 py-1 rounded-lg hover:bg-blue-900/90 transition-colors"
+          >
+            Exit client view
+          </button>
+        </div>
+      )}
 
       {/* Mobile menu */}
       {open && (
