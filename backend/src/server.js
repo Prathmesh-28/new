@@ -66,6 +66,14 @@ app.use("/api/operations",         require("./routes/operations"));
 app.use("/api/whatsapp",           require("./routes/whatsapp"));
 app.use("/webhook/whatsapp",       require("./routes/whatsapp")); // Twilio inbound
 
+// Phase 1+2 modules
+app.use("/api/invoices",           require("./routes/invoices"));
+app.use("/api/gst",                require("./routes/gst"));
+app.use("/api/payroll",            require("./routes/payroll"));
+app.use("/api/bnpl",               require("./routes/bnpl"));
+app.use("/api/collections",        require("./routes/collections"));
+app.use("/webhook/razorpay",       require("./routes/collections")); // Razorpay payment webhook
+
 // Admin endpoints (super_admin only)
 const { authenticate: _auth } = require("./middleware/auth");
 app.get("/api/admin/tenants", _auth, async (req, res) => {
@@ -107,9 +115,16 @@ initDb()
   .then(seed)
   .then(() => {
     app.listen(PORT, () => console.log(`[server] :${PORT}`));
-    // Daily digest at 7:00 AM IST (01:30 UTC)
-    cron.schedule("30 1 * * *", () => {
-      sendDailyDigest().catch(err => console.error("[digest]", err.message));
+    // Daily digest at 7:00 AM IST (01:30 UTC) — email + WhatsApp
+    cron.schedule("30 1 * * *", async () => {
+      sendDailyDigest().catch(err => console.error("[digest-email]", err.message));
+      // Fire WhatsApp digest (self-call so it uses the same route logic)
+      try {
+        await fetch(`http://localhost:${PORT}/api/whatsapp/send-digest`, {
+          method: "POST",
+          headers: { "x-internal-secret": process.env.INTERNAL_CRON_SECRET ?? "" },
+        });
+      } catch (e) { console.error("[digest-wa]", e.message); }
     }, { timezone: "UTC" });
     // Monday CFO brief at 8:00 AM IST (02:30 UTC, day-of-week 1 = Monday)
     cron.schedule("30 2 * * 1", () => {

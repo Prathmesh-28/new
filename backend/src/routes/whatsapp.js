@@ -189,6 +189,48 @@ router.get("/status", authenticate, async (req, res) => {
   res.json({ registered: rows.length > 0, phone: rows[0]?.phone ?? null });
 });
 
+// POST /api/whatsapp/send-digest — called by morning digest cron
+router.post("/send-digest", async (req, res) => {
+  // Internal call from cron — allow only from localhost or with a shared secret
+  const secret = req.headers["x-internal-secret"];
+  if (process.env.INTERNAL_CRON_SECRET && secret !== process.env.INTERNAL_CRON_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { rows: bindings } = await pool.query(
+    "SELECT wb.phone, wb.tenant_id FROM whatsapp_bindings wb"
+  );
+
+  let sent = 0, failed = 0;
+  for (const { phone, tenant_id } of bindings) {
+    try {
+      const data    = await getTenantData(tenant_id);
+      const burn    = monthlyBurn(data.transactions);
+      const runway  = runwayDays(data.bankAccounts, burn);
+      const total   = (data.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
+      const unread  = (data.alerts ?? []).filter(a => !a.isRead);
+      const critical = unread.filter(a => a.severity === "critical" || a.severity === "high");
+
+      const today = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+      const emoji  = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
+      let msg = `☀️ *Headroom Morning Brief — ${today}*\n\n`;
+      msg += `💰 Cash: *${fmt(total)}*\n`;
+      msg += `🔥 Burn: ${fmt(burn)}/month\n`;
+      msg += `${emoji} Runway: *${runway} days*\n`;
+      if (critical.length) msg += `\n⚠️ *${critical.length} critical alert${critical.length > 1 ? "s" : ""}*\n${critical.slice(0, 2).map(a => `  • ${a.title}`).join("\n")}\n`;
+      else msg += "\n✅ No critical alerts today\n";
+      msg += `\nReply *help* for commands`;
+
+      await sendWhatsApp(phone, msg);
+      sent++;
+    } catch (e) {
+      console.error("[wa digest] failed for", phone, e.message);
+      failed++;
+    }
+  }
+  res.json({ sent, failed, total: bindings.length });
+});
+
 // POST /webhook/whatsapp — Twilio inbound webhook (mounted at root, no /api prefix)
 router.post("/", async (req, res) => {
   // Twilio signature validation

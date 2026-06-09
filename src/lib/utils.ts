@@ -13,6 +13,15 @@ export function formatCurrency(amount: number, currency = "INR"): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
 }
 
+// Compact Indian format: ₹12.5L, ₹1.2Cr — use for stat cards, chart tooltips
+export function formatAmount(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  const abs  = Math.abs(n);
+  if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(1)}Cr`;
+  if (abs >= 100000)   return `${sign}₹${(abs / 100000).toFixed(1)}L`;
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+}
+
 export function formatNumber(n: number): string {
   if (Math.abs(n) >= 10000000) return `${(n / 10000000).toFixed(1)}Cr`;
   if (Math.abs(n) >= 100000)   return `${(n / 100000).toFixed(1)}L`;

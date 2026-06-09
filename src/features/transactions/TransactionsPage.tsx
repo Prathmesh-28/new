@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
-import { Search, Filter, Tag, Repeat, Flag, ChevronLeft, ChevronRight, Pencil, Check, X, Download } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction } from "@/data/types";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
+const PAGE_SIZE  = 50;
 
 const CAT_COLOR: Record<string, string> = {
   revenue:  "bg-green-900/30 text-green-400 border-green-800/40",
@@ -16,7 +17,20 @@ const CAT_COLOR: Record<string, string> = {
   transfer: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
 };
 
-const PAGE_SIZE = 20;
+const CAT_DOT: Record<string, string> = {
+  revenue: "bg-green-400", expense: "bg-red-400", payroll: "bg-blue-400",
+  loan: "bg-purple-400", tax: "bg-orange-400", transfer: "bg-[var(--color-muted)]",
+};
+
+type SortField = "date" | "description" | "amount";
+type SortDir   = "asc" | "desc";
+
+function getRules(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem("hr_cat_rules") ?? "{}"); } catch { return {}; }
+}
+function saveRules(rules: Record<string, string>) {
+  localStorage.setItem("hr_cat_rules", JSON.stringify(rules));
+}
 
 function computeCategoryAverages(txns: Transaction[]) {
   const sums: Record<string, { total: number; count: number }> = {};
@@ -28,97 +42,137 @@ function computeCategoryAverages(txns: Transaction[]) {
     }
   });
   const avgs: Record<string, number> = {};
-  for (const [cat, { total, count }] of Object.entries(sums)) {
-    avgs[cat] = count > 0 ? total / count : 0;
-  }
+  for (const [cat, { total, count }] of Object.entries(sums)) avgs[cat] = count > 0 ? total / count : 0;
   return avgs;
 }
 
 function exportCsv(filtered: Transaction[], bankAccounts: { id: string; name: string }[]) {
-  const headers = ["Date", "Description", "Category", "Counterparty", "Amount", "Account", "Recurring", "Unusual", "Notes"];
+  const headers = ["Date", "Description", "Category", "Counterparty", "Amount", "Account"];
   const rows = filtered.map(t => {
     const acct = bankAccounts.find(a => a.id === t.bankAccountId)?.name ?? "";
-    return [
-      t.date, t.description, t.category, t.counterparty,
-      t.amount.toFixed(2), acct,
-      t.isRecurring ? "Yes" : "No",
-      (t as unknown as Record<string, unknown>).flagged ? "Yes" : "No",
-      (t.notes ?? ""),
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    return [t.date, t.description, t.category, t.counterparty, t.amount.toFixed(2), acct]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
   });
-  const csv   = [headers.map(h => `"${h}"`).join(","), ...rows].join("\n");
-  const blob  = new Blob([csv], { type: "text/csv" });
-  const url   = URL.createObjectURL(blob);
-  const a     = document.createElement("a");
-  a.href      = url;
-  a.download  = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  const csv  = [headers.map(h => `"${h}"`).join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement("a"), { href: url, download: `transactions-${new Date().toISOString().slice(0, 10)}.csv` });
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (field !== sortField) return <span className="opacity-20 ml-0.5">↕</span>;
+  return <span className="ml-0.5 text-[var(--color-primary)]">{sortDir === "asc" ? "↑" : "↓"}</span>;
 }
 
 export default function TransactionsPage() {
   const { store, updateTransaction, canExport } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [search,     setSearch]     = useState("");
-  const [filterCat,  setFilterCat]  = useState<string>("all");
-  const [filterAcct, setFilterAcct] = useState<string>("all");
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo,   setFilterTo]   = useState("");
+  const [search,      setSearch]      = useState("");
+  const [filterCat,   setFilterCat]   = useState<string>("all");
+  const [filterAcct,  setFilterAcct]  = useState<string>("all");
+  const [filterFrom,  setFilterFrom]  = useState("");
+  const [filterTo,    setFilterTo]    = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [page,       setPage]       = useState(1);
-  const [editId,     setEditId]     = useState<string | null>(null);
-  const [editNote,   setEditNote]   = useState("");
-  const [editCat,    setEditCat]    = useState<Transaction["category"]>("expense");
+  const [page,        setPage]        = useState(1);
+  const [sortField,   setSortField]   = useState<SortField>("date");
+  const [sortDir,     setSortDir]     = useState<SortDir>("desc");
+  const [selected,    setSelected]    = useState<Set<string>>(new Set());
+  const [bulkCat,     setBulkCat]     = useState<Transaction["category"]>("expense");
+  const [editCatId,   setEditCatId]   = useState<string | null>(null);
 
   const catAvgs = useMemo(() => computeCategoryAverages(transactions), [transactions]);
 
-  const filtered = useMemo(() => {
-    let list = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
-    if (search)      list = list.filter(t => t.description.toLowerCase().includes(search.toLowerCase()) || t.counterparty.toLowerCase().includes(search.toLowerCase()));
-    if (filterCat  !== "all") list = list.filter(t => t.category === filterCat);
-    if (filterAcct !== "all") list = list.filter(t => t.bankAccountId === filterAcct);
-    if (filterFrom) list = list.filter(t => t.date >= filterFrom);
-    if (filterTo)   list = list.filter(t => t.date <= filterTo);
-    return list;
-  }, [transactions, search, filterCat, filterAcct, filterFrom, filterTo]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const totalIn  = filtered.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const totalOut = filtered.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-
-  const startEdit = (t: Transaction) => {
-    setEditId(t.id);
-    setEditNote(t.notes ?? "");
-    setEditCat(t.category);
-  };
-
-  const saveEdit = (t: Transaction) => {
-    updateTransaction({ ...t, notes: editNote, category: editCat });
-    toast.success("Transaction updated");
-    setEditId(null);
-  };
-
-  const isUnusual = (t: Transaction) => {
+  const isUnusual = useCallback((t: Transaction) => {
     if (t.amount >= 0) return false;
     const avg = catAvgs[t.category] ?? 0;
     return avg > 0 && Math.abs(t.amount) > avg * 2.5;
+  }, [catAvgs]);
+
+  const filtered = useMemo(() => {
+    let list = [...transactions];
+    if (search)          list = list.filter(t => t.description.toLowerCase().includes(search.toLowerCase()) || t.counterparty.toLowerCase().includes(search.toLowerCase()));
+    if (filterCat !== "all") list = list.filter(t => t.category === filterCat);
+    if (filterAcct !== "all") list = list.filter(t => t.bankAccountId === filterAcct);
+    if (filterFrom)      list = list.filter(t => t.date >= filterFrom);
+    if (filterTo)        list = list.filter(t => t.date <= filterTo);
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "date")        cmp = a.date.localeCompare(b.date);
+      if (sortField === "description") cmp = a.description.localeCompare(b.description);
+      if (sortField === "amount")      cmp = a.amount - b.amount;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [transactions, search, filterCat, filterAcct, filterFrom, filterTo, sortField, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalIn    = filtered.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalOut   = filtered.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("desc"); }
+    setPage(1);
   };
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+
+  const allOnPageSelected = paginated.length > 0 && paginated.every(t => selected.has(t.id));
+  const toggleAll = () => {
+    if (allOnPageSelected) setSelected(prev => { const next = new Set(prev); paginated.forEach(t => next.delete(t.id)); return next; });
+    else setSelected(prev => { const next = new Set(prev); paginated.forEach(t => next.add(t.id)); return next; });
+  };
+
+  const applyBulkCat = () => {
+    let count = 0;
+    transactions.forEach(t => {
+      if (selected.has(t.id) && t.category !== bulkCat) {
+        updateTransaction({ ...t, category: bulkCat });
+        count++;
+      }
+    });
+    toast.success(`Updated ${count} transaction${count !== 1 ? "s" : ""} to "${bulkCat}"`);
+    setSelected(new Set());
+  };
+
+  const applyRule = (counterparty: string) => {
+    if (!counterparty) { toast.error("No counterparty on selected transactions"); return; }
+    const rules = getRules();
+    rules[counterparty.toLowerCase()] = bulkCat;
+    saveRules(rules);
+    const matching = transactions.filter(t => t.counterparty.toLowerCase() === counterparty.toLowerCase() && t.category !== bulkCat);
+    matching.forEach(t => updateTransaction({ ...t, category: bulkCat }));
+    toast.success(`Rule saved: all "${counterparty}" → ${bulkCat} (${matching.length} updated)`);
+    setSelected(new Set());
+  };
+
+  const selectedCounterparties = useMemo(() => {
+    const set = new Set<string>();
+    transactions.filter(t => selected.has(t.id) && t.counterparty).forEach(t => set.add(t.counterparty));
+    return [...set];
+  }, [selected, transactions]);
+
+  const thCls = "px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider select-none whitespace-nowrap";
+  const thSortCls = `${thCls} cursor-pointer hover:text-[var(--color-text)] transition-colors`;
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">Transaction Feed</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">{filtered.length} transactions</p>
+          <h1 className="text-xl font-bold">Transactions</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5 tabular-nums">
+            {filtered.length} transactions · <span className="text-green-400">{formatCurrency(totalIn)} in</span> · <span className="text-red-400">{formatCurrency(totalOut)} out</span>
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-green-400 font-semibold text-sm">{formatCurrency(totalIn)} in</span>
-          <span className="text-[var(--color-muted)] text-sm">/</span>
-          <span className="text-red-400 font-semibold text-sm">{formatCurrency(totalOut)} out</span>
+        <div className="flex items-center gap-2 shrink-0">
           {canExport() && (
             <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
@@ -133,12 +187,12 @@ export default function TransactionsPage() {
         <div className="flex-1 relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by description or counterparty…"
+            placeholder="Search description or counterparty…"
             className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
         </div>
         <button onClick={() => setShowFilters(v => !v)}
           className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${showFilters ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-          <Filter size={12} /> Filters
+          <Filter size={12} /> Filters {showFilters && (filterCat !== "all" || filterAcct !== "all" || filterFrom || filterTo) ? "·" : ""}
         </button>
       </div>
 
@@ -173,96 +227,110 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Category quick-filter pills */}
+      {/* Category pills */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <button onClick={() => { setFilterCat("all"); setPage(1); }}
-          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${filterCat === "all" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${filterCat === "all" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
           All
         </button>
         {CATEGORIES.map(c => (
-          <button key={c} onClick={() => { setFilterCat(c); setPage(1); }}
-            className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${filterCat === c ? CAT_COLOR[c] + " border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+          <button key={c} onClick={() => { setFilterCat(c === filterCat ? "all" : c); setPage(1); }}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${filterCat === c ? `${CAT_COLOR[c]} border-transparent` : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${CAT_DOT[c]}`} />
             {c}
           </button>
         ))}
       </div>
 
-      {/* Transaction list */}
+      {/* Dense table */}
       {filtered.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center text-sm text-[var(--color-muted)]">
+        <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center text-sm text-[var(--color-muted)]">
           {transactions.length === 0 ? "No transactions yet. Add an account and import transactions from the Dashboard." : "No transactions match your filters."}
         </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
-          {paginated.map(t => {
-            const unusual = isUnusual(t);
-            const acct = bankAccounts.find(a => a.id === t.bankAccountId);
-            const isEditing = editId === t.id;
+        <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="sticky top-0 z-10 bg-[var(--color-surface)] border-b border-[var(--color-border)]">
+                <tr>
+                  <th className="w-10 px-3 py-2.5">
+                    <input type="checkbox" checked={allOnPageSelected} onChange={toggleAll}
+                      className="accent-[var(--color-primary)] cursor-pointer" title="Select all on this page" />
+                  </th>
+                  <th className={thSortCls} onClick={() => toggleSort("date")}>
+                    Date <SortIcon field="date" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                  <th className={thSortCls} onClick={() => toggleSort("description")}>
+                    Description <SortIcon field="description" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                  <th className={thCls}>Category</th>
+                  <th className={`${thCls} hidden md:table-cell`}>Account</th>
+                  <th className={`${thCls} text-right`} style={{ cursor: "pointer" }} onClick={() => toggleSort("amount")}>
+                    Amount <SortIcon field="amount" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {paginated.map(t => {
+                  const acct    = bankAccounts.find(a => a.id === t.bankAccountId);
+                  const unusual = isUnusual(t);
+                  const isSel   = selected.has(t.id);
+                  const editingCat = editCatId === t.id;
 
-            return (
-              <div key={t.id} className={`px-4 py-3 hover:bg-[var(--color-accent)] transition-colors ${unusual ? "border-l-2 border-orange-500" : ""}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="text-sm font-medium truncate">{t.description}</p>
-                      {t.isRecurring && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-blue-400 bg-blue-900/20 border border-blue-800/30 px-1.5 py-0.5 rounded-full">
-                          <Repeat size={9} /> recurring
+                  return (
+                    <tr
+                      key={t.id}
+                      className={`h-10 transition-colors ${isSel ? "bg-[var(--color-primary)]/5" : "hover:bg-white/3"} ${unusual ? "border-l-2 border-orange-500/60" : ""}`}
+                    >
+                      <td className="px-3">
+                        <input type="checkbox" checked={isSel} onChange={() => toggleSelect(t.id)}
+                          className="accent-[var(--color-primary)] cursor-pointer" />
+                      </td>
+                      <td className="px-3 text-xs text-[var(--color-muted)] tabular-nums whitespace-nowrap">{t.date}</td>
+                      <td className="px-3 max-w-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate font-medium text-sm">{t.description}</span>
+                          {t.isRecurring && <span className="text-[9px] text-blue-400 bg-blue-900/20 border border-blue-800/30 px-1 py-0.5 rounded shrink-0">REC</span>}
+                          {unusual && <span className="text-[9px] text-orange-400 bg-orange-900/20 border border-orange-800/30 px-1 py-0.5 rounded shrink-0">!</span>}
+                        </div>
+                        {t.counterparty && <p className="text-[10px] text-[var(--color-muted)] truncate leading-tight">{t.counterparty}</p>}
+                      </td>
+                      <td className="px-3">
+                        {editingCat ? (
+                          <select
+                            value={t.category}
+                            autoFocus
+                            onChange={e => {
+                              updateTransaction({ ...t, category: e.target.value as Transaction["category"] });
+                              toast.success("Category updated");
+                              setEditCatId(null);
+                            }}
+                            onBlur={() => setEditCatId(null)}
+                            className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-0.5 outline-none"
+                          >
+                            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        ) : (
+                          <button
+                            onClick={() => setEditCatId(t.id)}
+                            title="Click to change category"
+                            className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border cursor-pointer hover:opacity-80 transition-opacity ${CAT_COLOR[t.category]}`}>
+                            <Tag size={8} /> {t.category}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-3 hidden md:table-cell text-xs text-[var(--color-muted)] max-w-[120px] truncate">{acct?.name ?? "—"}</td>
+                      <td className="px-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                        <span className={t.amount >= 0 ? "text-green-400" : "text-[var(--color-text)]"}>
+                          {t.amount >= 0 ? "+" : ""}{formatCurrency(t.amount)}
                         </span>
-                      )}
-                      {unusual && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-orange-400 bg-orange-900/20 border border-orange-800/30 px-1.5 py-0.5 rounded-full">
-                          <Flag size={9} /> unusual spend
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-[var(--color-muted)]">{t.date}</span>
-                      {acct && <span className="text-xs text-[var(--color-muted)]">· {acct.name}</span>}
-                      {t.counterparty && <span className="text-xs text-[var(--color-muted)]">· {t.counterparty}</span>}
-                    </div>
-                    {/* Category tag — inline editable */}
-                    <div className="mt-1.5">
-                      {isEditing ? (
-                        <select value={editCat} onChange={e => setEditCat(e.target.value as Transaction["category"])}
-                          className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-0.5 outline-none">
-                          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                        </select>
-                      ) : (
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${CAT_COLOR[t.category]}`}>
-                          <Tag size={9} /> {t.category}
-                        </span>
-                      )}
-                    </div>
-                    {/* Notes */}
-                    {isEditing ? (
-                      <input value={editNote} onChange={e => setEditNote(e.target.value)}
-                        placeholder="Add note (visible to linked CA)…"
-                        className="mt-2 w-full text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 outline-none focus:border-[var(--color-primary)]" />
-                    ) : t.notes ? (
-                      <p className="mt-1 text-xs text-[var(--color-muted)] italic">📝 {t.notes}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-start gap-2 shrink-0">
-                    <span className={`text-sm font-bold tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {t.amount >= 0 ? "+" : ""}{formatCurrency(t.amount)}
-                    </span>
-                    {isEditing ? (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => saveEdit(t)} className="p-1 text-green-400 hover:bg-green-900/20 rounded"><Check size={13} /></button>
-                        <button onClick={() => setEditId(null)} className="p-1 text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded"><X size={13} /></button>
-                      </div>
-                    ) : (
-                      <button onClick={() => startEdit(t)} className="p-1 text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] rounded transition-colors">
-                        <Pencil size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -270,7 +338,7 @@ export default function TransactionsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
           <p className="text-xs text-[var(--color-muted)]">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
           </p>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -292,6 +360,45 @@ export default function TransactionsPage() {
               <ChevronRight size={14} />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Floating bulk-action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-xl px-5 py-3 shadow-2xl">
+          <span className="text-sm font-semibold text-[var(--color-text)]">{selected.size} selected</span>
+
+          <div className="flex items-center gap-1">
+            <Tag size={12} className="text-[var(--color-muted)]" />
+            <select
+              value={bulkCat}
+              onChange={e => setBulkCat(e.target.value as Transaction["category"])}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-2 py-1 text-xs outline-none"
+            >
+              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <button
+            onClick={applyBulkCat}
+            className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-md hover:opacity-90"
+          >
+            Apply to {selected.size}
+          </button>
+
+          {selectedCounterparties.length === 1 && (
+            <button
+              onClick={() => applyRule(selectedCounterparties[0])}
+              title={`Always categorize "${selectedCounterparties[0]}" as ${bulkCat}`}
+              className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-md hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
+            >
+              + Create rule
+            </button>
+          )}
+
+          <button onClick={() => setSelected(new Set())} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
+            <X size={14} />
+          </button>
         </div>
       )}
     </div>

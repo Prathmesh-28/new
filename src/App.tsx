@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider } from "@/context/AppContext";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { CommandPalette } from "@/components/CommandPalette";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
@@ -26,6 +27,10 @@ const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage")
 const TransactionsPage   = lazy(() => import("@/features/transactions/TransactionsPage"));
 const AlertsPage         = lazy(() => import("@/features/alerts/AlertsPage"));
 const ReceivablesPage    = lazy(() => import("@/features/receivables/ReceivablesPage"));
+const ProfilePage        = lazy(() => import("@/pages/ProfilePage"));
+const InvoicesPage       = lazy(() => import("@/features/invoices/InvoicesPage"));
+const GstPage            = lazy(() => import("@/features/gst/GstPage"));
+const PayrollPage        = lazy(() => import("@/features/payroll/PayrollPage"));
 
 function PageLoader() {
   return (
@@ -45,11 +50,23 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function AppShell() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette  = useCallback(() => setPaletteOpen(true),  []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setPaletteOpen(v => !v); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-[var(--color-bg)]">
-      <Sidebar />
+      <Sidebar onOpenSearch={openPalette} />
       <div className="flex-1 flex flex-col min-w-0">
-        {/* pt-12 offsets the fixed mobile top bar; no offset needed on md+ */}
+        {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
         <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
@@ -68,12 +85,17 @@ function AppShell() {
                 <Route path="/connectors"    element={<ConnectorsPage />} />
                 <Route path="/settings"      element={<SettingsPage />} />
                 <Route path="/admin"         element={<AdminPage />} />
+                <Route path="/invoices"      element={<InvoicesPage />} />
+                <Route path="/gst"           element={<GstPage />} />
+                <Route path="/payroll"       element={<PayrollPage />} />
+                <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>
         </main>
       </div>
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
     </div>
   );
 }

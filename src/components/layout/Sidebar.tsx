@@ -4,9 +4,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
 import {
-  Eye, ChevronLeft, ChevronRight, LogOut, Menu, X,
+  Eye, ChevronLeft, ChevronRight, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
+  FilePlus, Calculator, Wallet,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -20,11 +21,14 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
     ]},
     { label: "Finance", items: [
+      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
+      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
     ]},
     { label: "Operations", items: [
+      { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
@@ -41,11 +45,14 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
     ]},
     { label: "Finance", items: [
+      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
+      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
     ]},
     { label: "Operations", items: [
+      { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
@@ -111,7 +118,7 @@ function NavItems({ groups, collapsed, onNavigate }: {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { user, logout }                          = useAuth();
   const { canAccess, selectedClientTenantId,
           selectedClientLabel, setSelectedClient } = useApp();
@@ -182,6 +189,28 @@ export default function Sidebar() {
           <NavItems groups={groups} collapsed={collapsed} />
         </nav>
 
+        {/* Search shortcut */}
+        {onOpenSearch && (
+          <div className="px-2 mb-1 shrink-0">
+            <button
+              onClick={onOpenSearch}
+              title="Search (⌘K)"
+              className={cn(
+                "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4 transition-colors",
+                collapsed && "justify-center"
+              )}
+            >
+              <Search size={13} className="shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Search…</span>
+                  <kbd className="font-mono text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1 py-0.5 rounded">⌘K</kbd>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* User + sign out */}
         <div className="border-t border-[var(--color-border)] p-2 shrink-0">
           {!collapsed && (
@@ -190,6 +219,20 @@ export default function Sidebar() {
               <p className="text-[10px] text-[var(--color-muted)] capitalize mt-px">{role.replace("_", " ")}</p>
             </div>
           )}
+          <NavLink
+            to="/profile"
+            title="Profile"
+            className={({ isActive }) => cn(
+              "flex items-center gap-2 text-xs transition-colors rounded-md px-2 py-1.5 w-full mb-0.5",
+              collapsed && "justify-center",
+              isActive
+                ? "text-[var(--color-primary)] bg-[var(--color-primary)]/10"
+                : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4"
+            )}
+          >
+            <User size={13} />
+            {!collapsed && <span>Profile</span>}
+          </NavLink>
           <button
             onClick={handleLogout}
             title="Sign out"

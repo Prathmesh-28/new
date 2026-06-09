@@ -166,4 +166,72 @@ router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json(result);
 });
 
+// POST /api/credit/finbox — submit lead to Finbox Credit API (NBFC routing)
+router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { requested_amount, purpose } = req.body;
+  const result = await underwrite(req.user.tenant_id, pool);
+
+  // Production: POST https://api.finbox.in/v2/credit/lead
+  // Headers: x-api-key: FINBOX_API_KEY
+  if (process.env.FINBOX_API_KEY) {
+    try {
+      const { rows: kvRows } = await pool.query(
+        "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1",
+        [req.user.tenant_id]
+      );
+      const firm = kvRows[0]?.value?.value?.firm ?? {};
+      const resp = await fetch("https://api.finbox.in/v2/credit/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": process.env.FINBOX_API_KEY },
+        body: JSON.stringify({
+          partner_id:       req.user.tenant_id,
+          requested_amount: requested_amount ?? result.approved_amount,
+          purpose:          purpose ?? "working_capital",
+          business_name:    firm.name ?? "Unknown",
+          gstin:            firm.gstNumber ?? null,
+          underwriting_score: result.score,
+          score_breakdown:  result.breakdown,
+        }),
+      });
+      const data = await resp.json();
+      return res.json({ ...data, internal_score: result.score, demo: false });
+    } catch (e) {
+      console.error("[finbox]", e.message);
+    }
+  }
+
+  // Demo mode — simulate Finbox routing response
+  const nbfcs = [
+    { lender: "Lendingkart",     rate: "14–18% p.a.", max: Math.round(result.approved_amount * 1.0), term: "12–36 months", processing_fee: "1%" },
+    { lender: "KreditBee",       rate: "16–24% p.a.", max: Math.round(result.approved_amount * 0.8), term: "6–24 months",  processing_fee: "2%" },
+    { lender: "IIFL Finance",    rate: "13–20% p.a.", max: Math.round(result.approved_amount * 1.2), term: "12–48 months", processing_fee: "0.5%" },
+  ].filter(n => result.score >= 40);
+
+  res.json({
+    internal_score: result.score,
+    matched_nbfcs:  nbfcs,
+    next_steps:     nbfcs.length ? "Finbox will contact you within 2 business days to verify KYC." : "Score too low — check the Not Yet tab for improvement actions.",
+    demo:           true,
+  });
+});
+
+// GET /api/credit/lender-api/:tenantId — B2B lender API (API key protected)
+router.get("/lender-api/:tenantId", async (req, res) => {
+  const apiKey = req.headers["x-api-key"];
+  if (!apiKey || apiKey !== process.env.LENDER_API_KEY) {
+    return res.status(401).json({ error: "Invalid API key" });
+  }
+  const result = await underwrite(req.params.tenantId, pool).catch(() => null);
+  if (!result) return res.status(404).json({ error: "Tenant not found or insufficient data" });
+  res.json({
+    tenant_id:          req.params.tenantId,
+    score:              result.score,
+    approved_amount:    result.approved_amount,
+    recommendation:     result.recommendation,
+    breakdown:          result.breakdown,
+    queried_at:         new Date().toISOString(),
+    powered_by:         "Headroom Underwriting Engine v2",
+  });
+});
+
 module.exports = router;

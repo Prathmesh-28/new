@@ -44,14 +44,17 @@ function getUpcomingTaxDates() {
   return dates.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
 }
 
-function StatCard({ label, raw, display, icon: Icon, color, trend }: {
+function StatCard({ label, raw, display, icon: Icon, color, trend, delta, onClick }: {
   label: string; raw: number; display: string; icon: React.ElementType;
-  color: string; trend?: "up" | "down" | null;
+  color: string; trend?: "up" | "down" | null; delta?: number | null; onClick?: () => void;
 }) {
   const animated = useCountUp(raw, 900);
   const isFormatted = display.includes("₹") || display.includes("days");
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-primary)]/30 transition-all">
+    <div
+      onClick={onClick}
+      className={`bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 transition-all ${onClick ? "cursor-pointer hover:border-[var(--color-primary)]/50 hover:bg-white/2 hover:shadow-lg" : "hover:border-[var(--color-primary)]/30"}`}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-[var(--color-muted)] font-medium">{label}</span>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-current/5 ${color}`}>
@@ -61,12 +64,19 @@ function StatCard({ label, raw, display, icon: Icon, color, trend }: {
       <p className="text-2xl font-semibold tabular-nums text-[var(--color-text)]">
         {isFormatted ? display : animated.toLocaleString()}
       </p>
-      {trend && (
-        <div className={`flex items-center gap-1 mt-1.5 text-xs ${trend === "up" ? "text-green-400" : "text-red-400"}`}>
-          {trend === "up" ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-          <span>{trend === "up" ? "Healthy" : "Watch closely"}</span>
-        </div>
-      )}
+      <div className="flex items-center justify-between mt-1.5">
+        {trend && (
+          <div className={`flex items-center gap-1 text-xs ${trend === "up" ? "text-green-400" : "text-red-400"}`}>
+            {trend === "up" ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            <span>{trend === "up" ? "Healthy" : "Watch closely"}</span>
+          </div>
+        )}
+        {delta != null && Math.abs(delta) > 0.5 && (
+          <span className={`text-[10px] font-semibold tabular-nums ml-auto ${delta > 0 ? "text-green-400" : "text-red-400"}`}>
+            {delta > 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}% vs last mo
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -333,13 +343,30 @@ export default function DashboardPage() {
 
       {!isEmpty && (
         <>
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <StatCard label="Total Balance"  raw={Math.round(totalBalance / 100000)} display={formatCurrency(totalBalance)} icon={Landmark}      color="text-[var(--color-primary)]" trend="up" />
-            <StatCard label="Monthly Burn"   raw={Math.round(burn / 100000)}          display={formatCurrency(burn)}         icon={TrendingDown}  color="text-red-400"                trend="down" />
-            <StatCard label="Cash Runway"    raw={runway}                              display={`${runway} days`}             icon={AlertTriangle} color={runway < 30 ? "text-red-400" : runway < 90 ? "text-yellow-400" : "text-green-400"} trend={runway < 30 ? "down" : "up"} />
-            <StatCard label="Unread Alerts"  raw={unread}                              display={unread.toString()}            icon={Bell}          color="text-orange-400" />
-          </div>
+          {/* Stat cards — compute deltas vs last month */}
+          {(() => {
+            const now = new Date();
+            const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+            const lastMDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+            const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
+            const thisBalance = bankAccounts.reduce((s,b) => s+b.balance, 0);
+            const lastBal = thisBalance; // balance is point-in-time, use txn net instead
+            const thisBurn  = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0).reduce((s,t)=>s+t.amount,0));
+            const lastBurn  = Math.abs(transactions.filter(t => t.date.startsWith(lastM) && t.amount < 0).reduce((s,t)=>s+t.amount,0));
+            const burnDelta = lastBurn > 0 ? ((thisBurn - lastBurn)/lastBurn)*100 : null;
+            const thisRevenue = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
+            const lastRevenue = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
+            const revDelta = lastRevenue > 0 ? ((thisRevenue - lastRevenue)/lastRevenue)*100 : null;
+            void lastBal; void thisBalance;
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <StatCard label="Total Balance" raw={Math.round(totalBalance/100000)} display={formatCurrency(totalBalance)} icon={Landmark} color="text-[var(--color-primary)]" trend="up" delta={revDelta} onClick={() => navigate("/transactions")} />
+                <StatCard label="Monthly Burn"  raw={Math.round(burn/100000)}         display={formatCurrency(burn)}         icon={TrendingDown} color="text-red-400" trend="down" delta={burnDelta !== null ? -burnDelta : null} onClick={() => navigate("/transactions")} />
+                <StatCard label="Cash Runway"   raw={runway}                           display={`${runway} days`}            icon={AlertTriangle} color={runway<30?"text-red-400":runway<90?"text-yellow-400":"text-green-400"} trend={runway<30?"down":"up"} onClick={() => navigate("/forecast")} />
+                <StatCard label="Unread Alerts" raw={unread}                           display={unread.toString()}           icon={Bell} color="text-orange-400" onClick={() => navigate("/alerts")} />
+              </div>
+            );
+          })()}
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

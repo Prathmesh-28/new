@@ -16,8 +16,9 @@ async function initDb() {
       tenant_id   TEXT NOT NULL DEFAULT 'default',
       full_name   TEXT,
       phone       TEXT,
-      first_login BOOLEAN NOT NULL DEFAULT true,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      first_login  BOOLEAN NOT NULL DEFAULT true,
+      display_name TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS kv_store (
@@ -209,6 +210,9 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 
+    -- ── Profile ───────────────────────────────────────────────────────────────
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+
     -- ── Connectors ───────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS connector_consents (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -305,6 +309,138 @@ async function initDb() {
       unit_cost    NUMERIC(15,2) NOT NULL DEFAULT 0
     );
 
+    -- ── Invoices ──────────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS invoices (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id      TEXT NOT NULL,
+      invoice_number TEXT NOT NULL,
+      customer_name  TEXT NOT NULL,
+      customer_gstin TEXT,
+      customer_email TEXT,
+      subtotal       NUMERIC(15,2) NOT NULL DEFAULT 0,
+      gst_rate       NUMERIC(5,2)  NOT NULL DEFAULT 18,
+      gst_amount     NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_amount   NUMERIC(15,2) NOT NULL DEFAULT 0,
+      status         TEXT NOT NULL DEFAULT 'draft',
+      due_date       DATE,
+      paid_at        TIMESTAMPTZ,
+      irn            TEXT,
+      qr_code_url    TEXT,
+      upi_link       TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      invoice_id   UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      description  TEXT NOT NULL,
+      hsn_sac      TEXT,
+      quantity     NUMERIC(10,3) NOT NULL DEFAULT 1,
+      unit_price   NUMERIC(15,2) NOT NULL DEFAULT 0,
+      gst_rate     NUMERIC(5,2)  NOT NULL DEFAULT 18,
+      amount       NUMERIC(15,2) NOT NULL DEFAULT 0
+    );
+
+    -- ── GST returns ───────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS gst_returns (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id        TEXT NOT NULL,
+      return_type      TEXT NOT NULL,
+      period_month     INTEGER NOT NULL,
+      period_year      INTEGER NOT NULL,
+      output_tax       NUMERIC(15,2) NOT NULL DEFAULT 0,
+      input_tax_credit NUMERIC(15,2) NOT NULL DEFAULT 0,
+      net_liability    NUMERIC(15,2) NOT NULL DEFAULT 0,
+      status           TEXT NOT NULL DEFAULT 'draft',
+      filed_at         TIMESTAMPTZ,
+      gstn_arn         TEXT,
+      computed_data    JSONB,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, return_type, period_month, period_year)
+    );
+
+    -- ── Payroll ───────────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS employees (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      email        TEXT,
+      pan          TEXT,
+      bank_account TEXT,
+      bank_ifsc    TEXT,
+      gross_salary NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tds_monthly  NUMERIC(15,2) NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'active',
+      joining_date DATE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS payroll_runs (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      run_month    INTEGER NOT NULL,
+      run_year     INTEGER NOT NULL,
+      total_gross  NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_tds    NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_net    NUMERIC(15,2) NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'draft',
+      disbursed_at TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, run_month, run_year)
+    );
+
+    -- ── B2B BNPL ──────────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS bnpl_facilities (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      credit_limit    NUMERIC(15,2) NOT NULL DEFAULT 0,
+      utilized_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+      status          TEXT NOT NULL DEFAULT 'active',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS bnpl_drawdowns (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      facility_id    UUID NOT NULL REFERENCES bnpl_facilities(id),
+      tenant_id      TEXT NOT NULL,
+      po_id          UUID REFERENCES procurement_orders(id),
+      supplier_name  TEXT NOT NULL,
+      amount         NUMERIC(15,2) NOT NULL,
+      fee_pct        NUMERIC(5,4) NOT NULL DEFAULT 0.025,
+      fee_amount     NUMERIC(15,2) NOT NULL,
+      repayment_date DATE NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'active',
+      disbursed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      repaid_at      TIMESTAMPTZ
+    );
+
+    -- ── Auto-categorizer + benchmarks ─────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS merchant_categories (
+      merchant_name TEXT NOT NULL,
+      tenant_id     TEXT,
+      category      TEXT NOT NULL,
+      confidence    NUMERIC(4,3) NOT NULL DEFAULT 1.000,
+      source        TEXT NOT NULL DEFAULT 'ai',
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (merchant_name, tenant_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS benchmark_metrics (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      industry     TEXT NOT NULL,
+      revenue_band TEXT NOT NULL,
+      metric_name  TEXT NOT NULL,
+      p25          NUMERIC(15,2),
+      p50          NUMERIC(15,2),
+      p75          NUMERIC(15,2),
+      sample_count INTEGER NOT NULL DEFAULT 0,
+      computed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(industry, revenue_band, metric_name)
+    );
+
+    -- ── Idempotent column additions ───────────────────────────────────────────
+    ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+
     -- ── Indexes ───────────────────────────────────────────────────────────────
     CREATE INDEX IF NOT EXISTS kv_tenant_ns         ON kv_store(tenant_id, namespace);
     CREATE INDEX IF NOT EXISTS notes_entity         ON notes(tenant_id, entity, entity_id);
@@ -321,6 +457,12 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS po_tenant            ON procurement_orders(tenant_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS advisor_links        ON advisor_client_links(advisor_id);
     CREATE INDEX IF NOT EXISTS connector_tenant     ON connector_consents(tenant_id);
+    CREATE INDEX IF NOT EXISTS invoices_tenant      ON invoices(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS gst_returns_tenant   ON gst_returns(tenant_id, period_year DESC, period_month DESC);
+    CREATE INDEX IF NOT EXISTS employees_tenant     ON employees(tenant_id);
+    CREATE INDEX IF NOT EXISTS payroll_runs_tenant  ON payroll_runs(tenant_id, run_year DESC, run_month DESC);
+    CREATE INDEX IF NOT EXISTS bnpl_tenant          ON bnpl_drawdowns(tenant_id, disbursed_at DESC);
+    CREATE INDEX IF NOT EXISTS merchant_cat_tenant  ON merchant_categories(tenant_id);
   `);
 }
 

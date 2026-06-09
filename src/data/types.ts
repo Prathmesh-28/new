@@ -7,6 +7,7 @@ export interface AuthUser {
   role: UserRole;
   tenant_id: string;
   first_login: boolean;
+  display_name?: string;
 }
 
 // ── Role config ───────────────────────────────────────────────────────────────

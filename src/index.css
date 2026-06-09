@@ -71,3 +71,50 @@ td, th, .tabular-nums, [data-numeric] {
 .delay-400 { animation-delay: 400ms; }
 .delay-500 { animation-delay: 500ms; }
 .delay-600 { animation-delay: 600ms; }
+
+/* ── Print / PDF export ────────────────────────────────────────── */
+@media print {
+  /* Hide everything except main content */
+  aside,
+  nav,
+  [data-no-print],
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Expand flex layout for print */
+  .flex { display: block !important; }
+
+  /* Cards as plain boxes */
+  [class*="bg-[var(--color-surface)]"],
+  [class*="bg-[var(--color-bg)]"] {
+    background: white !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+    color: black !important;
+  }
+
+  /* Make all text legible */
+  [class*="text-[var(--color"] {
+    color: black !important;
+  }
+
+  a { text-decoration: none; color: black; }
+
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+}

@@ -85,9 +85,13 @@ router.post("/refresh", async (req, res) => {
 router.post("/logout", (_req, res) => res.json({ ok: true }));
 
 // GET /auth/me
-router.get("/me", authenticate, (req, res) => {
-  const u = req.user;
-  res.json({ id: u.id, email: u.email, role: u.role, tenant_id: u.tenant_id, first_login: u.first_login });
+router.get("/me", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, email, role, tenant_id, first_login, display_name FROM users WHERE id=$1",
+    [req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "User not found" });
+  res.json(rows[0]);
 });
 
 // POST /auth/forgot-password
@@ -109,6 +113,41 @@ router.post("/set-password", authenticate, async (req, res) => {
   const hash = await bcrypt.hash(password, 10);
   await pool.query("UPDATE users SET password=$1, first_login=false WHERE id=$2", [hash, req.user.id]);
   res.json({ ok: true });
+});
+
+// PUT /auth/profile — update display name
+router.put("/profile", authenticate, async (req, res) => {
+  const { display_name } = req.body;
+  if (!display_name || !display_name.trim()) return res.status(400).json({ error: "display_name required" });
+  await pool.query(
+    "UPDATE users SET display_name=$1 WHERE id=$2",
+    [display_name.trim().slice(0, 64), req.user.id]
+  );
+  res.json({ ok: true });
+});
+
+// POST /auth/change-password — requires current password
+router.post("/change-password", authenticate, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: "Both passwords required" });
+  if (new_password.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
+
+  const { rows } = await pool.query("SELECT password FROM users WHERE id=$1", [req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: "User not found" });
+
+  const ok = await bcrypt.compare(current_password, rows[0].password);
+  if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
+
+  const hash = await bcrypt.hash(new_password, 10);
+  await pool.query("UPDATE users SET password=$1 WHERE id=$2", [hash, req.user.id]);
+  res.json({ ok: true });
+});
+
+// GET /auth/me — extend to include display_name
+router.get("/me/profile", authenticate, async (req, res) => {
+  const { rows } = await pool.query("SELECT id, email, role, tenant_id, first_login, display_name FROM users WHERE id=$1", [req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: "User not found" });
+  res.json(rows[0]);
 });
 
 module.exports = router;

@@ -250,12 +250,12 @@ export default function ForecastPage() {
               <ComposedChart data={chartData}>
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={14} />
                 <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "#1e1e14", border: "1px solid #2e2e1a", borderRadius: 8, fontSize: 11 }}
+                <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 8, fontSize: 11 }}
                   formatter={(v: number) => [`₹${v}L`, ""]} />
-                <Area type="monotone" dataKey="p90" stroke="#C9A227" strokeWidth={1} strokeDasharray="4 2" fill="#C9A22710" />
-                <Area type="monotone" dataKey="p50" stroke="#C9A227" strokeWidth={2} fill="transparent" />
-                <Area type="monotone" dataKey="p10" stroke="#C9A227" strokeWidth={1} strokeDasharray="4 2" fill="transparent" />
-                {activeScenario && <Line type="monotone" dataKey="scenario" stroke="#e0b830" strokeWidth={2} strokeDasharray="6 3" dot={false} />}
+                <Area type="monotone" dataKey="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="#1A6B5510" />
+                <Area type="monotone" dataKey="p50" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5508" />
+                <Area type="monotone" dataKey="p10" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="transparent" />
+                {activeScenario && <Line type="monotone" dataKey="scenario" stroke="#2EA882" strokeWidth={2} strokeDasharray="6 3" dot={false} />}
                 {oblMarkers.map(o => (
                   <ReferenceLine key={o.id} x={o.chartDate} stroke="#ef4444" strokeDasharray="3 2" strokeWidth={1.5}
                     label={{ value: o.name, position: "insideTopRight", fontSize: 8, fill: "#ef4444" }} />

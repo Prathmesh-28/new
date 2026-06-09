@@ -405,71 +405,152 @@ export default function CreditPage() {
       )}
 
       {/* ── NOT YET ── */}
-      {tab === "notyet" && (
-        <div className="space-y-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-            <div className="flex items-start gap-3 mb-4">
-              <Clock size={18} className="text-yellow-400 shrink-0 mt-0.5" />
-              <div>
-                <h2 className="text-sm font-semibold mb-1">Not approved yet — here's why</h2>
-                <p className="text-sm text-[var(--color-muted)]">
-                  {bestScore > 0
-                    ? `Your score is ${bestScore}/100. We approve at 50+. Here's what to improve:`
-                    : "Apply first to see your score and the specific gaps holding you back."}
-                </p>
-              </div>
-            </div>
+      {tab === "notyet" && (() => {
+        // Compute real CoV from monthly revenue over last 6 months
+        const monthlyRevs: number[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(); d.setMonth(d.getMonth() - i);
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          const rev = transactions.filter(t => t.amount > 0 && t.date.startsWith(key)).reduce((s,t) => s+t.amount, 0);
+          if (rev > 0) monthlyRevs.push(rev);
+        }
+        const meanRev = monthlyRevs.length ? monthlyRevs.reduce((a,b) => a+b, 0) / monthlyRevs.length : 0;
+        const stdRev  = monthlyRevs.length > 1
+          ? Math.sqrt(monthlyRevs.reduce((s,v) => s + Math.pow(v - meanRev, 2), 0) / monthlyRevs.length)
+          : 0;
+        const cov = meanRev > 0 ? stdRev / meanRev : 1;
 
-            {declined.length > 0 && (
-              <div className="space-y-3">
-                {SCORE_FACTORS.slice(0, 4).map((f, i) => {
-                  const progress = Math.min(100, (bestScore / 50) * (100 - i * 12));
-                  return (
-                    <div key={f.label}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium">{f.label}</span>
-                        <span className={progress >= 80 ? "text-green-400" : progress >= 50 ? "text-yellow-400" : "text-red-400"}>
-                          {progress >= 80 ? "Good" : progress >= 50 ? "Needs work" : "Critical gap"}
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${progress >= 80 ? "bg-green-500" : progress >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
-                          style={{ width: `${progress}%` }} />
+        // Business age in months from first transaction
+        const firstTx = transactions.slice().sort((a,b) => a.date.localeCompare(b.date))[0];
+        const ageMonths = firstTx
+          ? Math.floor((Date.now() - new Date(firstTx.date).getTime()) / (30.44 * 86400000))
+          : 0;
+
+        // Overdraft proxy: any day where cumulative balance went negative
+        const overdraftCount = transactions.filter(t => {
+          const runningTotal = transactions
+            .filter(x => x.bankAccountId === t.bankAccountId && x.date <= t.date)
+            .reduce((s, x) => s + x.amount, 0);
+          return runningTotal < 0;
+        }).length;
+
+        // Top customer concentration
+        const cpRevs = transactions.filter(t => t.amount > 0 && t.counterparty)
+          .reduce<Record<string,number>>((acc,t) => { acc[t.counterparty] = (acc[t.counterparty]??0)+t.amount; return acc; }, {});
+        const topCpRevs = Object.values(cpRevs).sort((a,b) => b-a);
+        const topConc   = meanRev > 0 && topCpRevs[0] ? topCpRevs[0] / (meanRev * 6) : 0;
+
+        const improvements: { label: string; action: string; points: number; done: boolean; detail: string }[] = [
+          {
+            label: "Revenue consistency (CoV)",
+            action: `Reduce CoV from ${cov.toFixed(2)} → below 0.25`,
+            points: cov > 0.25 ? 8 : 0,
+            done: cov <= 0.25,
+            detail: cov > 0.25
+              ? `Your monthly revenue varies ${(cov*100).toFixed(0)}%. Lenders want <25% variation. This is the fastest lever — consistent invoicing adds ~8 pts.`
+              : "Revenue consistency is strong.",
+          },
+          {
+            label: "Business age",
+            action: ageMonths < 12 ? `${12 - ageMonths} months until 1-year milestone` : ageMonths < 24 ? `${24 - ageMonths} months to 2-year tier` : "",
+            points: ageMonths < 12 ? 10 : ageMonths < 24 ? 5 : 0,
+            done: ageMonths >= 24,
+            detail: ageMonths < 12
+              ? `You have ${ageMonths} months of history. Lenders require 12+ for standard approval, 24+ for best rates.`
+              : ageMonths < 24
+                ? `At ${ageMonths} months, you qualify for standard tier. Reaching 24 months adds ~5 pts.`
+                : "Business age is excellent.",
+          },
+          {
+            label: "Customer concentration",
+            action: topConc > 0.4 ? `Top customer is ${(topConc*100).toFixed(0)}% of revenue — add 2 more revenue sources` : "",
+            points: topConc > 0.4 ? 6 : 0,
+            done: topConc <= 0.4,
+            detail: topConc > 0.4
+              ? `Single customer concentration of ${(topConc*100).toFixed(0)}% is high risk. Diversify to add ~6 pts.`
+              : "Revenue concentration is acceptable.",
+          },
+          {
+            label: "Overdraft history",
+            action: overdraftCount > 0 ? `${overdraftCount} negative balance occurrence${overdraftCount>1?"s":""} detected — maintain positive balance` : "",
+            points: overdraftCount > 0 ? 5 : 0,
+            done: overdraftCount === 0,
+            detail: overdraftCount > 0
+              ? `${overdraftCount} instance${overdraftCount>1?"s":""} of negative balance detected. Even 1 overdraft reduces the score by ~5 pts. Keep a buffer of 1-2 months burn.`
+              : "No overdrafts detected.",
+          },
+          {
+            label: "Monthly revenue level",
+            action: meanRev < 300000 ? `Current avg ₹${(meanRev/1000).toFixed(0)}K — target ₹3L/mo for ₹15L credit` : "",
+            points: meanRev < 300000 ? 5 : 0,
+            done: meanRev >= 300000,
+            detail: meanRev < 300000
+              ? `Avg monthly revenue ₹${(meanRev/1000).toFixed(0)}K. ₹3L/mo unlocks ₹15L limit; ₹5L/mo unlocks ₹25L.`
+              : `Revenue level of ₹${(meanRev/1000).toFixed(0)}K/mo is sufficient.`,
+          },
+        ];
+
+        const gapTotal = improvements.filter(i => !i.done).reduce((s,i) => s+i.points, 0);
+        const projectedScore = Math.min(100, bestScore + gapTotal);
+
+        return (
+          <div className="space-y-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <div className="flex items-start gap-3 mb-4">
+                <Clock size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h2 className="text-sm font-semibold mb-0.5">
+                    {bestScore > 0 ? `Score: ${bestScore}/100 — ${50 - bestScore} points to approval` : "Apply to see your score and exact gaps"}
+                  </h2>
+                  {gapTotal > 0 && bestScore > 0 && (
+                    <p className="text-xs text-[var(--color-muted)]">
+                      Fix the items below to reach <strong className="text-[var(--color-text)]">{projectedScore}/100</strong> (threshold: 50) — potential credit limit{" "}
+                      <strong className="text-[var(--color-primary)]">{formatCurrency(meanRev * 3)}</strong>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {bestScore > 0 && (
+                <div className="space-y-4">
+                  {improvements.map(item => (
+                    <div key={item.label} className={`rounded-lg border p-3 ${item.done ? "border-green-800/30 bg-green-950/10 opacity-60" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 flex-1">
+                          {item.done
+                            ? <CheckCircle2 size={14} className="text-green-400 shrink-0 mt-0.5" />
+                            : <div className="w-3.5 h-3.5 rounded-full border-2 border-yellow-500/60 shrink-0 mt-0.5" />}
+                          <div>
+                            <p className="text-xs font-semibold">{item.label}</p>
+                            <p className="text-[11px] text-[var(--color-muted)] mt-0.5 leading-snug">{item.detail}</p>
+                            {item.action && !item.done && (
+                              <p className="text-[11px] text-[var(--color-primary)] mt-1 font-medium">→ {item.action}</p>
+                            )}
+                          </div>
+                        </div>
+                        {!item.done && item.points > 0 && (
+                          <span className="text-xs font-bold text-yellow-400 bg-yellow-950/30 border border-yellow-800/30 px-2 py-0.5 rounded shrink-0">+{item.points} pts</span>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-3">Auto re-check in 30 days</h3>
-            <p className="text-sm text-[var(--color-muted)] mb-3">
-              Headroom re-runs your underwriting every 30 days automatically. You'll get an immediate notification as soon as you qualify.
-            </p>
-            <div className="space-y-2 text-xs">
-              {[
-                { action: "Add 3+ months of connected bank history", done: bankAccounts.length > 0 },
-                { action: "Keep revenue consistent month-over-month", done: false },
-                { action: "Avoid overdraft (even 1 day)", done: false },
-                { action: "Reduce existing debt (DSCR below 0.4)", done: false },
-              ].map(({ action, done }) => (
-                <div key={action} className="flex items-center gap-2">
-                  {done
-                    ? <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-                    : <div className="w-3.5 h-3.5 rounded-full border border-[var(--color-border)] shrink-0" />}
-                  <span className={done ? "text-[var(--color-muted)] line-through" : ""}>{action}</span>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <TrendingUp size={12} className="text-[var(--color-primary)]" />
-              <p className="text-xs text-[var(--color-muted)]">15% of declined applicants convert to approved within 90 days.</p>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={13} className="text-[var(--color-primary)]" />
+                <h3 className="text-sm font-semibold">Auto re-check in 30 days</h3>
+              </div>
+              <p className="text-xs text-[var(--color-muted)]">
+                Headroom re-scores your business every 30 days. Fix any item above and your score updates automatically.
+                15% of declined applicants reach approval within 90 days.
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* KFS modal */}
       {showKfs && tierOffers && (
