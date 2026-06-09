@@ -101,7 +101,16 @@
       "Bash(curl -s https://headroom-pi.vercel.app/health -w \"\\\\nSTATUS:%{http_code}\")",
       "Bash(curl -s https://headroom-api.onrender.com/health -w \"\\\\nSTATUS:%{http_code}\")",
       "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/server.js)",
-      "Bash(curl -s https://headroom-backend.onrender.com/health -w \"\\\\nSTATUS:%{http_code}\")"
+      "Bash(curl -s https://headroom-backend.onrender.com/health -w \"\\\\nSTATUS:%{http_code}\")",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node ./node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(git -C /Users/prathmeshwalimbe/Downloads/new status --short)",
+      "Bash(git -C /Users/prathmeshwalimbe/Downloads/new add backend/src/db.js backend/src/lib/email.js backend/src/routes/auth.js src/App.tsx src/components/layout/Header.tsx src/context/AppContext.tsx src/data/defaultConfig.ts src/features/admin/AdminPage.tsx src/features/capital/CapitalPage.tsx src/features/credit/CreditPage.tsx src/features/dashboard/DashboardPage.tsx src/features/forecast/ForecastPage.tsx src/components/ErrorBoundary.tsx src/components/TransactionImportModal.tsx src/pages/NotFoundPage.tsx)",
+      "Bash(git -C /Users/prathmeshwalimbe/Downloads/new commit -m ' *)",
+      "Bash(git -C /Users/prathmeshwalimbe/Downloads/new push origin main)",
+      "Bash(npx vite *)",
+      "Bash(node ./node_modules/typescript/bin/tsc -b)",
+      "Bash(node ./node_modules/vite/bin/vite.js build)"
     ]
   }
 }

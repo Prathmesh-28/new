@@ -22,6 +22,8 @@ const InvestorPage       = lazy(() => import("@/features/investor/InvestorPage")
 const ConnectorsPage     = lazy(() => import("@/features/connectors/ConnectorsPage"));
 const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
 const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage"));
+const TransactionsPage   = lazy(() => import("@/features/transactions/TransactionsPage"));
+const AlertsPage         = lazy(() => import("@/features/alerts/AlertsPage"));
 
 function PageLoader() {
   return (
@@ -50,6 +52,8 @@ function AppShell() {
             <Routes>
               <Route path="/set-password"  element={<SetPasswordPage />} />
               <Route path="/dashboard"     element={<Dashboard />} />
+              <Route path="/transactions"  element={<TransactionsPage />} />
+              <Route path="/alerts"        element={<AlertsPage />} />
               <Route path="/forecast"      element={<Forecast />} />
               <Route path="/credit"        element={<Credit />} />
               <Route path="/capital"       element={<Capital />} />

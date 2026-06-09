@@ -6,6 +6,7 @@ export const defaultConfig: AppStore = {
     legalName: "Headroom Financial Technologies Pvt. Ltd.",
     industry: "SaaS / Fintech",
     foundedYear: 2023,
+    safetyThresholdDays: 14,
   },
 
   roles: [
@@ -21,8 +22,8 @@ export const defaultConfig: AppStore = {
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "forecast", "credit", "capital", "operations", "settings"],
-      visibleTabs:    ["dashboard", "forecast", "credit", "capital", "operations", "settings"],
+      accessibleTabs: ["dashboard", "transactions", "alerts", "forecast", "credit", "capital", "operations", "connectors", "settings"],
+      visibleTabs:    ["dashboard", "transactions", "alerts", "forecast", "credit", "capital", "operations", "connectors", "settings"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital", "operations"],
@@ -55,6 +56,7 @@ export const defaultConfig: AppStore = {
   obligations:        [],
   creditApplications: [],
   creditOffers:       [],
+  activeLoans:        [],
   capitalRaises:      [],
   capitalInvestments: [],
   connectors:         [],

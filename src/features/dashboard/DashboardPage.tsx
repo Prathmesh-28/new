@@ -249,6 +249,75 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Category burn breakdown + inflow vs outflow */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Burn by category */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+              <h2 className="text-sm font-semibold mb-3">Monthly burn by category</h2>
+              {(() => {
+                const cats = ["payroll","expense","loan","tax","transfer"];
+                const totals = cats.map(c => ({
+                  cat: c,
+                  val: Math.abs(transactions.filter(t => t.category === c && t.amount < 0).reduce((s, t) => s + t.amount, 0)),
+                })).filter(x => x.val > 0).sort((a, b) => b.val - a.val);
+                const max = totals[0]?.val ?? 1;
+                const CAT_CLR: Record<string, string> = { payroll:"bg-blue-500", expense:"bg-red-500", loan:"bg-purple-500", tax:"bg-orange-500", transfer:"bg-[var(--color-muted)]" };
+                return totals.length === 0
+                  ? <p className="text-sm text-[var(--color-muted)] py-4 text-center">No expense transactions yet</p>
+                  : <div className="space-y-2">{totals.map(({ cat, val }) => (
+                      <div key={cat}>
+                        <div className="flex items-center justify-between text-xs mb-0.5">
+                          <span className="capitalize font-medium">{cat}</span>
+                          <span className="text-[var(--color-muted)]">{formatCurrency(val)}</span>
+                        </div>
+                        <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${CAT_CLR[cat] ?? "bg-[var(--color-primary)]"}`} style={{ width: `${(val / max) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}</div>;
+              })()}
+            </div>
+
+            {/* Inflow vs Outflow this month vs last */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+              <h2 className="text-sm font-semibold mb-3">This month vs last month</h2>
+              {(() => {
+                const now = new Date();
+                const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+                const lastM = new Date(now.getFullYear(), now.getMonth()-1, 1);
+                const lastMStr = `${lastM.getFullYear()}-${String(lastM.getMonth()+1).padStart(2,"0")}`;
+                const thisIn  = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
+                const thisOut = transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0).reduce((s,t) => s+Math.abs(t.amount), 0);
+                const lastIn  = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
+                const lastOut = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount < 0).reduce((s,t) => s+Math.abs(t.amount), 0);
+                const rows = [
+                  { label: "Inflow",  this: thisIn,  last: lastIn,  color: "text-green-400" },
+                  { label: "Outflow", this: thisOut, last: lastOut, color: "text-red-400" },
+                  { label: "Net",     this: thisIn - thisOut, last: lastIn - lastOut, color: thisIn - thisOut >= 0 ? "text-green-400" : "text-red-400" },
+                ];
+                return (
+                  <div className="space-y-3">
+                    {rows.map(({ label, this: cur, last, color }) => {
+                      const delta = last > 0 ? ((cur - last) / last) * 100 : 0;
+                      return (
+                        <div key={label} className="flex items-center justify-between text-sm">
+                          <span className="text-[var(--color-muted)] text-xs w-14">{label}</span>
+                          <span className={`font-bold ${color}`}>{formatCurrency(cur)}</span>
+                          <div className="flex items-center gap-1 text-xs">
+                            <span className="text-[var(--color-muted)]">prev {formatCurrency(last)}</span>
+                            {last > 0 && (
+                              <span className={delta >= 0 ? "text-green-400" : "text-red-400"}>{delta >= 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}%</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Bank accounts */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">

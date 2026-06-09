@@ -41,6 +41,10 @@ interface AppCtx {
   addCreditApplication:   (x: AppStore["creditApplications"][0]) => void;
   updateCreditApplication:(x: AppStore["creditApplications"][0]) => void;
   addCreditOffer:         (x: AppStore["creditOffers"][0])       => void;
+  addActiveLoan:          (x: AppStore["activeLoans"][0])         => void;
+  updateActiveLoan:       (x: AppStore["activeLoans"][0])         => void;
+  deleteActiveLoan:       (id: string)                            => void;
+  updateFirm:             (f: Partial<AppStore["firm"]>)          => void;
   addCapitalRaise:        (x: AppStore["capitalRaises"][0])      => void;
   updateCapitalRaise:     (x: AppStore["capitalRaises"][0])      => void;
   addCapitalInvestment:   (x: AppStore["capitalInvestments"][0]) => void;
@@ -181,6 +185,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCreditApplication:    add("creditApplications"),
     updateCreditApplication: update("creditApplications"),
     addCreditOffer:          add("creditOffers"),
+    addActiveLoan:           add("activeLoans"),
+    updateActiveLoan:        update("activeLoans"),
+    deleteActiveLoan:        del("activeLoans"),
+    updateFirm:              (f) => setStore(s => ({ ...s, firm: { ...s.firm, ...f } })),
     addCapitalRaise:         add("capitalRaises"),
     updateCapitalRaise:      update("capitalRaises"),
     addCapitalInvestment:    add("capitalInvestments"),

@@ -26,6 +26,21 @@ export interface FirmSettings {
   legalName: string;
   industry: string;
   foundedYear: number;
+  safetyThresholdDays: number;
+}
+
+export interface ActiveLoan {
+  id: string;
+  lender: string;
+  principal: number;
+  outstanding: number;
+  rate: number;
+  termMonths: number;
+  monthlyEmi: number;
+  startDate: string;
+  nextPaymentDate: string;
+  nextPaymentAmount: number;
+  applicationId?: string;
 }
 
 // ── Dashboard entities ────────────────────────────────────────────────────────
@@ -47,14 +62,18 @@ export interface Transaction {
   counterparty: string;
   isRecurring: boolean;
   bankAccountId: string;
+  notes?: string;
+  flagged?: boolean;
 }
 
 export interface Alert {
   id: string;
   type: string;
   severity: "critical" | "high" | "medium" | "low";
+  title: string;
   message: string;
   isRead: boolean;
+  actionTaken?: string;
   createdAt: string;
 }
 
@@ -201,6 +220,7 @@ export interface AppStore {
   obligations: CashObligation[];
   creditApplications: CreditApplication[];
   creditOffers: CreditOffer[];
+  activeLoans: ActiveLoan[];
   capitalRaises: CapitalRaise[];
   capitalInvestments: CapitalInvestment[];
   connectors: BankConnector[];
@@ -222,6 +242,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   obligations:         "forecast",
   creditApplications:  "credit",
   creditOffers:        "credit",
+  activeLoans:         "credit",
   capitalRaises:       "capital",
   capitalInvestments:  "capital",
   orders:              "operations",

@@ -4,29 +4,33 @@ import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
-  LogOut, Menu, X, Package, Users, Briefcase, PlugZap,
+  LogOut, Menu, X, Package, Users, Briefcase, PlugZap, FileText, Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_BY_ROLE: Record<string, { to: string; label: string; icon: React.ElementType; tab: string }[]> = {
   super_admin: [
-    { to: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard, tab: "dashboard"  },
-    { to: "/forecast",   label: "Forecast",    icon: TrendingUp,      tab: "forecast"   },
-    { to: "/credit",     label: "Credit",      icon: CreditCard,      tab: "credit"     },
-    { to: "/capital",    label: "Capital",     icon: Rocket,          tab: "capital"    },
-    { to: "/operations", label: "Operations",  icon: Package,         tab: "operations" },
-    { to: "/connectors", label: "Connectors",  icon: PlugZap,         tab: "connectors" },
-    { to: "/settings",   label: "Settings",    icon: Settings2,       tab: "settings"   },
-    { to: "/admin",      label: "Admin",       icon: ShieldCheck,     tab: "admin"      },
+    { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"     },
+    { to: "/transactions",  label: "Transactions",  icon: FileText,        tab: "transactions"  },
+    { to: "/alerts",        label: "Alerts",        icon: Bell,            tab: "alerts"        },
+    { to: "/forecast",      label: "Forecast",      icon: TrendingUp,      tab: "forecast"      },
+    { to: "/credit",        label: "Credit",        icon: CreditCard,      tab: "credit"        },
+    { to: "/capital",       label: "Capital",       icon: Rocket,          tab: "capital"       },
+    { to: "/operations",    label: "Operations",    icon: Package,         tab: "operations"    },
+    { to: "/connectors",    label: "Connectors",    icon: PlugZap,         tab: "connectors"    },
+    { to: "/settings",      label: "Settings",      icon: Settings2,       tab: "settings"      },
+    { to: "/admin",         label: "Admin",         icon: ShieldCheck,     tab: "admin"         },
   ],
   owner: [
-    { to: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard, tab: "dashboard"  },
-    { to: "/forecast",   label: "Forecast",    icon: TrendingUp,      tab: "forecast"   },
-    { to: "/credit",     label: "Credit",      icon: CreditCard,      tab: "credit"     },
-    { to: "/capital",    label: "Capital",     icon: Rocket,          tab: "capital"    },
-    { to: "/operations", label: "Operations",  icon: Package,         tab: "operations" },
-    { to: "/connectors", label: "Connectors",  icon: PlugZap,         tab: "connectors" },
-    { to: "/settings",   label: "Settings",    icon: Settings2,       tab: "settings"   },
+    { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"     },
+    { to: "/transactions",  label: "Transactions",  icon: FileText,        tab: "transactions"  },
+    { to: "/alerts",        label: "Alerts",        icon: Bell,            tab: "alerts"        },
+    { to: "/forecast",      label: "Forecast",      icon: TrendingUp,      tab: "forecast"      },
+    { to: "/credit",        label: "Credit",        icon: CreditCard,      tab: "credit"        },
+    { to: "/capital",       label: "Capital",       icon: Rocket,          tab: "capital"       },
+    { to: "/operations",    label: "Operations",    icon: Package,         tab: "operations"    },
+    { to: "/connectors",    label: "Connectors",    icon: PlugZap,         tab: "connectors"    },
+    { to: "/settings",      label: "Settings",      icon: Settings2,       tab: "settings"      },
   ],
   accountant: [
     { to: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard, tab: "dashboard"  },

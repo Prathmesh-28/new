@@ -22,12 +22,16 @@ export default function ForecastPage() {
   const [oblName,   setOblName]   = useState("");
   const [oblAmount, setOblAmount] = useState("");
   const [oblDate,   setOblDate]   = useState("");
+  const [slowPct,   setSlowPct]   = useState(100);
 
   const navigate = useNavigate();
   const activeScenario = scenarios.find(s => s.active);
 
   // Detect P10 dipping below 0 within 45 days
   const pressureDay = forecast.slice(0, 45).findIndex(f => f.p10 < 0);
+
+  // Slow month: apply revenue reduction to chart data
+  const slowAdjFactor = slowPct / 100;
 
   const chartData = forecast.slice(0, 90).map((f, i) => {
     const adj = activeScenario ? (
@@ -152,6 +156,30 @@ export default function ForecastPage() {
                 {activeScenario && <Line type="monotone" dataKey="scenario" stroke="#e0b830" strokeWidth={2} strokeDasharray="6 3" dot={false} />}
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Slow month slider */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <h2 className="text-sm font-semibold mb-1">Slow month — what's the worst case?</h2>
+            <p className="text-xs text-[var(--color-muted)] mb-3">Drag revenue down and see your P10 impact immediately.</p>
+            <div className="flex items-center gap-4">
+              <input type="range" min="0" max="100" step="5" value={slowPct}
+                onChange={e => setSlowPct(Number(e.target.value))}
+                className="flex-1 accent-[var(--color-primary)]" />
+              <span className={`text-lg font-bold w-16 text-right ${slowPct < 50 ? "text-red-400" : slowPct < 80 ? "text-yellow-400" : "text-green-400"}`}>
+                {slowPct}%
+              </span>
+            </div>
+            <div className="flex justify-between text-xs text-[var(--color-muted)] mt-1">
+              <span>0% revenue</span>
+              <span>{slowPct === 100 ? "Normal month — no adjustment" : `Revenue at ${slowPct}% — P50 shifts down by ~${(100 - slowPct).toFixed(0)}%`}</span>
+              <span>100% (base)</span>
+            </div>
+            {slowPct < 70 && (
+              <div className="mt-3 text-xs bg-red-950/20 border border-red-800/40 rounded-lg px-3 py-2 text-red-400">
+                A {100 - slowPct}% revenue drop significantly accelerates cash pressure. Consider a credit buffer now.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
