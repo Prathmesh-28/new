@@ -3,8 +3,8 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 
 const ROLE_NAMESPACES = {
-  super_admin: ["app", "forecast", "credit", "capital"],
-  owner:       ["app", "forecast", "credit", "capital"],
+  super_admin: ["app", "forecast", "credit", "capital", "operations"],
+  owner:       ["app", "forecast", "credit", "capital", "operations"],
   accountant:  ["app", "forecast"],
   investor:    ["app", "capital"],
 };
@@ -13,14 +13,30 @@ function canAccess(role, ns) {
   return (ROLE_NAMESPACES[role] || []).includes(ns);
 }
 
+// Resolve tenant: own data OR a linked client's data (accountants/super_admin only)
+async function resolveTenantId(req) {
+  const requested = req.query.tenant_id;
+  if (!requested || requested === req.user.tenant_id) return req.user.tenant_id;
+  if (req.user.role === "super_admin") return requested;
+  if (req.user.role !== "accountant") return null;
+  const { rows } = await pool.query(
+    "SELECT 1 FROM advisor_client_links WHERE advisor_id=$1 AND client_tenant_id=$2",
+    [req.user.id, requested]
+  );
+  return rows[0] ? requested : null;
+}
+
 // GET /api/kv/:ns — get all keys in namespace
 router.get("/:ns", authenticate, async (req, res) => {
   const { ns } = req.params;
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
+  const tenantId = await resolveTenantId(req);
+  if (!tenantId) return res.status(403).json({ error: "Forbidden" });
+
   const { rows } = await pool.query(
     "SELECT key, value, updated_at FROM kv_store WHERE tenant_id=$1 AND namespace=$2",
-    [req.user.tenant_id, ns]
+    [tenantId, ns]
   );
   const out = {};
   for (const r of rows) out[r.key] = r.value;
@@ -32,9 +48,12 @@ router.get("/:ns/:key", authenticate, async (req, res) => {
   const { ns, key } = req.params;
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
+  const tenantId = await resolveTenantId(req);
+  if (!tenantId) return res.status(403).json({ error: "Forbidden" });
+
   const { rows } = await pool.query(
     "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace=$2 AND key=$3",
-    [req.user.tenant_id, ns, key]
+    [tenantId, ns, key]
   );
   res.json(rows[0]?.value ?? null);
 });

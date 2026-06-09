@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { buildForecast } = require("../lib/forecast");
+const { sendAlertEmail } = require("../lib/email");
 
 // GET /api/forecast — returns current forecast datapoints
 router.get("/", authenticate, async (req, res) => {
@@ -185,10 +186,11 @@ async function runAlertEngine(tenantId, forecastId, datapoints, startBalance) {
     });
   }
 
-  // Deduplicate: don't re-insert the same rule if already active & unread
+  // Deduplicate: don't re-insert the same rule more than once per 24 hours
+  const newAlerts = [];
   for (const alert of alerts) {
     const { rows: existing } = await pool.query(
-      "SELECT id FROM alerts WHERE tenant_id=$1 AND rule_id=$2 AND is_read=false AND is_resolved=false",
+      "SELECT id FROM alerts WHERE tenant_id=$1 AND rule_id=$2 AND created_at > now() - interval '24 hours'",
       [tenantId, alert.rule_id]
     );
     if (!existing[0]) {
@@ -196,6 +198,38 @@ async function runAlertEngine(tenantId, forecastId, datapoints, startBalance) {
         "INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,$2,$3,$4,$5,$6)",
         [tenantId, alert.rule_id, alert.severity, alert.title, alert.message, JSON.stringify(alert.meta)]
       );
+      newAlerts.push(alert);
+    }
+  }
+
+  if (!newAlerts.length) return;
+
+  // Email owner + linked accountants for non-low-severity new alerts
+  const actionable = newAlerts.filter(a => a.severity !== "low");
+  if (!actionable.length) return;
+
+  const { rows: ownerRows } = await pool.query(
+    "SELECT email FROM users WHERE tenant_id=$1 AND role IN ('owner','super_admin') LIMIT 1",
+    [tenantId]
+  );
+  const { rows: advisorRows } = await pool.query(
+    `SELECT u.email FROM advisor_client_links acl
+     JOIN users u ON u.id = acl.advisor_id
+     WHERE acl.client_tenant_id = $1`,
+    [tenantId]
+  );
+  const recipients = [
+    ...(ownerRows[0] ? [ownerRows[0].email] : []),
+    ...advisorRows.map(r => r.email),
+  ];
+
+  for (const alert of actionable) {
+    for (const to of recipients) {
+      try {
+        await sendAlertEmail({ to, title: alert.title, message: alert.message, severity: alert.severity });
+      } catch (err) {
+        console.error("[alert-email] failed to send to", to, err.message);
+      }
     }
   }
 }

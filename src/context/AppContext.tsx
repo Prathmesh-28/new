@@ -157,10 +157,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const clientId   = selectedClientTenantId;
     // CA in client view: only needs app + forecast namespaces for the client
     const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
-    Promise.allSettled(namespaces.map(ns => api.get<Record<string, unknown>>(kvUrl(ns, clientId))))
+    Promise.allSettled(namespaces.map(ns => api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, clientId))))
       .then(results => {
         const merged: Record<string, unknown> = {};
-        results.forEach(r => { if (r.status === "fulfilled" && r.value) Object.assign(merged, r.value); });
+        results.forEach(r => {
+          if (r.status === "fulfilled" && r.value) {
+            // Stored as { value: { ...fields } } — unwrap one level
+            const payload = r.value?.value;
+            if (payload && typeof payload === "object") Object.assign(merged, payload);
+          }
+        });
         if (Object.keys(merged).length) {
           _setStore(prev => ({ ...prev, ...merged }));
           // Only persist own data to localStorage
@@ -181,10 +187,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const clientId   = clientIdRef.current;
       const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
       const results = await Promise.allSettled(
-        namespaces.map(ns => api.get<Record<string, unknown>>(kvUrl(ns, clientId)))
+        namespaces.map(ns => api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, clientId)))
       );
       const merged: Record<string, unknown> = {};
-      results.forEach(r => { if (r.status === "fulfilled" && r.value) Object.assign(merged, r.value); });
+      results.forEach(r => {
+        if (r.status === "fulfilled" && r.value) {
+          const payload = r.value?.value;
+          if (payload && typeof payload === "object") Object.assign(merged, payload);
+        }
+      });
       if (Object.keys(merged).length) _setStore(prev => ({ ...prev, ...merged }));
     }, POLL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };

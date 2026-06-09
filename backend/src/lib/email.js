@@ -136,4 +136,36 @@ async function sendPasswordResetSuccess({ to, name }) {
   await sendMail({ to, subject: "Your Headroom password has been changed", html });
 }
 
-module.exports = { sendMail, sendOtp, sendWelcome, sendPasswordResetSuccess };
+async function sendAlertEmail({ to, title, message, severity }) {
+  const colorMap = { critical: "#ef4444", high: "#f97316", medium: "#eab308", low: "#22c55e" };
+  const color = colorMap[severity] || "#C9A227";
+  const html = wrap(`
+    <tr><td style="padding:32px 32px 8px">
+      <h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;font-family:system-ui,sans-serif">Cash Flow Alert</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#9a9a70;font-family:system-ui,sans-serif">
+        A new alert was generated for your Headroom account.
+      </p>
+    </td></tr>
+    <tr><td style="padding:0 32px">
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#0d0d09;border:1px solid #2a2a1a;border-left:3px solid ${color};border-radius:8px">
+        <tr><td style="padding:16px 20px">
+          <p style="margin:0 0 4px;font-size:11px;color:#5a5a40;font-family:system-ui,sans-serif;text-transform:uppercase;letter-spacing:1px">
+            ${severity} severity
+          </p>
+          <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#ffffff;font-family:system-ui,sans-serif">${title}</p>
+          <p style="margin:0;font-size:13px;color:#9a9a70;font-family:system-ui,sans-serif">${message}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:16px 32px 32px">
+      <a href="${process.env.FRONTEND_URL || "https://headroom-pi.vercel.app"}/alerts"
+        style="display:inline-block;background:#C9A227;color:#0d0d09;font-weight:700;font-size:13px;padding:12px 24px;border-radius:8px;text-decoration:none;font-family:system-ui,sans-serif">
+        View Alerts →
+      </a>
+    </td></tr>
+  `);
+  await sendMail({ to, subject: `[${severity.toUpperCase()}] ${title} — Headroom`, html });
+}
+
+module.exports = { sendMail, sendOtp, sendWelcome, sendPasswordResetSuccess, sendAlertEmail };

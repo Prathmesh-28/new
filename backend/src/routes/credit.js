@@ -46,6 +46,13 @@ router.post("/apply", authenticate, requireOwnerOrAdmin, async (req, res) => {
   );
   if (existing[0]) return res.status(409).json({ error: "An active application already exists", application_id: existing[0].id });
 
+  // Velocity gate: max 1 application per 90 days (fraud prevention)
+  const { rows: recent } = await pool.query(
+    "SELECT id FROM credit_applications WHERE tenant_id=$1 AND created_at > now() - interval '90 days' LIMIT 1",
+    [req.user.tenant_id]
+  );
+  if (recent[0]) return res.status(429).json({ error: "You may submit only one application per 90 days.", code: "velocity_limit" });
+
   // Run underwriting
   const result = await underwrite(req.user.tenant_id, pool);
 
