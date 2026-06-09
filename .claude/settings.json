@@ -76,7 +76,32 @@
       "Bash(curl -s -X PATCH https://api.vercel.com/v9/projects/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"framework\": null}')",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('framework'\\), d.get\\('name'\\)\\)\")",
       "Bash(echo \"exit: $?\")",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(node --check backend/src/server.js)",
+      "Bash(node --check backend/src/routes/accounts.js)",
+      "Bash(node --check backend/src/routes/transactions.js)",
+      "Bash(node --check backend/src/routes/forecast.js)",
+      "Bash(node --check backend/src/routes/alerts.js)",
+      "WebFetch(domain:headroom-fc7e3.web.app)",
+      "Bash(curl -s --max-time 10 https://headroom-api.onrender.com/health)",
+      "Bash(curl -s --max-time 10 -H \"Origin: https://new.vercel.app\" -I https://headroom-api.onrender.com/health)",
+      "Bash(curl -s --max-time 15 https://headroom-api.onrender.com/health)",
+      "Bash(curl -s --max-time 15 https://new-eornczf6i-prathmeshwalimbe2004-8877s-projects.vercel.app/health)",
+      "Bash(vercel inspect *)",
+      "Bash(curl -s --max-time 15 -H \"Accept: application/json\" \"https://new-eornczf6i-prathmeshwalimbe2004-8877s-projects.vercel.app/auth/login\" -X POST -H \"Content-Type: application/json\" -d '{\"email\":\"admin@headroom.app\",\"password\":\"Headroom@2024\"}')",
+      "Bash(curl -s -X PATCH https://api.vercel.com/v9/projects/prj_782UVoK7a0b6AC3vwVUGTxaAzN0A -H 'Authorization: Bearer vca_3k3ef2HN5fzl9dngBN0bO13LUeHZqWw4Sxl30eTYnuDDXaN8mP4V1HIb' -H 'Content-Type: application/json' -d '{\"ssoProtection\": null, \"passwordProtection\": null, \"trustedIps\": null}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - protection disabled' if 'id' in d else d.get\\('error'\\)\\)\")",
+      "Bash(curl -s --max-time 15 \"https://headroom-pi.vercel.app/auth/login\" -X POST -H \"Content-Type: application/json\" -d '{\"email\":\"admin@headroom.app\",\"password\":\"Headroom@2024\"}')",
+      "Bash(curl -s -X POST https://headroom-pi.vercel.app/auth/login -H 'Content-Type: application/json' -H 'Origin: https://headroom-pi.vercel.app' -d '{\"email\":\"admin@headroom.app\",\"password\":\"Headroom@2024\"}' -w '\\\\n\\\\nHTTP_STATUS: %{http_code}')",
+      "Bash(curl -s -X POST https://headroom-api.onrender.com/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@headroom.app\",\"password\":\"Headroom@2024\"}' -w '\\\\n\\\\nHTTP_STATUS: %{http_code}')",
+      "Bash(curl -s https://headroom-api.onrender.com/health -w '\\\\n\\\\nHTTP_STATUS: %{http_code}')",
+      "Bash(wait)",
+      "Bash(curl -sv https://headroom-pi.vercel.app/health)",
+      "Bash(curl -sv https://headroom-api.onrender.com/health)",
+      "Bash(curl -s https://headroom-pi.vercel.app/health -w \"\\\\nSTATUS:%{http_code}\")",
+      "Bash(curl -s https://headroom-api.onrender.com/health -w \"\\\\nSTATUS:%{http_code}\")",
+      "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/server.js)",
+      "Bash(curl -s https://headroom-backend.onrender.com/health -w \"\\\\nSTATUS:%{http_code}\")"
     ]
   }
 }

@@ -6,6 +6,30 @@ const { signAccess, signRefresh, verifyRefresh } = require("../lib/jwt");
 const { authenticate } = require("../middleware/auth");
 const { sendOtp, sendWelcome } = require("../lib/email");
 
+// POST /auth/signup
+router.post("/signup", async (req, res) => {
+  const { email, password, company_name, role = "owner" } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+  if (!["owner", "accountant", "investor"].includes(role)) return res.status(400).json({ error: "Invalid role" });
+
+  const { rows: existing } = await pool.query("SELECT id FROM users WHERE email=$1", [email.toLowerCase()]);
+  if (existing[0]) return res.status(409).json({ error: "An account with this email already exists" });
+
+  const hash = await bcrypt.hash(password, 10);
+  const slug = (company_name || email.split("@")[0])
+    .toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const tenant_id = `${slug}-${crypto.randomBytes(3).toString("hex")}`;
+
+  const { rows } = await pool.query(
+    "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,$3,$4,false) RETURNING id,email,role,tenant_id,first_login",
+    [email.toLowerCase(), hash, role, tenant_id]
+  );
+  const user = rows[0];
+  const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
+  res.status(201).json({ access: signAccess(payload), refresh: signRefresh(payload), user });
+});
+
 // POST /auth/login
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 
@@ -126,7 +126,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-[var(--color-muted)] mt-8 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3">
+          <p className="text-center text-xs text-[var(--color-muted)] mt-6">
+            Don't have an account?{" "}
+            <Link to="/signup" className="text-[var(--color-primary)] hover:underline font-medium">Sign up free</Link>
+          </p>
+
+          <p className="text-center text-xs text-[var(--color-muted)] mt-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3">
             Demo: <span className="text-[var(--color-primary)] font-medium">admin@headroom.app</span><br />
             Password: <span className="text-[var(--color-primary)] font-medium">Headroom@2024</span>
           </p>
