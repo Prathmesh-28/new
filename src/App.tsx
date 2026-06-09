@@ -9,6 +9,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
 const SignupPage         = lazy(() => import("@/pages/SignupPage"));
+const SignupAdvisorPage  = lazy(() => import("@/pages/SignupAdvisorPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const SetPasswordPage    = lazy(() => import("@/pages/SetPasswordPage"));
 const NotFoundPage       = lazy(() => import("@/pages/NotFoundPage"));
@@ -86,6 +87,7 @@ export default function App() {
                 <Route path="/"                element={<HomePage />} />
                 <Route path="/login"           element={<LoginPage />} />
                 <Route path="/signup"          element={<SignupPage />} />
+                <Route path="/signup-advisor" element={<SignupAdvisorPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/*"               element={<RequireAuth><AppShell /></RequireAuth>} />
               </Routes>

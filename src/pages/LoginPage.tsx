@@ -137,6 +137,11 @@ export default function LoginPage() {
             <Link to="/signup" className="text-[var(--color-primary)] hover:underline font-medium">Sign up free</Link>
           </p>
 
+          <p className="text-center text-xs text-[var(--color-muted)] mt-2">
+            CA or accountant?{" "}
+            <Link to="/signup-advisor" className="text-[var(--color-primary)] hover:underline font-medium">Join as an advisor →</Link>
+          </p>
+
           <p className="text-center text-xs text-[var(--color-muted)] mt-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3">
             Demo: <span className="text-[var(--color-primary)] font-medium">admin@headroom.app</span><br />
             Password: <span className="text-[var(--color-primary)] font-medium">Headroom@2024</span>
