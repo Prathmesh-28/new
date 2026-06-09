@@ -42,7 +42,7 @@ function exportCsv(filtered: Transaction[], bankAccounts: { id: string; name: st
       t.date, t.description, t.category, t.counterparty,
       t.amount.toFixed(2), acct,
       t.isRecurring ? "Yes" : "No",
-      (t as Record<string, unknown>).flagged ? "Yes" : "No",
+      (t as unknown as Record<string, unknown>).flagged ? "Yes" : "No",
       (t.notes ?? ""),
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
   });
