@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { generateId } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
@@ -81,13 +82,22 @@ export default function ConnectorsPage() {
 
   const connectedMap = new Map(connectors.map(c => [c.provider, c]));
 
-  const handleConnect = (providerId: ConnectorProvider) => {
+  const persistConnector = async (providerId: ConnectorProvider, accountName: string): Promise<string> => {
+    try {
+      const res = await api.post<{ id: string }>("/api/connectors", { provider: providerId, account_name: accountName });
+      return res.id;
+    } catch {
+      return generateId();
+    }
+  };
+
+  const handleConnect = async (providerId: ConnectorProvider) => {
     const existing = connectedMap.get(providerId);
     if (existing) { toast("Already connected. Disconnect first to reconfigure."); return; }
     const provider = PROVIDERS.find(p => p.id === providerId)!;
     if (provider.webhookNote) {
-      // Tally — just create the connector stub
-      addConnector({ id: generateId(), provider: providerId, label: provider.name, accountName: "Tally ERP", status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
+      const id = await persistConnector(providerId, "Tally ERP");
+      addConnector({ id, provider: providerId, label: provider.name, accountName: "Tally ERP", status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
       toast.success("Tally connector added. Install the sync agent to complete setup.");
     } else {
       setSetupFor(providerId);
@@ -95,11 +105,12 @@ export default function ConnectorsPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!setupFor) return;
-    const provider = PROVIDERS.find(p => p.id === setupFor)!;
+    const provider    = PROVIDERS.find(p => p.id === setupFor)!;
     const accountName = fields.accountName || provider.name;
-    addConnector({ id: generateId(), provider: setupFor, label: provider.name, accountName, status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
+    const id          = await persistConnector(setupFor, accountName);
+    addConnector({ id, provider: setupFor, label: provider.name, accountName, status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
     toast.success(`${provider.name} connector added — complete consent to activate.`);
     setSetupFor(null); setFields({});
   };

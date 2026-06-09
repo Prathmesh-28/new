@@ -61,6 +61,19 @@ app.use("/api/connectors",         require("./routes/connectors"));
 app.use("/api/advisor",            require("./routes/advisor"));
 app.use("/api/operations",         require("./routes/operations"));
 
+// Admin endpoints (super_admin only)
+const { authenticate: _auth } = require("./middleware/auth");
+app.get("/api/admin/tenants", _auth, async (req, res) => {
+  if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
+  const { rows } = await pool.query(
+    `SELECT tenant_id,
+            COUNT(*) AS user_count,
+            MAX(CASE WHEN role IN ('owner','super_admin') THEN email END) AS owner_email
+     FROM users GROUP BY tenant_id ORDER BY tenant_id`
+  );
+  res.json(rows.map(r => ({ tenant_id: r.tenant_id, user_count: Number(r.user_count), owner_email: r.owner_email })));
+});
+
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

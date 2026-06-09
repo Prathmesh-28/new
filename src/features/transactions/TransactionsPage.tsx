@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
-import { Search, Filter, Tag, Repeat, Flag, ChevronLeft, ChevronRight, Pencil, Check, X } from "lucide-react";
+import { Search, Filter, Tag, Repeat, Flag, ChevronLeft, ChevronRight, Pencil, Check, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction } from "@/data/types";
 
@@ -34,8 +34,30 @@ function computeCategoryAverages(txns: Transaction[]) {
   return avgs;
 }
 
+function exportCsv(filtered: Transaction[], bankAccounts: { id: string; name: string }[]) {
+  const headers = ["Date", "Description", "Category", "Counterparty", "Amount", "Account", "Recurring", "Unusual", "Notes"];
+  const rows = filtered.map(t => {
+    const acct = bankAccounts.find(a => a.id === t.bankAccountId)?.name ?? "";
+    return [
+      t.date, t.description, t.category, t.counterparty,
+      t.amount.toFixed(2), acct,
+      t.isRecurring ? "Yes" : "No",
+      (t as Record<string, unknown>).flagged ? "Yes" : "No",
+      (t.notes ?? ""),
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+  });
+  const csv   = [headers.map(h => `"${h}"`).join(","), ...rows].join("\n");
+  const blob  = new Blob([csv], { type: "text/csv" });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement("a");
+  a.href      = url;
+  a.download  = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function TransactionsPage() {
-  const { store, updateTransaction } = useApp();
+  const { store, updateTransaction, canExport } = useApp();
   const { transactions, bankAccounts } = store;
 
   const [search,     setSearch]     = useState("");
@@ -93,10 +115,16 @@ export default function TransactionsPage() {
           <h1 className="text-xl font-bold">Transaction Feed</h1>
           <p className="text-sm text-[var(--color-muted)] mt-0.5">{filtered.length} transactions</p>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-green-400 font-semibold">{formatCurrency(totalIn)} in</span>
-          <span className="text-[var(--color-muted)]">/</span>
-          <span className="text-red-400 font-semibold">{formatCurrency(totalOut)} out</span>
+        <div className="flex items-center gap-3">
+          <span className="text-green-400 font-semibold text-sm">{formatCurrency(totalIn)} in</span>
+          <span className="text-[var(--color-muted)] text-sm">/</span>
+          <span className="text-red-400 font-semibold text-sm">{formatCurrency(totalOut)} out</span>
+          {canExport() && (
+            <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <Download size={12} /> Export CSV
+            </button>
+          )}
         </div>
       </div>
 

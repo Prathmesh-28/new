@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
+import { useApp } from "@/context/AppContext";
 import { Navigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2 } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save } from "lucide-react";
 import { toast } from "sonner";
 
 type TeamUser = {
@@ -27,7 +28,8 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
+  const { store, updateFirm } = useApp();
   const [users,    setUsers]    = useState<TeamUser[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -36,7 +38,20 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [copied,   setCopied]   = useState(false);
 
+  // Firm profile form state (synced from store.firm)
+  const [firmName,     setFirmName]     = useState(store.firm.name ?? "");
+  const [firmIndustry, setFirmIndustry] = useState(store.firm.industry ?? "");
+  const [safetyDays,   setSafetyDays]   = useState(store.firm.safetyThresholdDays ?? 14);
+  const [firmSaving,   setFirmSaving]   = useState(false);
+
   const tenantId = users.find(u => u.id === user?.id)?.tenant_id ?? "Loading…";
+
+  const handleSaveFirm = () => {
+    setFirmSaving(true);
+    updateFirm({ name: firmName, industry: firmIndustry, safetyThresholdDays: safetyDays });
+    toast.success("Business profile saved");
+    setFirmSaving(false);
+  };
 
   const copyTenantId = () => {
     navigator.clipboard.writeText(tenantId).then(() => {
@@ -184,6 +199,45 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Business profile */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+        <h2 className="text-sm font-semibold mb-1">Business Profile</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-5">Used in credit underwriting and advisor reports.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Business name</label>
+            <input value={firmName} onChange={e => setFirmName(e.target.value)}
+              placeholder="e.g. Raj Traders Pvt Ltd"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Industry</label>
+            <select value={firmIndustry} onChange={e => setFirmIndustry(e.target.value)}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+              <option value="">Select industry…</option>
+              {["Retail", "Manufacturing", "Food & Beverage", "Technology", "Healthcare", "Logistics", "Construction", "Services", "Agriculture", "Education", "Other"].map(i => (
+                <option key={i}>{i}</option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">
+              Safety threshold — alert when runway drops below <span className="text-[var(--color-text)] font-semibold">{safetyDays} days</span>
+            </label>
+            <input type="range" min="7" max="60" step="1" value={safetyDays}
+              onChange={e => setSafetyDays(Number(e.target.value))}
+              className="w-full accent-[var(--color-primary)]" />
+            <div className="flex justify-between text-xs text-[var(--color-muted)] mt-1">
+              <span>7 days</span><span>60 days</span>
+            </div>
+          </div>
+        </div>
+        <button onClick={handleSaveFirm} disabled={firmSaving}
+          className="mt-5 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
+          <Save size={13} /> {firmSaving ? "Saving…" : "Save Profile"}
+        </button>
       </div>
 
       {/* Tenant ID card */}

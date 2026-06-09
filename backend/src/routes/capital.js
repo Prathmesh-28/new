@@ -11,6 +11,41 @@ router.get("/raises", authenticate, async (req, res) => {
   res.json(rows);
 });
 
+// GET /api/capital/raises/public — all active raises across tenants (investor marketplace)
+router.get("/raises/public", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, name, raise_type, target_amount, raised_amount, status, closes_at, created_at FROM capital_raises WHERE status='active' ORDER BY created_at DESC"
+  );
+  res.json(rows);
+});
+
+// POST /api/capital/raises/:id/commit — investor commits to a raise
+router.post("/raises/:id/commit", authenticate, async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Positive amount required" });
+
+  const { rows: raiseRows } = await pool.query(
+    "SELECT * FROM capital_raises WHERE id=$1 AND status='active'",
+    [req.params.id]
+  );
+  if (!raiseRows[0]) return res.status(404).json({ error: "Active raise not found" });
+
+  const raise = raiseRows[0];
+  const equityPct = (Number(amount) / Number(raise.target_amount)) * 100;
+
+  const { rows: invRows } = await pool.query(
+    "INSERT INTO investors(tenant_id, raise_id, name, email, amount, status) VALUES($1,$2,$3,$4,$5,'committed') RETURNING *",
+    [raise.tenant_id, req.params.id, req.user.email, req.user.email, amount]
+  );
+
+  await pool.query(
+    "UPDATE capital_raises SET raised_amount = (SELECT COALESCE(SUM(amount),0) FROM investors WHERE raise_id=$1 AND status='committed') WHERE id=$1",
+    [req.params.id]
+  );
+
+  res.status(201).json({ ...invRows[0], equity_pct: equityPct });
+});
+
 // GET /api/capital/raises/:id
 router.get("/raises/:id", authenticate, async (req, res) => {
   const { rows: raiseRows } = await pool.query(

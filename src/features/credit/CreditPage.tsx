@@ -44,14 +44,16 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,        setTab]        = useState<"overview" | "apply" | "loans" | "notyet">("overview");
-  const [amount,     setAmount]     = useState("");
-  const [term,       setTerm]       = useState("24");
-  const [purpose,    setPurpose]    = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [showKfs,    setShowKfs]    = useState<string | null>(null);
-  const [expandRepay, setExpandRepay] = useState<string | null>(null);
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet">("overview");
+  const [amount,       setAmount]       = useState("");
+  const [term,         setTerm]         = useState("24");
+  const [purpose,      setPurpose]      = useState("");
+  const [submitting,   setSubmitting]   = useState(false);
+  const [showKfs,      setShowKfs]      = useState<string | null>(null);
+  const [expandRepay,  setExpandRepay]  = useState<string | null>(null);
   const [payoffMonths, setPayoffMonths] = useState<Record<string, number>>({});
+  const [payingLoan,   setPayingLoan]   = useState<string | null>(null);
+  const [payAmt,       setPayAmt]       = useState("");
 
   const bestApp   = creditApplications.find(a => a.status === "approved");
   const bestScore = Math.max(0, ...creditApplications.map(a => a.underwritingScore));
@@ -328,6 +330,41 @@ export default function CreditPage() {
                     </div>
                     <span className="font-bold">{formatCurrency(loan.nextPaymentAmount)}</span>
                   </div>
+
+                  {/* Record payment */}
+                  {payingLoan === loan.id ? (
+                    <div className="flex items-center gap-2 mb-2">
+                      <input type="number" min="1" placeholder={`EMI: ₹${Math.round(loan.monthlyEmi).toLocaleString("en-IN")}`}
+                        value={payAmt} onChange={e => setPayAmt(e.target.value)}
+                        className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                      <button
+                        disabled={!payAmt}
+                        onClick={async () => {
+                          const paid = Number(payAmt);
+                          if (!paid) return;
+                          try {
+                            await api.post(`/api/credit/loans/${loan.id}/payment`, { amount: paid });
+                            const next = new Date(loan.nextPaymentDate);
+                            next.setMonth(next.getMonth() + 1);
+                            updateActiveLoan({ ...loan, outstanding: Math.max(0, loan.outstanding - paid), nextPaymentDate: next.toISOString().split("T")[0] });
+                            toast.success("Payment recorded");
+                          } catch { toast.error("Failed to record payment"); }
+                          setPayingLoan(null); setPayAmt("");
+                        }}
+                        className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-40">
+                        Confirm
+                      </button>
+                      <button onClick={() => { setPayingLoan(null); setPayAmt(""); }}
+                        className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] px-2 py-1.5 rounded-lg hover:bg-[var(--color-accent)]">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setPayingLoan(loan.id); setPayAmt(String(Math.round(loan.monthlyEmi))); }}
+                      className="flex items-center gap-1.5 text-xs text-green-400 hover:underline mb-2">
+                      Record Payment
+                    </button>
+                  )}
 
                   {/* Repayment slider */}
                   <button onClick={() => setExpandRepay(expanded ? null : loan.id)}

@@ -132,6 +132,34 @@ router.get("/loans", authenticate, async (req, res) => {
   res.json(rows);
 });
 
+// POST /api/credit/loans/:id/payment — record a repayment
+router.post("/loans/:id/payment", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Positive amount required" });
+
+  const { rows } = await pool.query(
+    "SELECT * FROM active_loans WHERE id=$1 AND tenant_id=$2",
+    [req.params.id, req.user.tenant_id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Loan not found" });
+
+  const loan = rows[0];
+  const paid        = Number(amount);
+  const newOutstanding = Math.max(0, Number(loan.outstanding_balance) - paid);
+  const newRepaid   = Number(loan.total_repaid) + paid;
+  const nextPayment = new Date(loan.next_payment_at ?? Date.now());
+  nextPayment.setMonth(nextPayment.getMonth() + 1);
+  const newStatus   = newOutstanding === 0 ? "paid_off" : "current";
+
+  const { rows: updated } = await pool.query(
+    `UPDATE active_loans
+     SET outstanding_balance=$1, total_repaid=$2, next_payment_at=$3, status=$4
+     WHERE id=$5 AND tenant_id=$6 RETURNING *`,
+    [newOutstanding, newRepaid, nextPayment.toISOString(), newStatus, req.params.id, req.user.tenant_id]
+  );
+  res.json(updated[0]);
+});
+
 // GET /api/credit/score — current underwriting score (no application created)
 router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const result = await underwrite(req.user.tenant_id, pool);
