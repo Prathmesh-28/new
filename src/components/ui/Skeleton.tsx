@@ -8,7 +8,7 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function StatCardSkeleton() {
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-4 w-4 rounded-full" />
@@ -32,7 +32,7 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
 
 export function ChartSkeleton() {
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
       <Skeleton className="h-4 w-48 mb-6" />
       <div className="flex items-end gap-1 h-[220px]">
         {Array.from({ length: 30 }).map((_, i) => (

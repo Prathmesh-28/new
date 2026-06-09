@@ -110,7 +110,13 @@
       "Bash(git -C /Users/prathmeshwalimbe/Downloads/new push origin main)",
       "Bash(npx vite *)",
       "Bash(node ./node_modules/typescript/bin/tsc -b)",
-      "Bash(node ./node_modules/vite/bin/vite.js build)"
+      "Bash(node ./node_modules/vite/bin/vite.js build)",
+      "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/lib/digest.js)",
+      "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/lib/whatsapp.js)",
+      "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/routes/whatsapp.js)",
+      "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/lib/cfo_brief.js)",
+      "Bash(xargs sed -i '' 's/rounded-xl/rounded-lg/g')",
+      "Bash(xargs sed -i '' 's/rounded-2xl/rounded-xl/g')"
     ]
   }
 }

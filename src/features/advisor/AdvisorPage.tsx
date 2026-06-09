@@ -115,7 +115,7 @@ export default function AdvisorPage() {
 
       {/* Add client form */}
       {showForm && (
-        <form onSubmit={handleLink} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+        <form onSubmit={handleLink} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Add Client</h2>
             <button type="button" onClick={() => setShowForm(false)}><X size={16} className="text-[var(--color-muted)]" /></button>
@@ -156,7 +156,7 @@ export default function AdvisorPage() {
             { label: "Active Alerts",   value: alerts.filter(a => a.severity !== "low").length.toString() },
             { label: "Pre-qualified",   value: clients.filter(c => c.credit_prequalified).length.toString() },
           ].map(({ label, value }) => (
-            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
               <p className="text-xl font-bold text-[var(--color-primary)]">{value}</p>
             </div>
@@ -166,13 +166,13 @@ export default function AdvisorPage() {
 
       {/* Empty state */}
       {!loading && clients.length === 0 && (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Users size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No clients yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             Add your first client using their Tenant ID from Settings. You'll get live cash view, runway alerts, and credit signals for every client.
           </p>
-          <button onClick={() => setShowForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">
+          <button onClick={() => setShowForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
             Add First Client
           </button>
         </div>
@@ -223,7 +223,7 @@ export default function AdvisorPage() {
             <div className="text-center py-10 text-sm text-[var(--color-muted)]">No active alerts across your portfolio.</div>
           ) : (
             alerts.map(a => (
-              <div key={a.id} className={`rounded-xl px-4 py-3 border ${SEV_COLOR[a.severity]}`}>
+              <div key={a.id} className={`rounded-lg px-4 py-3 border ${SEV_COLOR[a.severity]}`}>
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider">{a.severity} · {a.client_label}</span>
                   <span className="text-[10px] text-[var(--color-muted)]">{new Date(a.created_at).toLocaleDateString("en-IN")}</span>
@@ -244,7 +244,7 @@ function ClientCard({ client, onUnlink, onNavigate }: {
   onNavigate: () => void;
 }) {
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">

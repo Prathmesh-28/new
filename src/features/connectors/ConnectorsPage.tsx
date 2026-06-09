@@ -148,7 +148,7 @@ export default function ConnectorsPage() {
             { label: "Pending",   value: connectors.filter(c => c.status === "pending").length },
             { label: "Total",     value: connectors.length },
           ].map(({ label, value }) => (
-            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
               <p className="text-xl font-bold text-[var(--color-primary)]">{value}</p>
             </div>
@@ -164,7 +164,7 @@ export default function ConnectorsPage() {
             const ui = STATUS_UI[c.status];
             const Icon = ui.icon;
             return (
-              <div key={c.id} className={`flex items-center justify-between p-4 rounded-xl border ${ui.bg || "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
+              <div key={c.id} className={`flex items-center justify-between p-4 rounded-lg border ${ui.bg || "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{PROVIDERS.find(p => p.id === c.provider)?.icon ?? "🔌"}</span>
                   <div>
@@ -197,7 +197,7 @@ export default function ConnectorsPage() {
       {/* Setup modal */}
       {setupFor && setupProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">{setupProvider.icon} {setupProvider.name}</h2>
               <button onClick={() => setSetupFor(null)}><X size={18} className="text-[var(--color-muted)]" /></button>
@@ -214,10 +214,10 @@ export default function ConnectorsPage() {
               ))}
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={handleSave} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">
+              <button onClick={handleSave} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
                 {setupFor === "aa_network" ? "Start Consent" : setupFor === "finbox" ? "Continue to Upload" : "Connect"}
               </button>
-              <button onClick={() => setSetupFor(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-xl">Cancel</button>
+              <button onClick={() => setSetupFor(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
             </div>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function ConnectorsPage() {
             const ui = existing ? STATUS_UI[existing.status] : null;
             const Icon = ui?.icon;
             return (
-              <div key={p.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 flex items-start gap-4">
+              <div key={p.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-start gap-4">
                 <span className="text-2xl mt-0.5">{p.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -262,7 +262,7 @@ export default function ConnectorsPage() {
       </div>
 
       {/* AA Network explainer */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold mb-2">🇮🇳 About Account Aggregator (AA Network)</h3>
         <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-3">
           The AA Network is India's RBI-mandated open banking framework. It lets you securely share bank statement data with Headroom via a one-time consent — no credentials or passwords shared. Supported by all major Indian banks including HDFC, ICICI, SBI, Axis, Kotak, and Yes Bank.

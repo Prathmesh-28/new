@@ -157,7 +157,7 @@ export default function OperationsPage() {
               { label: "Inventory Value",      value: formatCurrency(totalInventoryVal), icon: Package,        color: "text-blue-400" },
               { label: "Low Stock Alerts",     value: lowStockItems.length.toString(),   icon: AlertTriangle,  color: "text-red-400" },
             ].map(({ label, value, icon: Icon, color }) => (
-              <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+              <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-[var(--color-muted)]">{label}</p>
                   <Icon size={14} className={color} />
@@ -168,9 +168,9 @@ export default function OperationsPage() {
           </div>
 
           {/* WhatsApp integration card */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 bg-green-900/30 rounded-lg flex items-center justify-center shrink-0">
                 <MessageCircle size={20} className="text-green-400" />
               </div>
               <div className="flex-1">
@@ -199,7 +199,7 @@ export default function OperationsPage() {
 
           {/* Recent orders preview */}
           {orders.length > 0 && (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <h3 className="text-sm font-semibold mb-3">Recent Orders</h3>
               <div className="space-y-2">
                 {orders.slice(0, 5).map(o => (
@@ -233,7 +233,7 @@ export default function OperationsPage() {
           </div>
 
           {showOrderForm && (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">New Order</h2>
                 <button onClick={() => setShowOrderForm(false)}><X size={16} className="text-[var(--color-muted)]" /></button>
@@ -266,13 +266,13 @@ export default function OperationsPage() {
           )}
 
           {orders.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <ShoppingCart size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
               <p className="text-sm text-[var(--color-muted)] mb-4">No orders yet. Add manually or connect WhatsApp to capture them automatically.</p>
-              <button onClick={() => setShowOrderForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">Add First Order</button>
+              <button onClick={() => setShowOrderForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Add First Order</button>
             </div>
           ) : (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
@@ -323,7 +323,7 @@ export default function OperationsPage() {
           </div>
 
           {showInvForm && (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Add Product</h2>
                 <button onClick={() => setShowInvForm(false)}><X size={16} className="text-[var(--color-muted)]" /></button>
@@ -343,13 +343,13 @@ export default function OperationsPage() {
           )}
 
           {inventory.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
               <p className="text-sm text-[var(--color-muted)] mb-4">No products yet. Add SKUs to track stock levels and get low-inventory alerts.</p>
-              <button onClick={() => setShowInvForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">Add First Product</button>
+              <button onClick={() => setShowInvForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Add First Product</button>
             </div>
           ) : (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
               <table className="w-full text-sm min-w-[560px]">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
@@ -401,7 +401,7 @@ export default function OperationsPage() {
 
           {/* Low-stock suggestions */}
           {lowStockItems.length > 0 && (
-            <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
+            <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg p-4">
               <h3 className="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><AlertTriangle size={11} /> AI Procurement Suggestions</h3>
               <div className="space-y-2">
                 {lowStockItems.map(item => (
@@ -422,7 +422,7 @@ export default function OperationsPage() {
           )}
 
           {showPoForm && (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Create Purchase Order</h2>
                 <button onClick={() => setShowPoForm(false)}><X size={16} className="text-[var(--color-muted)]" /></button>
@@ -440,15 +440,15 @@ export default function OperationsPage() {
           )}
 
           {procurement.length === 0 && !showPoForm ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <Truck size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
               <p className="text-sm text-[var(--color-muted)] mb-4">No purchase orders yet. Add inventory items first and Headroom will auto-suggest POs when stock is low.</p>
-              <button onClick={() => setShowPoForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">Create First PO</button>
+              <button onClick={() => setShowPoForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Create First PO</button>
             </div>
           ) : (
             <div className="space-y-3">
               {procurement.map((po: ProcurementOrder) => (
-                <div key={po.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div key={po.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm font-semibold">{po.supplierName}</p>
                     <span className={`text-xs font-semibold ${PO_STATUS_COLOR[po.status]}`}>{po.status}</span>
@@ -485,7 +485,7 @@ export default function OperationsPage() {
             ))}
           </div>
 
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 md:p-6">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold">Demand Signal Propagation</h3>
@@ -532,7 +532,7 @@ export default function OperationsPage() {
               { icon: "🔮", title: "Demand forecasting", desc: "ML model spots pattern shifts 4–6 weeks early and drafts procurement before shelves go dry." },
               { icon: "🤝", title: "Shared intelligence", desc: "Every partner in your chain sees demand signals simultaneously — eliminating the bullwhip." },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+              <div key={title} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <span className="text-2xl">{icon}</span>
                 <h3 className="text-sm font-semibold mt-2 mb-1">{title}</h3>
                 <p className="text-xs text-[var(--color-muted)] leading-relaxed">{desc}</p>
@@ -541,13 +541,13 @@ export default function OperationsPage() {
           </div>
 
           {/* Supply chain flow */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <h3 className="text-sm font-semibold mb-4">Intelligent Data Sharing Layer</h3>
             <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
               {["Supplier", "Manufacturer", "Distributor", "Wholesaler", "Retailer", "Consumer"].map((tier, i, arr) => (
                 <div key={tier} className="flex items-center gap-2 shrink-0">
                   <div className="text-center">
-                    <div className="w-14 h-14 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-xl flex items-center justify-center text-xs font-semibold">
+                    <div className="w-14 h-14 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg flex items-center justify-center text-xs font-semibold">
                       {tier.slice(0, 4)}
                     </div>
                     <p className="text-[10px] text-[var(--color-muted)] mt-1">{tier}</p>

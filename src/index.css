@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  /* App dashboard colours */
-  --color-primary: #C9A227;
-  --color-primary-light: #e0b830;
-  --color-accent: #3a3820;
-  --color-bg: #131310;
-  --color-surface: #1e1e14;
-  --color-border: #2e2e1a;
-  --color-text: #f0ead6;
-  --color-muted: #8a8060;
+  /* App dashboard — professional finance palette */
+  --color-primary:       #1A6B55;
+  --color-primary-light: #22875F;
+  --color-accent:        #1A2A24;
+  --color-bg:            #0D1117;
+  --color-surface:       #161B22;
+  --color-border:        #21262D;
+  --color-text:          #E6EDF3;
+  --color-muted:         #7D8590;
 
-  /* Olive marketing palette (homepage) */
+  /* Olive marketing palette (homepage only) */
   --ol-deepest: #1C2209;
   --ol-deep:    #2E3A10;
   --ol-mid:     #4A5E1A;
@@ -33,9 +33,15 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1;
+}
+
+/* Tabular numbers for all financial data */
+td, th, .tabular-nums, [data-numeric] {
+  font-feature-settings: "tnum" 1, "kern" 1;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

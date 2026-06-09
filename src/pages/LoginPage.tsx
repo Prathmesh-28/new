@@ -92,7 +92,7 @@ export default function LoginPage() {
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
                 required autoFocus placeholder="you@company.com"
-                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />
             </div>
             <div>
@@ -102,12 +102,12 @@ export default function LoginPage() {
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
                 required placeholder="••••••••"
-                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />
             </div>
 
             {error && (
-              <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-xl px-4 py-3 flex items-center gap-2">
+              <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-4 py-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                 {error}
               </div>
@@ -121,7 +121,7 @@ export default function LoginPage() {
 
             <button
               type="submit" disabled={loading}
-              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-xl py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
+              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-lg py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -142,7 +142,7 @@ export default function LoginPage() {
             <Link to="/signup-advisor" className="text-[var(--color-primary)] hover:underline font-medium">Join as an advisor →</Link>
           </p>
 
-          <p className="text-center text-xs text-[var(--color-muted)] mt-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3">
+          <p className="text-center text-xs text-[var(--color-muted)] mt-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3">
             Demo: <span className="text-[var(--color-primary)] font-medium">admin@headroom.app</span><br />
             Password: <span className="text-[var(--color-primary)] font-medium">Headroom@2024</span>
           </p>

@@ -126,7 +126,7 @@ export default function CreditPage() {
     <div className="space-y-5">
       {/* Proactive CTA when runway < 45d */}
       {showCta && (
-        <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-5 py-4">
+        <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg px-5 py-4">
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1">
@@ -171,7 +171,7 @@ export default function CreditPage() {
               { label: "Max Approved",  value: bestApp ? formatCurrency(bestApp.approvedAmount) : "—", color: "text-[var(--color-primary)]" },
               { label: "Active Loans",  value: activeLoans.length.toString(), color: "text-[var(--color-text)]" },
             ].map(({ label, value, color }) => (
-              <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+              <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
                 <p className={`text-xl font-bold ${color}`}>{value}</p>
               </div>
@@ -184,7 +184,7 @@ export default function CreditPage() {
               <h2 className="text-sm font-semibold mb-3">Your Pre-Qualified Offers</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {tierOffers.map(t => (
-                  <div key={t.tier} className={`rounded-xl border p-4 relative ${t.color}`}>
+                  <div key={t.tier} className={`rounded-lg border p-4 relative ${t.color}`}>
                     {t.recommended && (
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-[var(--color-primary)] text-[var(--color-bg)] px-2 py-0.5 rounded-full uppercase tracking-wide">
                         Recommended
@@ -212,16 +212,16 @@ export default function CreditPage() {
               </p>
             </div>
           ) : (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <CreditCard size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
               <h2 className="text-base font-semibold mb-1">No offers yet</h2>
               <p className="text-sm text-[var(--color-muted)] mb-4 max-w-sm mx-auto">Complete an application to see your pre-qualified offers. The engine scores your business instantly based on 9 signals.</p>
-              <button onClick={() => setTab("apply")} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">Apply Now</button>
+              <button onClick={() => setTab("apply")} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Apply Now</button>
             </div>
           )}
 
           {/* Score factors */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <h3 className="text-sm font-semibold mb-3">How your score is computed</h3>
             <div className="space-y-2">
               {SCORE_FACTORS.map(f => (
@@ -242,7 +242,7 @@ export default function CreditPage() {
       {tab === "apply" && (
         <div className="space-y-4 max-w-lg">
           <p className="text-sm text-[var(--color-muted)]">Our engine scores your business instantly using live bank data. No documents needed for the pre-qualification.</p>
-          <div className="space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div className="space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">How much do you need? (₹)</label>
               <input type="number" min="100000" placeholder="e.g. 2500000" value={amount} onChange={e => setAmount(e.target.value)}
@@ -264,14 +264,14 @@ export default function CreditPage() {
               </select>
             </div>
             <button onClick={handleSubmit} disabled={submitting}
-              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-3 rounded-xl text-sm hover:opacity-90 disabled:opacity-40">
+              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-3 rounded-lg text-sm hover:opacity-90 disabled:opacity-40">
               {submitting ? "Underwriting in progress…" : "Get Pre-Qualified Offers"}
             </button>
             <p className="text-[11px] text-[var(--color-muted)] text-center">No hard CIBIL pull · Decision in under 60 seconds</p>
           </div>
 
           {/* Hardship plans */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <h3 className="text-sm font-semibold mb-2">Hardship protection included</h3>
             <div className="space-y-2">
               {HARDSHIP_PLANS.map(h => (
@@ -293,7 +293,7 @@ export default function CreditPage() {
       {tab === "loans" && (
         <div className="space-y-4">
           {activeLoans.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center text-sm text-[var(--color-muted)]">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center text-sm text-[var(--color-muted)]">
               No active loans. Accept an offer from the Overview tab to start tracking repayments here.
             </div>
           ) : (
@@ -305,7 +305,7 @@ export default function CreditPage() {
               const expanded = expandRepay === loan.id;
 
               return (
-                <div key={loan.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div key={loan.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-sm font-semibold">{loan.lender}</p>
@@ -373,7 +373,7 @@ export default function CreditPage() {
                   </button>
 
                   {expanded && (
-                    <div className="bg-[var(--color-bg)] rounded-xl p-3 border border-[var(--color-border)] space-y-3">
+                    <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)] space-y-3">
                       <div>
                         <label className="text-xs text-[var(--color-muted)] block mb-1">Pay off in (months)</label>
                         <div className="flex items-center gap-3">
@@ -407,7 +407,7 @@ export default function CreditPage() {
       {/* ── NOT YET ── */}
       {tab === "notyet" && (
         <div className="space-y-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="flex items-start gap-3 mb-4">
               <Clock size={18} className="text-yellow-400 shrink-0 mt-0.5" />
               <div>
@@ -443,7 +443,7 @@ export default function CreditPage() {
             )}
           </div>
 
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <h3 className="text-sm font-semibold mb-3">Auto re-check in 30 days</h3>
             <p className="text-sm text-[var(--color-muted)] mb-3">
               Headroom re-runs your underwriting every 30 days automatically. You'll get an immediate notification as soon as you qualify.
@@ -474,14 +474,14 @@ export default function CreditPage() {
       {/* KFS modal */}
       {showKfs && tierOffers && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
             {(() => {
               const t = tierOffers.find(x => x.tier === showKfs)!;
               return (
                 <>
                   <h2 className="text-base font-bold mb-1">Key Facts Statement (KFS)</h2>
                   <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 — mandatory disclosure</p>
-                  <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-xl p-4 border border-[var(--color-border)] mb-4">
+                  <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)] mb-4">
                     {[
                       ["Lender",               "Lendingkart Finance Ltd"],
                       ["Loan amount",          formatCurrency(t.principal)],
@@ -499,10 +499,10 @@ export default function CreditPage() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleAcceptTier(t)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">
+                    <button onClick={() => handleAcceptTier(t)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
                       I acknowledge — Accept Loan
                     </button>
-                    <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-xl">Cancel</button>
+                    <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
                   </div>
                 </>
               );

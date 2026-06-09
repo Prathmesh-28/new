@@ -103,7 +103,7 @@ export default function InvestorPage() {
           { label: "Active Raises",    value: activeRaises.toString(),        icon: TrendingUp },
           { label: "Investments",      value: myInvestments.length.toString(),icon: Users },
         ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-[var(--color-muted)]">{label}</p>
               <Icon size={14} className="text-[var(--color-primary)] opacity-60" />
@@ -122,7 +122,7 @@ export default function InvestorPage() {
               const inv = myInvestments.find(i => i.raiseId === raise.id)!;
               const pct = raise.targetAmount > 0 ? Math.min(100, (raise.raisedAmount / raise.targetAmount) * 100) : 0;
               return (
-                <div key={raise.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div key={raise.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${TRACK_COLOR[raise.track]}`}>
@@ -150,7 +150,7 @@ export default function InvestorPage() {
           </div>
         </div>
       ) : (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-8 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-8 text-center">
           <Briefcase size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
           <h2 className="text-base font-semibold mb-1">No investments yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-4 max-w-xs mx-auto">
@@ -175,7 +175,7 @@ export default function InvestorPage() {
             <div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : publicRaises.length === 0 ? (
-          <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+          <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
             <Rocket size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
             <p className="text-sm text-[var(--color-muted)]">No active raises at the moment. Check back soon.</p>
           </div>
@@ -186,7 +186,7 @@ export default function InvestorPage() {
               const alreadyCommitted = capitalInvestments.some(i => i.raiseId === r.id && i.investorEmail === user.email);
               const trackKey = r.raise_type;
               return (
-                <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="text-sm font-semibold mb-1">{r.name}</p>
@@ -231,7 +231,7 @@ export default function InvestorPage() {
           { track: "reg_cf"    as const, icon: "📄", desc: "Equity crowdfunding. Up to ₹50Cr per year under SEBI framework." },
           { track: "reg_a_plus"as const, icon: "🚀", desc: "Public mini-IPO. Shares tradeable. Full compliance layer." },
         ].map(({ track, icon, desc }) => (
-          <div key={track} className="rounded-xl p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div key={track} className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
             <span className="text-xl">{icon}</span>
             <p className="text-xs font-semibold mt-2 mb-1">{TRACK_LABEL[track]}</p>
             <p className="text-xs text-[var(--color-muted)]">{desc}</p>
@@ -242,7 +242,7 @@ export default function InvestorPage() {
       {/* Express Interest modal */}
       {commitRaise && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-md space-y-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold">Express Interest</h2>
               <button onClick={() => setCommitRaise(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
@@ -250,7 +250,7 @@ export default function InvestorPage() {
               </button>
             </div>
 
-            <div className="bg-[var(--color-bg)] rounded-xl p-3">
+            <div className="bg-[var(--color-bg)] rounded-lg p-3">
               <p className="text-xs text-[var(--color-muted)] mb-0.5">Raise</p>
               <p className="text-sm font-semibold">{commitRaise.name}</p>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${TRACK_COLOR[commitRaise.raise_type] ?? ""}`}>
@@ -268,7 +268,7 @@ export default function InvestorPage() {
             </div>
 
             {commitAmount && Number(commitAmount) > 0 && (
-              <div className="bg-[var(--color-accent)] rounded-xl p-3 text-xs">
+              <div className="bg-[var(--color-accent)] rounded-lg p-3 text-xs">
                 <p className="text-[var(--color-muted)] mb-0.5">Estimated ownership</p>
                 <p className="text-2xl font-bold text-[var(--color-primary)]">
                   {((Number(commitAmount) / commitRaise.target_amount) * 100).toFixed(3)}%
@@ -290,11 +290,11 @@ export default function InvestorPage() {
 
             <div className="flex gap-2">
               <button onClick={handleCommit} disabled={!commitAmount || !agreed || committing}
-                className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90 disabled:opacity-40">
+                className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-40">
                 {committing ? "Committing…" : "Confirm Interest"}
               </button>
               <button onClick={() => setCommitRaise(null)}
-                className="px-4 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-accent)]">
+                className="px-4 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-lg hover:bg-[var(--color-accent)]">
                 Cancel
               </button>
             </div>

@@ -101,7 +101,7 @@ export default function AdminPage() {
             { label: "Capital Raises", value: capitalRaises.length.toString() },
             { label: "Bank Accounts",  value: bankAccounts.length.toString() },
           ].map(({ label, value }) => (
-            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
               <p className="text-lg font-bold text-[var(--color-primary)]">{value}</p>
             </div>
@@ -118,7 +118,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--color-muted)]">No users found.</p>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
             <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
@@ -156,7 +156,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--color-muted)]">No tenants data — endpoint may not be configured yet.</p>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
             <table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
@@ -187,7 +187,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--color-muted)]">No transactions yet.</p>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
@@ -225,7 +225,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--color-muted)]">No alerts.</p>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">

@@ -68,14 +68,14 @@ export default function CapitalPage() {
 
       {/* Empty state */}
       {capitalRaises.length === 0 && !showRaiseForm && (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Rocket size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No capital raises yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             Choose a fundraising track — Revenue Share, Reg CF equity, or Reg A+ Mini-IPO — and start accepting investors.
           </p>
           <button onClick={() => setShowRaiseForm(true)}
-            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">
+            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
             Start a Capital Raise
           </button>
         </div>
@@ -89,7 +89,7 @@ export default function CapitalPage() {
             { label: "Total Raised",    value: formatCurrency(totalRaised) },
             { label: "Total Investors", value: capitalInvestments.length.toString() },
           ].map(({ label, value }) => (
-            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
               <p className="text-xl font-bold text-[var(--color-primary)]">{value}</p>
             </div>
@@ -99,7 +99,7 @@ export default function CapitalPage() {
 
       {/* New raise form */}
       {showRaiseForm && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <h2 className="text-sm font-semibold">New Capital Raise</h2>
           <select value={track} onChange={e => setTrack(e.target.value as CapitalRaise["track"])}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
@@ -120,7 +120,7 @@ export default function CapitalPage() {
           const pct = r.targetAmount > 0 ? Math.min(100, (r.raisedAmount / r.targetAmount) * 100) : 0;
           const investors = capitalInvestments.filter(i => i.raiseId === r.id);
           return (
-            <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mr-2 ${STATUS_COLOR[r.status]}`}>{r.status}</span>

@@ -167,7 +167,7 @@ export default function SettingsPage() {
       <h1 className="text-xl font-bold">Settings</h1>
 
       {/* Team Members */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-sm font-semibold">Team Members</h2>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
         </div>
 
         {showForm && (
-          <form onSubmit={handleInvite} className="mb-6 p-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl space-y-3">
+          <form onSubmit={handleInvite} className="mb-6 p-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg space-y-3">
             <h3 className="text-sm font-semibold">Invite Team Member</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input
@@ -257,7 +257,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Business profile */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <h2 className="text-sm font-semibold mb-1">Business Profile</h2>
         <p className="text-xs text-[var(--color-muted)] mb-5">Used in credit underwriting and advisor reports.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -296,7 +296,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tenant ID card */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <h2 className="text-sm font-semibold mb-1">Your Tenant ID</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">Share this with your CA, CFO, or banker so they can link your account to their Advisor Portal and get live cash visibility.</p>
         <div className="flex items-center gap-3">
@@ -315,7 +315,7 @@ export default function SettingsPage() {
       </div>
 
       {/* GST */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <h2 className="text-sm font-semibold mb-1">GST Settings</h2>
         <p className="text-xs text-[var(--color-muted)] mb-5">
           Used to estimate your monthly GSTR-3B liability from revenue transactions and surface it in the tax calendar and forecast.
@@ -368,7 +368,7 @@ export default function SettingsPage() {
       </div>
 
       {/* WhatsApp */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <div className="flex items-center gap-2 mb-1">
           <MessageCircle size={15} className="text-green-400" />
           <h2 className="text-sm font-semibold">WhatsApp Alerts</h2>
@@ -383,7 +383,7 @@ export default function SettingsPage() {
             Checking status…
           </div>
         ) : waRegistered ? (
-          <div className="flex items-center justify-between gap-4 p-4 bg-green-950/20 border border-green-800/30 rounded-xl">
+          <div className="flex items-center justify-between gap-4 p-4 bg-green-950/20 border border-green-800/30 rounded-lg">
             <div className="flex items-center gap-3">
               <CheckCircle2 size={16} className="text-green-400 shrink-0" />
               <div>
@@ -433,7 +433,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Role reference */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <h2 className="text-sm font-semibold mb-4">Role Permissions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
@@ -442,7 +442,7 @@ export default function SettingsPage() {
             { r: "investor",    label: "Investor / Banker",      perms: ["Investor portfolio", "Live raises marketplace"] },
             { r: "super_admin", label: "Super Admin",            perms: ["All tabs", "All tenants", "Admin panel", "Connectors"] },
           ].map(({ r, label, perms }) => (
-            <div key={r} className="border border-[var(--color-border)] rounded-xl p-4">
+            <div key={r} className="border border-[var(--color-border)] rounded-lg p-4">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${ROLE_BADGE[r] ?? ""}`}>
                 {ROLE_LABEL[r]}
               </span>

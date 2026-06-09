@@ -143,7 +143,7 @@ export default function TransactionsPage() {
       </div>
 
       {showFilters && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
             <select value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}
@@ -189,11 +189,11 @@ export default function TransactionsPage() {
 
       {/* Transaction list */}
       {filtered.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center text-sm text-[var(--color-muted)]">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center text-sm text-[var(--color-muted)]">
           {transactions.length === 0 ? "No transactions yet. Add an account and import transactions from the Dashboard." : "No transactions match your filters."}
         </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl divide-y divide-[var(--color-border)]">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
           {paginated.map(t => {
             const unusual = isUnusual(t);
             const acct = bankAccounts.find(a => a.id === t.bankAccountId);

@@ -35,7 +35,7 @@ export default function SetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] px-6">
       <div className="w-full max-w-sm">
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8">
           <div className="mb-8">
             <span className="text-xl font-bold">Head<span className="text-[var(--color-primary)]">room</span></span>
             <h1 className="text-2xl font-bold mt-6 mb-1">Set your password</h1>
@@ -52,7 +52,7 @@ export default function SetPasswordPage() {
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
                 required minLength={8} autoFocus placeholder="At least 8 characters"
-                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               />
             </div>
             <div>
@@ -62,12 +62,12 @@ export default function SetPasswordPage() {
               <input
                 type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
                 required placeholder="Repeat password"
-                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               />
             </div>
             <button
               type="submit" disabled={loading}
-              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-xl py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
+              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-lg py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
             >
               {loading
                 ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-[var(--color-bg)] border-t-transparent rounded-full animate-spin" />Setting password…</span>

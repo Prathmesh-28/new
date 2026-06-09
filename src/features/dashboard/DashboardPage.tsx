@@ -10,10 +10,10 @@ import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
 
 const SEV_COLOR: Record<string, string> = {
-  critical: "text-red-400 border-red-800/40 bg-red-950/20",
-  high:     "text-orange-400 border-orange-800/40 bg-orange-950/20",
-  medium:   "text-yellow-400 border-yellow-800/40 bg-yellow-950/20",
-  low:      "text-green-400 border-green-800/40 bg-green-950/20",
+  critical: "text-red-400 border-red-700/60 bg-red-900/40",
+  high:     "text-orange-400 border-orange-700/50 bg-orange-900/30",
+  medium:   "text-yellow-400 border-yellow-700/50 bg-yellow-900/30",
+  low:      "text-green-400 border-green-700/50 bg-green-900/25",
 };
 
 // Indian tax calendar: compute next 4 upcoming statutory dates
@@ -51,14 +51,14 @@ function StatCard({ label, raw, display, icon: Icon, color, trend }: {
   const animated = useCountUp(raw, 900);
   const isFormatted = display.includes("₹") || display.includes("days");
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 hover:border-[var(--color-primary)]/30 transition-all">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-primary)]/30 transition-all">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-[var(--color-muted)] font-medium">{label}</span>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-current/5 ${color}`}>
           <Icon size={14} />
         </div>
       </div>
-      <p className={`text-2xl font-bold tabular-nums ${color}`}>
+      <p className="text-2xl font-semibold tabular-nums text-[var(--color-text)]">
         {isFormatted ? display : animated.toLocaleString()}
       </p>
       {trend && (
@@ -87,20 +87,20 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm">
         <h2 className="text-base font-bold mb-4">Add Bank Account</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <input required value={name} onChange={e => setName(e.target.value)} placeholder="Account name (e.g. HDFC Current)"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
           <input required type="number" min="0" value={balance} onChange={e => setBalance(e.target.value)} placeholder="Current balance (₹)"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
           <select value={provider} onChange={e => setProvider(e.target.value)}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none">
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none">
             {["Manual", "HDFC", "ICICI", "SBI", "Axis", "Kotak", "Yes Bank", "Razorpay", "Stripe"].map(p => <option key={p}>{p}</option>)}
           </select>
           <div className="flex gap-2 pt-1">
-            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">Add Account</button>
-            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-xl">Cancel</button>
+            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">Add Account</button>
+            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
           </div>
         </form>
       </div>
@@ -129,30 +129,30 @@ function AddTransactionModal({ accountId, onClose, onAdd }: { accountId: string;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm">
         <h2 className="text-base font-bold mb-4">Add Transaction</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex gap-2">
             {(["income", "expense"] as const).map(t => (
               <button key={t} type="button" onClick={() => setType(t)}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${type === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${type === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
                 {t === "income" ? "Income +" : "Expense −"}
               </button>
             ))}
           </div>
           <input required value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
           <input required type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
           <select value={category} onChange={e => setCategory(e.target.value)}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none">
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none">
             {["revenue", "expense", "payroll", "tax", "loan", "other"].map(c => <option key={c}>{c}</option>)}
           </select>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm outline-none" />
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none" />
           <div className="flex gap-2 pt-1">
-            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">Add</button>
-            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-xl">Cancel</button>
+            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">Add</button>
+            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
           </div>
         </form>
       </div>
@@ -263,7 +263,7 @@ export default function DashboardPage() {
 
       {/* Onboarding wizard */}
       {showWizard && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-xl p-5">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold">Get started with Headroom</h2>
@@ -288,7 +288,7 @@ export default function DashboardPage() {
                 key={i}
                 onClick={step.done ? undefined : step.action}
                 disabled={step.done}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-all ${
                   step.done
                     ? "border-green-800/30 bg-green-950/10 opacity-60 cursor-default"
                     : "border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-accent)] cursor-pointer"
@@ -318,14 +318,14 @@ export default function DashboardPage() {
 
       {/* Empty state */}
       {isEmpty && (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Building2 size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">Add your first bank account</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-xs mx-auto">
             Connect your accounts to start tracking cash flow, generate forecasts, and get alerts.
           </p>
           <button onClick={() => setShowAddAccount(true)}
-            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">
+            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
             Add Bank Account
           </button>
         </div>
@@ -343,7 +343,7 @@ export default function DashboardPage() {
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (
-            <div className="bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+            <div className="bg-red-900/40 border border-red-700/60 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <AlertTriangle size={16} className="text-red-400 shrink-0" />
                 <p className="text-sm">Your cash runway is <strong className="text-red-400">{runway} days</strong> — balance pressure detected. Act now before it becomes critical.</p>
@@ -357,7 +357,7 @@ export default function DashboardPage() {
 
           {/* Chart */}
           {forecast.length > 0 ? (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 md:p-6">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
               <div className="flex items-center justify-between mb-4 md:mb-6">
                 <div>
                   <h2 className="text-sm font-semibold">60-Day Cash Forecast</h2>
@@ -368,21 +368,21 @@ export default function DashboardPage() {
                 <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="grad50" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#C9A227" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#C9A227" stopOpacity={0} />
+                      <stop offset="5%"  stopColor="#1A6B55" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#1A6B55" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={9} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} width={28} />
-                  <Tooltip contentStyle={{ background: "#1e1e14", border: "1px solid #2e2e1a", borderRadius: 8, fontSize: 11 }} formatter={(v: number) => [`₹${v}L`, ""]} />
-                  <Area type="monotone" dataKey="p90" stroke="#C9A227" strokeWidth={1} strokeDasharray="3 3" fill="#C9A22710" />
-                  <Area type="monotone" dataKey="p50" stroke="#C9A227" strokeWidth={2.5} fill="url(#grad50)" />
-                  <Area type="monotone" dataKey="p10" stroke="#C9A227" strokeWidth={1} strokeDasharray="3 3" fill="transparent" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} interval={9} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
+                  <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}L`, ""]} />
+                  <Area type="monotone" dataKey="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="3 3" fill="#1A6B5510" />
+                  <Area type="monotone" dataKey="p50" stroke="#1A6B55" strokeWidth={2} fill="url(#grad50)" />
+                  <Area type="monotone" dataKey="p10" stroke="#1A6B55" strokeWidth={1} strokeDasharray="3 3" fill="transparent" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-xl p-8 text-center text-sm text-[var(--color-muted)]">
+            <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center text-sm text-[var(--color-muted)]">
               Go to <strong className="text-[var(--color-text)]">Forecast</strong> to generate your 90-day cash projection.
             </div>
           )}
@@ -390,7 +390,7 @@ export default function DashboardPage() {
           {/* Category burn breakdown + inflow vs outflow */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Burn by category */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <h2 className="text-sm font-semibold mb-3">Monthly burn by category</h2>
               {(() => {
                 const cats = ["payroll","expense","loan","tax","transfer"];
@@ -417,7 +417,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Inflow vs Outflow this month vs last */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <h2 className="text-sm font-semibold mb-3">This month vs last month</h2>
               {(() => {
                 const now = new Date();
@@ -461,10 +461,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Customer concentration */}
               {showConcentration && (
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <h2 className="text-sm font-semibold mb-1">Revenue concentration</h2>
                   {topConcentration > 40 && (
-                    <div className="flex items-start gap-2 mb-3 p-2.5 bg-orange-950/20 border border-orange-800/30 rounded-lg">
+                    <div className="flex items-start gap-2 mb-3 p-2.5 bg-orange-900/40 border border-orange-700/50 rounded-md">
                       <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
                       <p className="text-xs text-orange-300">
                         <strong>{topRevenueSources[0].name}</strong> accounts for{" "}
@@ -497,7 +497,7 @@ export default function DashboardPage() {
 
               {/* GST / tax calendar */}
               {taxDates.length > 0 && (
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Calendar size={13} className="text-[var(--color-primary)]" />
                     <h2 className="text-sm font-semibold">Tax calendar</h2>
@@ -542,7 +542,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Bank accounts */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Bank Accounts</h2>
                 <button onClick={() => setShowAddAccount(true)} className="text-xs text-[var(--color-primary)] hover:underline">+ Add</button>
@@ -557,7 +557,7 @@ export default function DashboardPage() {
                           <p className="text-sm font-medium">{a.name}</p>
                           <p className="text-xs text-[var(--color-muted)]">{a.provider}</p>
                         </div>
-                        <span className="text-sm font-bold text-[var(--color-primary)]">{formatCurrency(a.balance)}</span>
+                        <span className="text-sm font-semibold tabular-nums text-[var(--color-text)]">{formatCurrency(a.balance)}</span>
                       </div>
                       <div className="h-1 bg-[var(--color-bg)] rounded-full overflow-hidden">
                         <div className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
@@ -569,7 +569,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Alerts */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Recent Alerts</h2>
                 {unread > 0 && <span className="text-xs bg-orange-950/40 text-orange-400 border border-orange-800/30 px-2 py-0.5 rounded-full">{unread} unread</span>}
@@ -577,7 +577,7 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 {alerts.slice(0, 5).map(a => (
                   <div key={a.id} onClick={() => markAlertRead(a.id)}
-                    className={`text-xs rounded-xl px-3 py-2.5 border cursor-pointer transition-opacity hover:opacity-100 ${SEV_COLOR[a.severity]} ${a.isRead ? "opacity-40" : ""}`}>
+                    className={`text-xs rounded-lg px-3 py-2.5 border cursor-pointer transition-opacity hover:opacity-100 ${SEV_COLOR[a.severity]} ${a.isRead ? "opacity-40" : ""}`}>
                     <div className="flex items-center justify-between">
                       <span className="uppercase font-bold tracking-wider text-[10px]">{a.severity}</span>
                       {!a.isRead && <span className="w-1.5 h-1.5 rounded-full bg-current" />}

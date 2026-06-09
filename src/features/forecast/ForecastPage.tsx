@@ -195,7 +195,7 @@ export default function ForecastPage() {
 
       {/* AI explanation panel */}
       {aiOpen && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 relative">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 relative">
           <button onClick={() => setAiOpen(false)} className="absolute top-3 right-3 text-[var(--color-muted)] hover:text-[var(--color-text)]">
             <X size={14} />
           </button>
@@ -216,14 +216,14 @@ export default function ForecastPage() {
 
       {/* Empty state */}
       {forecast.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <TrendingUp size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No forecast yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-xs mx-auto">
             Add transactions in the Dashboard, then generate your 90-day P10/P50/P90 forecast.
           </p>
           <button onClick={handleGenerate} disabled={generating}
-            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90 disabled:opacity-40">
+            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-40">
             {generating ? "Generating…" : "Generate Forecast"}
           </button>
         </div>
@@ -231,7 +231,7 @@ export default function ForecastPage() {
         <>
           {/* Pressure alert */}
           {pressureDay !== -1 && (
-            <div className="bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+            <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <TrendingUp size={16} className="text-red-400 shrink-0" />
                 <p className="text-sm">P10 scenario goes below zero in <strong className="text-red-400">{pressureDay + 1} days</strong> — downside risk is high.</p>
@@ -244,7 +244,7 @@ export default function ForecastPage() {
           )}
 
           {/* Chart */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 md:p-6">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
             <h2 className="text-sm font-semibold mb-4">90-Day Projection (₹L) · P10 / P50 / P90</h2>
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={chartData}>
@@ -268,7 +268,7 @@ export default function ForecastPage() {
           </div>
 
           {/* Slow month slider */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <h2 className="text-sm font-semibold mb-1">Slow month — what's the worst case?</h2>
             <p className="text-xs text-[var(--color-muted)] mb-3">Drag revenue down and see your P10 impact immediately.</p>
             <div className="flex items-center gap-4">
@@ -293,7 +293,7 @@ export default function ForecastPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Scenarios */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold">Scenarios</h2>
                 <button onClick={() => setShowForm(v => !v)} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-2 py-1 rounded font-semibold hover:opacity-90">
@@ -339,7 +339,7 @@ export default function ForecastPage() {
             </div>
 
             {/* Obligations */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold">Cash Obligations</h2>
                 <button onClick={() => setShowOblForm(v => !v)} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-2 py-1 rounded font-semibold hover:opacity-90">

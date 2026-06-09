@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider } from "@/context/AppContext";
 import { Toaster } from "sonner";
-import Header from "@/components/layout/Header";
+import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
@@ -46,31 +46,34 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
-        <ErrorBoundary>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/set-password"  element={<SetPasswordPage />} />
-              <Route path="/dashboard"     element={<Dashboard />} />
-              <Route path="/transactions"  element={<TransactionsPage />} />
-              <Route path="/alerts"        element={<AlertsPage />} />
-              <Route path="/receivables"   element={<ReceivablesPage />} />
-              <Route path="/forecast"      element={<Forecast />} />
-              <Route path="/credit"        element={<Credit />} />
-              <Route path="/capital"       element={<Capital />} />
-              <Route path="/operations"    element={<Operations />} />
-              <Route path="/advisor"       element={<AdvisorPage />} />
-              <Route path="/investor"      element={<InvestorPage />} />
-              <Route path="/connectors"    element={<ConnectorsPage />} />
-              <Route path="/settings"      element={<SettingsPage />} />
-              <Route path="/admin"         element={<AdminPage />} />
-              <Route path="*"              element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
-        </ErrorBoundary>
-      </main>
+    <div className="flex min-h-screen bg-[var(--color-bg)]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* pt-12 offsets the fixed mobile top bar; no offset needed on md+ */}
+        <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/set-password"  element={<SetPasswordPage />} />
+                <Route path="/dashboard"     element={<Dashboard />} />
+                <Route path="/transactions"  element={<TransactionsPage />} />
+                <Route path="/alerts"        element={<AlertsPage />} />
+                <Route path="/receivables"   element={<ReceivablesPage />} />
+                <Route path="/forecast"      element={<Forecast />} />
+                <Route path="/credit"        element={<Credit />} />
+                <Route path="/capital"       element={<Capital />} />
+                <Route path="/operations"    element={<Operations />} />
+                <Route path="/advisor"       element={<AdvisorPage />} />
+                <Route path="/investor"      element={<InvestorPage />} />
+                <Route path="/connectors"    element={<ConnectorsPage />} />
+                <Route path="/settings"      element={<SettingsPage />} />
+                <Route path="/admin"         element={<AdminPage />} />
+                <Route path="*"              element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
+        </main>
+      </div>
     </div>
   );
 }

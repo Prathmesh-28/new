@@ -115,7 +115,7 @@ export default function TransactionImportModal({ bankAccountId, onClose, onImpor
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold">Import Transactions (CSV)</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={18} /></button>
@@ -124,7 +124,7 @@ export default function TransactionImportModal({ bankAccountId, onClose, onImpor
         {step === "upload" && (
           <div className="flex-1">
             <div onClick={() => fileRef.current?.click()}
-              className="border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-xl p-10 text-center cursor-pointer transition-colors">
+              className="border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-lg p-10 text-center cursor-pointer transition-colors">
               <Upload size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-50" />
               <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
               <p className="text-xs text-[var(--color-muted)]">Required columns: date, amount — optional: description / narration</p>
@@ -186,7 +186,7 @@ export default function TransactionImportModal({ bankAccountId, onClose, onImpor
             <div className="flex gap-2 mt-4">
               <button onClick={() => { setStep("upload"); setRows([]); setErrors([]); }} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg py-2">Back</button>
               <button onClick={handleImport}
-                className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">
+                className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
                 Import {rows.length} Transaction{rows.length === 1 ? "" : "s"}
               </button>
             </div>

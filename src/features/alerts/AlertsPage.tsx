@@ -58,7 +58,7 @@ export default function AlertsPage() {
   const AlertCard = ({ a }: { a: typeof alerts[0] }) => {
     const { color, bg, icon: Icon, label } = SEV[a.severity] ?? SEV.low;
     return (
-      <div className={`rounded-xl border px-4 py-3.5 ${bg}`}>
+      <div className={`rounded-lg border px-4 py-3.5 ${bg}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1">
             <Icon size={15} className={`${color} mt-0.5 shrink-0`} />
@@ -120,7 +120,7 @@ export default function AlertsPage() {
 
       {/* Safety buffer config */}
       {showConfig && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold">Alert Threshold Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -161,7 +161,7 @@ export default function AlertsPage() {
       {tab === "active" && (
         <>
           {active.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400 opacity-50" />
               <h2 className="text-base font-semibold mb-1">All clear</h2>
               <p className="text-sm text-[var(--color-muted)]">No active alerts. The system checks your cash position every 4 hours.</p>
@@ -187,7 +187,7 @@ export default function AlertsPage() {
               {history.map(a => {
                 const { color, bg, label } = SEV[a.severity] ?? SEV.low;
                 return (
-                  <div key={a.id} className={`rounded-xl border px-4 py-3 opacity-60 ${bg}`}>
+                  <div key={a.id} className={`rounded-lg border px-4 py-3 opacity-60 ${bg}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${color}`}>{label}</span>

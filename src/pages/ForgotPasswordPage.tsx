@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
         </Link>
 
         {sent ? (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 text-center">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8 text-center">
             <div className="w-12 h-12 rounded-full bg-green-900/30 flex items-center justify-center mx-auto mb-4">
               <CheckCircle size={22} className="text-green-400" />
             </div>
@@ -51,13 +51,13 @@ export default function ForgotPasswordPage() {
             </p>
             <Link
               to="/login"
-              className="inline-block w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-xl py-3 text-sm hover:opacity-90 text-center"
+              className="inline-block w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-lg py-3 text-sm hover:opacity-90 text-center"
             >
               Go to sign in →
             </Link>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8">
             <h1 className="text-2xl font-bold mb-1">Forgot password?</h1>
             <p className="text-sm text-[var(--color-muted)] mb-8">
               Enter your email and we'll send a one-time password to reset access.
@@ -71,12 +71,12 @@ export default function ForgotPasswordPage() {
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)}
                   required autoFocus placeholder="you@company.com"
-                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
                 />
               </div>
 
               {error && (
-                <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-xl px-4 py-3 flex items-center gap-2">
+                <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-4 py-3 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                   {error}
                 </div>
@@ -84,7 +84,7 @@ export default function ForgotPasswordPage() {
 
               <button
                 type="submit" disabled={loading}
-                className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-xl py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
+                className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-lg py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 mt-2"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">

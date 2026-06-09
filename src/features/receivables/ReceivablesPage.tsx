@@ -57,7 +57,7 @@ function AddInvoiceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (inv:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-md">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold">Add Invoice</h2>
           <button onClick={onClose}><X size={18} className="text-[var(--color-muted)]" /></button>
@@ -96,10 +96,10 @@ function AddInvoiceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (inv:
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-xl text-sm hover:opacity-90">
+            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
               Add Invoice
             </button>
-            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-xl">
+            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">
               Cancel
             </button>
           </div>
@@ -169,7 +169,7 @@ export default function ReceivablesPage() {
       {/* Aging summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {buckets.map(b => (
-          <div key={b} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+          <div key={b} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{BUCKET_LABELS[b]}</p>
             <p className={`text-lg font-bold ${BUCKET_COLOR[b]}`}>{formatCurrency(bucketTotals[b].amount)}</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">{bucketTotals[b].count} invoice{bucketTotals[b].count !== 1 ? "s" : ""}</p>
@@ -179,7 +179,7 @@ export default function ReceivablesPage() {
 
       {/* Total outstanding */}
       {totalOutstanding > 0 && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-5 py-4 flex items-center justify-between">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-5 py-4 flex items-center justify-between">
           <div>
             <p className="text-xs text-[var(--color-muted)]">Total outstanding</p>
             <p className="text-2xl font-bold text-[var(--color-primary)]">{formatCurrency(totalOutstanding)}</p>
@@ -195,7 +195,7 @@ export default function ReceivablesPage() {
 
       {/* Invoice list */}
       {pending.length > 0 ? (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
             <h2 className="text-sm font-semibold">Outstanding Invoices</h2>
             <span className="text-xs text-[var(--color-muted)]">{pending.length} invoices</span>
@@ -239,7 +239,7 @@ export default function ReceivablesPage() {
           </div>
         </div>
       ) : (
-        <div className="border border-dashed border-[var(--color-border)] rounded-2xl p-10 text-center">
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Clock size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No outstanding invoices</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-xs mx-auto">
@@ -247,7 +247,7 @@ export default function ReceivablesPage() {
           </p>
           {!isReadOnly && (
             <button onClick={() => setShowAdd(true)}
-              className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-xl text-sm hover:opacity-90">
+              className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
               Add First Invoice
             </button>
           )}
@@ -256,7 +256,7 @@ export default function ReceivablesPage() {
 
       {/* Paid invoices */}
       {paid.length > 0 && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)]">
             <h2 className="text-sm font-semibold text-[var(--color-muted)]">Paid ({paid.length})</h2>
           </div>
