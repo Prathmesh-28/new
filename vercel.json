@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/auth/:path*",
-      "destination": "https://headroom-api.onrender.com/auth/:path*"
+      "destination": "https://headroom-backend.onrender.com/auth/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://headroom-api.onrender.com/api/:path*"
+      "destination": "https://headroom-backend.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
