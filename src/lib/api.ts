@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+const BASE = import.meta.env.VITE_API_URL ?? "";
 
 function getToken() {
   return localStorage.getItem("hr_access");
@@ -37,17 +37,18 @@ export async function authFetch<T = unknown>(
 }
 
 async function tryRefresh(): Promise<boolean> {
-  const refreshToken = localStorage.getItem("hr_refresh");
-  if (!refreshToken) return false;
+  const rt = localStorage.getItem("hr_refresh");
+  if (!rt) return false;
   try {
     const res = await fetch(`${BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({ refresh: rt }),
     });
     if (!res.ok) return false;
-    const { accessToken } = await res.json();
-    localStorage.setItem("hr_access", accessToken);
+    const { access, refresh } = await res.json();
+    localStorage.setItem("hr_access", access);
+    if (refresh) localStorage.setItem("hr_refresh", refresh);
     return true;
   } catch {
     return false;

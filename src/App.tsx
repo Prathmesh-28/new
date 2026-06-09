@@ -5,10 +5,11 @@ import { AppProvider } from "@/context/AppContext";
 import { Toaster } from "sonner";
 import Header from "@/components/layout/Header";
 
-const HomePage        = lazy(() => import("@/pages/HomePage"));
-const LoginPage       = lazy(() => import("@/pages/LoginPage"));
-const SignupPage      = lazy(() => import("@/pages/SignupPage"));
-const SetPasswordPage = lazy(() => import("@/pages/SetPasswordPage"));
+const HomePage            = lazy(() => import("@/pages/HomePage"));
+const LoginPage           = lazy(() => import("@/pages/LoginPage"));
+const SignupPage          = lazy(() => import("@/pages/SignupPage"));
+const ForgotPasswordPage  = lazy(() => import("@/pages/ForgotPasswordPage"));
+const SetPasswordPage     = lazy(() => import("@/pages/SetPasswordPage"));
 const Dashboard      = lazy(() => import("@/features/dashboard/DashboardPage"));
 const Forecast       = lazy(() => import("@/features/forecast/ForecastPage"));
 const Credit         = lazy(() => import("@/features/credit/CreditPage"));
@@ -63,9 +64,10 @@ export default function App() {
           <Toaster position="top-right" theme="dark" richColors />
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route path="/"       element={<HomePage />} />
-              <Route path="/login"  element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/"                element={<HomePage />} />
+              <Route path="/login"           element={<LoginPage />} />
+              <Route path="/signup"          element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/*"     element={<RequireAuth><AppShell /></RequireAuth>} />
             </Routes>
           </Suspense>

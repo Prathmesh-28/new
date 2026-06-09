@@ -125,7 +125,7 @@ export default function HomePage() {
         </ul>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => navigate("/login")} style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.6)", background: "none", border: "none", cursor: "pointer" }}>Sign in</button>
-          <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 20px", borderRadius: 6, border: "none", cursor: "pointer" }}>Start free trial</button>
+          <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 20px", borderRadius: 6, border: "none", cursor: "pointer" }}>Start free trial</button>
         </div>
       </nav>
 
@@ -145,7 +145,7 @@ export default function HomePage() {
               Headroom helps businesses forecast cash with more honesty, detect risk earlier, and access the right capital path when timing gets tight.
             </p>
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 32 }}>
-              <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "14px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Get your forecast free</button>
+              <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "14px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Get your forecast free</button>
               <a href="#features" style={{ fontFamily: sans, fontSize: 14, color: C.pale, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
                 See how it works
                 <span style={{ width: 22, height: 22, borderRadius: "50%", border: `1px solid ${C.light}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>▶</span>
@@ -283,7 +283,7 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Check my eligibility</button>
+                <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Check my eligibility</button>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
@@ -360,7 +360,7 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => navigate("/login")} style={{ width: "100%", padding: "11px 0", borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(196,217,122,0.2)"}`, color: featured ? C.deepest : C.pale }}>
+                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: "11px 0", borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(196,217,122,0.2)"}`, color: featured ? C.deepest : C.pale }}>
                   Explore {track}
                 </button>
               </div>
@@ -374,7 +374,7 @@ export default function HomePage() {
               <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.pale, marginBottom: 4 }}>Compliance first.</div>
               <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. Revenue-share, Reg CF, and Reg A+ frameworks are handled by Headroom — you focus on the raise.</p>
             </div>
-            <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>See launch requirements →</button>
+            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>See launch requirements →</button>
           </div>
         </Reveal>
       </section>
@@ -440,7 +440,7 @@ export default function HomePage() {
 
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "center", gap: 16 }}>
-            <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free 14-day trial</button>
+            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free 14-day trial</button>
             <a href="#pricing" style={{ fontFamily: sans, fontSize: 14, color: C.mid, textDecoration: "none", padding: "13px 28px", border: `1px solid rgba(74,94,26,0.2)`, borderRadius: 8, display: "inline-flex", alignItems: "center" }}>View pricing</a>
           </div>
         </Reveal>
@@ -539,7 +539,7 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => navigate("/login")} style={{ width: "100%", padding: 12, borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(74,94,26,0.2)"}`, color: featured ? C.deepest : C.mid }}>
+                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: 12, borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(74,94,26,0.2)"}`, color: featured ? C.deepest : C.mid }}>
                   {cta}
                 </button>
               </div>
@@ -555,7 +555,7 @@ export default function HomePage() {
               <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>$299 <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.4)" }}>/ mo while raise is active</span></div>
               <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", maxWidth: 460 }}>Add community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
             </div>
-            <button onClick={() => navigate("/login")} style={{ background: "transparent", border: `1px solid rgba(196,217,122,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
+            <button onClick={() => navigate("/signup")} style={{ background: "transparent", border: `1px solid rgba(196,217,122,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
               Explore capital raise →
             </button>
           </div>
@@ -590,7 +590,7 @@ export default function HomePage() {
           <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(196,217,122,0.55)", marginBottom: 40 }}>Free for 90 days. No credit card. Connect your bank in under 3 minutes.</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
             <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(196,217,122,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
-            <button onClick={() => navigate("/login")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
+            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
           </div>
           <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.25)", marginTop: 20 }}>
             Trusted by 12,000+ SMBs &nbsp;·&nbsp; Free for 90 days &nbsp;·&nbsp; No credit card required
@@ -613,7 +613,7 @@ export default function HomePage() {
             <div key={h}>
               <h5 style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(196,217,122,0.4)", marginBottom: 16 }}>{h}</h5>
               {links.map(l => (
-                <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/login"); }} style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)", textDecoration: "none", marginBottom: 10 }}
+                <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/signup"); }} style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)", textDecoration: "none", marginBottom: 10 }}
                   onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(196,217,122,0.5)")}>{l}</a>
               ))}
             </div>

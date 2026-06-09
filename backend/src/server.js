@@ -1,7 +1,8 @@
 require("dotenv").config();
-const express  = require("express");
-const cors     = require("cors");
-const bcrypt   = require("bcryptjs");
+const express   = require("express");
+const cors      = require("cors");
+const rateLimit = require("express-rate-limit");
+const bcrypt    = require("bcryptjs");
 const { initDb, pool } = require("./db");
 
 const app  = express();
@@ -27,11 +28,20 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" }));
 
+// Rate limiting on auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 20,
+  message: { error: "Too many requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// Auth
-app.use("/auth",                   require("./routes/auth"));
+// Auth (rate limited)
+app.use("/auth",                   authLimiter, require("./routes/auth"));
 
 // Core API
 app.use("/api/kv",                 require("./routes/kv"));
