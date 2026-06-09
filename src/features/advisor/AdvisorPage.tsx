@@ -90,7 +90,7 @@ export default function AdvisorPage() {
 
   const handleUnlink = async (tenantId: string, label: string) => {
     if (!window.confirm(`Remove ${label} from your portfolio?`)) return;
-    await api.del(`/api/advisor/clients/${tenantId}`);
+    await api.delete(`/api/advisor/clients/${tenantId}`);
     toast.success("Client removed");
     load();
   };

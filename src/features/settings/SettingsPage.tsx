@@ -36,7 +36,7 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [copied,   setCopied]   = useState(false);
 
-  const tenantId = users.find(u => u.id === user.id)?.tenant_id ?? "Loading…";
+  const tenantId = users.find(u => u.id === user?.id)?.tenant_id ?? "Loading…";
 
   const copyTenantId = () => {
     navigator.clipboard.writeText(tenantId).then(() => {
