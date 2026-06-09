@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { AuthUser } from "@/data/types";
 
-export const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+export const BASE = import.meta.env.VITE_API_URL ?? "";
 
 /* Fetch with a configurable timeout so Render cold-start doesn't silently hang */
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 60_000): Promise<Response> {
