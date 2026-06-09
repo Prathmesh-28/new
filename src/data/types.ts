@@ -27,6 +27,9 @@ export interface FirmSettings {
   industry: string;
   foundedYear: number;
   safetyThresholdDays: number;
+  gstRegistered?: boolean;
+  gstNumber?: string;
+  gstRate?: number;  // output tax rate: 5 | 12 | 18 | 28
 }
 
 export interface ActiveLoan {
@@ -208,6 +211,18 @@ export interface ProcurementOrder {
   createdAt: string;
 }
 
+// ── Receivables ───────────────────────────────────────────────────────────────
+export interface Invoice {
+  id: string;
+  customer: string;
+  amount: number;
+  invoiceNumber?: string;
+  invoiceDate: string;
+  dueDate: string;
+  description: string;
+  status: "pending" | "overdue" | "paid";
+}
+
 // ── App store ─────────────────────────────────────────────────────────────────
 export interface AppStore {
   firm: FirmSettings;
@@ -224,6 +239,7 @@ export interface AppStore {
   capitalRaises: CapitalRaise[];
   capitalInvestments: CapitalInvestment[];
   connectors: BankConnector[];
+  invoices: Invoice[];
   orders: Order[];
   inventory: InventoryItem[];
   procurement: ProcurementOrder[];
@@ -237,6 +253,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   transactions:        "app",
   alerts:              "app",
   connectors:          "app",
+  invoices:            "app",
   forecast:            "forecast",
   scenarios:           "forecast",
   obligations:         "forecast",

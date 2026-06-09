@@ -7,6 +7,9 @@ export const defaultConfig: AppStore = {
     industry: "SaaS / Fintech",
     foundedYear: 2023,
     safetyThresholdDays: 14,
+    gstRegistered: false,
+    gstNumber: "",
+    gstRate: 18,
   },
 
   roles: [
@@ -22,8 +25,8 @@ export const defaultConfig: AppStore = {
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "transactions", "alerts", "forecast", "credit", "capital", "operations", "connectors", "settings"],
-      visibleTabs:    ["dashboard", "transactions", "alerts", "forecast", "credit", "capital", "operations", "connectors", "settings"],
+      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "credit", "capital", "operations", "connectors", "settings"],
+      visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "credit", "capital", "operations", "connectors", "settings"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital", "operations"],
@@ -60,6 +63,7 @@ export const defaultConfig: AppStore = {
   capitalRaises:      [],
   capitalInvestments: [],
   connectors:         [],
+  invoices:           [],
   orders:             [],
   inventory:          [],
   procurement:        [],

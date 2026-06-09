@@ -14,7 +14,7 @@ import type { Scenario, CashObligation } from "@/data/types";
 
 export default function ForecastPage() {
   const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
-  const { forecast, scenarios, obligations, transactions, bankAccounts } = store;
+  const { forecast, scenarios, obligations, transactions, bankAccounts, firm } = store;
   const [generating, setGenerating] = useState(false);
   const [showForm,   setShowForm]   = useState(false);
   const [showOblForm, setShowOblForm] = useState(false);
@@ -81,6 +81,27 @@ export default function ForecastPage() {
     chartDate: format(new Date(o.dueDate), "MMM d"),
   })).filter(o => chartDates.has(o.chartDate));
 
+  // Auto-add GSTR-3B obligation when GST is enabled (run after any forecast generation)
+  const autoAddGSTObligation = () => {
+    if (!firm.gstRegistered || !firm.gstRate) return;
+    const now       = new Date();
+    const lastM     = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMStr  = `${lastM.getFullYear()}-${String(lastM.getMonth() + 1).padStart(2, "0")}`;
+    const revenue   = transactions.filter(t => t.amount > 0 && t.date.startsWith(lastMStr)).reduce((s, t) => s + t.amount, 0);
+    if (revenue <= 0) return;
+    const liability = Math.round(revenue * (firm.gstRate / 100));
+    // GSTR-3B is due on the 20th of the current month for last month's returns
+    const due = new Date(now.getFullYear(), now.getMonth(), 20);
+    if (due < now) { due.setMonth(due.getMonth() + 1); } // already passed → next month
+    const dueStr = due.toISOString().split("T")[0];
+    const name   = `GSTR-3B (${lastM.toLocaleString("en-IN", { month: "short" })})`;
+    setStore(s => {
+      const alreadyExists = s.obligations.some(o => o.name === name);
+      if (alreadyExists) return s;
+      return { ...s, obligations: [...s.obligations, { id: generateId(), name, amount: liability, dueDate: dueStr, type: "tax" as const }] };
+    });
+  };
+
   const handleGenerate = async () => {
     if (transactions.length === 0) {
       toast.error("Add some transactions first — the forecast engine needs transaction history.");
@@ -98,6 +119,7 @@ export default function ForecastPage() {
     } catch {
       localForecast();
     } finally {
+      autoAddGSTObligation();
       setGenerating(false);
     }
   };

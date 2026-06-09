@@ -3,7 +3,9 @@ const express   = require("express");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");
 const bcrypt    = require("bcryptjs");
+const cron      = require("node-cron");
 const { initDb, pool } = require("./db");
+const { sendDailyDigest, sendMondayBrief } = require("./lib/digest");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
@@ -27,6 +29,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false })); // Required for Twilio webhooks
 
 // Rate limiting on auth endpoints
 const authLimiter = rateLimit({
@@ -60,6 +63,8 @@ app.use("/api/capital",            require("./routes/capital"));
 app.use("/api/connectors",         require("./routes/connectors"));
 app.use("/api/advisor",            require("./routes/advisor"));
 app.use("/api/operations",         require("./routes/operations"));
+app.use("/api/whatsapp",           require("./routes/whatsapp"));
+app.use("/webhook/whatsapp",       require("./routes/whatsapp")); // Twilio inbound
 
 // Admin endpoints (super_admin only)
 const { authenticate: _auth } = require("./middleware/auth");
@@ -100,5 +105,16 @@ async function seed() {
 
 initDb()
   .then(seed)
-  .then(() => app.listen(PORT, () => console.log(`[server] :${PORT}`)))
+  .then(() => {
+    app.listen(PORT, () => console.log(`[server] :${PORT}`));
+    // Daily digest at 7:00 AM IST (01:30 UTC)
+    cron.schedule("30 1 * * *", () => {
+      sendDailyDigest().catch(err => console.error("[digest]", err.message));
+    }, { timezone: "UTC" });
+    // Monday CFO brief at 8:00 AM IST (02:30 UTC, day-of-week 1 = Monday)
+    cron.schedule("30 2 * * 1", () => {
+      sendMondayBrief().catch(err => console.error("[brief]", err.message));
+    }, { timezone: "UTC" });
+    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST");
+  })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

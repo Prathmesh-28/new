@@ -1,0 +1,229 @@
+const router   = require("express").Router();
+const { pool } = require("../db");
+const { authenticate } = require("../middleware/auth");
+const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/whatsapp");
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function fmt(n) {
+  if (typeof n !== "number" || isNaN(n)) return "₹0";
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(1)}Cr`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(1)}L`;
+  return `₹${Math.round(n).toLocaleString("en-IN")}`;
+}
+
+function monthlyBurn(transactions = []) {
+  const now    = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().split("T")[0];
+  const exp    = transactions.filter(t => t.amount < 0 && t.date >= cutoff);
+  if (!exp.length) return 0;
+  return Math.abs(exp.reduce((s, t) => s + t.amount, 0)) / 3;
+}
+
+function runwayDays(bankAccounts = [], burn) {
+  const total = bankAccounts.reduce((s, a) => s + (a.balance ?? 0), 0);
+  return burn > 0 ? Math.floor((total / burn) * 30) : 999;
+}
+
+async function getTenantData(tenantId) {
+  const { rows } = await pool.query(
+    "SELECT namespace, value FROM kv_store WHERE tenant_id=$1 AND key='store'",
+    [tenantId]
+  );
+  const merged = {};
+  for (const row of rows) {
+    const inner = row.value?.value ?? {};
+    Object.assign(merged, inner);
+  }
+  return merged;
+}
+
+// Build a compact text summary of tenant financials for AI context
+function buildContext(data) {
+  const accounts = (data.bankAccounts ?? []).map(a => `${a.name}: ${fmt(a.balance)}`).join(", ");
+  const burn     = monthlyBurn(data.transactions);
+  const runway   = runwayDays(data.bankAccounts, burn);
+  const alerts   = (data.alerts ?? []).filter(a => !a.isRead).length;
+  const overdue  = (data.invoices ?? []).filter(i => i.status !== "paid" && i.dueDate < new Date().toISOString().split("T")[0]);
+  const overdueAmt = overdue.reduce((s, i) => s + i.amount, 0);
+  const topRevenue = Object.entries(
+    (data.transactions ?? []).filter(t => t.amount > 0 && t.counterparty)
+      .reduce((acc, t) => { acc[t.counterparty] = (acc[t.counterparty] ?? 0) + t.amount; return acc; }, {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k}: ${fmt(v)}`).join(", ");
+  return `Business data: cash balance ${accounts || "none"} | burn ${fmt(burn)}/mo | runway ${runway} days | ${alerts} unread alerts | overdue receivables ${fmt(overdueAmt)} | top revenue sources: ${topRevenue || "none"}`;
+}
+
+// Dispatch a command from WhatsApp text → response string
+async function dispatch(text, data) {
+  const cmd = text.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
+
+  // Cash / balance
+  if (/^(cash|balance|bal|money|funds?)$/.test(cmd)) {
+    const accounts = data.bankAccounts ?? [];
+    const total    = accounts.reduce((s, a) => s + (a.balance ?? 0), 0);
+    if (!accounts.length) return "No bank accounts connected yet. Add one at headroom-pi.vercel.app/dashboard";
+    const lines    = accounts.map(a => `  ${a.name}: *${fmt(a.balance)}*`).join("\n");
+    return `💰 *Cash balance: ${fmt(total)}*\n\n${lines}`;
+  }
+
+  // Runway
+  if (/^(runway|run|days?|howlong)$/.test(cmd)) {
+    const burn   = monthlyBurn(data.transactions);
+    const runway = runwayDays(data.bankAccounts, burn);
+    const total  = (data.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
+    const emoji  = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
+    return `${emoji} *Cash runway: ${runway} days*\n\nBalance: ${fmt(total)} · Burn: ${fmt(burn)}/month`;
+  }
+
+  // Burn / expenses
+  if (/^(burn|expense|expenses|spending)$/.test(cmd)) {
+    const burn = monthlyBurn(data.transactions);
+    return `🔥 *Monthly burn: ${fmt(burn)}*\nBased on average of last 3 months of expenses`;
+  }
+
+  // Alerts
+  if (/^(alert|alerts|warning|warnings)$/.test(cmd)) {
+    const unread = (data.alerts ?? []).filter(a => !a.isRead);
+    if (!unread.length) return "✅ *No unread alerts* — your cash flow is looking healthy.";
+    const lines = unread.slice(0, 5).map(a => `  ${a.severity === "critical" ? "🚨" : a.severity === "high" ? "⚠️" : "📌"} ${a.title}`).join("\n");
+    return `🔔 *${unread.length} unread alert${unread.length > 1 ? "s" : ""}*\n\n${lines}`;
+  }
+
+  // Invoices / receivables
+  if (/^(invoice|invoices|overdue|receivable|collect|chase)$/.test(cmd)) {
+    const today   = new Date().toISOString().split("T")[0];
+    const pending = (data.invoices ?? []).filter(i => i.status !== "paid");
+    if (!pending.length) return "✅ *No outstanding invoices*";
+    const overdue = pending.filter(i => i.dueDate < today);
+    const current = pending.filter(i => i.dueDate >= today);
+    const lines   = [];
+    if (overdue.length) lines.push(`  🔴 Overdue: *${fmt(overdue.reduce((s, i) => s + i.amount, 0))}* (${overdue.length} invoices)`);
+    if (current.length) lines.push(`  🟢 Current: *${fmt(current.reduce((s, i) => s + i.amount, 0))}* (${current.length} invoices)`);
+    return `📋 *Receivables: ${fmt(pending.reduce((s, i) => s + i.amount, 0))}*\n\n${lines.join("\n")}`;
+  }
+
+  // Forecast
+  if (/^(forecast|predict|future|next|trend)$/.test(cmd)) {
+    const pts = (data.forecast ?? []).slice(0, 30);
+    if (!pts.length) return "No forecast generated yet. Go to headroom-pi.vercel.app/forecast and click Generate.";
+    const last = pts[pts.length - 1];
+    const burn = monthlyBurn(data.transactions);
+    const total = (data.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
+    return `📈 *30-day forecast*\n\nToday: *${fmt(total)}*\nIn 30 days (P50): *${fmt(last.p50)}*\nRange: ${fmt(last.p10)}–${fmt(last.p90)}\nBurn: ${fmt(burn)}/mo`;
+  }
+
+  // Credit
+  if (/^(credit|loan|borrow|lend|apply)$/.test(cmd)) {
+    const apps   = data.creditApplications ?? [];
+    const loans  = data.activeLoans ?? [];
+    if (!loans.length && !apps.length) {
+      return `💳 *No active credit*\n\nRun a credit pre-qualification at headroom-pi.vercel.app/credit`;
+    }
+    const lines = [];
+    for (const l of loans.slice(0, 3)) {
+      lines.push(`  ${l.lender}: *${fmt(l.outstanding ?? l.principal)}* outstanding`);
+    }
+    return `💳 *Credit summary*\n\n${lines.join("\n") || "No active loans"}`;
+  }
+
+  // Help
+  if (/^(help|hi|hello|helo|commands?|menu|start)$/.test(cmd)) {
+    return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* — current balance\n  *runway* — how many days of cash\n  *burn* — monthly expenses\n  *alerts* — unread alerts\n  *invoices* — outstanding receivables\n  *forecast* — 30-day projection\n  *credit* — loan status\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"\n  "Why is my burn so high?"`;
+  }
+
+  // AI fallback — anything else
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return `I didn't understand "${text}". Reply *help* for available commands.`;
+  }
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client    = new Anthropic.default();
+    const context   = buildContext(data);
+    const resp = await client.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      system:     `You are a CFO assistant for an Indian SMB. Answer questions about their business finances concisely in 2-4 sentences. Use Indian number formatting (L for lakhs, Cr for crores). Do NOT use markdown. ${context}`,
+      messages:   [{ role: "user", content: text }],
+    });
+    return resp.content[0]?.text ?? "Sorry, I could not process that.";
+  } catch {
+    return `Couldn't process that right now. Reply *help* for available commands.`;
+  }
+}
+
+// ── Routes ─────────────────────────────────────────────────────────────────────
+
+// POST /api/whatsapp/register — link a phone number to the authenticated user's tenant
+router.post("/register", authenticate, async (req, res) => {
+  const rawPhone = req.body.phone ?? "";
+  const phone    = normalizePhone(rawPhone);
+  if (!phone.match(/^\+[1-9]\d{6,14}$/)) {
+    return res.status(400).json({ error: "Invalid phone — use E.164 format e.g. +919876543210" });
+  }
+  await pool.query(
+    "INSERT INTO whatsapp_bindings(phone, tenant_id, user_id) VALUES($1,$2,$3) ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, user_id=$3",
+    [phone, req.user.tenant_id, req.user.id]
+  );
+  // Send welcome message
+  await sendWhatsApp(phone,
+    `✅ *Headroom connected!*\n\nYou're all set. Reply *help* to see available commands, or just ask your numbers in plain language.\n\nExample: "What's my cash balance?"`
+  ).catch(() => {});
+  res.json({ ok: true, phone });
+});
+
+// DELETE /api/whatsapp/register — unlink
+router.delete("/register", authenticate, async (req, res) => {
+  await pool.query(
+    "DELETE FROM whatsapp_bindings WHERE tenant_id=$1",
+    [req.user.tenant_id]
+  );
+  res.json({ ok: true });
+});
+
+// GET /api/whatsapp/status — check registration
+router.get("/status", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT phone FROM whatsapp_bindings WHERE tenant_id=$1 LIMIT 1",
+    [req.user.tenant_id]
+  );
+  res.json({ registered: rows.length > 0, phone: rows[0]?.phone ?? null });
+});
+
+// POST /webhook/whatsapp — Twilio inbound webhook (mounted at root, no /api prefix)
+router.post("/", async (req, res) => {
+  // Twilio signature validation
+  if (!validateSignature(req)) {
+    return res.status(403).send("Forbidden");
+  }
+
+  const rawFrom = req.body.From ?? "";
+  const body    = (req.body.Body ?? "").trim();
+  const phone   = normalizePhone(rawFrom);
+
+  // Look up binding
+  const { rows } = await pool.query(
+    "SELECT tenant_id FROM whatsapp_bindings WHERE phone=$1",
+    [phone]
+  );
+
+  if (!rows[0]) {
+    // Unknown sender — tell them how to register
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>Your number isn't linked to a Headroom account yet. Open headroom-pi.vercel.app/settings and connect your WhatsApp number to get started.</Message></Response>`;
+    return res.type("text/xml").send(twiml);
+  }
+
+  const { tenant_id } = rows[0];
+
+  try {
+    const data  = await getTenantData(tenant_id);
+    const reply = await dispatch(body, data);
+    const safe  = reply.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${safe}</Message></Response>`;
+    res.type("text/xml").send(twiml);
+  } catch (err) {
+    console.error("[wa webhook]", err.message);
+    res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>Something went wrong. Try again in a moment.</Message></Response>`);
+  }
+});
+
+module.exports = router;

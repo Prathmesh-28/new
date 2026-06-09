@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 type TeamUser = {
   id: string;
@@ -44,6 +45,25 @@ export default function SettingsPage() {
   const [safetyDays,   setSafetyDays]   = useState(store.firm.safetyThresholdDays ?? 14);
   const [firmSaving,   setFirmSaving]   = useState(false);
 
+  // GST settings
+  const [gstRegistered, setGstRegistered] = useState(store.firm.gstRegistered ?? false);
+  const [gstNumber,     setGstNumber]     = useState(store.firm.gstNumber ?? "");
+  const [gstRate,       setGstRate]       = useState(store.firm.gstRate ?? 18);
+  const [gstSaving,     setGstSaving]     = useState(false);
+
+  const handleSaveGst = () => {
+    setGstSaving(true);
+    updateFirm({ gstRegistered, gstNumber, gstRate });
+    toast.success("GST settings saved");
+    setGstSaving(false);
+  };
+
+  // WhatsApp binding
+  const [waPhone,      setWaPhone]      = useState("");
+  const [waRegistered, setWaRegistered] = useState<string | null>(null);
+  const [waLoading,    setWaLoading]    = useState(true);
+  const [waConnecting, setWaConnecting] = useState(false);
+
   const tenantId = users.find(u => u.id === user?.id)?.tenant_id ?? "Loading…";
 
   const handleSaveFirm = () => {
@@ -51,6 +71,41 @@ export default function SettingsPage() {
     updateFirm({ name: firmName, industry: firmIndustry, safetyThresholdDays: safetyDays });
     toast.success("Business profile saved");
     setFirmSaving(false);
+  };
+
+  const loadWaStatus = useCallback(async () => {
+    try {
+      const res = await api.get<{ registered: boolean; phone: string | null }>("/api/whatsapp/status");
+      setWaRegistered(res.phone);
+    } catch { /* silently skip */ }
+    finally { setWaLoading(false); }
+  }, []);
+
+  useEffect(() => { loadWaStatus(); }, [loadWaStatus]);
+
+  const handleWaConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waPhone) return;
+    setWaConnecting(true);
+    try {
+      await api.post("/api/whatsapp/register", { phone: waPhone });
+      toast.success("WhatsApp connected — check your phone for a welcome message");
+      setWaPhone("");
+      loadWaStatus();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to connect WhatsApp");
+    } finally { setWaConnecting(false); }
+  };
+
+  const handleWaDisconnect = async () => {
+    if (!window.confirm("Disconnect WhatsApp? You will stop receiving digests and alerts.")) return;
+    try {
+      await api.delete("/api/whatsapp/register");
+      setWaRegistered(null);
+      toast.success("WhatsApp disconnected");
+    } catch {
+      toast.error("Failed to disconnect");
+    }
   };
 
   const copyTenantId = () => {
@@ -256,6 +311,124 @@ export default function SettingsPage() {
         </div>
         <p className="text-xs text-[var(--color-muted)] mt-3">
           Your advisor will use this in their <strong className="text-[var(--color-text)]">My Clients</strong> panel to add you to their portfolio. You can revoke access at any time by contacting support.
+        </p>
+      </div>
+
+      {/* GST */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+        <h2 className="text-sm font-semibold mb-1">GST Settings</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-5">
+          Used to estimate your monthly GSTR-3B liability from revenue transactions and surface it in the tax calendar and forecast.
+        </p>
+        <div className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setGstRegistered(v => !v)}
+              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${gstRegistered ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${gstRegistered ? "translate-x-5" : "translate-x-0.5"}`} />
+            </div>
+            <span className="text-sm">I'm GST registered</span>
+          </label>
+
+          {gstRegistered && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN</label>
+                <input value={gstNumber} onChange={e => setGstNumber(e.target.value.toUpperCase())}
+                  placeholder="22AAAAA0000A1Z5"
+                  maxLength={15}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-wide" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Primary output GST rate</label>
+                <select value={gstRate} onChange={e => setGstRate(Number(e.target.value))}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                  <option value={0}>0% (Exempt / Nil rated)</option>
+                  <option value={5}>5%</option>
+                  <option value={12}>12%</option>
+                  <option value={18}>18% (most common)</option>
+                  <option value={28}>28%</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {gstRegistered && (
+            <div className="p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+              Headroom will estimate your monthly GSTR-3B output tax as <strong className="text-[var(--color-text)]">revenue × {gstRate}%</strong> and
+              show it in your tax calendar and forecast obligations. Actual liability is lower after input tax credit — this is a planning estimate.
+            </div>
+          )}
+        </div>
+        <button onClick={handleSaveGst} disabled={gstSaving}
+          className="mt-5 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
+          <Save size={13} /> {gstSaving ? "Saving…" : "Save GST Settings"}
+        </button>
+      </div>
+
+      {/* WhatsApp */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <MessageCircle size={15} className="text-green-400" />
+          <h2 className="text-sm font-semibold">WhatsApp Alerts</h2>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-5">
+          Get a 7am cash snapshot every morning and ask your numbers anytime — reply <strong className="text-[var(--color-text)]">cash</strong>, <strong className="text-[var(--color-text)]">runway</strong>, <strong className="text-[var(--color-text)]">alerts</strong>, or anything in plain language.
+        </p>
+
+        {waLoading ? (
+          <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+            <div className="w-4 h-4 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+            Checking status…
+          </div>
+        ) : waRegistered ? (
+          <div className="flex items-center justify-between gap-4 p-4 bg-green-950/20 border border-green-800/30 rounded-xl">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-green-300">Connected</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5 font-mono">{waRegistered}</p>
+              </div>
+            </div>
+            <button onClick={handleWaDisconnect}
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors">
+              <Unlink size={13} /> Disconnect
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleWaConnect} className="flex gap-2">
+            <div className="flex-1">
+              <input
+                type="tel" required value={waPhone} onChange={e => setWaPhone(e.target.value)}
+                placeholder="+919876543210 (include country code)"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-green-500 font-mono"
+              />
+            </div>
+            <button type="submit" disabled={waConnecting}
+              className="flex items-center gap-1.5 bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-600 disabled:opacity-40 shrink-0">
+              <MessageCircle size={13} /> {waConnecting ? "Connecting…" : "Connect WhatsApp"}
+            </button>
+          </form>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+          {[
+            { cmd: "cash",     desc: "Current balance" },
+            { cmd: "runway",   desc: "Days of cash left" },
+            { cmd: "alerts",   desc: "Unread alerts" },
+            { cmd: "invoices", desc: "Overdue receivables" },
+          ].map(({ cmd, desc }) => (
+            <div key={cmd} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2.5">
+              <p className="text-xs font-bold text-[var(--color-primary)] font-mono">"{cmd}"</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[10px] text-[var(--color-muted)] mt-3">
+          Powered by Twilio WhatsApp Business API · Uses the same Headroom number you'll set up in your Twilio dashboard ·{" "}
+          Set <strong className="text-[var(--color-text)]">TWILIO_ACCOUNT_SID</strong>, <strong className="text-[var(--color-text)]">TWILIO_AUTH_TOKEN</strong>, and <strong className="text-[var(--color-text)]">TWILIO_WHATSAPP_FROM</strong> in backend .env
         </p>
       </div>
 

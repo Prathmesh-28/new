@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
-import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { format } from "date-fns";
+import { format, addMonths, setDate, isBefore } from "date-fns";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -15,6 +15,34 @@ const SEV_COLOR: Record<string, string> = {
   medium:   "text-yellow-400 border-yellow-800/40 bg-yellow-950/20",
   low:      "text-green-400 border-green-800/40 bg-green-950/20",
 };
+
+// Indian tax calendar: compute next 4 upcoming statutory dates
+function getUpcomingTaxDates() {
+  const now = new Date();
+  const dates: { label: string; desc: string; date: Date }[] = [];
+
+  for (let offset = 0; offset < 4; offset++) {
+    const base = addMonths(now, offset);
+    const y    = base.getFullYear();
+    const m    = base.getMonth();
+
+    // GSTR-3B: 20th of each month
+    const gstr = setDate(new Date(y, m, 1), 20);
+    if (!isBefore(gstr, now)) dates.push({ label: "GSTR-3B", desc: format(gstr, "d MMM"), date: gstr });
+
+    // TDS deposit: 7th of each month
+    const tds = setDate(new Date(y, m, 1), 7);
+    if (!isBefore(tds, now)) dates.push({ label: "TDS deposit", desc: format(tds, "d MMM"), date: tds });
+
+    // Advance tax: quarterly on 15th of Jun (5), Sep (8), Dec (11), Mar (2)
+    if ([2, 5, 8, 11].includes(m)) {
+      const adv = setDate(new Date(y, m, 1), 15);
+      if (!isBefore(adv, now)) dates.push({ label: "Advance Tax", desc: format(adv, "d MMM"), date: adv });
+    }
+  }
+
+  return dates.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
+}
 
 function StatCard({ label, raw, display, icon: Icon, color, trend }: {
   label: string; raw: number; display: string; icon: React.ElementType;
@@ -134,11 +162,14 @@ function AddTransactionModal({ accountId, onClose, onAdd }: { accountId: string;
 
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
-  const { bankAccounts, transactions, alerts, forecast } = store;
+  const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
   const navigate = useNavigate();
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddTx, setShowAddTx]           = useState(false);
   const [showImport,    setShowImport]      = useState(false);
+  const [wizardDismissed, setWizardDismissed] = useState(
+    () => localStorage.getItem("hr_onboarding_dismissed") === "true"
+  );
 
   const totalBalance = bankAccounts.reduce((a, b) => a + b.balance, 0);
   const burn         = monthlyBurn(transactions);
@@ -153,6 +184,55 @@ export default function DashboardPage() {
   }));
 
   const isEmpty = bankAccounts.length === 0 && transactions.length === 0;
+
+  // Onboarding steps (computed from store)
+  const onboardingSteps = [
+    { label: "Add a bank account",          done: bankAccounts.length > 0,         action: () => setShowAddAccount(true) },
+    { label: "Import 3+ transactions",      done: transactions.length >= 3,         action: () => setShowImport(true) },
+    { label: "Generate your first forecast",done: forecast.length > 0,             action: () => navigate("/forecast") },
+    { label: "Run credit pre-qualification",done: creditApplications.length > 0,   action: () => navigate("/credit") },
+  ];
+  const completedCount = onboardingSteps.filter(s => s.done).length;
+  const allDone        = completedCount === onboardingSteps.length;
+  const showWizard     = !wizardDismissed && !allDone && !isReadOnly;
+
+  const dismissWizard = () => {
+    localStorage.setItem("hr_onboarding_dismissed", "true");
+    setWizardDismissed(true);
+  };
+
+  // Concentration intelligence (computed from transactions)
+  const revenueByCounterparty = transactions
+    .filter(t => t.amount > 0 && t.counterparty)
+    .reduce<Record<string, number>>((acc, t) => {
+      acc[t.counterparty] = (acc[t.counterparty] ?? 0) + t.amount;
+      return acc;
+    }, {});
+  const topRevenueSources = Object.entries(revenueByCounterparty)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+  const totalRevenue = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const topConcentration = topRevenueSources[0] && totalRevenue > 0
+    ? (topRevenueSources[0].total / totalRevenue) * 100
+    : 0;
+  const showConcentration = topRevenueSources.length >= 2;
+
+  // GST / tax calendar
+  const taxDates = getUpcomingTaxDates();
+  const today    = new Date();
+
+  // Estimated monthly GST liability from last month's revenue
+  const lastMonthStr = (() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
+  const lastMonthRevenue = transactions
+    .filter(t => t.amount > 0 && t.date.startsWith(lastMonthStr))
+    .reduce((s, t) => s + t.amount, 0);
+  const gstEstimate = firm.gstRegistered && firm.gstRate && lastMonthRevenue > 0
+    ? Math.round(lastMonthRevenue * (firm.gstRate / 100))
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -180,6 +260,61 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Onboarding wizard */}
+      {showWizard && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-xl p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold">Get started with Headroom</h2>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">{completedCount} of {onboardingSteps.length} steps complete</p>
+            </div>
+            <button onClick={dismissWizard} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors" title="Dismiss">
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-4">
+            <div
+              className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-700"
+              style={{ width: `${(completedCount / onboardingSteps.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {onboardingSteps.map((step, i) => (
+              <button
+                key={i}
+                onClick={step.done ? undefined : step.action}
+                disabled={step.done}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+                  step.done
+                    ? "border-green-800/30 bg-green-950/10 opacity-60 cursor-default"
+                    : "border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-accent)] cursor-pointer"
+                }`}
+              >
+                {step.done
+                  ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                  : <Circle size={15} className="text-[var(--color-muted)] shrink-0" />
+                }
+                <span className={`text-sm font-medium flex-1 ${step.done ? "line-through text-[var(--color-muted)]" : ""}`}>
+                  {step.label}
+                </span>
+                {!step.done && <ChevronRight size={13} className="text-[var(--color-muted)] shrink-0" />}
+              </button>
+            ))}
+          </div>
+
+          {completedCount === 3 && (
+            <div className="mt-3 p-3 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 rounded-lg">
+              <p className="text-xs text-[var(--color-primary)] font-medium">
+                One more step — run your credit pre-qualification to unlock working capital options and see your "aha moment."
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty state */}
       {isEmpty && (
@@ -320,6 +455,90 @@ export default function DashboardPage() {
               })()}
             </div>
           </div>
+
+          {/* Business health: concentration + GST */}
+          {(showConcentration || taxDates.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Customer concentration */}
+              {showConcentration && (
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                  <h2 className="text-sm font-semibold mb-1">Revenue concentration</h2>
+                  {topConcentration > 40 && (
+                    <div className="flex items-start gap-2 mb-3 p-2.5 bg-orange-950/20 border border-orange-800/30 rounded-lg">
+                      <AlertTriangle size={12} className="text-orange-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-orange-300">
+                        <strong>{topRevenueSources[0].name}</strong> accounts for{" "}
+                        <strong>{topConcentration.toFixed(0)}%</strong> of revenue. Losing this customer
+                        could impact {Math.round((topRevenueSources[0].total / Math.max(burn, 1) / 12) * 30)} days of runway.
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {topRevenueSources.map(({ name, total }) => {
+                      const pct = totalRevenue > 0 ? (total / totalRevenue) * 100 : 0;
+                      return (
+                        <div key={name}>
+                          <div className="flex items-center justify-between text-xs mb-0.5">
+                            <span className="truncate font-medium max-w-[55%]">{name}</span>
+                            <span className="text-[var(--color-muted)]">{pct.toFixed(0)}% · {formatCurrency(total)}</span>
+                          </div>
+                          <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${pct > 40 ? "bg-orange-500" : pct > 25 ? "bg-yellow-500" : "bg-[var(--color-primary)]"}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* GST / tax calendar */}
+              {taxDates.length > 0 && (
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar size={13} className="text-[var(--color-primary)]" />
+                    <h2 className="text-sm font-semibold">Tax calendar</h2>
+                  </div>
+                  <div className="space-y-2">
+                    {taxDates.map((t, i) => {
+                      const daysLeft   = Math.ceil((t.date.getTime() - today.getTime()) / 86400000);
+                      const urgent     = daysLeft <= 10;
+                      const soon       = daysLeft <= 30;
+                      const isGSTR3B   = t.label === "GSTR-3B";
+                      return (
+                        <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0">
+                          <div>
+                            <p className="text-sm font-medium">{t.label}</p>
+                            <p className="text-xs text-[var(--color-muted)]">
+                              {t.desc}
+                              {isGSTR3B && gstEstimate > 0 && (
+                                <span className="ml-1.5 text-orange-400 font-semibold">
+                                  ~{formatCurrency(gstEstimate)} est.
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            urgent ? "bg-red-950/30 text-red-400" :
+                            soon   ? "bg-yellow-950/30 text-yellow-400" :
+                                     "bg-[var(--color-accent)] text-[var(--color-muted)]"
+                          }`}>
+                            {daysLeft === 0 ? "Today" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-3">
+                    GSTR-3B · TDS · Advance Tax · Based on standard Indian statutory dates
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Bank accounts */}

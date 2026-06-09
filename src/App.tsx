@@ -24,6 +24,7 @@ const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
 const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage"));
 const TransactionsPage   = lazy(() => import("@/features/transactions/TransactionsPage"));
 const AlertsPage         = lazy(() => import("@/features/alerts/AlertsPage"));
+const ReceivablesPage    = lazy(() => import("@/features/receivables/ReceivablesPage"));
 
 function PageLoader() {
   return (
@@ -54,6 +55,7 @@ function AppShell() {
               <Route path="/dashboard"     element={<Dashboard />} />
               <Route path="/transactions"  element={<TransactionsPage />} />
               <Route path="/alerts"        element={<AlertsPage />} />
+              <Route path="/receivables"   element={<ReceivablesPage />} />
               <Route path="/forecast"      element={<Forecast />} />
               <Route path="/credit"        element={<Credit />} />
               <Route path="/capital"       element={<Capital />} />

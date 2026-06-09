@@ -71,6 +71,10 @@ interface AppCtx {
   addProcurement:          (x: AppStore["procurement"][0])         => void;
   updateProcurement:       (x: AppStore["procurement"][0])         => void;
   deleteProcurement:       (id: string)                            => void;
+  // Receivables
+  addInvoice:              (x: AppStore["invoices"][0])            => void;
+  updateInvoice:           (x: AppStore["invoices"][0])            => void;
+  deleteInvoice:           (id: string)                            => void;
 }
 
 const Ctx = createContext<AppCtx | null>(null);
@@ -260,6 +264,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addProcurement:          add("procurement"),
     updateProcurement:       update("procurement"),
     deleteProcurement:       del("procurement"),
+    addInvoice:              add("invoices"),
+    updateInvoice:           update("invoices"),
+    deleteInvoice:           del("invoices"),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

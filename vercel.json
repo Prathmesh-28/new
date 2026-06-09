@@ -9,6 +9,10 @@
       "destination": "https://headroom-backend.onrender.com/api/:path*"
     },
     {
+      "source": "/webhook/:path*",
+      "destination": "https://headroom-backend.onrender.com/webhook/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

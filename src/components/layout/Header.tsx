@@ -5,7 +5,7 @@ import { useApp } from "@/context/AppContext";
 import { Eye } from "lucide-react";
 import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
-  LogOut, Menu, X, Package, Users, Briefcase, PlugZap, FileText, Bell,
+  LogOut, Menu, X, Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ const NAV_BY_ROLE: Record<string, { to: string; label: string; icon: React.Eleme
     { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"     },
     { to: "/transactions",  label: "Transactions",  icon: FileText,        tab: "transactions"  },
     { to: "/alerts",        label: "Alerts",        icon: Bell,            tab: "alerts"        },
+    { to: "/receivables",   label: "Receivables",   icon: Receipt,         tab: "receivables"   },
     { to: "/forecast",      label: "Forecast",      icon: TrendingUp,      tab: "forecast"      },
     { to: "/credit",        label: "Credit",        icon: CreditCard,      tab: "credit"        },
     { to: "/capital",       label: "Capital",       icon: Rocket,          tab: "capital"       },
@@ -26,6 +27,7 @@ const NAV_BY_ROLE: Record<string, { to: string; label: string; icon: React.Eleme
     { to: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"     },
     { to: "/transactions",  label: "Transactions",  icon: FileText,        tab: "transactions"  },
     { to: "/alerts",        label: "Alerts",        icon: Bell,            tab: "alerts"        },
+    { to: "/receivables",   label: "Receivables",   icon: Receipt,         tab: "receivables"   },
     { to: "/forecast",      label: "Forecast",      icon: TrendingUp,      tab: "forecast"      },
     { to: "/credit",        label: "Credit",        icon: CreditCard,      tab: "credit"        },
     { to: "/capital",       label: "Capital",       icon: Rocket,          tab: "capital"       },

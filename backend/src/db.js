@@ -225,6 +225,15 @@ async function initDb() {
       UNIQUE(tenant_id, provider, account_name)
     );
 
+    -- ── WhatsApp bindings ─────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS whatsapp_bindings (
+      phone      TEXT PRIMARY KEY,
+      tenant_id  TEXT NOT NULL,
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS wa_tenant ON whatsapp_bindings(tenant_id);
+
     -- ── Advisor links ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS advisor_client_links (
       id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
