@@ -39,9 +39,24 @@ router.post("/login", async (req, res) => {
   const user = rows[0];
   if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+  if (user.locked_until && new Date(user.locked_until) > new Date()) {
+    const mins = Math.ceil((new Date(user.locked_until) - Date.now()) / 60000);
+    return res.status(423).json({ error: `Account locked. Try again in ${mins} minute${mins === 1 ? "" : "s"}.` });
+  }
 
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) {
+    const attempts = (user.failed_attempts || 0) + 1;
+    if (attempts >= 5) {
+      const lockUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      await pool.query("UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3", [attempts, lockUntil, user.id]);
+      return res.status(423).json({ error: "Too many failed attempts. Account locked for 15 minutes." });
+    }
+    await pool.query("UPDATE users SET failed_attempts=$1 WHERE id=$2", [attempts, user.id]);
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  await pool.query("UPDATE users SET failed_attempts=0, locked_until=NULL WHERE id=$1", [user.id]);
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.json({
     access:  signAccess(payload),

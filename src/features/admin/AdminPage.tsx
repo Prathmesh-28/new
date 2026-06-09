@@ -3,6 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate } from "react-router-dom";
+import { AlertTriangle, ArrowLeftRight } from "lucide-react";
 
 type Tab = "overview" | "users" | "tenants" | "transactions" | "alerts";
 
@@ -66,65 +67,79 @@ export default function AdminPage() {
 
       {/* Transactions */}
       {tab === "transactions" && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border)]">
-                {["Date","Description","Category","Counterparty","Amount",""].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map(t => (
-                <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] transition-colors">
-                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.date}</td>
-                  <td className="px-4 py-2.5 max-w-[200px] truncate">{t.description}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.category}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.counterparty}</td>
-                  <td className={`px-4 py-2.5 font-medium ${t.amount > 0 ? "text-green-400" : "text-red-400"}`}>
-                    {t.amount > 0 ? "+" : ""}{formatCurrency(t.amount)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button onClick={() => deleteTransaction(t.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
-                  </td>
+        transactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <ArrowLeftRight size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No transactions yet. Add them from the Dashboard.</p>
+          </div>
+        ) : (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Date","Description","Category","Counterparty","Amount",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {transactions.map(t => (
+                  <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] transition-colors">
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.date}</td>
+                    <td className="px-4 py-2.5 max-w-[200px] truncate">{t.description}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.category}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{t.counterparty}</td>
+                    <td className={`px-4 py-2.5 font-medium ${t.amount > 0 ? "text-green-400" : "text-red-400"}`}>
+                      {t.amount > 0 ? "+" : ""}{formatCurrency(t.amount)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => deleteTransaction(t.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
 
       {/* Alerts */}
       {tab === "alerts" && (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border)]">
-                {["Severity","Type","Message","Read",""].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map(a => (
-                <tr key={a.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-4 py-2.5">
-                    <span className={`text-xs font-semibold uppercase ${a.severity === "critical" ? "text-red-400" : a.severity === "high" ? "text-orange-400" : a.severity === "medium" ? "text-yellow-400" : "text-green-400"}`}>
-                      {a.severity}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{a.type}</td>
-                  <td className="px-4 py-2.5 max-w-[300px] truncate">{a.message}</td>
-                  <td className="px-4 py-2.5">{a.isRead ? "✓" : "—"}</td>
-                  <td className="px-4 py-2.5">
-                    <button onClick={() => deleteAlert(a.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
-                  </td>
+        alerts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <AlertTriangle size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No alerts. The system will generate alerts when cash thresholds are breached.</p>
+          </div>
+        ) : (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Severity","Type","Message","Read",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {alerts.map(a => (
+                  <tr key={a.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs font-semibold uppercase ${a.severity === "critical" ? "text-red-400" : a.severity === "high" ? "text-orange-400" : a.severity === "medium" ? "text-yellow-400" : "text-green-400"}`}>
+                        {a.severity}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{a.type}</td>
+                    <td className="px-4 py-2.5 max-w-[300px] truncate">{a.message}</td>
+                    <td className="px-4 py-2.5">{a.isRead ? "✓" : "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => deleteAlert(a.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
     </div>
   );

@@ -205,6 +205,10 @@ async function initDb() {
       invested_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- ── Account lockout columns (added after initial schema) ────────────────
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
     -- ── Indexes ───────────────────────────────────────────────────────────────
     CREATE INDEX IF NOT EXISTS kv_tenant_ns         ON kv_store(tenant_id, namespace);
     CREATE INDEX IF NOT EXISTS notes_entity         ON notes(tenant_id, entity, entity_id);

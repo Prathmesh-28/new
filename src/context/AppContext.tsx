@@ -6,6 +6,7 @@ import { FIELD_NAMESPACE, ROLE_NAMESPACES } from "@/data/types";
 import { defaultConfig } from "@/data/defaultConfig";
 import { api } from "@/lib/api";
 import { useAuth } from "./AuthContext";
+import { toast } from "sonner";
 
 const LS_KEY = "hr_store";
 const DEBOUNCE = 400;
@@ -72,9 +73,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LS_KEY, JSON.stringify(s));
     const namespaces = ROLE_NAMESPACES[currentRole] ?? [];
     const split = splitByNs(s);
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       namespaces.map(ns => api.put(`/api/kv/${ns}/store`, { value: split[ns] ?? {} }))
     );
+    if (results.some(r => r.status === "rejected")) {
+      toast.error("Changes saved locally but failed to sync to server.", { id: "sync-error", duration: 4000 });
+    }
   }, [currentRole]);
 
   const setStore: SetStore = useCallback((fn) => {
@@ -99,6 +103,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           _setStore(prev => ({ ...prev, ...merged }));
           localStorage.setItem(LS_KEY, JSON.stringify({ ...store, ...merged }));
         }
+      })
+      .catch(() => {
+        toast.error("Failed to load your data. Working offline — changes will sync when reconnected.");
       })
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
