@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
 
@@ -117,10 +117,74 @@ function chaseMessage(inv: Invoice, daysOverdue: number): string {
   return `Hi, invoice ${inv.invoiceNumber ?? inv.id} for ${amt} was due on ${format(parseISO(inv.dueDate), "d MMM yyyy")} and is now ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue. Please arrange payment at the earliest or contact us to discuss.`;
 }
 
+function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
+  withDays: { id: string; customer: string; amount: number; dueDate: string; bucket: string; daysOverdue: number; invoiceNumber?: string; description?: string; status: string }[];
+  isReadOnly: boolean;
+  onMarkPaid: (id: string) => void;
+  onChase: (inv: typeof withDays[0]) => void;
+}) {
+  const cols = [
+    { key: "current", label: "Current",     color: "border-green-700/40",  headerColor: "text-green-400",  dot: "bg-green-500" },
+    { key: "30d",     label: "1–30 d overdue", color: "border-yellow-700/40", headerColor: "text-yellow-400", dot: "bg-yellow-500" },
+    { key: "60d",     label: "31–60 d overdue", color: "border-orange-700/40", headerColor: "text-orange-400", dot: "bg-orange-500" },
+    { key: "90d",     label: "60d+ overdue", color: "border-red-700/40",   headerColor: "text-red-400",    dot: "bg-red-500" },
+  ] as const;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {cols.map(col => {
+        const cards = withDays.filter(i => i.bucket === col.key);
+        const total = cards.reduce((s, i) => s + i.amount, 0);
+        return (
+          <div key={col.key} className={`border ${col.color} rounded-lg overflow-hidden`}>
+            <div className="px-3 py-2.5 border-b border-[var(--color-border)] flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${col.dot}`} />
+                <span className={`text-xs font-semibold ${col.headerColor}`}>{col.label}</span>
+              </div>
+              <span className="text-[10px] text-[var(--color-muted)]">{cards.length}</span>
+            </div>
+            <div className="p-2 space-y-2 min-h-[80px]">
+              {cards.length === 0 && (
+                <div className="py-4 text-center text-[10px] text-[var(--color-muted)]">None</div>
+              )}
+              {cards.map(inv => (
+                <div key={inv.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2.5">
+                  <p className="text-xs font-semibold truncate">{inv.customer}</p>
+                  <p className="text-base font-bold tabular-nums text-[var(--color-primary)] my-1">{formatCurrency(inv.amount)}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-2">Due {format(parseISO(inv.dueDate), "d MMM")}</p>
+                  {!isReadOnly && (
+                    <div className="flex gap-1">
+                      <button onClick={() => onChase(inv)} title="Send reminder"
+                        className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-blue-400 hover:border-blue-700/40 rounded-md transition-colors">
+                        <Send size={9} /> Chase
+                      </button>
+                      <button onClick={() => onMarkPaid(inv.id)} title="Mark paid"
+                        className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 rounded-md transition-colors">
+                        <CheckCircle2 size={9} /> Paid
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {total > 0 && (
+              <div className="px-3 py-2 border-t border-[var(--color-border)]">
+                <p className={`text-xs font-bold tabular-nums ${col.headerColor}`}>{formatCurrency(total)}</p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ReceivablesPage() {
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
   const { invoices } = store;
   const [showAdd, setShowAdd] = useState(false);
+  const [view, setView] = useState<"list" | "kanban">("list");
   const today = new Date().toISOString().split("T")[0];
 
   const pending = invoices.filter(i => i.status !== "paid");
@@ -158,12 +222,24 @@ export default function ReceivablesPage() {
           <h1 className="text-xl font-bold">Receivables</h1>
           <p className="text-sm text-[var(--color-muted)] mt-0.5">Track outstanding invoices and follow up on overdue payments</p>
         </div>
-        {!isReadOnly && (
-          <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-            <Plus size={13} /> Add Invoice
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-0.5">
+            <button onClick={() => setView("list")} title="List view"
+              className={`p-1.5 rounded ${view === "list" ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              <List size={13} />
+            </button>
+            <button onClick={() => setView("kanban")} title="Kanban view"
+              className={`p-1.5 rounded ${view === "kanban" ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              <Kanban size={13} />
+            </button>
+          </div>
+          {!isReadOnly && (
+            <button onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+              <Plus size={13} /> Add Invoice
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Aging summary */}
@@ -193,8 +269,18 @@ export default function ReceivablesPage() {
         </div>
       )}
 
+      {/* Kanban pipeline */}
+      {view === "kanban" && pending.length > 0 && (
+        <KanbanPipeline
+          withDays={withDays}
+          isReadOnly={isReadOnly}
+          onMarkPaid={id => { const inv = invoices.find(i => i.id === id); if (inv) { updateInvoice({ ...inv, status: "paid" }); toast.success("Marked paid"); } }}
+          onChase={inv => { const msg = chaseMessage(inv, inv.daysOverdue); window.open(`mailto:?subject=${encodeURIComponent(`Payment reminder: ${formatCurrency(inv.amount)}`)}&body=${encodeURIComponent(msg)}`, "_blank"); }}
+        />
+      )}
+
       {/* Invoice list */}
-      {pending.length > 0 ? (
+      {view === "list" && pending.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
             <h2 className="text-sm font-semibold">Outstanding Invoices</h2>
@@ -238,7 +324,7 @@ export default function ReceivablesPage() {
             ))}
           </div>
         </div>
-      ) : (
+      ) : view === "list" ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Clock size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No outstanding invoices</h2>

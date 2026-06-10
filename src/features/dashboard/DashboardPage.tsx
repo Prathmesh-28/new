@@ -140,6 +140,93 @@ function TreasuryBanner() {
   );
 }
 
+function HealthScoreWidget() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, alerts, activeLoans, firm } = store;
+  const burn    = monthlyBurn(transactions);
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);
+  const unread  = alerts.filter(a => !a.isRead).length;
+
+  const now = new Date();
+  const m1s = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const m2s = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
+  const m2e = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
+  const thisRev = transactions.filter(t => t.date >= m1s && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const lastRev = transactions.filter(t => t.date >= m2s && t.date <= m2e && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+
+  const scores = [
+    {
+      label: "Cash Health",
+      score: runway >= 180 ? 100 : runway >= 90 ? 80 : runway >= 60 ? 60 : runway >= 30 ? 35 : 10,
+      detail: `${runway}d runway`,
+      color: runway >= 90 ? "#22c55e" : runway >= 45 ? "#eab308" : "#ef4444",
+    },
+    {
+      label: "Revenue Trend",
+      score: lastRev === 0 ? 60 : thisRev >= lastRev * 1.1 ? 90 : thisRev >= lastRev ? 70 : thisRev >= lastRev * 0.85 ? 45 : 20,
+      detail: lastRev > 0 ? `${thisRev >= lastRev ? "+" : ""}${Math.round(((thisRev - lastRev) / lastRev) * 100)}% MoM` : "First month",
+      color: lastRev === 0 || thisRev >= lastRev ? "#22c55e" : thisRev >= lastRev * 0.85 ? "#eab308" : "#ef4444",
+    },
+    {
+      label: "Debt Coverage",
+      score: activeLoans.length === 0 ? 90 : burn > 0 ? Math.min(100, Math.round((balance / (activeLoans.reduce((s,l)=>s+l.monthlyEmi,0) * 6)) * 90)) : 70,
+      detail: activeLoans.length === 0 ? "No active loans" : `${activeLoans.length} loan${activeLoans.length > 1 ? "s" : ""}`,
+      color: activeLoans.length === 0 ? "#22c55e" : "#3b82f6",
+    },
+    {
+      label: "Compliance",
+      score: unread === 0 ? 95 : unread <= 2 ? 70 : unread <= 5 ? 45 : 20,
+      detail: unread === 0 ? "All clear" : `${unread} alert${unread > 1 ? "s" : ""} pending`,
+      color: unread === 0 ? "#22c55e" : unread <= 2 ? "#eab308" : "#ef4444",
+    },
+  ];
+
+  const overall = Math.round(scores.reduce((s, c) => s + c.score, 0) / scores.length);
+  const overallColor = overall >= 75 ? "#22c55e" : overall >= 50 ? "#eab308" : "#ef4444";
+  const overallLabel = overall >= 75 ? "Healthy" : overall >= 50 ? "Needs Attention" : "At Risk";
+
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between cursor-pointer" onClick={() => setOpen(o => !o)}>
+        <div className="flex items-center gap-3">
+          <div className="relative w-10 h-10 shrink-0">
+            <svg viewBox="0 0 36 36" className="w-10 h-10 -rotate-90">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--color-border)" strokeWidth="3" />
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke={overallColor} strokeWidth="3"
+                strokeDasharray={`${overall} ${100 - overall}`} strokeLinecap="round" />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold" style={{ color: overallColor }}>{overall}</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Business Health Score</p>
+            <p className="text-xs font-medium" style={{ color: overallColor }}>{overallLabel}</p>
+          </div>
+        </div>
+        <ChevronRight size={14} className={`text-[var(--color-muted)] transition-transform ${open ? "rotate-90" : ""}`} />
+      </div>
+      {open && (
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          {scores.map(s => (
+            <div key={s.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-[var(--color-muted)] font-medium">{s.label}</p>
+                <span className="text-xs font-bold" style={{ color: s.color }}>{s.score}</span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1.5">
+                <div className="h-full rounded-full transition-all" style={{ width: `${s.score}%`, background: s.color }} />
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)]">{s.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: { name: string; balance: number; provider: string }) => void }) {
   const [name, setName]         = useState("");
   const [balance, setBalance]   = useState("");
@@ -428,6 +515,7 @@ export default function DashboardPage() {
           })()}
 
           <TreasuryBanner />
+          <HealthScoreWidget />
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

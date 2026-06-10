@@ -7,7 +7,7 @@ import {
   Eye, ChevronLeft, ChevronRight, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
-  FilePlus, Calculator, Wallet, Store, Landmark,
+  FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -19,6 +19,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
       { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
+      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
@@ -30,11 +31,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     ]},
     { label: "Operations", items: [
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
+      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
       { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
     { label: "Tools", items: [
+      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
@@ -45,6 +48,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
       { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
+      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
@@ -55,11 +59,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     ]},
     { label: "Operations", items: [
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
+      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
       { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
     { label: "Tools", items: [
+      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
     ]},

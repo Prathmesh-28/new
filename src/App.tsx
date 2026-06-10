@@ -33,6 +33,9 @@ const GstPage            = lazy(() => import("@/features/gst/GstPage"));
 const PayrollPage        = lazy(() => import("@/features/payroll/PayrollPage"));
 const SuppliersPage      = lazy(() => import("@/features/suppliers/SuppliersPage"));
 const LendersPage        = lazy(() => import("@/features/lenders/LendersPage"));
+const AnalyticsPage      = lazy(() => import("@/features/analytics/AnalyticsPage"));
+const CfoBriefPage       = lazy(() => import("@/features/cfo-brief/CfoBriefPage"));
+const VendorsPage        = lazy(() => import("@/features/vendors/VendorsPage"));
 
 function PageLoader() {
   return (
@@ -92,6 +95,9 @@ function AppShell() {
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />
                 <Route path="/lenders"       element={<LendersPage />} />
+                <Route path="/analytics"     element={<AnalyticsPage />} />
+                <Route path="/cfo-brief"     element={<CfoBriefPage />} />
+                <Route path="/vendors"       element={<VendorsPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>
