@@ -8,6 +8,7 @@ import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
+  PiggyBank,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -24,6 +25,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
+      { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
@@ -53,6 +56,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
+      { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
@@ -87,10 +92,11 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
   ],
 };
 
-function NavItems({ groups, collapsed, onNavigate }: {
+function NavItems({ groups, collapsed, onNavigate, badges }: {
   groups: NavGroup[];
   collapsed: boolean;
   onNavigate?: () => void;
+  badges?: Record<string, number>;
 }) {
   return (
     <>
@@ -102,25 +108,40 @@ function NavItems({ groups, collapsed, onNavigate }: {
             </p>
           )}
           <div className="flex flex-col gap-0.5">
-            {group.items.map(({ to, label, icon: Icon, tab }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={tab === "dashboard"}
-                title={collapsed ? label : undefined}
-                onClick={onNavigate}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-2.5 px-2 py-2 rounded-md text-sm font-medium transition-colors",
-                  collapsed && "justify-center",
-                  isActive
-                    ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
-                    : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4"
-                )}
-              >
-                <Icon size={15} className="shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </NavLink>
-            ))}
+            {group.items.map(({ to, label, icon: Icon, tab }) => {
+              const badge = badges?.[tab];
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={tab === "dashboard"}
+                  title={collapsed ? label : undefined}
+                  onClick={onNavigate}
+                  className={({ isActive }) => cn(
+                    "flex items-center gap-2.5 px-2 py-2 rounded-md text-sm font-medium transition-colors",
+                    collapsed && "justify-center",
+                    isActive
+                      ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
+                      : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4"
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    <Icon size={15} />
+                    {badge !== undefined && badge > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                        {badge > 9 ? "9+" : badge}
+                      </span>
+                    )}
+                  </div>
+                  {!collapsed && <span className="flex-1">{label}</span>}
+                  {!collapsed && badge !== undefined && badge > 0 && (
+                    <span className="text-[9px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">
+                      {badge}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -131,7 +152,7 @@ function NavItems({ groups, collapsed, onNavigate }: {
 export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { user, logout }                          = useAuth();
   const { canAccess, selectedClientTenantId,
-          selectedClientLabel, setSelectedClient } = useApp();
+          selectedClientLabel, setSelectedClient, store } = useApp();
   const navigate                                  = useNavigate();
   const [collapsed, setCollapsed]                 = useState(
     () => localStorage.getItem("hr_sidebar_collapsed") === "true"
@@ -142,6 +163,15 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   const groups = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
     .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
     .filter(g => g.items.length > 0);
+
+  const unreadAlerts = store.alerts.filter(a => !a.isRead).length;
+  const today        = new Date().toISOString().split("T")[0];
+  const overdueInvoices = (store as { invoices?: { dueDate: string; status: string }[] }).invoices
+    ? (store as { invoices: { dueDate: string; status: string }[] }).invoices.filter(inv => inv.dueDate < today && inv.status !== "paid").length
+    : 0;
+  const badges: Record<string, number> = {};
+  if (unreadAlerts > 0)   badges["alerts"]   = unreadAlerts;
+  if (overdueInvoices > 0) badges["invoices"] = overdueInvoices;
 
   const handleLogout = async () => { await logout(); navigate("/login"); };
   const toggleCollapse = () => setCollapsed(v => {
@@ -196,7 +226,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-          <NavItems groups={groups} collapsed={collapsed} />
+          <NavItems groups={groups} collapsed={collapsed} badges={badges} />
         </nav>
 
         {/* Search shortcut */}
@@ -309,7 +339,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
             )}
 
             <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} />
+              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} />
             </nav>
 
             <div className="border-t border-[var(--color-border)] px-4 py-3 flex items-center justify-between shrink-0">

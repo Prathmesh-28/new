@@ -36,6 +36,8 @@ const LendersPage        = lazy(() => import("@/features/lenders/LendersPage"));
 const AnalyticsPage      = lazy(() => import("@/features/analytics/AnalyticsPage"));
 const CfoBriefPage       = lazy(() => import("@/features/cfo-brief/CfoBriefPage"));
 const VendorsPage        = lazy(() => import("@/features/vendors/VendorsPage"));
+const BudgetsPage        = lazy(() => import("@/features/budgets/BudgetsPage"));
+const TaxPage            = lazy(() => import("@/features/tax/TaxPage"));
 
 function PageLoader() {
   return (
@@ -98,6 +100,8 @@ function AppShell() {
                 <Route path="/analytics"     element={<AnalyticsPage />} />
                 <Route path="/cfo-brief"     element={<CfoBriefPage />} />
                 <Route path="/vendors"       element={<VendorsPage />} />
+                <Route path="/budgets"       element={<BudgetsPage />} />
+                <Route path="/tax"           element={<TaxPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>

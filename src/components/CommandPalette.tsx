@@ -2,19 +2,36 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
-import { Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase, Package, Bell, Settings, Users, X } from "lucide-react";
+import {
+  Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
+  Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
+  Landmark, FilePlus, Calculator, Wallet, Receipt, Rocket, PlugZap, PiggyBank, ShieldCheck,
+} from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "Dashboard",    path: "/dashboard",    icon: LayoutDashboard },
-  { label: "Transactions", path: "/transactions", icon: ArrowRightLeft },
-  { label: "Forecast",     path: "/forecast",     icon: TrendingUp },
-  { label: "Credit",       path: "/credit",       icon: CreditCard },
-  { label: "Operations",   path: "/operations",   icon: Package },
-  { label: "Alerts",       path: "/alerts",       icon: Bell },
-  { label: "Settings",     path: "/settings",     icon: Settings },
-  { label: "Advisor",      path: "/advisor",      icon: Users },
-  { label: "Capital",      path: "/capital",      icon: Briefcase },
-  { label: "Profile",      path: "/profile",      icon: Settings },
+  { label: "Dashboard",    path: "/dashboard",    icon: LayoutDashboard, desc: "Overview & health score" },
+  { label: "Transactions", path: "/transactions", icon: ArrowRightLeft,  desc: "All bank transactions" },
+  { label: "Forecast",     path: "/forecast",     icon: TrendingUp,      desc: "90-day cash projection" },
+  { label: "Analytics",    path: "/analytics",    icon: BarChart3,       desc: "P&L, trends, benchmarks" },
+  { label: "CFO Brief",    path: "/cfo-brief",    icon: Sparkles,        desc: "AI financial summary" },
+  { label: "Invoices",     path: "/invoices",     icon: FilePlus,        desc: "Invoices & auto-collect" },
+  { label: "Receivables",  path: "/receivables",  icon: Receipt,         desc: "Aging pipeline & kanban" },
+  { label: "GST",          path: "/gst",          icon: Calculator,      desc: "GST returns & filings" },
+  { label: "Credit",       path: "/credit",       icon: CreditCard,      desc: "Working capital options" },
+  { label: "Capital",      path: "/capital",      icon: Rocket,          desc: "Fundraise & term sheets" },
+  { label: "Lenders",      path: "/lenders",      icon: Landmark,        desc: "Co-lending auction" },
+  { label: "Payroll",      path: "/payroll",      icon: Wallet,          desc: "Payroll & EWA" },
+  { label: "Vendors",      path: "/vendors",      icon: Building2,       desc: "Vendor directory & spend" },
+  { label: "Suppliers",    path: "/suppliers",    icon: Store,           desc: "Early-pay marketplace" },
+  { label: "Budgets",      path: "/budgets",      icon: PiggyBank,       desc: "Category budgets vs actuals" },
+  { label: "Tax Autopilot",path: "/tax",          icon: ShieldCheck,     desc: "Advance tax & TDS tracker" },
+  { label: "Operations",   path: "/operations",   icon: Package,         desc: "Business operations" },
+  { label: "Connectors",   path: "/connectors",   icon: PlugZap,         desc: "Integrations & data sources" },
+  { label: "Alerts",       path: "/alerts",       icon: Bell,            desc: "Notifications & alerts" },
+  { label: "Advisor",      path: "/advisor",      icon: Users,           desc: "CA/CFO client portal" },
+  { label: "Capital",      path: "/capital",      icon: Briefcase,       desc: "Investor portfolio" },
+  { label: "Settings",     path: "/settings",     icon: Settings,        desc: "Account preferences" },
+  { label: "Profile",      path: "/profile",      icon: Settings,        desc: "Your profile" },
 ];
 
 type Result = {
@@ -46,13 +63,13 @@ export function CommandPalette({ open, onClose }: Props) {
     const q = query.toLowerCase().trim();
     const go = (path: string) => { navigate(path); onClose(); };
 
-    if (!q) return NAV_ITEMS.map(n => ({ id: n.path, label: n.label, type: "nav" as const, action: () => go(n.path) }));
+    if (!q) return NAV_ITEMS.slice(0, 10).map(n => ({ id: n.path, label: n.label, sub: n.desc, type: "nav" as const, action: () => go(n.path) }));
 
     const out: Result[] = [];
 
     // Nav
-    NAV_ITEMS.filter(n => n.label.toLowerCase().includes(q)).forEach(n =>
-      out.push({ id: n.path, label: n.label, type: "nav", action: () => go(n.path) })
+    NAV_ITEMS.filter(n => n.label.toLowerCase().includes(q) || n.desc?.toLowerCase().includes(q)).forEach(n =>
+      out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", action: () => go(n.path) })
     );
 
     // Transactions
@@ -132,7 +149,7 @@ export function CommandPalette({ open, onClose }: Props) {
           {results.map((r, i) => {
             const showHeader = r.type !== lastType;
             lastType = r.type;
-            const NavIcon = r.type === "nav" ? (NAV_ITEMS.find(n => n.path === r.id)?.icon ?? Search) : null;
+            const NavIcon = r.type === "nav" ? (NAV_ITEMS.find(n => n.path === r.id && n.label === r.label)?.icon ?? NAV_ITEMS.find(n => n.path === r.id)?.icon ?? Search) : null;
             return (
               <li key={r.id}>
                 {showHeader && (
