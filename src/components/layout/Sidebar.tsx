@@ -7,7 +7,7 @@ import {
   Eye, ChevronLeft, ChevronRight, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
-  FilePlus, Calculator, Wallet,
+  FilePlus, Calculator, Wallet, Store, Landmark,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -26,9 +26,11 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
+      { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
     ]},
     { label: "Operations", items: [
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
+      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
@@ -53,6 +55,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     ]},
     { label: "Operations", items: [
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
+      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
@@ -73,6 +76,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     { label: "", items: [
       { to: "/investor",     label: "Portfolio",    icon: Briefcase,       tab: "investor"     },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
+      { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
     ]},
   ],
 };

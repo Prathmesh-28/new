@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle } from "lucide-react";
+import { Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 interface InvoiceItem { description: string; hsn_sac: string; quantity: number; unit_price: number; gst_rate: number; amount: number; }
@@ -26,6 +26,7 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [customerName, setCustomerName] = useState("");
   const [customerGstin, setCustomerGstin] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [gstRate, setGstRate] = useState("18");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState([{ description: "", hsn_sac: "", quantity: "1", unit_price: "", gst_rate: "18" }]);
@@ -47,7 +48,9 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
     try {
       await api.post("/api/invoices", {
         customer_name: customerName, customer_gstin: customerGstin || undefined,
-        customer_email: customerEmail || undefined, gst_rate: parseFloat(gstRate),
+        customer_email: customerEmail || undefined,
+        customer_phone: customerPhone || undefined,
+        gst_rate: parseFloat(gstRate),
         due_date: dueDate || undefined,
         items: items.map(it => ({
           description: it.description, hsn_sac: it.hsn_sac || undefined,
@@ -88,6 +91,10 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
               <input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className={inp} placeholder="accounts@acme.com" />
             </div>
             <div>
+              <label className={lbl}>Customer WhatsApp</label>
+              <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className={inp} placeholder="+91 98765 43210" />
+            </div>
+            <div>
               <label className={lbl}>GST rate (%)</label>
               <select value={gstRate} onChange={e => setGstRate(e.target.value)} className={inp}>
                 {["0", "5", "12", "18", "28"].map(r => <option key={r} value={r}>{r}%</option>)}
@@ -99,7 +106,6 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
           </div>
 
-          {/* Line items */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Line items</label>
@@ -137,7 +143,6 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
           </div>
 
-          {/* Totals */}
           <div className="border-t border-[var(--color-border)] pt-3 space-y-1 text-sm">
             <div className="flex justify-between text-[var(--color-muted)]"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
             <div className="flex justify-between text-[var(--color-muted)]"><span>GST {gstRate}%</span><span>{formatCurrency(gst)}</span></div>
@@ -184,12 +189,93 @@ function UpiQrModal({ invoice, onClose }: { invoice: Invoice; onClose: () => voi
   );
 }
 
+function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onRefresh: () => void }) {
+  const overdue = invoices.filter(i => i.aging && i.aging !== "current" && i.status !== "paid" && i.status !== "cancelled");
+  const [reminding, setReminding] = useState<Record<string, boolean>>({});
+  const [reminded, setReminded]   = useState<Set<string>>(new Set());
+
+  const sendReminder = async (id: string) => {
+    setReminding(r => ({ ...r, [id]: true }));
+    try {
+      await api.post(`/api/invoices/${id}/remind`, {});
+      setReminded(s => new Set([...s, id]));
+      toast.success("WhatsApp reminder sent with UPI payment link");
+      onRefresh();
+    } catch {
+      toast.error("Could not send reminder");
+    } finally {
+      setReminding(r => ({ ...r, [id]: false }));
+    }
+  };
+
+  const remindAll = async () => {
+    const unreminded = overdue.filter(i => !reminded.has(i.id));
+    for (const inv of unreminded) await sendReminder(inv.id);
+    toast.success(`${unreminded.length} reminders sent`);
+  };
+
+  if (overdue.length === 0) {
+    return (
+      <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3">
+        <Check size={14} className="text-green-400 shrink-0" />
+        <p className="text-sm text-green-300">All invoices are current — no overdue collections.</p>
+      </div>
+    );
+  }
+
+  const totalOverdue = overdue.reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Zap size={14} className="text-yellow-400" />
+          <span className="text-sm font-semibold">Auto-Collection</span>
+          <span className="text-xs bg-red-900/30 text-red-400 border border-red-800/30 px-2 py-0.5 rounded-full">{overdue.length} overdue · {formatCurrency(totalOverdue)}</span>
+        </div>
+        <button onClick={remindAll} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+          <Bell size={11} /> Remind All
+        </button>
+      </div>
+      <div className="divide-y divide-[var(--color-border)]">
+        {overdue.map(inv => (
+          <div key={inv.id} className="px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-medium truncate">{inv.customer_name}</p>
+                <span className={`text-[10px] font-semibold ${AGING_COLOR[inv.aging ?? "current"]}`}>
+                  {inv.aging === "90d+" ? "90d+ overdue" : inv.aging === "60d" ? "60d overdue" : "30d overdue"}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--color-muted)]">{inv.invoice_number} · Due {inv.due_date}</p>
+            </div>
+            <p className="text-sm font-bold tabular-nums text-red-400 shrink-0">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
+            {reminded.has(inv.id) ? (
+              <span className="flex items-center gap-1 text-[10px] text-green-400 bg-green-900/20 border border-green-800/30 px-2 py-1 rounded-lg shrink-0">
+                <Check size={10} /> Sent
+              </span>
+            ) : (
+              <button onClick={() => sendReminder(inv.id)} disabled={reminding[inv.id]}
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/50 hover:bg-green-900/10 px-2.5 py-1.5 rounded-lg shrink-0 disabled:opacity-40 transition-colors">
+                <MessageCircle size={11} /> {reminding[inv.id] ? "Sending…" : "Remind"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+        <p className="text-[11px] text-[var(--color-muted)]">Sends WhatsApp message with a one-tap UPI payment link. Invoice auto-marks paid when collected.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showNew, setShowNew]   = useState(false);
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
-  const [tab, setTab]           = useState<"all" | "pending" | "paid">("all");
+  const [tab, setTab]           = useState<"all" | "pending" | "paid" | "collection">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,16 +302,18 @@ export default function InvoicesPage() {
   const downloadPdf = (id: string, num: string) => {
     const token = localStorage.getItem("hr_access");
     const a = document.createElement("a");
-    a.href = `${import.meta.env.VITE_API_URL ?? ""}/api/invoices/${id}/pdf`;
-    a.download = `${num}.pdf`;
-    // Add auth header via fetch instead
-    fetch(a.href, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob()).then(b => { a.href = URL.createObjectURL(b); a.click(); })
+    fetch(`${import.meta.env.VITE_API_URL ?? ""}/api/invoices/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.blob()).then(b => { a.href = URL.createObjectURL(b); a.download = `${num}.pdf`; a.click(); })
       .catch(() => toast.error("PDF generation failed"));
   };
 
+  const overdueCount = invoices.filter(i => i.aging && i.aging !== "current" && i.status !== "paid" && i.status !== "cancelled").length;
+
   const filtered = invoices.filter(inv =>
-    tab === "all" ? true : tab === "pending" ? inv.status !== "paid" && inv.status !== "cancelled" : inv.status === "paid"
+    tab === "all" ? true :
+    tab === "pending" ? inv.status !== "paid" && inv.status !== "cancelled" :
+    tab === "paid" ? inv.status === "paid" :
+    true
   );
 
   const totalPending = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
@@ -245,7 +333,6 @@ export default function InvoicesPage() {
         </button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Pending",  value: totalPending, color: "text-yellow-400" },
@@ -259,17 +346,22 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {(["all", "pending", "paid"] as const).map(t => (
+        {(["all", "pending", "paid", "collection"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-xs rounded font-medium capitalize transition-colors ${tab === t ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-            {t}
+            className={`px-3 py-1.5 text-xs rounded font-medium capitalize transition-colors flex items-center gap-1.5 ${tab === t ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {t === "collection" && <Zap size={10} />}
+            {t === "collection" ? "Auto-Collect" : t}
+            {t === "collection" && overdueCount > 0 && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${tab === t ? "bg-white/20 text-white" : "bg-red-900/40 text-red-400"}`}>{overdueCount}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {loading ? (
+      {tab === "collection" ? (
+        <CollectionAutoPanel invoices={invoices} onRefresh={load} />
+      ) : loading ? (
         <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading…</div>
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
@@ -336,6 +428,15 @@ export default function InvoicesPage() {
                             className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 rounded">
                             <QrCode size={13} />
                           </button>
+                          {inv.aging && inv.aging !== "current" && (
+                            <button onClick={async () => {
+                              try { await api.post(`/api/invoices/${inv.id}/remind`, {}); toast.success("Reminder sent"); }
+                              catch { toast.error("Failed to send reminder"); }
+                            }} title="Send WhatsApp reminder"
+                              className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
+                              <MessageCircle size={13} />
+                            </button>
+                          )}
                           <button onClick={() => markStatus(inv.id, "paid")} title="Mark paid"
                             className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
                             <Check size={13} />

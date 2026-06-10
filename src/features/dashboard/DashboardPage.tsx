@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { format, addMonths, setDate, isBefore } from "date-fns";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
+import { api } from "@/lib/api";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "text-red-400 border-red-700/60 bg-red-900/40",
@@ -76,6 +77,64 @@ function StatCard({ label, raw, display, icon: Icon, color, trend, delta, onClic
             {delta > 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}% vs last mo
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TreasuryBanner() {
+  const [data, setData] = useState<{ idle_cash: number; annual_yield_at_65: number } | null>(null);
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem("hr_treasury_dismissed") === "true");
+  const [enabling, setEnabling] = useState(false);
+
+  useEffect(() => {
+    if (dismissed) return;
+    api.get<{ idle_cash: number; annual_yield_at_65: number }>("/api/treasury/analysis")
+      .then(setData)
+      .catch(() => {});
+  }, [dismissed]);
+
+  if (dismissed || !data || data.idle_cash < 50000) return null;
+
+  const idleL = (data.idle_cash / 100000).toFixed(1);
+  const yieldAmt = formatCurrency(Math.round(data.annual_yield_at_65));
+
+  const handleEnable = async () => {
+    setEnabling(true);
+    try {
+      await api.post("/api/treasury/sweep-enable", {});
+      toast.success("Auto-sweep enrollment queued. Our team will contact you shortly.");
+      setDismissed(true);
+      localStorage.setItem("hr_treasury_dismissed", "true");
+    } catch {
+      toast.error("Could not enable auto-sweep");
+    } finally { setEnabling(false); }
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem("hr_treasury_dismissed", "true");
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Landmark size={14} className="text-[var(--color-primary)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">₹{idleL}L idle in current account · Auto-sweep could earn {yieldAmt}/yr at 6.5%</p>
+          <p className="text-xs text-[var(--color-muted)]">Put excess cash to work in liquid mutual funds — withdraw anytime, same-day.</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={handleEnable} disabled={enabling}
+          className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50 whitespace-nowrap">
+          {enabling ? "Enrolling…" : "Enable Auto-Sweep →"}
+        </button>
+        <button onClick={handleDismiss} className="p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]">
+          <X size={14} />
+        </button>
       </div>
     </div>
   );
@@ -367,6 +426,8 @@ export default function DashboardPage() {
               </div>
             );
           })()}
+
+          <TreasuryBanner />
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

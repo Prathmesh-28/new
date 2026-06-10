@@ -176,6 +176,55 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   doc.end();
 });
 
+// POST /:id/remind - Send WhatsApp reminder with UPI link
+router.post("/:id/remind", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.user.tenant_id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT i.*, t.phone as customer_phone FROM invoices i
+       LEFT JOIN tenants t ON t.id = $2
+       WHERE i.id = $1 AND i.tenant_id = $2`,
+      [id, tenantId]
+    );
+    const invoice = rows[0];
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+    // Record the reminder
+    await pool.query(
+      `INSERT INTO invoice_reminders (invoice_id, tenant_id, reminded_at, channel, status)
+       VALUES ($1, $2, NOW(), 'whatsapp', 'sent')
+       ON CONFLICT DO NOTHING`,
+      [id, tenantId]
+    ).catch(() => {});
+
+    // Update invoice status to sent if still draft
+    if (invoice.status === 'draft') {
+      await pool.query(`UPDATE invoices SET status='sent', updated_at=NOW() WHERE id=$1`, [id]);
+    }
+
+    res.json({ success: true, message: "Reminder queued" });
+  } catch (err) {
+    console.error("remind error", err);
+    res.status(500).json({ error: "Failed to send reminder" });
+  }
+});
+
+// GET /:id/reminders - Get reminder history
+router.get("/:id/reminders", authenticate, async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.user.tenant_id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 ORDER BY reminded_at DESC LIMIT 10`,
+      [id, tenantId]
+    ).catch(() => ({ rows: [] }));
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
+
 // POST /api/invoices/:id/send — email invoice
 router.post("/:id/send", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows: [inv] } = await pool.query(

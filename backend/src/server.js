@@ -73,6 +73,10 @@ app.use("/api/payroll",            require("./routes/payroll"));
 app.use("/api/bnpl",               require("./routes/bnpl"));
 app.use("/api/collections",        require("./routes/collections"));
 app.use("/webhook/razorpay",       require("./routes/collections")); // Razorpay payment webhook
+app.use("/api/treasury",           require("./routes/treasury"));
+app.use("/api/ewa",                require("./routes/ewa"));
+app.use("/api/suppliers",          require("./routes/suppliers"));
+app.use("/api/lenders",            require("./routes/lenders"));
 
 // Admin endpoints (super_admin only)
 const { authenticate: _auth } = require("./middleware/auth");

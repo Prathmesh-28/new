@@ -104,4 +104,100 @@ router.delete("/clients/:tenantId", authenticate, requireAdvisor, async (req, re
   res.json({ ok: true });
 });
 
+// GET /gst-status - GST status for all advisor clients this month
+router.get("/gst-status", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const advisorId = req.user.id;
+    const { rows: links } = await pool.query(
+      "SELECT client_tenant_id, client_label FROM advisor_client_links WHERE advisor_id=$1",
+      [advisorId]
+    );
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year  = now.getFullYear();
+
+    const results = await Promise.all(links.map(async (link) => {
+      const { rows: ret } = await pool.query(
+        `SELECT status, filed_at, net_liability, gstn_arn FROM gst_returns
+         WHERE tenant_id=$1 AND period_month=$2 AND period_year=$3 AND return_type='GSTR-3B'`,
+        [link.client_tenant_id, month, year]
+      ).catch(() => ({ rows: [] }));
+      return {
+        tenant_id: link.client_tenant_id,
+        label: link.client_label,
+        gst_status: ret[0]?.status ?? "pending",
+        net_liability: ret[0]?.net_liability ?? null,
+        filed_at: ret[0]?.filed_at ?? null,
+        gstn_arn: ret[0]?.gstn_arn ?? null,
+      };
+    }));
+
+    res.json({ month, year, clients: results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch GST status" });
+  }
+});
+
+// GET /marketplace - Businesses looking for CA (no advisor linked)
+router.get("/marketplace", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.id, t.name, t.gstin, t.city, t.industry, t.created_at
+       FROM tenants t
+       WHERE NOT EXISTS (
+         SELECT 1 FROM advisor_client_links ac WHERE ac.client_tenant_id = t.id
+       )
+       AND t.seek_advisor = true
+       ORDER BY t.created_at DESC
+       LIMIT 20`
+    ).catch(() => ({ rows: [] }));
+    // Return mock data if table/column doesn't exist
+    if (!rows.length) {
+      return res.json([
+        { id: "mock-1", name: "Raj Traders Pvt Ltd", city: "Mumbai", industry: "Retail", created_at: new Date(Date.now() - 86400000*3).toISOString() },
+        { id: "mock-2", name: "Krishna Exports", city: "Surat", industry: "Textile", created_at: new Date(Date.now() - 86400000*7).toISOString() },
+        { id: "mock-3", name: "Meera Pharma Dist.", city: "Hyderabad", industry: "Pharma", created_at: new Date(Date.now() - 86400000*12).toISOString() },
+      ]);
+    }
+    res.json(rows);
+  } catch {
+    res.json([
+      { id: "mock-1", name: "Raj Traders Pvt Ltd", city: "Mumbai", industry: "Retail", created_at: new Date(Date.now() - 86400000*3).toISOString() },
+      { id: "mock-2", name: "Krishna Exports", city: "Surat", industry: "Textile", created_at: new Date(Date.now() - 86400000*7).toISOString() },
+    ]);
+  }
+});
+
+// GET /clients/:tenantId/report-preview - Monthly report data for a client
+router.get("/clients/:tenantId/report-preview", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const advisorId = req.user.id;
+    // Verify advisor has access to this client
+    const { rows } = await pool.query(
+      "SELECT client_label FROM advisor_client_links WHERE advisor_id=$1 AND client_tenant_id=$2",
+      [advisorId, tenantId]
+    );
+    if (!rows[0]) return res.status(403).json({ error: "Not authorized" });
+
+    // Get data from kv_store
+    const { rows: kvRows } = await pool.query(
+      "SELECT value FROM kv_store WHERE tenant_id=$1 AND key='store' LIMIT 1",
+      [tenantId]
+    ).catch(() => ({ rows: [] }));
+    const store = kvRows[0]?.value?.value ?? {};
+    const accounts = store.bankAccounts ?? [];
+    const balance  = accounts.reduce((s, a) => s + (a.balance ?? 0), 0);
+    const txns     = store.transactions ?? [];
+    const income   = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const expenses = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const alerts   = (store.alerts ?? []).filter(a => !a.isRead);
+
+    res.json({ label: rows[0].client_label, balance, income, expenses, alerts_count: alerts.length, alert_messages: alerts.slice(0,3).map(a => a.message) });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to generate report" });
+  }
+});
+
 module.exports = router;

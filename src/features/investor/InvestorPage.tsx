@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
-import { Briefcase, TrendingUp, Users, Rocket, X } from "lucide-react";
+import { Briefcase, TrendingUp, Users, Rocket, X, ShieldCheck } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -97,11 +97,12 @@ export default function InvestorPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {[
           { label: "Total Invested",   value: formatCurrency(totalInvested), icon: Briefcase },
           { label: "Active Raises",    value: activeRaises.toString(),        icon: TrendingUp },
           { label: "Investments",      value: myInvestments.length.toString(),icon: Users },
+          { label: "AA-Verified",      value: publicRaises.length.toString(), icon: ShieldCheck },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
@@ -189,7 +190,12 @@ export default function InvestorPage() {
                 <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="text-sm font-semibold mb-1">{r.name}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-semibold">{r.name}</p>
+                        <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
+                          <ShieldCheck size={9} /> AA Verified
+                        </span>
+                      </div>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${TRACK_COLOR[trackKey] ?? ""}`}>
                         {TRACK_LABEL[trackKey] ?? r.raise_type}
                       </span>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote } from "lucide-react";
 import { toast } from "sonner";
 
 interface Employee {
@@ -113,7 +113,10 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa">("employees");
+  const [ewaData, setEwaData]     = useState<{ day_of_month: number; employees: { id: string; name: string; gross_salary: number; earned_to_date: number; max_advance: number; advances_taken: number }[] } | null>(null);
+  const [ewaLoading, setEwaLoading] = useState(false);
+  const [requesting, setRequesting] = useState<Record<string, boolean>>({});
 
   const now = new Date();
   const [runMonth] = useState(now.getMonth() + 1);
@@ -131,6 +134,27 @@ export default function PayrollPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadEwa = async () => {
+    setEwaLoading(true);
+    try {
+      const d = await api.get<typeof ewaData>("/api/ewa");
+      setEwaData(d);
+    } catch { /* ok */ } finally { setEwaLoading(false); }
+  };
+
+  useEffect(() => { if (tab === "ewa") loadEwa(); }, [tab]);
+
+  const requestAdvance = async (empId: string, empName: string, amount: number) => {
+    setRequesting(r => ({ ...r, [empId]: true }));
+    try {
+      await api.post("/api/ewa/request", { employee_id: empId, amount });
+      toast.success(`Advance of ${formatCurrency(amount)} approved for ${empName}`);
+      loadEwa();
+    } catch {
+      toast.error("Could not request advance");
+    } finally { setRequesting(r => ({ ...r, [empId]: false })); }
+  };
 
   const runPayroll = async () => {
     setRunning(true);
@@ -188,7 +212,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -304,6 +328,56 @@ export default function PayrollPage() {
                 </div>
               );
             })}
+          </div>
+        )
+      )}
+
+      {tab === "ewa" && (
+        ewaLoading ? (
+          <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading…</div>
+        ) : !ewaData || ewaData.employees.length === 0 ? (
+          <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center">
+            <Banknote size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No active employees. Add employees to enable Earned Wage Access.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-3">
+              <p className="text-sm font-semibold text-blue-300 mb-0.5">Earned Wage Access · Day {ewaData.day_of_month} of month</p>
+              <p className="text-xs text-[var(--color-muted)]">Employees can access up to 50% of wages earned so far this month. Deducted from next salary.</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>
+                    {["Employee", "Gross Salary", "Earned To Date", "Max Advance", "Action"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {ewaData.employees.map(emp => (
+                    <tr key={emp.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3">
+                        <div className="w-7 h-7 rounded-full bg-[var(--color-primary)]/20 inline-flex items-center justify-center text-xs font-bold text-[var(--color-primary)] mr-2">{emp.name[0].toUpperCase()}</div>
+                        {emp.name}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">{formatCurrency(emp.gross_salary)}</td>
+                      <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(emp.earned_to_date)}</td>
+                      <td className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(emp.max_advance)}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => requestAdvance(emp.id, emp.name, emp.max_advance)}
+                          disabled={requesting[emp.id] || emp.max_advance === 0}
+                          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-40">
+                          <Banknote size={11} /> {requesting[emp.id] ? "Requesting…" : "Request Advance"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       )}
