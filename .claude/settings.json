@@ -116,7 +116,11 @@
       "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/routes/whatsapp.js)",
       "Bash(node --check /Users/prathmeshwalimbe/Downloads/new/backend/src/lib/cfo_brief.js)",
       "Bash(xargs sed -i '' 's/rounded-xl/rounded-lg/g')",
-      "Bash(xargs sed -i '' 's/rounded-2xl/rounded-xl/g')"
+      "Bash(xargs sed -i '' 's/rounded-2xl/rounded-xl/g')",
+      "Bash(/usr/local/bin/node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(node -e \"const lr = require\\('/Users/prathmeshwalimbe/Downloads/new/node_modules/lucide-react'\\); console.log\\('Wallet:', !!lr.Wallet, 'FilePlus:', !!lr.FilePlus, 'Calculator:', !!lr.Calculator, 'BanknoteIcon:', !!lr.Banknote\\)\")",
+      "Bash(vercel domains *)",
+      "Bash(grep -E '\\\\.\\(tsx|ts|py|js\\)$')"
     ]
   }
 }
