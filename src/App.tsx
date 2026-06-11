@@ -38,6 +38,12 @@ const CfoBriefPage       = lazy(() => import("@/features/cfo-brief/CfoBriefPage"
 const VendorsPage        = lazy(() => import("@/features/vendors/VendorsPage"));
 const BudgetsPage        = lazy(() => import("@/features/budgets/BudgetsPage"));
 const TaxPage            = lazy(() => import("@/features/tax/TaxPage"));
+const FinancialHealthPage = lazy(() => import("@/features/health/FinancialHealthPage"));
+const WorkingCapitalPage = lazy(() => import("@/features/working-capital/WorkingCapitalPage"));
+const DebtPage           = lazy(() => import("@/features/debt/DebtPage"));
+const ValuationPage      = lazy(() => import("@/features/valuation/ValuationPage"));
+const CompliancePage     = lazy(() => import("@/features/compliance/CompliancePage"));
+const SpendPage          = lazy(() => import("@/features/spend/SpendPage"));
 
 function PageLoader() {
   return (
@@ -102,6 +108,12 @@ function AppShell() {
                 <Route path="/vendors"       element={<VendorsPage />} />
                 <Route path="/budgets"       element={<BudgetsPage />} />
                 <Route path="/tax"           element={<TaxPage />} />
+                <Route path="/health"        element={<FinancialHealthPage />} />
+                <Route path="/working-capital" element={<WorkingCapitalPage />} />
+                <Route path="/debt"          element={<DebtPage />} />
+                <Route path="/valuation"     element={<ValuationPage />} />
+                <Route path="/compliance"    element={<CompliancePage />} />
+                <Route path="/spend"         element={<SpendPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>

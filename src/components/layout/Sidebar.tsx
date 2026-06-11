@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
-  PiggyBank,
+  PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -21,9 +21,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
+      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
+      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
+      { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
+      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
@@ -36,11 +40,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
       { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
       { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
+      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
     { label: "Tools", items: [
       { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
+      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
@@ -52,9 +58,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
+      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
+      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
+      { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
+      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
@@ -66,11 +76,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
       { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
       { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
+      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
       { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
     ]},
     { label: "Tools", items: [
       { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
+      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
     ]},
@@ -79,7 +91,10 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     { label: "", items: [
       { to: "/advisor",      label: "My Clients",   icon: Users,           tab: "advisor"      },
       { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
+      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
+      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
+      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
     ]},
   ],
@@ -87,6 +102,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     { label: "", items: [
       { to: "/investor",     label: "Portfolio",    icon: Briefcase,       tab: "investor"     },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
+      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
       { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
     ]},
   ],

@@ -6,6 +6,7 @@ import {
   Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
   Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
   Landmark, FilePlus, Calculator, Wallet, Receipt, Rocket, PlugZap, PiggyBank, ShieldCheck,
+  HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -14,6 +15,11 @@ const NAV_ITEMS = [
   { label: "Forecast",     path: "/forecast",     icon: TrendingUp,      desc: "90-day cash projection" },
   { label: "Analytics",    path: "/analytics",    icon: BarChart3,       desc: "P&L, trends, benchmarks" },
   { label: "CFO Brief",    path: "/cfo-brief",    icon: Sparkles,        desc: "AI financial summary" },
+  { label: "Financial Health", path: "/health",   icon: HeartPulse,      desc: "Composite score, ratios & lender readiness" },
+  { label: "Working Capital", path: "/working-capital", icon: RefreshCcw, desc: "DSO, DPO, DIO & cash conversion cycle" },
+  { label: "Debt Manager", path: "/debt",         icon: Scale,           desc: "Amortisation, prepayment & refinance maths" },
+  { label: "Valuation",    path: "/valuation",    icon: Gem,             desc: "DCF, multiples & dilution simulator" },
+  { label: "Compliance",   path: "/compliance",   icon: CalendarCheck,   desc: "GST, TDS & advance-tax calendar" },
   { label: "Invoices",     path: "/invoices",     icon: FilePlus,        desc: "Invoices & auto-collect" },
   { label: "Receivables",  path: "/receivables",  icon: Receipt,         desc: "Aging pipeline & kanban" },
   { label: "GST",          path: "/gst",          icon: Calculator,      desc: "GST returns & filings" },
@@ -25,6 +31,7 @@ const NAV_ITEMS = [
   { label: "Suppliers",    path: "/suppliers",    icon: Store,           desc: "Early-pay marketplace" },
   { label: "Budgets",      path: "/budgets",      icon: PiggyBank,       desc: "Category budgets vs actuals" },
   { label: "Tax Autopilot",path: "/tax",          icon: ShieldCheck,     desc: "Advance tax & TDS tracker" },
+  { label: "Spend Intel",  path: "/spend",        icon: ScanSearch,      desc: "Duplicate vendors, subscriptions, category benchmarks" },
   { label: "Operations",   path: "/operations",   icon: Package,         desc: "Business operations" },
   { label: "Connectors",   path: "/connectors",   icon: PlugZap,         desc: "Integrations & data sources" },
   { label: "Alerts",       path: "/alerts",       icon: Bell,            desc: "Notifications & alerts" },
