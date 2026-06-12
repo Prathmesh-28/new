@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
-import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { format, addMonths, setDate, isBefore } from "date-fns";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -515,12 +515,14 @@ export default function DashboardPage() {
           })()}
 
           {/* Quick-actions row */}
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
             {[
+              { label: "Fin Health",    icon: HeartPulse,   path: "/health",     color: "text-rose-400",   bg: "bg-rose-950/20"   },
+              { label: "Working Capital", icon: RefreshCcw, path: "/working-capital", color: "text-teal-400", bg: "bg-teal-950/20" },
               { label: "Analytics",     icon: BarChart3,    path: "/analytics",  color: "text-blue-400",   bg: "bg-blue-950/20"   },
               { label: "CFO Brief",     icon: Sparkles,     path: "/cfo-brief",  color: "text-purple-400", bg: "bg-purple-950/20" },
               { label: "Budgets",       icon: PiggyBank,    path: "/budgets",    color: "text-green-400",  bg: "bg-green-950/20"  },
-              { label: "Tax Autopilot", icon: ShieldCheck,  path: "/tax",        color: "text-orange-400", bg: "bg-orange-950/20" },
+              { label: "Compliance",    icon: ShieldCheck,  path: "/compliance", color: "text-orange-400", bg: "bg-orange-950/20" },
               { label: "Receivables",   icon: Receipt,      path: "/receivables",color: "text-yellow-400", bg: "bg-yellow-950/20" },
               { label: "Operations",    icon: Package,      path: "/operations", color: "text-[var(--color-muted)]", bg: "bg-[var(--color-accent)]" },
             ].map(({ label, icon: Icon, path, color, bg }) => (

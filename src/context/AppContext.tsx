@@ -205,10 +205,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [user, currentRole]);
 
+  // Union of stored role config and shipped defaults, so tabs added in newer
+  // releases stay reachable for users whose roles were persisted earlier.
   const canAccess = (tab: string) => {
     if (currentRole === "super_admin") return true;
     const rc: RoleConfig | undefined = store.roles.find(r => r.id === currentRole);
-    return rc?.accessibleTabs.includes(tab) ?? false;
+    const dc = defaultConfig.roles.find(r => r.id === currentRole);
+    return (rc?.accessibleTabs.includes(tab) ?? false) || (dc?.accessibleTabs.includes(tab) ?? false);
   };
 
   const canExport = () => {

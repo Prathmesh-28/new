@@ -228,8 +228,8 @@ export default function VendorsPage() {
                     {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "—"}
                   </td>
                   <td className="px-4 py-3 text-center hidden lg:table-cell">
-                    {v.trend === "up" ? <TrendingUp size={13} className="text-red-400 mx-auto" title="Spend up vs last month" />
-                      : v.trend === "down" ? <TrendingDown size={13} className="text-green-400 mx-auto" title="Spend down vs last month" />
+                    {v.trend === "up" ? <span title="Spend up vs last month"><TrendingUp size={13} className="text-red-400 mx-auto" /></span>
+                      : v.trend === "down" ? <span title="Spend down vs last month"><TrendingDown size={13} className="text-green-400 mx-auto" /></span>
                       : <span className="text-[var(--color-muted)] text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">

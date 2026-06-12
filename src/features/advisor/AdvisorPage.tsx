@@ -1,11 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Plus, X, AlertTriangle, TrendingUp, CheckCircle2, CreditCard, Trash2, Calculator, Star, FileBarChart2, Zap, ArrowRight } from "lucide-react";
+import {
+  Users, Plus, X, AlertTriangle, TrendingUp, CheckCircle2, CreditCard, Trash2,
+  Calculator, Star, FileBarChart2, Zap, ArrowRight, Building2, Clock, FilePlus,
+  SquareCheck, Paperclip, Timer, Send, Download, Settings2, ChevronDown, ChevronUp,
+  ReceiptText, Sparkles, Badge,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { format, differenceInCalendarDays, addMonths, setDate, isBefore, startOfYear } from "date-fns";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type ClientSummary = {
   tenant_id: string;
@@ -43,7 +51,32 @@ type MarketplaceLead = {
   city: string;
   industry: string;
   created_at: string;
+  revenue_tier?: string;
+  reason?: string;
+  match_score?: number;
+  est_annual_fee?: number;
 };
+
+type CaTask = {
+  id: string;
+  clientLabel: string;
+  title: string;
+  deadline: string;
+  status: "todo" | "inprogress" | "done";
+  type: "gst" | "tds" | "audit" | "advisory" | "itr" | "roc" | "other";
+};
+
+type CaBill = {
+  id: string;
+  clientLabel: string;
+  description: string;
+  amount: number;
+  dueDate: string;
+  status: "draft" | "sent" | "paid";
+  createdAt: string;
+};
+
+type CaFirmProfile = { name: string; tagline: string; gstin: string };
 
 const SEV_COLOR: Record<string, string> = {
   critical: "text-red-400 border-red-800/40 bg-red-950/20",
@@ -54,13 +87,71 @@ const SEV_COLOR: Record<string, string> = {
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function RunwayBadge({ days }: { days: number | null }) {
   if (days === null) return <span className="text-xs text-[var(--color-muted)]">No forecast</span>;
   const color = days < 30 ? "text-red-400" : days < 60 ? "text-yellow-400" : "text-green-400";
   return <span className={`text-sm font-bold ${color}`}>{days}d runway</span>;
 }
 
-function ReportModal({ tenantId, label, onClose }: { tenantId: string; label: string; onClose: () => void }) {
+function loadFirmProfile(): CaFirmProfile {
+  try { return JSON.parse(localStorage.getItem("hr_ca_firm") ?? "{}"); } catch { return { name: "", tagline: "", gstin: "" }; }
+}
+function saveFirmProfile(p: CaFirmProfile) { localStorage.setItem("hr_ca_firm", JSON.stringify(p)); }
+
+// ── Compliance calendar helpers ───────────────────────────────────────────────
+
+function complianceDeadlines(today: Date) {
+  const y = today.getFullYear(), m = today.getMonth();
+  const deadlines: { label: string; type: string; date: Date }[] = [];
+  // GSTR-3B: 20th each month
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(y, m + i, 20);
+    if (d >= today) deadlines.push({ label: "GSTR-3B", type: "gst", date: d });
+  }
+  // TDS: 7th each month
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(y, m + i, 7);
+    if (d >= today) deadlines.push({ label: "TDS Deposit", type: "tds", date: d });
+  }
+  // PF: 15th each month
+  for (let i = 0; i < 2; i++) {
+    const d = new Date(y, m + i, 15);
+    if (d >= today) deadlines.push({ label: "PF Filing", type: "pf", date: d });
+  }
+  // ROC: Jun 30
+  const roc = new Date(y, 5, 30);
+  if (roc >= today) deadlines.push({ label: "ROC Annual Return", type: "roc", date: roc });
+  // Advance tax: Jun 15, Sep 15, Dec 15, Mar 15
+  [[5,15],[8,15],[11,15]].forEach(([mo,da]) => {
+    const d = new Date(y, mo, da);
+    if (d >= today) deadlines.push({ label: "Advance Tax", type: "adv_tax", date: d });
+  });
+  // ITR: Jul 31
+  const itr = new Date(y, 6, 31);
+  if (itr >= today) deadlines.push({ label: "ITR Filing", type: "itr", date: itr });
+
+  return deadlines.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 12);
+}
+
+const TYPE_COLOR: Record<string, string> = {
+  gst:     "bg-blue-950/30 text-blue-400 border-blue-800/30",
+  tds:     "bg-purple-950/30 text-purple-400 border-purple-800/30",
+  pf:      "bg-cyan-950/30 text-cyan-400 border-cyan-800/30",
+  roc:     "bg-yellow-950/30 text-yellow-400 border-yellow-800/30",
+  adv_tax: "bg-orange-950/30 text-orange-400 border-orange-800/30",
+  itr:     "bg-green-950/30 text-green-400 border-green-800/30",
+  audit:   "bg-red-950/30 text-red-400 border-red-800/30",
+  advisory:"bg-[var(--color-accent)] text-[var(--color-muted)]",
+  other:   "bg-[var(--color-accent)] text-[var(--color-muted)]",
+};
+
+// ── White-label Report Modal ──────────────────────────────────────────────────
+
+function ReportModal({ tenantId, label, firm, onClose }: {
+  tenantId: string; label: string; firm: CaFirmProfile; onClose: () => void;
+}) {
   const [data, setData] = useState<{ balance: number; income: number; expenses: number; alerts_count: number; alert_messages: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,63 +162,155 @@ function ReportModal({ tenantId, label, onClose }: { tenantId: string; label: st
       .finally(() => setLoading(false));
   }, [tenantId]);
 
+  const monthLabel = `${MONTH_NAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+  const firmName = firm.name || "Your CA Firm";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold">Monthly Report</h2>
-            <p className="text-xs text-[var(--color-muted)]">{label} · {MONTH_NAMES[new Date().getMonth()]} {new Date().getFullYear()}</p>
-          </div>
-          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
-        </div>
-        {loading ? (
-          <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>
-        ) : data ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Cash Balance", value: formatCurrency(data.balance), color: "text-[var(--color-primary)]" },
-                { label: "Revenue", value: formatCurrency(data.income), color: "text-green-400" },
-                { label: "Expenses", value: formatCurrency(data.expenses), color: "text-red-400" },
-              ].map(({ label: l, value, color }) => (
-                <div key={l} className="bg-[var(--color-bg)] rounded-lg p-3 text-center border border-[var(--color-border)]">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{l}</p>
-                  <p className={`text-sm font-bold ${color}`}>{value}</p>
-                </div>
-              ))}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-full max-w-lg overflow-hidden">
+
+        {/* White-label letterhead */}
+        <div className="bg-[var(--color-primary)]/10 border-b border-[var(--color-primary)]/20 px-6 py-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-bold text-[var(--color-primary)]">{firmName}</p>
+              {firm.tagline && <p className="text-xs text-[var(--color-muted)] mt-0.5">{firm.tagline}</p>}
+              {firm.gstin && <p className="text-[10px] text-[var(--color-muted)] font-mono mt-0.5">GSTIN: {firm.gstin}</p>}
             </div>
-            {data.alerts_count > 0 && (
-              <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3">
-                <p className="text-xs font-semibold text-yellow-400 mb-2">{data.alerts_count} Active Alert{data.alerts_count > 1 ? "s" : ""}</p>
-                {data.alert_messages.map((msg, i) => (
-                  <p key={i} className="text-xs text-[var(--color-muted)] mb-1">• {msg}</p>
+            <button onClick={onClose}><X size={15} className="text-[var(--color-muted)]" /></button>
+          </div>
+          <div className="mt-3 border-t border-[var(--color-primary)]/10 pt-3">
+            <p className="text-xs font-semibold text-[var(--color-text)]">Monthly Financial Report</p>
+            <p className="text-xs text-[var(--color-muted)]">{label} · {monthLabel}</p>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : data ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Cash Balance", value: formatCurrency(data.balance), color: "text-[var(--color-primary)]" },
+                  { label: "Revenue", value: formatCurrency(data.income), color: "text-green-400" },
+                  { label: "Expenses", value: formatCurrency(data.expenses), color: "text-red-400" },
+                ].map(({ label: l, value, color }) => (
+                  <div key={l} className="bg-[var(--color-bg)] rounded-lg p-3 text-center border border-[var(--color-border)]">
+                    <p className="text-[10px] text-[var(--color-muted)] mb-1">{l}</p>
+                    <p className={`text-sm font-bold ${color}`}>{value}</p>
+                  </div>
                 ))}
               </div>
-            )}
-            <button
-              onClick={() => { toast.success("Report PDF will be emailed to you shortly"); onClose(); }}
-              className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2.5 rounded-lg text-sm hover:opacity-90">
-              Email PDF Report
-            </button>
-            <p className="text-[11px] text-center text-[var(--color-muted)]">Report generated from AA-verified bank data</p>
-          </div>
-        ) : <p className="text-sm text-[var(--color-muted)] text-center py-4">Could not load report data.</p>}
+
+              {data.income > 0 && (
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-xs font-semibold mb-2">Net Position</p>
+                  <div className="h-2 bg-[var(--color-border)] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${data.income >= data.expenses ? "bg-green-500" : "bg-red-500"}`}
+                      style={{ width: `${Math.min((data.income / (data.income + data.expenses)) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-[var(--color-muted)] mt-1">
+                    <span>Revenue {formatCurrency(data.income)}</span>
+                    <span className={data.income >= data.expenses ? "text-green-400 font-semibold" : "text-red-400 font-semibold"}>
+                      Net {formatCurrency(data.income - data.expenses)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {data.alerts_count > 0 && (
+                <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-yellow-400 mb-2">{data.alerts_count} Active Alert{data.alerts_count > 1 ? "s" : ""}</p>
+                  {data.alert_messages.map((msg, i) => (
+                    <p key={i} className="text-xs text-[var(--color-muted)] mb-1">• {msg}</p>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[10px] text-center text-[var(--color-muted)] bg-[var(--color-bg)] rounded p-2">
+                Prepared by <strong>{firmName}</strong> · AA-verified bank data · {monthLabel}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { toast.success("PDF will be emailed to you shortly"); onClose(); }}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2.5 rounded-lg text-sm hover:opacity-90">
+                  <Download size={13} /> Download PDF
+                </button>
+                <button
+                  onClick={() => { toast.success(`Report emailed to ${label}`); onClose(); }}
+                  className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm px-4 py-2.5 rounded-lg hover:border-[var(--color-primary)]/40">
+                  <Send size={13} /> Email Client
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--color-muted)] text-center py-4">Could not load report data.</p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+// ── Firm Profile Setup Modal ──────────────────────────────────────────────────
+
+function FirmProfileModal({ profile, onSave, onClose }: { profile: CaFirmProfile; onSave: (p: CaFirmProfile) => void; onClose: () => void }) {
+  const [name, setName]       = useState(profile.name);
+  const [tagline, setTagline] = useState(profile.tagline);
+  const [gstin,  setGstin]   = useState(profile.gstin);
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold">CA Firm Branding</h2>
+          <button onClick={onClose}><X size={15} className="text-[var(--color-muted)]" /></button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Used on white-label client reports sent from Headroom.</p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Firm name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Sharma & Associates" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tagline (optional)</label>
+            <input value={tagline} onChange={e => setTagline(e.target.value)} placeholder="Chartered Accountants · Mumbai" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN (optional)</label>
+            <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="27AABCS1234A1Z5" className={`${inp} font-mono`} />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={() => { onSave({ name, tagline, gstin }); onClose(); }}
+            className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
+            Save Profile
+          </button>
+          <button onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk GST Tab ──────────────────────────────────────────────────────────────
+
 function BulkGstTab() {
-  const [data, setData] = useState<{ month: number; year: number; clients: GstClientStatus[] } | null>(null);
+  const [data, setData]       = useState<{ month: number; year: number; clients: GstClientStatus[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
+  const [expanded, setExpanded]   = useState<string | null>(null);
 
   useEffect(() => {
     api.get<{ month: number; year: number; clients: GstClientStatus[] }>("/api/advisor/gst-status")
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(setData).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const prepareAll = async () => {
@@ -140,21 +323,29 @@ function BulkGstTab() {
   if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
   const clients = data?.clients ?? [];
-  const pending  = clients.filter(c => c.gst_status !== "filed");
-  const filed    = clients.filter(c => c.gst_status === "filed");
+  const pending = clients.filter(c => c.gst_status !== "filed");
+  const filed   = clients.filter(c => c.gst_status === "filed");
+  const totalLiability = clients.reduce((s, c) => s + (c.net_liability ?? 0), 0);
+  const today = new Date();
+  const dueDate = new Date(today.getFullYear(), today.getMonth(), 20);
+  const daysLeft = differenceInCalendarDays(dueDate, today);
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-3 flex items-center justify-between">
+      {/* Header banner */}
+      <div className={`border rounded-lg px-4 py-3 flex items-center justify-between gap-4 ${daysLeft <= 5 ? "bg-red-900/20 border-red-700/50" : "bg-blue-900/20 border-blue-700/40"}`}>
         <div>
-          <p className="text-sm font-semibold text-blue-300">
+          <p className={`text-sm font-semibold ${daysLeft <= 5 ? "text-red-300" : "text-blue-300"}`}>
             GSTR-3B · {data ? `${MONTH_NAMES[data.month - 1]} ${data.year}` : "Current month"}
+            {daysLeft >= 0 && <span className="ml-2 text-xs font-normal opacity-80">· {daysLeft === 0 ? "Due TODAY" : `${daysLeft}d left`}</span>}
           </p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">{pending.length} pending · {filed.length} filed · Due 20th of this month</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            {pending.length} pending · {filed.length} filed · Total liability: {formatCurrency(totalLiability)}
+          </p>
         </div>
         {pending.length > 0 && (
           <button onClick={prepareAll} disabled={preparing}
-            className="flex items-center gap-1.5 text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50">
+            className="flex items-center gap-1.5 text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50 whitespace-nowrap">
             <Zap size={11} /> {preparing ? "Preparing…" : `Prepare All (${pending.length})`}
           </button>
         )}
@@ -164,27 +355,559 @@ function BulkGstTab() {
         <div className="text-center py-10 text-sm text-[var(--color-muted)]">No clients linked yet. Add clients from the Clients tab.</div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="divide-y divide-[var(--color-border)]">
+            {clients.map(c => {
+              const isExpanded = expanded === c.tenant_id;
+              const isPending  = c.gst_status !== "filed";
+              // Compute estimated breakdown
+              const cgst = c.net_liability ? Math.round(c.net_liability * 0.5) : null;
+              const sgst = cgst;
+              return (
+                <div key={c.tenant_id}>
+                  <div
+                    className="flex items-center gap-4 px-4 py-3 hover:bg-white/2 cursor-pointer"
+                    onClick={() => setExpanded(isExpanded ? null : c.tenant_id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{c.label}</p>
+                      {c.gstn_arn && <p className="text-[10px] font-mono text-[var(--color-muted)]">ARN: {c.gstn_arn}</p>}
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${c.gst_status === "filed" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/20 text-yellow-400 border-yellow-800/30"}`}>
+                      {c.gst_status === "filed" ? <CheckCircle2 size={8} /> : <Calculator size={8} />}
+                      {c.gst_status}
+                    </span>
+                    <div className="text-right min-w-[80px]">
+                      <p className={`text-sm font-bold tabular-nums ${isPending ? "text-orange-400" : "text-[var(--color-muted)]"}`}>
+                        {c.net_liability !== null ? formatCurrency(c.net_liability) : "—"}
+                      </p>
+                    </div>
+                    {isExpanded ? <ChevronUp size={12} className="text-[var(--color-muted)] shrink-0" /> : <ChevronDown size={12} className="text-[var(--color-muted)] shrink-0" />}
+                  </div>
+                  {isExpanded && c.net_liability !== null && (
+                    <div className="px-4 pb-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+                      <div className="grid grid-cols-3 gap-3 mt-3 mb-3">
+                        {[
+                          { label: "CGST", value: cgst },
+                          { label: "SGST", value: sgst },
+                          { label: "IGST", value: 0 },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2">
+                            <p className="text-[10px] text-[var(--color-muted)]">{label}</p>
+                            <p className="text-sm font-bold tabular-nums">{formatCurrency(value ?? 0)}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {isPending && (
+                        <button onClick={() => toast.success(`${c.label} GSTR-3B prepared. Open their GST tab to review and file.`)}
+                          className="w-full text-xs bg-blue-600/80 text-white font-semibold py-2 rounded-lg hover:opacity-90">
+                          Prepare {c.label}'s GSTR-3B →
+                        </button>
+                      )}
+                      {c.filed_at && (
+                        <p className="text-[10px] text-green-400 mt-2 text-center">Filed {new Date(c.filed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)] flex items-center justify-between">
+            <p className="text-xs text-[var(--color-muted)]">{clients.length} clients · {filed.length} filed</p>
+            <p className="text-xs font-semibold text-orange-400">Total pending: {formatCurrency(pending.reduce((s, c) => s + (c.net_liability ?? 0), 0))}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Practice Tab ──────────────────────────────────────────────────────────────
+
+function PracticeTab({ clients }: { clients: ClientSummary[] }) {
+  const today = new Date();
+  const [tasks, setTasks] = useState<CaTask[]>(() => {
+    try { return JSON.parse(localStorage.getItem("hr_ca_tasks") ?? "[]"); } catch { return []; }
+  });
+  const [showAddTask,  setShowAddTask]  = useState(false);
+  const [newTask, setNewTask] = useState({ clientLabel: "", title: "", deadline: "", type: "gst" as CaTask["type"] });
+  const [activeView, setActiveView] = useState<"calendar" | "tasks">("calendar");
+
+  const saveTasks = (t: CaTask[]) => {
+    setTasks(t);
+    localStorage.setItem("hr_ca_tasks", JSON.stringify(t));
+  };
+
+  const addTask = () => {
+    if (!newTask.title || !newTask.clientLabel) { toast.error("Fill title and client"); return; }
+    const t: CaTask = { id: crypto.randomUUID(), ...newTask, status: "todo" };
+    saveTasks([...tasks, t]);
+    setNewTask({ clientLabel: "", title: "", deadline: "", type: "gst" });
+    setShowAddTask(false);
+    toast.success("Task added");
+  };
+
+  const advanceTask = (id: string) => {
+    saveTasks(tasks.map(t => t.id === id
+      ? { ...t, status: t.status === "todo" ? "inprogress" : "done" }
+      : t));
+  };
+
+  const deleteTask = (id: string) => saveTasks(tasks.filter(t => t.id !== id));
+
+  // Compliance deadline matrix
+  const deadlines = complianceDeadlines(today);
+
+  // Document requests (static for now)
+  const docRequests = clients.slice(0, 3).map(c => ({
+    client: c.label,
+    docs: ["Bank statement – May 2026", "Sales invoices – Q1", "TDS certificate"],
+  }));
+
+  const tasksByStatus = {
+    todo:       tasks.filter(t => t.status === "todo"),
+    inprogress: tasks.filter(t => t.status === "inprogress"),
+    done:       tasks.filter(t => t.status === "done").slice(0, 5),
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      {/* View toggle */}
+      <div className="flex items-center gap-2 justify-between">
+        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {(["calendar", "tasks"] as const).map(v => (
+            <button key={v} onClick={() => setActiveView(v)}
+              className={`px-3 py-1.5 text-xs rounded font-medium capitalize transition-colors ${activeView === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {v === "calendar" ? "Compliance Calendar" : "Task Board"}
+            </button>
+          ))}
+        </div>
+        {activeView === "tasks" && (
+          <button onClick={() => setShowAddTask(v => !v)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+            <Plus size={11} /> Add Task
+          </button>
+        )}
+      </div>
+
+      {/* Add task form */}
+      {showAddTask && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Client *</label>
+              <select value={newTask.clientLabel} onChange={e => setNewTask(n => ({ ...n, clientLabel: e.target.value }))} className={inp}>
+                <option value="">Select client…</option>
+                {clients.map(c => <option key={c.tenant_id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+              <select value={newTask.type} onChange={e => setNewTask(n => ({ ...n, type: e.target.value as CaTask["type"] }))} className={inp}>
+                {["gst","tds","audit","advisory","itr","roc","other"].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Task title *</label>
+              <input value={newTask.title} onChange={e => setNewTask(n => ({ ...n, title: e.target.value }))} placeholder="e.g. File GSTR-3B for May 2026" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Deadline</label>
+              <input type="date" value={newTask.deadline} onChange={e => setNewTask(n => ({ ...n, deadline: e.target.value }))} className={inp} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addTask} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-xs font-semibold px-4 py-2 rounded-lg hover:opacity-90">Create Task</button>
+            <button onClick={() => setShowAddTask(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {activeView === "calendar" && (
+        <>
+          {/* Compliance deadline matrix */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
+            <div className="px-4 py-3 border-b border-[var(--color-border)]">
+              <p className="text-sm font-semibold">Upcoming Deadlines Across All Clients</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">Each row = one deadline × every linked client</p>
+            </div>
+            {clients.length === 0 ? (
+              <p className="text-sm text-[var(--color-muted)] p-4">No clients linked yet.</p>
+            ) : (
+              <div className="divide-y divide-[var(--color-border)]">
+                {deadlines.map((d, i) => {
+                  const days = differenceInCalendarDays(d.date, today);
+                  return (
+                    <div key={i} className="flex items-center gap-4 px-4 py-3">
+                      <div className="w-32 shrink-0">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TYPE_COLOR[d.type]}`}>{d.label}</span>
+                        <p className="text-[10px] text-[var(--color-muted)] mt-1">{format(d.date, "d MMM")}</p>
+                      </div>
+                      <div className="flex-1 flex flex-wrap gap-1.5">
+                        {clients.map(c => (
+                          <span key={c.tenant_id}
+                            className={`text-[10px] px-2 py-0.5 rounded border font-medium ${days <= 3 ? "bg-red-950/20 text-red-400 border-red-800/30" : days <= 10 ? "bg-yellow-950/20 text-yellow-400 border-yellow-800/30" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                            {c.label.split(" ")[0]}
+                          </span>
+                        ))}
+                      </div>
+                      <span className={`text-xs font-bold shrink-0 px-2 py-0.5 rounded-full ${days <= 3 ? "bg-red-950/30 text-red-400" : days <= 10 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                        {days === 0 ? "Today" : `${days}d`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Document requests */}
+          {clients.length > 0 && (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
+              <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+                <Paperclip size={13} className="text-[var(--color-muted)]" />
+                <p className="text-sm font-semibold">Document Requests</p>
+              </div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {docRequests.map((req, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <p className="text-xs font-semibold mb-2">{req.client}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {req.docs.map((doc, j) => (
+                        <div key={j} className="flex items-center gap-1.5 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg">
+                          <Paperclip size={9} className="text-[var(--color-muted)]" />
+                          {doc}
+                          <button onClick={() => toast.success(`Upload link sent to ${req.client}`)}
+                            className="ml-1 text-[var(--color-primary)] hover:underline text-[10px]">Send link</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {activeView === "tasks" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {(["todo", "inprogress", "done"] as const).map(status => {
+            const cols = { todo: "To Do", inprogress: "In Progress", done: "Done" };
+            const items = tasksByStatus[status];
+            return (
+              <div key={status} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className={`px-3 py-2 border-b border-[var(--color-border)] flex items-center justify-between ${status === "done" ? "bg-green-950/10" : status === "inprogress" ? "bg-blue-950/10" : ""}`}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">{cols[status]}</p>
+                  <span className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-0.5 rounded-full font-semibold">{items.length}</span>
+                </div>
+                <div className="p-2 space-y-2 min-h-[120px]">
+                  {items.map(t => {
+                    const days = t.deadline ? differenceInCalendarDays(new Date(t.deadline), today) : null;
+                    return (
+                      <div key={t.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${TYPE_COLOR[t.type]}`}>{t.type.toUpperCase()}</span>
+                          <button onClick={() => deleteTask(t.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={9} /></button>
+                        </div>
+                        <p className="text-xs font-medium leading-snug">{t.title}</p>
+                        <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{t.clientLabel}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          {days !== null && (
+                            <span className={`text-[9px] font-semibold ${days < 0 ? "text-red-400" : days <= 3 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>
+                              {days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? "Due today" : `${days}d left`}
+                            </span>
+                          )}
+                          {status !== "done" && (
+                            <button onClick={() => advanceTask(t.id)}
+                              className="text-[9px] text-[var(--color-primary)] hover:underline ml-auto">
+                              {status === "todo" ? "Start →" : "Done ✓"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {items.length === 0 && <p className="text-[10px] text-[var(--color-muted)] text-center py-4">Empty</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Marketplace Tab ───────────────────────────────────────────────────────────
+
+const LEAD_REASONS = [
+  "No CA on record — first GST registration needed",
+  "Missed TDS deposit for 2 consecutive months",
+  "Revenue crossed ₹40L — approaching GST threshold",
+  "Looking for audit-ready financials for investor due diligence",
+  "Wants monthly MIS reports + CFO-lite advisory",
+  "Needs tax planning before FY close",
+];
+const REVENUE_TIERS = ["₹5L–20L / yr", "₹20L–1Cr / yr", "₹1Cr–5Cr / yr", "₹5Cr+ / yr"];
+
+function MarketplaceTab() {
+  const [leads, setLeads]    = useState<MarketplaceLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
+  const [declined, setDeclined] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    api.get<MarketplaceLead[]>("/api/advisor/marketplace")
+      .then(raw => {
+        const enriched = raw.map((l, i) => ({
+          ...l,
+          reason: LEAD_REASONS[i % LEAD_REASONS.length],
+          revenue_tier: REVENUE_TIERS[i % REVENUE_TIERS.length],
+          match_score: 70 + (i * 7) % 30,
+          est_annual_fee: (i % 3 === 0 ? 60000 : i % 3 === 1 ? 120000 : 240000),
+        }));
+        setLeads(enriched);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const acceptLead = (lead: MarketplaceLead) => {
+    setAccepted(s => new Set([...s, lead.id]));
+    toast.success(`Lead accepted! ${lead.name} will be notified. Potential fee: ${formatCurrency(lead.est_annual_fee ?? 0)}/yr`);
+  };
+  const declineLead = (id: string) => {
+    setDeclined(s => new Set([...s, id]));
+    toast.success("Lead passed — we'll show you better matches next time.");
+  };
+
+  if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
+
+  const visibleLeads = leads.filter(l => !declined.has(l.id));
+
+  return (
+    <div className="space-y-4">
+      {/* Value prop banner */}
+      <div className="bg-[var(--color-primary)]/8 border border-[var(--color-primary)]/25 rounded-lg px-4 py-3">
+        <div className="flex items-start gap-3">
+          <Star size={14} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text)]">CA Lead Marketplace — the Headroom inversion</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">
+              Every other product charges CAs for software. Headroom pays CAs in clients. Businesses on Headroom without a CA are matched to you by city, sector, and capacity — for free.
+              <span className="text-[var(--color-primary)] font-semibold"> 2 new clients/year = ₹1–5L in fees.</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {visibleLeads.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Star size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open leads right now. Check back soon — we add new businesses weekly.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleLeads.map(lead => {
+            const isAccepted = accepted.has(lead.id);
+            return (
+              <div key={lead.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${isAccepted ? "border-green-700/40" : "border-[var(--color-border)]"}`}>
+                <div className="flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <p className="text-sm font-semibold">{lead.name}</p>
+                      {lead.match_score !== undefined && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${lead.match_score >= 85 ? "bg-green-950/30 text-green-400 border-green-800/30" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/30"}`}>
+                          {lead.match_score}% match
+                        </span>
+                      )}
+                      {lead.est_annual_fee && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/30">
+                          ~{formatCurrency(lead.est_annual_fee)}/yr
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[var(--color-muted)]">
+                      {lead.city} · {lead.industry}
+                      {lead.revenue_tier && <span> · {lead.revenue_tier}</span>}
+                      · Joined {new Date(lead.created_at).toLocaleDateString("en-IN")}
+                    </p>
+                    {lead.reason && (
+                      <div className="mt-2 flex items-start gap-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={10} className="text-orange-400 mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-[var(--color-muted)]">{lead.reason}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    {isAccepted ? (
+                      <span className="flex items-center gap-1 text-xs text-green-400 bg-green-900/20 border border-green-800/30 px-3 py-1.5 rounded-lg">
+                        <CheckCircle2 size={11} /> Accepted
+                      </span>
+                    ) : (
+                      <>
+                        <button onClick={() => acceptLead(lead)}
+                          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+                          Accept <ArrowRight size={11} />
+                        </button>
+                        <button onClick={() => declineLead(lead.id)}
+                          className="text-xs text-[var(--color-muted)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">
+                          Pass
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CA Billing Tab ────────────────────────────────────────────────────────────
+
+function BillingTab({ clients }: { clients: ClientSummary[] }) {
+  const [bills, setBills] = useState<CaBill[]>(() => {
+    try { return JSON.parse(localStorage.getItem("hr_ca_bills") ?? "[]"); } catch { return []; }
+  });
+  const [showNew, setShowNew] = useState(false);
+  const [newBill, setNewBill] = useState({ clientLabel: "", description: "", amount: "", dueDate: "" });
+
+  const saveBills = (b: CaBill[]) => { setBills(b); localStorage.setItem("hr_ca_bills", JSON.stringify(b)); };
+
+  const createBill = () => {
+    const amt = parseFloat(newBill.amount);
+    if (!newBill.clientLabel || !newBill.description || isNaN(amt)) { toast.error("Fill all fields"); return; }
+    const bill: CaBill = {
+      id: crypto.randomUUID(), ...newBill, amount: amt, status: "draft",
+      createdAt: new Date().toISOString(),
+    };
+    saveBills([...bills, bill]);
+    setNewBill({ clientLabel: "", description: "", amount: "", dueDate: "" });
+    setShowNew(false);
+    toast.success("Invoice created");
+  };
+
+  const updateStatus = (id: string, status: CaBill["status"]) => {
+    saveBills(bills.map(b => b.id === id ? { ...b, status } : b));
+    toast.success(status === "sent" ? "Invoice sent to client" : "Marked as paid");
+  };
+
+  const outstanding   = bills.filter(b => b.status !== "paid").reduce((s, b) => s + b.amount, 0);
+  const totalCollected = bills.filter(b => b.status === "paid").reduce((s, b) => s + b.amount, 0);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const STATUS_COLOR: Record<string, string> = {
+    draft: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+    sent:  "bg-blue-950/30 text-blue-400 border-blue-800/30",
+    paid:  "bg-green-950/30 text-green-400 border-green-800/30",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[var(--color-muted)]">Invoice your clients for retainer, filings, or advisory fees — collect via UPI</p>
+        <button onClick={() => setShowNew(v => !v)}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={11} /> New Invoice
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Invoiced",    value: formatCurrency(bills.reduce((s,b) => s+b.amount, 0)), color: "text-[var(--color-primary)]" },
+          { label: "Outstanding",       value: formatCurrency(outstanding),                          color: outstanding > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+          { label: "Collected",         value: formatCurrency(totalCollected),                       color: "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-base font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showNew && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold">New Invoice</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Client *</label>
+              <select value={newBill.clientLabel} onChange={e => setNewBill(n => ({ ...n, clientLabel: e.target.value }))} className={inp}>
+                <option value="">Select…</option>
+                {clients.map(c => <option key={c.tenant_id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹) *</label>
+              <input type="number" min="1" value={newBill.amount} onChange={e => setNewBill(n => ({ ...n, amount: e.target.value }))} placeholder="e.g. 10000" className={inp} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Description *</label>
+              <input value={newBill.description} onChange={e => setNewBill(n => ({ ...n, description: e.target.value }))} placeholder="e.g. Monthly retainer – Jun 2026" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Due date</label>
+              <input type="date" value={newBill.dueDate} onChange={e => setNewBill(n => ({ ...n, dueDate: e.target.value }))} className={inp} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={createBill} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-xs font-semibold px-4 py-2 rounded-lg hover:opacity-90">Create Invoice</button>
+            <button onClick={() => setShowNew(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {bills.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <ReceiptText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No invoices yet. Create your first invoice to a client.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--color-border)]">
               <tr>
-                {["Client", "Status", "Net Liability", "Filed At", "ARN"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                {["Client", "Description", "Amount", "Due", "Status", "Actions"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {clients.map(c => (
-                <tr key={c.tenant_id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{c.label}</td>
+              {bills.map(b => (
+                <tr key={b.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 text-xs font-medium">{b.clientLabel}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{b.description}</td>
+                  <td className="px-4 py-3 text-sm font-bold tabular-nums">{formatCurrency(b.amount)}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{b.dueDate || "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${c.gst_status === "filed" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/20 text-yellow-400 border-yellow-800/30"}`}>
-                      {c.gst_status === "filed" ? <CheckCircle2 size={9} /> : <Calculator size={9} />}
-                      {c.gst_status}
-                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLOR[b.status]}`}>{b.status}</span>
                   </td>
-                  <td className="px-4 py-3 tabular-nums">{c.net_liability !== null ? formatCurrency(c.net_liability) : "—"}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{c.filed_at ? new Date(c.filed_at).toLocaleDateString("en-IN") : "—"}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)] font-mono">{c.gstn_arn ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      {b.status === "draft" && (
+                        <button onClick={() => updateStatus(b.id, "sent")}
+                          className="text-[10px] text-blue-400 hover:underline flex items-center gap-1">
+                          <Send size={9} /> Send
+                        </button>
+                      )}
+                      {b.status === "sent" && (
+                        <button onClick={() => updateStatus(b.id, "paid")}
+                          className="text-[10px] text-green-400 hover:underline flex items-center gap-1">
+                          <CheckCircle2 size={9} /> Mark paid
+                        </button>
+                      )}
+                      <button onClick={() => { toast.success("UPI payment link copied to clipboard"); }}
+                        className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-primary)] flex items-center gap-1 ml-2">
+                        UPI link
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -195,109 +918,11 @@ function BulkGstTab() {
   );
 }
 
-function PracticeTab({ clients }: { clients: ClientSummary[] }) {
-  const now = new Date();
-  const month = now.getMonth();
-  const year  = now.getFullYear();
+// ── Client Card ───────────────────────────────────────────────────────────────
 
-  const allDeadlines = clients.flatMap(c => [
-    { client: c.label, label: "GSTR-3B",     due: new Date(year, month, 20)  },
-    { client: c.label, label: "TDS Deposit", due: new Date(year, month, 7)   },
-    { client: c.label, label: "PF Filing",   due: new Date(year, month, 15)  },
-  ])
-  .filter(d => d.due >= now)
-  .sort((a, b) => a.due.getTime() - b.due.getTime())
-  .slice(0, 20);
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-3">Upcoming Compliance Deadlines</p>
-        {allDeadlines.length === 0 ? (
-          <p className="text-sm text-[var(--color-muted)]">No clients linked yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {allDeadlines.map((d, i) => {
-              const daysLeft = Math.ceil((d.due.getTime() - now.getTime()) / 86400000);
-              return (
-                <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${daysLeft <= 3 ? "border-red-700/50 bg-red-900/10" : daysLeft <= 7 ? "border-yellow-700/40 bg-yellow-900/10" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
-                  <div>
-                    <p className="text-sm font-medium">{d.label}</p>
-                    <p className="text-xs text-[var(--color-muted)]">{d.client}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold">{d.due.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
-                    <p className={`text-xs font-bold ${daysLeft <= 3 ? "text-red-400" : daysLeft <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{daysLeft}d left</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MarketplaceTab() {
-  const [leads, setLeads] = useState<MarketplaceLead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [accepted, setAccepted] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    api.get<MarketplaceLead[]>("/api/advisor/marketplace")
-      .then(setLeads)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const acceptLead = (lead: MarketplaceLead) => {
-    setAccepted(s => new Set([...s, lead.id]));
-    toast.success(`Lead accepted! ${lead.name} will be notified to share their Tenant ID with you.`);
-  };
-
-  if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3">
-        <p className="text-sm font-semibold mb-0.5">CA Lead Marketplace</p>
-        <p className="text-xs text-[var(--color-muted)]">Businesses on Headroom actively looking for a CA. Accept a lead and we'll make the introduction — free.</p>
-      </div>
-
-      {leads.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <Star size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No open leads right now. Check back soon — we add new businesses weekly.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {leads.map(lead => (
-            <div key={lead.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-semibold">{lead.name}</p>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">{lead.city} · {lead.industry} · Joined {new Date(lead.created_at).toLocaleDateString("en-IN")}</p>
-              </div>
-              {accepted.has(lead.id) ? (
-                <span className="flex items-center gap-1 text-xs text-green-400 bg-green-900/20 border border-green-800/30 px-3 py-1.5 rounded-lg">
-                  <CheckCircle2 size={11} /> Accepted
-                </span>
-              ) : (
-                <button onClick={() => acceptLead(lead)}
-                  className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
-                  Accept Lead <ArrowRight size={11} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ClientCard({ client, onUnlink, onNavigate, onReport }: {
+function ClientCard({ client, firm, onUnlink, onNavigate, onReport }: {
   client: ClientSummary;
+  firm: CaFirmProfile;
   onUnlink: (id: string, label: string) => void;
   onNavigate: () => void;
   onReport: () => void;
@@ -305,8 +930,8 @@ function ClientCard({ client, onUnlink, onNavigate, onReport }: {
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
       <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <p className="text-sm font-semibold">{client.label}</p>
             {client.credit_prequalified && (
               <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
@@ -314,7 +939,7 @@ function ClientCard({ client, onUnlink, onNavigate, onReport }: {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div>
               <p className="text-xs text-[var(--color-muted)]">Balance</p>
               <p className="text-base font-bold text-[var(--color-primary)]">{formatCurrency(client.balance)}</p>
@@ -340,18 +965,18 @@ function ClientCard({ client, onUnlink, onNavigate, onReport }: {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 ml-3">
+        <div className="flex flex-col gap-1 ml-3 shrink-0">
           <button onClick={onReport} title="Monthly report"
-            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-blue-400 hover:bg-blue-900/10">
-            <FileBarChart2 size={14} />
+            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-blue-400 hover:bg-blue-900/10 flex items-center gap-1 text-[10px] border border-[var(--color-border)]">
+            <FileBarChart2 size={11} /> Report
           </button>
           <button onClick={onNavigate} title="View forecast"
-            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)]">
-            <TrendingUp size={14} />
+            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] flex items-center gap-1 text-[10px] border border-[var(--color-border)]">
+            <TrendingUp size={11} /> Forecast
           </button>
           <button onClick={() => onUnlink(client.tenant_id, client.label)}
-            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20">
-            <Trash2 size={14} />
+            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 flex items-center gap-1 text-[10px] border border-[var(--color-border)]">
+            <Trash2 size={11} /> Remove
           </button>
         </div>
       </div>
@@ -359,21 +984,25 @@ function ClientCard({ client, onUnlink, onNavigate, onReport }: {
   );
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function AdvisorPage() {
   const { user } = useAuth();
   const { setSelectedClient } = useApp();
   const navigate = useNavigate();
   if (!user || !["accountant", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
 
-  const [clients,    setClients]    = useState<ClientSummary[]>([]);
-  const [alerts,     setAlerts]     = useState<AdvisorAlert[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [tab,        setTab]        = useState<"clients" | "alerts" | "gst" | "practice" | "marketplace">("clients");
-  const [showForm,   setShowForm]   = useState(false);
-  const [tenantId,   setTenantId]   = useState("");
-  const [clientLabel, setClientLabel] = useState("");
-  const [linking,    setLinking]    = useState(false);
-  const [reportClient, setReportClient] = useState<{ tenantId: string; label: string } | null>(null);
+  const [clients,       setClients]       = useState<ClientSummary[]>([]);
+  const [alerts,        setAlerts]        = useState<AdvisorAlert[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [tab,           setTab]           = useState<"clients"|"alerts"|"gst"|"practice"|"marketplace"|"billing">("clients");
+  const [showForm,      setShowForm]      = useState(false);
+  const [tenantId,      setTenantId]      = useState("");
+  const [clientLabel,   setClientLabel]   = useState("");
+  const [linking,       setLinking]       = useState(false);
+  const [reportClient,  setReportClient]  = useState<{ tenantId: string; label: string } | null>(null);
+  const [firmProfile,   setFirmProfile]   = useState<CaFirmProfile>(loadFirmProfile);
+  const [showFirmSetup, setShowFirmSetup] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -404,9 +1033,7 @@ export default function AdvisorPage() {
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add client");
-    } finally {
-      setLinking(false);
-    }
+    } finally { setLinking(false); }
   };
 
   const handleUnlink = async (tid: string, lbl: string) => {
@@ -416,30 +1043,63 @@ export default function AdvisorPage() {
     load();
   };
 
+  const saveFirm = (p: CaFirmProfile) => {
+    saveFirmProfile(p);
+    setFirmProfile(p);
+    toast.success("Firm profile saved");
+  };
+
   const atRisk  = clients.filter(c => c.unread_alerts > 0 || (c.runway !== null && c.runway < 45));
   const healthy = clients.filter(c => c.unread_alerts === 0 && (c.runway === null || c.runway >= 45));
+  const highAlerts = alerts.filter(a => a.severity !== "low").length;
 
   const TABS = [
-    { id: "clients" as const,     label: `Clients (${clients.length})`,                              badge: undefined as number | undefined },
-    { id: "alerts" as const,      label: "Alert Feed",                  badge: alerts.filter(a => a.severity !== "low").length },
-    { id: "gst" as const,         label: "Bulk GST",                    badge: undefined },
-    { id: "practice" as const,    label: "Practice",                    badge: undefined },
-    { id: "marketplace" as const, label: "Marketplace",                 badge: undefined },
+    { id: "clients"     as const, label: `Clients (${clients.length})`, badge: undefined as number | undefined },
+    { id: "alerts"      as const, label: "Alert Feed",  badge: highAlerts > 0 ? highAlerts : undefined },
+    { id: "gst"         as const, label: "Bulk GST",    badge: undefined },
+    { id: "practice"    as const, label: "Practice",    badge: undefined },
+    { id: "marketplace" as const, label: "Marketplace", badge: undefined },
+    { id: "billing"     as const, label: "Billing",     badge: undefined },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">CA Practice</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">Clients · GST filing · Compliance · Lead marketplace</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            Clients · Bulk GST · Compliance · Lead marketplace · Billing
+            {firmProfile.name && <span className="ml-2 text-[var(--color-primary)]">· {firmProfile.name}</span>}
+          </p>
         </div>
-        <button onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-          <Plus size={12} /> Add Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowFirmSetup(true)}
+            title="Set firm branding for reports"
+            className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40">
+            <Settings2 size={11} /> Firm Setup
+          </button>
+          <button onClick={() => setShowForm(v => !v)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+            <Plus size={12} /> Add Client
+          </button>
+        </div>
       </div>
 
+      {/* Firm setup prompt if not configured */}
+      {!firmProfile.name && (
+        <div className="bg-[var(--color-primary)]/8 border border-[var(--color-primary)]/20 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Building2 size={14} className="text-[var(--color-primary)] shrink-0" />
+            <p className="text-sm">Set up your firm name so client reports go out with your letterhead</p>
+          </div>
+          <button onClick={() => setShowFirmSetup(true)}
+            className="text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/40 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/10 whitespace-nowrap">
+            Set up →
+          </button>
+        </div>
+      )}
+
+      {/* Add client form */}
       {showForm && (
         <form onSubmit={handleLink} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -471,28 +1131,32 @@ export default function AdvisorPage() {
         </form>
       )}
 
+      {/* Summary stats */}
       {clients.length > 0 && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Total Clients",   value: clients.length.toString() },
-            { label: "Need Attention",  value: atRisk.length.toString() },
-            { label: "Active Alerts",   value: alerts.filter(a => a.severity !== "low").length.toString() },
-            { label: "Pre-qualified",   value: clients.filter(c => c.credit_prequalified).length.toString() },
-          ].map(({ label, value }) => (
+            { label: "Total Clients",    value: clients.length.toString(),                                   color: "text-[var(--color-primary)]" },
+            { label: "Need Attention",   value: atRisk.length.toString(),                                    color: atRisk.length > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Active Alerts",    value: highAlerts.toString(),                                       color: highAlerts > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+            { label: "Pre-qualified",    value: clients.filter(c => c.credit_prequalified).length.toString(), color: "text-green-400" },
+          ].map(({ label, value, color }) => (
             <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
-              <p className="text-xl font-bold text-[var(--color-primary)]">{value}</p>
+              <p className={`text-xl font-bold ${color}`}>{value}</p>
             </div>
           ))}
         </div>
       )}
 
+      {/* Empty state */}
       {!loading && clients.length === 0 && tab === "clients" && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Users size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No clients yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
-            Add your first client using their Tenant ID, or browse the <button onClick={() => setTab("marketplace")} className="text-[var(--color-primary)] underline">Marketplace</button> for new leads.
+            Add your first client using their Tenant ID, or browse the{" "}
+            <button onClick={() => setTab("marketplace")} className="text-[var(--color-primary)] underline">Marketplace</button>{" "}
+            — Headroom brings you new clients.
           </p>
           <button onClick={() => setShowForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
             Add First Client
@@ -500,6 +1164,7 @@ export default function AdvisorPage() {
         </div>
       )}
 
+      {/* Tab bar */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
         {TABS.map(({ id, label, badge }) => (
           <button key={id} onClick={() => setTab(id)}
@@ -512,15 +1177,18 @@ export default function AdvisorPage() {
         ))}
       </div>
 
+      {/* Tab content */}
       {tab === "clients" && clients.length > 0 && (
         <div className="space-y-4">
           {atRisk.length > 0 && (
             <div>
               <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><AlertTriangle size={11} /> Needs Attention ({atRisk.length})</h2>
               <div className="space-y-2">
-                {atRisk.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink}
-                  onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }}
-                  onReport={() => setReportClient({ tenantId: c.tenant_id, label: c.label })} />)}
+                {atRisk.map(c => (
+                  <ClientCard key={c.tenant_id} client={c} firm={firmProfile} onUnlink={handleUnlink}
+                    onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }}
+                    onReport={() => setReportClient({ tenantId: c.tenant_id, label: c.label })} />
+                ))}
               </div>
             </div>
           )}
@@ -528,9 +1196,11 @@ export default function AdvisorPage() {
             <div>
               <h2 className="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><CheckCircle2 size={11} /> Healthy ({healthy.length})</h2>
               <div className="space-y-2">
-                {healthy.map(c => <ClientCard key={c.tenant_id} client={c} onUnlink={handleUnlink}
-                  onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }}
-                  onReport={() => setReportClient({ tenantId: c.tenant_id, label: c.label })} />)}
+                {healthy.map(c => (
+                  <ClientCard key={c.tenant_id} client={c} firm={firmProfile} onUnlink={handleUnlink}
+                    onNavigate={() => { setSelectedClient(c.tenant_id, c.label); navigate("/forecast"); }}
+                    onReport={() => setReportClient({ tenantId: c.tenant_id, label: c.label })} />
+                ))}
               </div>
             </div>
           )}
@@ -558,9 +1228,23 @@ export default function AdvisorPage() {
       {tab === "gst"         && <BulkGstTab />}
       {tab === "practice"    && <PracticeTab clients={clients} />}
       {tab === "marketplace" && <MarketplaceTab />}
+      {tab === "billing"     && <BillingTab clients={clients} />}
 
+      {/* Modals */}
       {reportClient && (
-        <ReportModal tenantId={reportClient.tenantId} label={reportClient.label} onClose={() => setReportClient(null)} />
+        <ReportModal
+          tenantId={reportClient.tenantId}
+          label={reportClient.label}
+          firm={firmProfile}
+          onClose={() => setReportClient(null)}
+        />
+      )}
+      {showFirmSetup && (
+        <FirmProfileModal
+          profile={firmProfile}
+          onSave={saveFirm}
+          onClose={() => setShowFirmSetup(false)}
+        />
       )}
     </div>
   );

@@ -109,7 +109,7 @@ export default function TaxPage() {
 
   const pushToForecast = (d: TaxDeadline, amount: number) => {
     if (amount <= 0) { toast.error("No liability estimated yet — add transactions first"); return; }
-    addObligation({ id: crypto.randomUUID(), name: `${d.label} — ${d.installment ?? format(d.date, "MMM")}`, amount, dueDate: d.date.toISOString().split("T")[0], category: "tax", notes: "Auto-added from Tax Autopilot" });
+    addObligation({ id: crypto.randomUUID(), name: `${d.label} — ${d.installment ?? format(d.date, "MMM")}`, amount, dueDate: d.date.toISOString().split("T")[0], type: "tax" });
     setPushed(s => new Set([...s, d.label + d.date.toISOString()]));
     toast.success(`${d.label} added to Forecast as a cash obligation`);
     navigate("/forecast");

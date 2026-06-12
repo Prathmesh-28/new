@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { AuthUser } from "@/data/types";
+import { API_BASE } from "@/lib/apiBase";
 
-export const BASE = import.meta.env.VITE_API_URL ?? "";
+export const BASE = API_BASE;
 
 /* Fetch with a configurable timeout so Render cold-start doesn't silently hang */
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 60_000): Promise<Response> {

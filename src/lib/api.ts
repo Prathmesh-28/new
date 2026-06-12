@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? "";
+import { API_BASE as BASE } from "./apiBase";
 
 function getToken() {
   return localStorage.getItem("hr_access");

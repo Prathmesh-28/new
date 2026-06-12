@@ -30,7 +30,7 @@ export default function SpendPage() {
   const today     = new Date();
 
   const expenses = useMemo(() =>
-    store.transactions.filter(t => t.type === "debit"),
+    store.transactions.filter(t => t.amount < 0),
   [store.transactions]);
 
   // ── Current & previous month spend by category ────────────────────────────
@@ -83,9 +83,6 @@ export default function SpendPage() {
   // ── Subscription growth detection ────────────────────────────────────────
   type SubGrow = { vendor: string; m0: number; m3: number; growth_pct: number; category: string };
   const growingSubscriptions = useMemo<SubGrow[]>(() => {
-    const vendorMonthly = (vendor: string, spend: Record<string, number>) =>
-      expenses.filter(t => t.counterparty === vendor && inWindow(t.date, ...Object.values(spend) as any)).reduce((s, t) => s + Math.abs(t.amount), 0);
-
     const recurrents = new Set(
       expenses.filter(t => {
         const vendor = t.counterparty;
@@ -218,7 +215,7 @@ export default function SpendPage() {
         </div>
 
         {growingSubscriptions.length === 0 ? (
-          <p className="text-xs text-green-400 py-2">No recurring vendors with >15% spend growth detected.</p>
+          <p className="text-xs text-green-400 py-2">No recurring vendors with &gt;15% spend growth detected.</p>
         ) : (
           <div className="space-y-2">
             {growingSubscriptions.map(s => (

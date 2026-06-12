@@ -118,7 +118,7 @@ function chaseMessage(inv: Invoice, daysOverdue: number): string {
 }
 
 function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
-  withDays: { id: string; customer: string; amount: number; dueDate: string; bucket: string; daysOverdue: number; invoiceNumber?: string; description?: string; status: string }[];
+  withDays: (Invoice & { bucket: string; daysOverdue: number })[];
   isReadOnly: boolean;
   onMarkPaid: (id: string) => void;
   onChase: (inv: typeof withDays[0]) => void;
@@ -338,7 +338,7 @@ export default function ReceivablesPage() {
             </button>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* Paid invoices */}
       {paid.length > 0 && (

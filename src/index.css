@@ -118,3 +118,31 @@ td, th, .tabular-nums, [data-numeric] {
     size: A4;
   }
 }
+
+/* ── Native (iOS/Android via Capacitor) ─────────────────────────────────────
+   Scoped to .capacitor-native (set by initNative) so the web layout is never
+   affected. Insets the app body around the notch / home indicator. */
+html.capacitor-native body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Disable the iOS rubber-band overscroll glow / pull-to-refresh on the shell. */
+html.capacitor-native,
+html.capacitor-native body {
+  overscroll-behavior-y: none;
+}
+
+/* Kill the long-press text-selection + tap-highlight that feels un-native. */
+html.capacitor-native {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+html.capacitor-native input,
+html.capacitor-native textarea,
+html.capacitor-native [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
