@@ -120,11 +120,14 @@ export default function CollectionsPage() {
   const today = new Date().toISOString().split("T")[0];
 
   const receivables = useMemo(() => {
-    const invs = (store as { invoices?: { id: string; clientName: string; amount: number; dueDate: string; status: string }[] }).invoices ?? [];
-    return invs
+    return store.invoices
       .filter(inv => inv.status !== "paid")
       .map(inv => ({
-        ...inv,
+        id: inv.id,
+        clientName: inv.customer,
+        amount: inv.amount,
+        dueDate: inv.dueDate,
+        status: inv.status,
         aging: getAging(inv.dueDate),
         daysOverdue: Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate))),
       }));

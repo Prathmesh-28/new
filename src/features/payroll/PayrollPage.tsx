@@ -108,6 +108,7 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
 }
 
 export default function PayrollPage() {
+  const now = new Date();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [runs, setRuns]           = useState<PayrollRun[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -122,7 +123,6 @@ export default function PayrollPage() {
   const [ewaLoading, setEwaLoading] = useState(false);
   const [requesting, setRequesting] = useState<Record<string, boolean>>({});
 
-  const now = new Date();
   const [runMonth] = useState(now.getMonth() + 1);
   const [runYear]  = useState(now.getFullYear());
 

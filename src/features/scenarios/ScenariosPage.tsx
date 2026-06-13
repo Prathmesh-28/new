@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, addDays } from "date-fns";
+import { toast } from "sonner";
 
 type ScenarioEvent = {
   id: string;

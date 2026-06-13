@@ -51,6 +51,12 @@ export default function FinancialHealthPage() {
 
   const lenderReady = health.score >= 65 && (snap.dscr === null || snap.dscr >= 1.25);
 
+  // ── EBITDA & Free Cash Flow ───────────────────────────────────────────────────
+  const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + snap.monthlyRevenue * 0.015;
+  const ebitdaMgnPct  = snap.monthlyRevenue > 0 ? Math.round((monthlyEbitda / snap.monthlyRevenue) * 100) : null;
+  const opCashFlow    = snap.monthlyNet + snap.monthlyDebtService;
+  const fcfRatioPct   = snap.monthlyRevenue > 0 ? Math.round((opCashFlow / snap.monthlyRevenue) * 100) : null;
+
   const ratios: { label: string; value: string; target: string; ok: boolean; path: string }[] = [
     { label: "Current Ratio", value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—", target: "≥ 1.5x", ok: (snap.currentRatio ?? 2) >= 1.5, path: "/working-capital" },
     { label: "Quick Ratio", value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "—", target: "≥ 1.0x", ok: (snap.quickRatio ?? 1.5) >= 1, path: "/working-capital" },
@@ -67,12 +73,6 @@ export default function FinancialHealthPage() {
   ];
 
   const weakest = [...health.components].sort((a, b) => a.score - b.score).slice(0, 3);
-
-  // ── EBITDA & Free Cash Flow ───────────────────────────────────────────────────
-  const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + snap.monthlyRevenue * 0.015;
-  const ebitdaMgnPct  = snap.monthlyRevenue > 0 ? Math.round((monthlyEbitda / snap.monthlyRevenue) * 100) : null;
-  const opCashFlow    = snap.monthlyNet + snap.monthlyDebtService;
-  const fcfRatioPct   = snap.monthlyRevenue > 0 ? Math.round((opCashFlow / snap.monthlyRevenue) * 100) : null;
 
   // ── Altman Z' Score (private firms) ──────────────────────────────────────────
   const estimatedFA     = snap.monthlyRevenue * 6;
