@@ -9,6 +9,7 @@ import {
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
+  MessageCircle, Sliders, PhoneCall, Award, FolderOpen,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -48,6 +49,11 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
       { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
+      { to: "/whatsapp",     label: "WhatsApp",     icon: MessageCircle,   tab: "whatsapp"     },
+      { to: "/scenarios",    label: "Scenarios",    icon: Sliders,         tab: "scenarios"    },
+      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
+      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
+      { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
     ]},
@@ -84,6 +90,11 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
       { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
+      { to: "/whatsapp",     label: "WhatsApp",     icon: MessageCircle,   tab: "whatsapp"     },
+      { to: "/scenarios",    label: "Scenarios",    icon: Sliders,         tab: "scenarios"    },
+      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
+      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
+      { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
     ]},
   ],

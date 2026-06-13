@@ -44,6 +44,11 @@ const DebtPage           = lazy(() => import("@/features/debt/DebtPage"));
 const ValuationPage      = lazy(() => import("@/features/valuation/ValuationPage"));
 const CompliancePage     = lazy(() => import("@/features/compliance/CompliancePage"));
 const SpendPage          = lazy(() => import("@/features/spend/SpendPage"));
+const WhatsAppPage       = lazy(() => import("@/features/whatsapp/WhatsAppPage"));
+const ScenariosPage      = lazy(() => import("@/features/scenarios/ScenariosPage"));
+const CollectionsPage    = lazy(() => import("@/features/collections/CollectionsPage"));
+const BenchmarksPage     = lazy(() => import("@/features/benchmarks/BenchmarksPage"));
+const DocumentsPage      = lazy(() => import("@/features/documents/DocumentsPage"));
 
 function PageLoader() {
   return (
@@ -114,6 +119,11 @@ function AppShell() {
                 <Route path="/valuation"     element={<ValuationPage />} />
                 <Route path="/compliance"    element={<CompliancePage />} />
                 <Route path="/spend"         element={<SpendPage />} />
+                <Route path="/whatsapp"      element={<WhatsAppPage />} />
+                <Route path="/scenarios"     element={<ScenariosPage />} />
+                <Route path="/collections"   element={<CollectionsPage />} />
+                <Route path="/benchmarks"    element={<BenchmarksPage />} />
+                <Route path="/documents"     element={<DocumentsPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>
