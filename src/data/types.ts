@@ -27,6 +27,7 @@ export interface RoleConfig {
   canExport: boolean;
   canAddNotes: boolean;
   namespaces: string[];
+  custom?: boolean;  // true once an owner has edited this role's access in the UI
 }
 
 // ── Firm ──────────────────────────────────────────────────────────────────────

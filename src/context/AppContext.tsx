@@ -27,6 +27,13 @@ interface AppCtx {
   canExport: () => boolean;
   canEdit: () => boolean;
   setStore: SetStore;
+  // Owner "view as" preview + per-role permission config
+  previewRole: UserRole | null;
+  setPreviewRole: (r: UserRole | null) => void;
+  effectiveRole: UserRole;
+  roleTabs: (roleId: UserRole) => string[];
+  setRoleTabs: (roleId: UserRole, tabs: string[]) => void;
+  resetRole: (roleId: UserRole) => void;
   // Client view (advisor feature)
   selectedClientTenantId: string | null;
   selectedClientLabel: string;
@@ -101,6 +108,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const role = (user?.role ?? "owner") as UserRole;
 
   const [currentRole, setCurrentRole] = useState<UserRole>(role);
+  // "View as" preview — owner/super_admin can render the app as another role sees
+  // it. Purely presentational: it gates nav + canAccess but never changes which
+  // data namespaces load/persist (those stay on the real role).
+  const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
+  const effectiveRole: UserRole = previewRole ?? currentRole;
   // Ref mirror so the write-gate inside setStore never reads a stale role.
   const roleRef = useRef<UserRole>(role);
   useEffect(() => { roleRef.current = currentRole; }, [currentRole]);
@@ -215,24 +227,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [user, currentRole]);
 
-  // Union of stored role config and shipped defaults, so tabs added in newer
-  // releases stay reachable for users whose roles were persisted earlier.
+  // Resolve a role's config: an owner-CUSTOMISED config (custom:true) is
+  // authoritative; otherwise fall back to the latest shipped defaults so roles
+  // never lose access to newly-released tabs.
+  const getRoleConfig = (roleId: UserRole): RoleConfig | undefined => {
+    const rc = store.roles.find(r => r.id === roleId);
+    if (rc && (rc as RoleConfig & { custom?: boolean }).custom) return rc;
+    return defaultConfig.roles.find(r => r.id === roleId) ?? rc;
+  };
+
   const canAccess = (tab: string) => {
-    if (currentRole === "super_admin") return true;
-    const rc: RoleConfig | undefined = store.roles.find(r => r.id === currentRole);
-    const dc = defaultConfig.roles.find(r => r.id === currentRole);
-    return (rc?.accessibleTabs.includes(tab) ?? false) || (dc?.accessibleTabs.includes(tab) ?? false);
+    if (effectiveRole === "super_admin") return true;
+    return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 
   const canExport = () => {
-    if (currentRole === "super_admin") return true;
-    const rc = store.roles.find(r => r.id === currentRole);
-    const dc = defaultConfig.roles.find(r => r.id === currentRole);
-    return rc?.canExport ?? dc?.canExport ?? false;
+    if (effectiveRole === "super_admin") return true;
+    return getRoleConfig(effectiveRole)?.canExport ?? false;
   };
 
-  // False when viewing a client's data (advisor) or when the role is read-only.
-  const canEdit = () => !isReadOnly && !isReadOnlyRole(currentRole);
+  // False when viewing a client's data (advisor) or when the (effective) role is read-only.
+  const canEdit = () => !isReadOnly && !isReadOnlyRole(effectiveRole);
+
+  // The accessible-tab set shown in the role editor (effective config).
+  const roleTabs = (roleId: UserRole): string[] => getRoleConfig(roleId)?.accessibleTabs ?? [];
+
+  // Owner edits which tabs a role can reach — persisted to store.roles (app namespace).
+  const setRoleTabs = (roleId: UserRole, tabs: string[]) => setStore(s => {
+    const base = s.roles.find(r => r.id === roleId) ?? defaultConfig.roles.find(r => r.id === roleId);
+    if (!base) return s;
+    const updated = { ...base, accessibleTabs: tabs, visibleTabs: tabs, custom: true } as RoleConfig;
+    const exists = s.roles.some(r => r.id === roleId);
+    return { ...s, roles: exists ? s.roles.map(r => r.id === roleId ? updated : r) : [...s.roles, updated] };
+  });
+  const resetRole = (roleId: UserRole) => setStore(s => {
+    const dc = defaultConfig.roles.find(r => r.id === roleId);
+    if (!dc) return s;
+    const fresh = { ...dc, custom: false } as RoleConfig;
+    const exists = s.roles.some(r => r.id === roleId);
+    return { ...s, roles: exists ? s.roles.map(r => r.id === roleId ? fresh : r) : [...s.roles, fresh] };
+  });
 
   // ── CRUD factories ─────────────────────────────────────────────────────────
   const add    = <K extends keyof AppStore>(key: K) => (x: AppStore[K] extends (infer I)[] ? I : never) =>
@@ -244,6 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppCtx = {
     store, loading, currentRole, setCurrentRole, canAccess, canExport, canEdit, setStore,
+    previewRole, setPreviewRole, effectiveRole, roleTabs, setRoleTabs, resetRole,
     selectedClientTenantId, selectedClientLabel, setSelectedClient, isReadOnly,
     addBankAccount:          add("bankAccounts"),
     updateBankAccount:       update("bankAccounts"),

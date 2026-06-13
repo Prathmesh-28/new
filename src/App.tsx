@@ -51,6 +51,7 @@ const BenchmarksPage     = lazy(() => import("@/features/benchmarks/BenchmarksPa
 const DocumentsPage      = lazy(() => import("@/features/documents/DocumentsPage"));
 const StatementsPage     = lazy(() => import("@/features/statements/StatementsPage"));
 const TermSheetPage      = lazy(() => import("@/features/termsheet/TermSheetPage"));
+const DataPage           = lazy(() => import("@/features/data/DataPage"));
 
 function PageLoader() {
   return (
@@ -78,7 +79,7 @@ const GUARDED_TABS = new Set([
   "operations", "advisor", "investor", "connectors", "settings", "admin", "invoices",
   "gst", "payroll", "suppliers", "lenders", "analytics", "cfo-brief", "vendors", "budgets",
   "tax", "health", "working-capital", "debt", "valuation", "compliance", "spend", "whatsapp",
-  "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet",
+  "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
 ]);
 
 function landingFor(role: string): string {
@@ -88,13 +89,30 @@ function landingFor(role: string): string {
 }
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
-  const { canAccess, currentRole } = useApp();
+  const { canAccess, effectiveRole } = useApp();
   const location = useLocation();
   const tab = location.pathname.split("/")[1] ?? "";
   if (GUARDED_TABS.has(tab) && !canAccess(tab)) {
-    return <Navigate to={landingFor(currentRole)} replace />;
+    return <Navigate to={landingFor(effectiveRole)} replace />;
   }
   return <>{children}</>;
+}
+
+function PreviewBanner() {
+  const { previewRole, setPreviewRole } = useApp();
+  if (!previewRole) return null;
+  const label = previewRole.replace(/_/g, " ");
+  return (
+    <div className="sticky top-0 z-30 bg-purple-900/40 border-b border-purple-700/50 backdrop-blur px-4 py-2 flex items-center justify-between gap-3">
+      <p className="text-xs text-purple-200">
+        Previewing the app as <strong className="capitalize">{label}</strong> — this is exactly what they see.
+      </p>
+      <button onClick={() => setPreviewRole(null)}
+        className="text-xs font-semibold bg-purple-800/60 text-purple-100 border border-purple-600/50 px-3 py-1 rounded-md hover:bg-purple-800/90 whitespace-nowrap">
+        Exit preview
+      </button>
+    </div>
+  );
 }
 
 function AppShell() {
@@ -114,6 +132,7 @@ function AppShell() {
     <div className="flex min-h-screen bg-[var(--color-bg)]">
       <Sidebar onOpenSearch={openPalette} />
       <div className="flex-1 flex flex-col min-w-0">
+        <PreviewBanner />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
         <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
           <ErrorBoundary>
@@ -157,6 +176,7 @@ function AppShell() {
                 <Route path="/documents"     element={<DocumentsPage />} />
                 <Route path="/statements"    element={<StatementsPage />} />
                 <Route path="/term-sheet"    element={<TermSheetPage />} />
+                <Route path="/data"          element={<DataPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>

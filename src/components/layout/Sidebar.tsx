@@ -9,7 +9,7 @@ import {
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
-  MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText,
+  MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -23,6 +23,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
       { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
@@ -67,6 +68,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
       { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
@@ -109,6 +111,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
       { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
     ]},
     { label: "Finance", items: [
       { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
@@ -146,6 +149,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
     ]},
   ],
   sales: [
@@ -156,6 +160,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
       { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
       { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
     ]},
   ],
@@ -168,6 +173,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
       { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
       { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
+      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
       { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
     ]},
   ],
@@ -252,14 +258,15 @@ function NavItems({ groups, collapsed, onNavigate, badges }: {
 export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { user, logout }                          = useAuth();
   const { canAccess, selectedClientTenantId,
-          selectedClientLabel, setSelectedClient, store } = useApp();
+          selectedClientLabel, setSelectedClient, store, previewRole } = useApp();
   const navigate                                  = useNavigate();
   const [collapsed, setCollapsed]                 = useState(
     () => localStorage.getItem("hr_sidebar_collapsed") === "true"
   );
   const [mobileOpen, setMobileOpen]               = useState(false);
 
-  const role   = user?.role ?? "owner";
+  // When previewing "as" another role, render that role's navigation.
+  const role   = previewRole ?? user?.role ?? "owner";
   const groups = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
     .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
     .filter(g => g.items.length > 0);

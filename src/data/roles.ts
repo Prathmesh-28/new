@@ -89,6 +89,57 @@ export const ROLE_META: Record<UserRole, TeamRoleMeta> = {
 /** Roles a workspace owner may assign when inviting a team member. */
 export const ASSIGNABLE_ROLES: TeamRoleMeta[] = Object.values(ROLE_META).filter(r => r.assignable);
 
+// ── Tab catalog — every configurable page, grouped, for the permission editor ──
+export interface TabDef { tab: string; label: string; group: string }
+export const TAB_CATALOG: TabDef[] = [
+  // Core
+  { tab: "dashboard",       label: "Dashboard",        group: "Core" },
+  { tab: "transactions",    label: "Transactions",     group: "Core" },
+  { tab: "forecast",        label: "Forecast",         group: "Core" },
+  { tab: "analytics",       label: "Analytics",        group: "Core" },
+  { tab: "health",          label: "Financial Health", group: "Core" },
+  // Finance
+  { tab: "invoices",        label: "Invoices",         group: "Finance" },
+  { tab: "receivables",     label: "Receivables",      group: "Finance" },
+  { tab: "working-capital", label: "Working Capital",  group: "Finance" },
+  { tab: "debt",            label: "Debt",             group: "Finance" },
+  { tab: "valuation",       label: "Valuation",        group: "Finance" },
+  { tab: "statements",      label: "Statements",       group: "Finance" },
+  { tab: "term-sheet",      label: "Term Sheet",       group: "Finance" },
+  { tab: "gst",             label: "GST",              group: "Finance" },
+  { tab: "tax",             label: "Tax Autopilot",    group: "Finance" },
+  { tab: "budgets",         label: "Budgets",          group: "Finance" },
+  { tab: "credit",          label: "Credit",           group: "Finance" },
+  { tab: "capital",         label: "Capital",          group: "Finance" },
+  { tab: "lenders",         label: "Lenders",          group: "Finance" },
+  // Operations
+  { tab: "payroll",         label: "Payroll",          group: "Operations" },
+  { tab: "vendors",         label: "Vendors",          group: "Operations" },
+  { tab: "suppliers",       label: "Suppliers",        group: "Operations" },
+  { tab: "spend",           label: "Spend Intel",      group: "Operations" },
+  { tab: "operations",      label: "Operations",       group: "Operations" },
+  { tab: "connectors",      label: "Connectors",       group: "Operations" },
+  // Tools
+  { tab: "cfo-brief",       label: "CFO Brief",        group: "Tools" },
+  { tab: "compliance",      label: "Compliance",       group: "Tools" },
+  { tab: "alerts",          label: "Alerts",           group: "Tools" },
+  { tab: "whatsapp",        label: "WhatsApp",         group: "Tools" },
+  { tab: "scenarios",       label: "Scenarios",        group: "Tools" },
+  { tab: "collections",     label: "Collections",      group: "Tools" },
+  { tab: "benchmarks",      label: "Benchmarks",       group: "Tools" },
+  { tab: "documents",       label: "Documents",        group: "Tools" },
+  // Investor & advisor surfaces
+  { tab: "investor",        label: "Investor Portfolio", group: "Stakeholder" },
+  { tab: "advisor",         label: "Advisor Portal",   group: "Stakeholder" },
+  { tab: "data",            label: "Data & Import",    group: "Admin" },
+  { tab: "settings",        label: "Settings",         group: "Admin" },
+];
+
+export const TAB_GROUPS = ["Core", "Finance", "Operations", "Tools", "Stakeholder", "Admin"];
+
+/** Roles whose access an owner can reshape (excludes super_admin god-mode + owner self). */
+export const CONFIGURABLE_ROLES: TeamRoleMeta[] = ASSIGNABLE_ROLES.filter(r => r.id !== "owner");
+
 export function roleLabel(role: string): string {
   return ROLE_META[role as UserRole]?.label ?? role;
 }

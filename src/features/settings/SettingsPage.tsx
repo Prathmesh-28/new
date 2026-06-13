@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
-import { Navigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users } from "lucide-react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { ROLE_META, ASSIGNABLE_ROLES, roleLabel, roleBadge } from "@/data/roles";
+import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUPS, roleLabel, roleBadge } from "@/data/roles";
+import type { UserRole } from "@/data/types";
 
 type TeamUser = {
   id: string;
@@ -15,9 +16,28 @@ type TeamUser = {
   first_login: boolean;
 };
 
+function landingFor(role: string): string {
+  if (role === "investor") return "/investor";
+  if (role === "accountant") return "/advisor";
+  return "/dashboard";
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
-  const { store, updateFirm } = useApp();
+  const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
+  const navigate = useNavigate();
+  const [openRole, setOpenRole] = useState<UserRole | null>(null);
+
+  const startPreview = (role: UserRole) => {
+    setPreviewRole(role);
+    navigate(landingFor(role));
+    toast.success(`Previewing as ${roleLabel(role)} — exit from the banner up top`);
+  };
+  const toggleTab = (role: UserRole, tab: string) => {
+    const current = roleTabs(role);
+    const next = current.includes(tab) ? current.filter(t => t !== tab) : [...current, tab];
+    setRoleTabs(role, next);
+  };
   const [users,    setUsers]    = useState<TeamUser[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -306,6 +326,89 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Stakeholder Views & Permissions */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+        <div className="flex items-center gap-2.5 mb-1">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+            <SlidersHorizontal size={15} className="text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Stakeholder Views &amp; Permissions</h2>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">See the app exactly as each role does, and control which pages each one can open.</p>
+          </div>
+        </div>
+
+        {/* Preview as */}
+        <div className="mt-5">
+          <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">Preview as</p>
+          <div className="flex flex-wrap gap-2">
+            {ASSIGNABLE_ROLES.map(r => (
+              <button key={r.id} onClick={() => startPreview(r.id)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors hover:border-[var(--color-primary)] ${roleBadge(r.id)}`}>
+                <Eye size={12} /> {r.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-2">Opens the app as that stakeholder. A banner lets you exit back to your own view anytime.</p>
+        </div>
+
+        {/* Configure access */}
+        <div className="mt-6">
+          <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">Configure access</p>
+          <div className="space-y-2">
+            {CONFIGURABLE_ROLES.map(r => {
+              const enabled = roleTabs(r.id);
+              const isOpen = openRole === r.id;
+              return (
+                <div key={r.id} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+                  <button onClick={() => setOpenRole(isOpen ? null : r.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/2 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${roleBadge(r.id)}`}>{r.label}</span>
+                      <span className="text-xs text-[var(--color-muted)] truncate">{enabled.length} page{enabled.length !== 1 ? "s" : ""} enabled</span>
+                    </div>
+                    <ChevronDown size={15} className={`text-[var(--color-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-[var(--color-border)] p-4 bg-[var(--color-bg)]">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[11px] text-[var(--color-muted)]">Tick a page to grant {r.label} access to it.</p>
+                        <button onClick={() => resetRole(r.id)}
+                          className="flex items-center gap-1 text-[10px] text-[var(--color-muted)] hover:text-[var(--color-primary)]">
+                          <RotateCcw size={10} /> Reset to default
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {TAB_GROUPS.map(group => {
+                          const tabs = TAB_CATALOG.filter(t => t.group === group);
+                          if (tabs.length === 0) return null;
+                          return (
+                            <div key={group}>
+                              <p className="text-[10px] font-semibold text-[var(--color-muted)]/70 uppercase tracking-wider mb-1.5">{group}</p>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                                {tabs.map(t => {
+                                  const on = enabled.includes(t.tab);
+                                  return (
+                                    <label key={t.tab} className="flex items-center gap-2 text-xs cursor-pointer py-0.5">
+                                      <input type="checkbox" checked={on} onChange={() => toggleTab(r.id, t.tab)} className="accent-[var(--color-primary)] shrink-0" />
+                                      <span className={on ? "" : "text-[var(--color-muted)]"}>{t.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Business profile */}
