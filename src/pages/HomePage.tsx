@@ -14,6 +14,19 @@ const C = {
 const serif = "Georgia,'Times New Roman',serif";
 const sans  = "system-ui,-apple-system,'Segoe UI',sans-serif";
 
+/* Detect India (→ ₹) vs everywhere else (→ $) from the visitor's timezone/locale.
+   Instant + free + no API key, so there's no network flash or geo-IP dependency. */
+function detectIndia(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    if (/Kolkata|Calcutta/i.test(tz)) return true;
+    const lang = (navigator.language || (navigator.languages && navigator.languages[0]) || "").toLowerCase();
+    if (/-in\b/.test(lang) || lang === "hi" || lang.startsWith("hi-")) return true;
+  } catch { /* ignore */ }
+  return false; // default → USD (US + rest of world)
+}
+
 /* ─── Scroll reveal ─── */
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -103,6 +116,7 @@ function Label({ text, dark = false }: { text: string; dark?: boolean }) {
 export default function HomePage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [inr] = useState(detectIndia); // ₹ for India, $ everywhere else — by geolocation
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20);
@@ -491,8 +505,11 @@ export default function HomePage() {
             <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>
               Choose the operating layer<br />your cash flow needs.
             </h2>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.08)", border: "1px solid rgba(201,162,39,0.2)", borderRadius: 20, padding: "5px 14px", marginBottom: 52 }}>
-              <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for your first 90 days — no credit card required</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.08)", border: "1px solid rgba(201,162,39,0.2)", borderRadius: 20, padding: "5px 14px", marginBottom: 12 }}>
+              <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for 90 days · no card · 🔥 founding price locked for the first 1,000 SMBs</span>
+            </div>
+            <div style={{ fontFamily: sans, fontSize: 11, color: C.txtMut, marginBottom: 52 }}>
+              Showing prices in {inr ? "₹ INR (India)" : "$ USD"} · detected from your location
             </div>
           </div>
         </Reveal>
@@ -500,36 +517,39 @@ export default function HomePage() {
         <div style={{ maxWidth: 940, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
           {[
             {
-              name:"Starter", price:"$29", featured: false,
-              desc:"For founders exploring their numbers.",
-              features:["90-day cash flow forecast","Confidence bands","Plain-language alerts","Weekly cash digest","Email alerts","2 connected accounts"],
-              disabled:["Scenario planner","Credit rescue","Advisor access"],
-              cta:"Get started",
+              name:"Free", price:inr ? "₹0" : "$0", period:"forever", featured: false,
+              note:inr ? "Free for SMBs under ₹25L turnover · no card ever" : "For early-stage businesses · no card ever",
+              desc:"See your cash truth — free for life.",
+              features:["30-day cash forecast","Confidence bands","Plain-language alerts","WhatsApp morning brief","1 connected account"],
+              disabled:["90-day forecast","Scenario planner","Credit rescue","Advisor access"],
+              cta:"Start free",
             },
             {
-              name:"Growth", price:"$79", featured: true,
-              desc:"For growing SMBs that need full visibility and credit access.",
-              features:["Everything in Starter","Unlimited accounts","Scenario planning","AI cash insights","Embedded credit rescue","Silent underwriting","Advisor access"],
+              name:"Growth", price:inr ? "₹999" : "$39", period:"/mo", featured: true,
+              note:inr ? "billed yearly · ₹1,499 monthly · 🔥 founding price locked for life" : "billed yearly · $59 monthly · 🔥 founding price locked for life",
+              desc:inr ? "For growing SMBs that need full visibility and credit. Cheaper than a half-day of an accountant." : "For growing businesses that need full visibility and credit access.",
+              features:["Everything in Free","90-day P10/P50/P90 forecast","Unlimited bank accounts","Scenario planner","AI cash insights","WhatsApp commands + alerts","Embedded credit rescue","Silent underwriting"],
               disabled:[],
               cta:"Get my forecast",
             },
             {
-              name:"Pro", price:"$149", featured: false,
+              name:"Pro", price:inr ? "₹2,999" : "$99", period:"/mo", featured: false,
+              note:inr ? "billed yearly · ₹3,999 monthly" : "billed yearly · $129 monthly",
               desc:"For businesses raising capital or managing investors.",
-              features:["Everything in Growth","Investor dashboard","Multi-entity support","Capital raise add-on","API access","Priority support"],
+              features:["Everything in Growth","Investor dashboard","Multi-entity support","Capital raise tools","API access","Priority support","Advisor access"],
               disabled:[],
-              cta:"Get started",
+              cta:"Go Pro →",
             },
-          ].map(({ name, price, featured, desc, features, disabled, cta }, i) => (
+          ].map(({ name, price, period, note, featured, desc, features, disabled, cta }, i) => (
             <Reveal key={name} delay={i * 80}>
               <div data-h3d-tilt style={{ background: featured ? C.deepest : "#fff", border: `1px solid ${featured ? C.mid : "rgba(74,94,26,0.12)"}`, borderRadius: 16, padding: "32px 28px", textAlign: "left", display: "flex", flexDirection: "column" }}>
                 {featured && <div style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", background: C.gold, color: C.deepest, padding: "3px 12px", borderRadius: 12, display: "inline-block", marginBottom: 16 }}>Most popular</div>}
                 <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 600, color: featured ? C.pale : C.txt, marginBottom: 6 }}>{name}</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "12px 0 4px" }}>
                   <span style={{ fontFamily: serif, fontSize: 36, color: featured ? C.gold : C.mid, letterSpacing: -1 }}>{price}</span>
-                  <span style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.45)" : C.txtMut }}>/mo</span>
+                  <span style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.45)" : C.txtMut }}>{period}</span>
                 </div>
-                <div style={{ fontFamily: sans, fontSize: 12, color: featured ? "rgba(196,217,122,0.4)" : C.txtMut, marginBottom: 8 }}>billed monthly · cancel any time</div>
+                <div style={{ fontFamily: sans, fontSize: 12, color: featured ? "rgba(196,217,122,0.4)" : C.txtMut, marginBottom: 8 }}>{note}</div>
                 <div style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.55)" : C.txtMut, marginBottom: 24, lineHeight: 1.5 }}>{desc}</div>
                 <ul style={{ listStyle: "none", marginBottom: 28, flex: 1 }}>
                   {features.map(f => (
@@ -556,8 +576,8 @@ export default function HomePage() {
           <div style={{ maxWidth: 940, margin: "20px auto 0", background: C.deepest, border: "1px solid rgba(196,217,122,0.12)", borderRadius: 14, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20, textAlign: "left" }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: C.bright, marginBottom: 6 }}>Capital raise add-on</div>
-              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>$299 <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.4)" }}>/ mo while raise is active</span></div>
-              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", maxWidth: 460 }}>Add community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
+              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>{inr ? "₹4,999" : "$299"} <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.4)" }}>/ mo while your raise is live</span></div>
+              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", maxWidth: 460 }}>Add a community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
             </div>
             <button onClick={() => navigate("/signup")} style={{ background: "transparent", border: `1px solid rgba(196,217,122,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
               Explore capital raise →
