@@ -2,32 +2,36 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const stripe = require("../lib/stripe");
+const razorpay = require("../lib/razorpay");
 
 const APP_URL = (process.env.FRONTEND_URL || "https://headroom-pi.vercel.app").replace(/\/$/, "");
 const VALID_PLANS = ["growth", "pro"];
 
 // Persist a plan to a tenant: updates the billing record AND every user in the
 // tenant (so each team member's entitlements reflect the company subscription).
-async function applyPlan(tenantId, plan, { customerId, subscriptionId, status, periodEnd } = {}) {
+// Works for both gateways — `provider` records which one paid.
+async function applyPlan(tenantId, plan, { provider = "stripe", customerId, subscriptionId, razorpayPaymentId, status, periodEnd } = {}) {
   await pool.query(`
-    INSERT INTO tenant_billing(tenant_id, plan, stripe_customer_id, stripe_subscription_id, status, current_period_end, updated_at)
-    VALUES($1,$2,$3,$4,$5,$6,now())
+    INSERT INTO tenant_billing(tenant_id, plan, provider, stripe_customer_id, stripe_subscription_id, razorpay_payment_id, status, current_period_end, updated_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,now())
     ON CONFLICT(tenant_id) DO UPDATE SET
       plan=$2,
-      stripe_customer_id=COALESCE($3, tenant_billing.stripe_customer_id),
-      stripe_subscription_id=COALESCE($4, tenant_billing.stripe_subscription_id),
-      status=COALESCE($5, tenant_billing.status),
-      current_period_end=COALESCE($6, tenant_billing.current_period_end),
+      provider=$3,
+      stripe_customer_id=COALESCE($4, tenant_billing.stripe_customer_id),
+      stripe_subscription_id=COALESCE($5, tenant_billing.stripe_subscription_id),
+      razorpay_payment_id=COALESCE($6, tenant_billing.razorpay_payment_id),
+      status=COALESCE($7, tenant_billing.status),
+      current_period_end=COALESCE($8, tenant_billing.current_period_end),
       updated_at=now()
-  `, [tenantId, plan, customerId || null, subscriptionId || null, status || null,
-      periodEnd ? new Date(periodEnd * 1000).toISOString() : null]);
+  `, [tenantId, plan, provider, customerId || null, subscriptionId || null, razorpayPaymentId || null,
+      status || null, periodEnd ? new Date(periodEnd * 1000).toISOString() : null]);
   await pool.query("UPDATE users SET subscription_plan=$1 WHERE tenant_id=$2", [plan, tenantId]);
 }
 
 // GET /api/billing/current — the tenant's current plan + subscription status
 router.get("/current", authenticate, async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT plan, status, current_period_end, stripe_customer_id FROM tenant_billing WHERE tenant_id=$1",
+    "SELECT plan, status, current_period_end, stripe_customer_id, provider FROM tenant_billing WHERE tenant_id=$1",
     [req.user.tenant_id]
   );
   const b = rows[0] || {};
@@ -35,9 +39,12 @@ router.get("/current", authenticate, async (req, res) => {
     plan: b.plan || req.user.subscription_plan || "free",
     status: b.status || null,
     current_period_end: b.current_period_end || null,
+    provider: b.provider || null,
     has_customer: !!b.stripe_customer_id,
     configured: !!stripe.getClient(),
     live: stripe.isLive(),
+    // Which gateways are usable right now, so the UI can offer the live ones.
+    gateways: { stripe: !!stripe.getClient(), razorpay: razorpay.isConfigured() },
   });
 });
 
@@ -150,6 +157,52 @@ router.post("/invoice-link", authenticate, requireOwnerOrAdmin, async (req, res)
     console.error("[billing] invoice-link", e.message);
     res.status(502).json({ error: `Stripe: ${e.message || "could not create payment link"}` });
   }
+});
+
+// ── Razorpay Standard Checkout (subscription upgrades) ──────────────────────
+// Razorpay is the India-first gateway (UPI / cards / netbanking / wallets). It's
+// a one-time Standard Checkout payment per period — the signature is verified
+// server-side before the plan is applied.
+
+// POST /api/billing/razorpay/order — create an order for a plan (amount in paise, INR)
+router.post("/razorpay/order", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { plan } = req.body || {};
+  if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
+  const problem = razorpay.configProblem();
+  if (problem) return res.status(503).json({ error: problem });
+  const amount = stripe.PLAN_PRICING[plan] && stripe.PLAN_PRICING[plan].inr; // paise, INR
+  if (!amount || amount < 100) return res.status(400).json({ error: "Invalid amount" });
+  try {
+    const order = await razorpay.createOrder({
+      amount,
+      currency: "INR",
+      receipt: `sub_${plan}_${Date.now()}`.slice(0, 40),
+      notes: { tenant_id: req.user.tenant_id, plan },
+    });
+    // key_id is public and safe to return; the SECRET never leaves the server.
+    res.json({ order_id: order.id, amount: order.amount, currency: order.currency, key_id: razorpay.keyId(), plan });
+  } catch (e) {
+    console.error("[billing] razorpay order", e.statusCode, e.message);
+    if (e.statusCode === 401) return res.status(401).json({ error: "Razorpay auth failed — check RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET on the server." });
+    res.status(500).json({ error: `Razorpay: ${e.message || "could not create order"}` });
+  }
+});
+
+// POST /api/billing/razorpay/verify — verify the payment signature, then apply the plan
+router.post("/razorpay/verify", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { plan, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) return res.status(400).json({ error: "Missing payment fields" });
+  if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
+  const ok = razorpay.verifyPaymentSignature({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature });
+  if (!ok) return res.status(400).json({ error: "Payment verification failed — signature mismatch." });
+  // Verified — apply the plan. ~30-day period for this one-time Standard Checkout.
+  await applyPlan(req.user.tenant_id, plan, {
+    provider: "razorpay",
+    razorpayPaymentId: razorpay_payment_id,
+    status: "active",
+    periodEnd: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+  });
+  res.json({ ok: true, plan });
 });
 
 // Webhook handler — mounted with express.raw() on /webhook/stripe (see server.js).

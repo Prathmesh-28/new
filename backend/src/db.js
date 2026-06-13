@@ -460,6 +460,9 @@ async function initDb() {
       current_period_end     TIMESTAMPTZ,
       updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Gateway-agnostic columns (Stripe or Razorpay paid the subscription)
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS provider TEXT;
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;

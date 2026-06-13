@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { CreditCard, Check, Sparkles, ExternalLink, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { PLAN_LABEL, PLAN_RANK, type PlanTier } from "@/data/types";
-import { fetchBilling, startCheckout, confirmCheckout, openBillingPortal, regionCurrency, type BillingState } from "@/lib/billing";
+import { fetchBilling, upgradePlan, confirmCheckout, openBillingPortal, regionCurrency, defaultGateway, type BillingState, type Gateway } from "@/lib/billing";
+import GatewayToggle from "@/components/GatewayToggle";
 
 const PLANS: { id: Exclude<PlanTier, "free">; inr: string; usd: string; tagline: string }[] = [
   { id: "growth", inr: "₹999",   usd: "$39", tagline: "Full visibility, benchmarks, scenarios & credit" },
@@ -15,9 +16,15 @@ export default function BillingCard() {
   const [params, setParams] = useSearchParams();
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [gateway, setGateway] = useState<Gateway>(defaultGateway());
   const inr = regionCurrency() === "inr";
 
-  const load = useCallback(() => { fetchBilling().then(setBilling).catch(() => {}); }, []);
+  const load = useCallback(() => {
+    fetchBilling().then(b => {
+      setBilling(b);
+      setGateway(g => (b.gateways?.[g] ? g : b.gateways?.razorpay ? "razorpay" : "stripe"));
+    }).catch(() => {});
+  }, []);
   useEffect(() => { load(); }, [load]);
 
   // Handle return from Stripe Checkout (success_url carries the session id).
@@ -37,7 +44,11 @@ export default function BillingCard() {
   const plan = (billing?.plan ?? user?.plan ?? "free") as PlanTier;
   const rank = PLAN_RANK[plan];
 
-  const upgrade = async (id: Exclude<PlanTier, "free">) => { setBusy(id); await startCheckout(id, () => { load(); refreshUser(); }); setBusy(null); };
+  const upgrade = async (id: Exclude<PlanTier, "free">) => {
+    setBusy(id);
+    await upgradePlan(id, { gateway, email: user?.email, name: user?.display_name, onComplete: () => { load(); refreshUser(); } });
+    setBusy(null);
+  };
   const manage = async () => { setBusy("portal"); await openBillingPortal(); setBusy(null); };
 
   return (
@@ -69,9 +80,16 @@ export default function BillingCard() {
         )}
       </div>
 
-      {billing && !billing.configured && (
+      {billing && !billing.gateways?.stripe && !billing.gateways?.razorpay && (
         <div className="mb-4 p-3 bg-[var(--color-accent)] rounded-lg text-xs text-[var(--color-muted)]">
-          Payments aren't enabled on this environment yet (no Stripe key). Upgrade buttons are live once <code>STRIPE_SECRET_KEY</code> is set.
+          No payment gateway is enabled on this environment yet. Upgrades go live once <code>STRIPE_SECRET_KEY</code> or <code>RAZORPAY_KEY_ID</code>/<code>RAZORPAY_KEY_SECRET</code> are set on the server.
+        </div>
+      )}
+
+      {plan === "free" && (
+        <div className="mb-4">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1.5">Pay with</p>
+          <GatewayToggle value={gateway} onChange={setGateway} available={billing?.gateways} />
         </div>
       )}
 

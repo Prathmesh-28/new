@@ -17,17 +17,35 @@ export function regionCurrency(): "inr" | "usd" {
   return "inr";
 }
 
+export type Gateway = "stripe" | "razorpay";
+
 export interface BillingState {
   plan: PlanTier;
   status: string | null;
   current_period_end: string | null;
+  provider: Gateway | null;
   has_customer: boolean;
   configured: boolean;
   live: boolean;
+  gateways: { stripe: boolean; razorpay: boolean };
 }
 
 export async function fetchBilling(): Promise<BillingState> {
   return api.get<BillingState>("/api/billing/current");
+}
+
+// Default gateway by region: India → Razorpay (UPI/cards/netbanking), else Stripe.
+export function defaultGateway(): Gateway {
+  return regionCurrency() === "inr" ? "razorpay" : "stripe";
+}
+
+// Unified entry point — routes a plan upgrade through the chosen gateway.
+export async function upgradePlan(
+  plan: Exclude<PlanTier, "free">,
+  opts: { gateway: Gateway; email?: string; name?: string; onComplete?: () => void } = { gateway: defaultGateway() },
+): Promise<void> {
+  if (opts.gateway === "razorpay") return startRazorpayCheckout(plan, opts);
+  return startCheckout(plan, opts.onComplete);
 }
 
 // Start a subscription upgrade. On web this redirects to Stripe Checkout; on
@@ -94,6 +112,83 @@ export async function payInvoiceWithStripe(invoiceId: string): Promise<void> {
     }
   } catch (e) {
     toast.error(apiMessage(e) || "Could not create a payment link.");
+  }
+}
+
+// ── Razorpay Standard Checkout (subscription upgrades) ──────────────────────
+interface RazorpaySuccess { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
+interface RazorpayInstance { open: () => void; on: (event: string, handler: (resp: { error?: { description?: string } }) => void) => void }
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayInstance;
+  }
+}
+
+let rzpScriptPromise: Promise<boolean> | null = null;
+function loadRazorpay(): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+  if (rzpScriptPromise) return rzpScriptPromise;
+  rzpScriptPromise = new Promise(resolve => {
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    s.onload = () => resolve(true);
+    s.onerror = () => { rzpScriptPromise = null; resolve(false); };
+    document.body.appendChild(s);
+  });
+  return rzpScriptPromise;
+}
+
+// Create an order, open the Razorpay modal, verify the signature server-side, then
+// reflect the upgrade. Handles user-dismiss and payment.failed gracefully.
+export async function startRazorpayCheckout(
+  plan: Exclude<PlanTier, "free">,
+  opts: { email?: string; name?: string; onComplete?: () => void } = {},
+): Promise<void> {
+  try {
+    haptic("medium");
+    const order = await api.post<{ order_id: string; amount: number; currency: string; key_id: string }>(
+      "/api/billing/razorpay/order", { plan },
+    );
+    const ready = await loadRazorpay();
+    if (!ready || !window.Razorpay) {
+      toast.error("Couldn't load Razorpay. Check your connection and try again.");
+      return;
+    }
+    const rzp = new window.Razorpay({
+      key: order.key_id,
+      amount: order.amount,
+      currency: order.currency,
+      name: "Headroom",
+      description: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan`,
+      order_id: order.order_id,
+      prefill: { email: opts.email || undefined, name: opts.name || undefined },
+      theme: { color: "#C9A227" },
+      handler: async (resp: RazorpaySuccess) => {
+        try {
+          const v = await api.post<{ ok: boolean }>("/api/billing/razorpay/verify", {
+            plan,
+            razorpay_order_id: resp.razorpay_order_id,
+            razorpay_payment_id: resp.razorpay_payment_id,
+            razorpay_signature: resp.razorpay_signature,
+          });
+          if (v.ok) { haptic("success"); toast.success("You're upgraded — welcome aboard! 🎉"); opts.onComplete?.(); }
+          else { haptic("error"); toast.error("Payment couldn't be verified."); }
+        } catch (e) {
+          haptic("error");
+          toast.error(apiMessage(e) || "Payment verification failed.");
+        }
+      },
+      modal: { ondismiss: () => { /* user closed the modal — no charge */ } },
+    });
+    rzp.on("payment.failed", (resp) => {
+      haptic("error");
+      toast.error(resp?.error?.description || "Payment failed. Please try again.");
+    });
+    rzp.open();
+  } catch (e) {
+    toast.error(apiMessage(e) || "Couldn't start Razorpay checkout.");
   }
 }
 
