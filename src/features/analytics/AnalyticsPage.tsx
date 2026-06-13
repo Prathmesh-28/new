@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
@@ -63,7 +63,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl">("overview");
 
   const now = new Date();
 
@@ -122,6 +122,26 @@ export default function AnalyticsPage() {
     return Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, amount]) => ({ name, amount, pct: Math.round((amount / Math.max(1, totalExpense)) * 100) }));
   }, [transactions, totalExpense]);
 
+  // ── P&L Deep Dive computed vars ───────────────────────────────────────────────
+  const opex        = categoryTotals.find(c => c[0] === "expense")?.[1] ?? 0;
+  const payrollAmt  = categoryTotals.find(c => c[0] === "payroll")?.[1] ?? 0;
+  const taxesAmt    = categoryTotals.find(c => c[0] === "tax")?.[1] ?? 0;
+  const loanPmtAmt  = categoryTotals.find(c => c[0] === "loan")?.[1] ?? 0;
+  const grossProfit = totalRevenue - opex;
+  const ebit        = grossProfit - payrollAmt - taxesAmt;
+  const interestEst = loanPmtAmt * 0.35;
+  const deprecEst   = totalRevenue * 0.015;
+  const ebitda      = ebit + deprecEst;
+  const netPlIncome = ebit - interestEst;
+  const revTxnCount = transactions.filter(t => t.amount > 0 && t.category !== "transfer").length;
+  const avgTicket   = revTxnCount > 0 ? totalRevenue / revTxnCount : 0;
+  const annualRunRate = (totalRevenue / 6) * 12;
+  const ebitdaMgnPct  = totalRevenue > 0 ? Math.round((ebitda / totalRevenue) * 100) : 0;
+  const grossMgnPct   = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
+  const recRevenue    = transactions.filter(t => t.amount > 0 && t.isRecurring).reduce((s, t) => s + t.amount, 0);
+  const recPct        = totalRevenue > 0 ? Math.round((recRevenue / totalRevenue) * 100) : 0;
+  const uniqueCustCount = new Set(transactions.filter(t => t.amount > 0 && t.counterparty).map(t => t.counterparty)).size;
+
   const revenueByMonth = useMemo(() => months.map(m => {
     const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end && t.amount > 0);
     const rev   = mTxns.reduce((s, t) => s + t.amount, 0);
@@ -142,6 +162,7 @@ export default function AnalyticsPage() {
     { id: "revenue",    label: "Revenue" },
     { id: "expenses",   label: "Expenses" },
     { id: "benchmarks", label: "Benchmarks" },
+    { id: "pl",         label: "P&L Deep Dive" },
   ] as const;
 
   const benchmarks = [
@@ -430,6 +451,171 @@ export default function AnalyticsPage() {
                 <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{totalExpense > 0 ? Math.round((val / totalExpense) * 100) : 0}% of total expense</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── P&L DEEP DIVE ── */}
+      {tab === "pl" && (
+        <div className="space-y-5">
+          {/* Income Statement Bridge */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Layers size={15} className="text-[var(--color-primary)]" />
+              <p className="text-sm font-semibold">Income Statement Bridge · 6-Month Cumulative</p>
+            </div>
+            <p className="text-xs text-[var(--color-muted)] mb-5">How ₹1 of revenue flows down to net income. Bar width = % of total revenue.</p>
+            {totalRevenue === 0 ? (
+              <p className="text-sm text-[var(--color-muted)]">No revenue data — connect a bank account or add transactions.</p>
+            ) : (
+              <div className="space-y-2">
+                {([
+                  { label: "Revenue",                   value: totalRevenue,   pct: 100,                                                       sign: "",  bold: true,  barCls: "bg-green-500"              },
+                  { label: "Direct Operating Expenses", value: opex,           pct: totalRevenue > 0 ? opex / totalRevenue * 100 : 0,          sign: "−", bold: false, barCls: "bg-red-400"                },
+                  { label: "Gross Profit",              value: grossProfit,    pct: totalRevenue > 0 ? grossProfit / totalRevenue * 100 : 0,   sign: "=", bold: true,  barCls: "bg-emerald-500"            },
+                  { label: "Payroll & Benefits",        value: payrollAmt,     pct: totalRevenue > 0 ? payrollAmt / totalRevenue * 100 : 0,    sign: "−", bold: false, barCls: "bg-blue-400"               },
+                  { label: "Taxes & Levies",            value: taxesAmt,       pct: totalRevenue > 0 ? taxesAmt / totalRevenue * 100 : 0,      sign: "−", bold: false, barCls: "bg-orange-400"             },
+                  { label: "EBIT",                      value: ebit,           pct: totalRevenue > 0 ? ebit / totalRevenue * 100 : 0,          sign: "=", bold: true,  barCls: "bg-[var(--color-primary)]" },
+                  { label: "Add: Depreciation (est.)",  value: deprecEst,      pct: totalRevenue > 0 ? deprecEst / totalRevenue * 100 : 0,     sign: "+", bold: false, barCls: "bg-sky-400"                },
+                  { label: "EBITDA",                    value: ebitda,         pct: totalRevenue > 0 ? ebitda / totalRevenue * 100 : 0,        sign: "=", bold: true,  barCls: "bg-[var(--color-primary)]" },
+                  { label: "Less: Interest (est.)",     value: interestEst,    pct: totalRevenue > 0 ? interestEst / totalRevenue * 100 : 0,   sign: "−", bold: false, barCls: "bg-purple-400"             },
+                  { label: "Net Income",                value: netPlIncome,    pct: totalRevenue > 0 ? netPlIncome / totalRevenue * 100 : 0,   sign: "=", bold: true,  barCls: netPlIncome >= 0 ? "bg-green-500" : "bg-red-500" },
+                ] as { label: string; value: number; pct: number; sign: string; bold: boolean; barCls: string }[]).map(row => {
+                  const isDeduct = row.sign === "−";
+                  const isAdd    = row.sign === "+";
+                  const isEq     = row.sign === "=";
+                  const valColor = isDeduct ? "text-red-400" : isAdd ? "text-sky-400"
+                    : isEq ? (row.value >= 0 ? "text-[var(--color-primary)]" : "text-red-400")
+                    : (row.value >= 0 ? "text-green-400" : "text-red-400");
+                  const pctAbs = Math.min(100, Math.abs(row.pct));
+                  return (
+                    <div key={row.label} className={isEq ? "border-t border-[var(--color-border)] pt-2 mt-1" : ""} style={{ paddingLeft: !row.bold ? 16 : 0 }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs ${row.bold ? "font-semibold" : "text-[var(--color-muted)]"}`}>
+                          <span className="text-[var(--color-muted)] font-normal mr-2 w-3 inline-block">{row.sign}</span>{row.label}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs tabular-nums font-semibold ${valColor}`}>
+                            {isDeduct ? `(${formatAmount(Math.abs(row.value))})` : formatAmount(row.value)}
+                          </span>
+                          <span className="text-[10px] text-[var(--color-muted)] w-10 text-right">{Math.round(pctAbs)}%</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                        <div className={`h-full ${row.barCls} rounded-full`} style={{ width: `${pctAbs}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Unit Economics */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={15} className="text-[var(--color-primary)]" />
+              <p className="text-sm font-semibold">Unit Economics · Derived Metrics</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {([
+                { label: "Annual Run Rate",           value: formatAmount(annualRunRate),                                                                                                    note: "Extrapolated from 6 months",           color: "text-[var(--color-primary)]"                            },
+                { label: "Avg Revenue / Transaction", value: avgTicket > 0 ? formatAmount(avgTicket) : "—",                                                                                 note: `${revTxnCount} revenue transactions`,  color: "text-green-400"                                         },
+                { label: "EBITDA Margin",             value: totalRevenue > 0 ? `${ebitdaMgnPct}%` : "—",                                                                                   note: "Target ≥ 15% for healthy SMBs",        color: ebitdaMgnPct >= 15 ? "text-green-400" : "text-yellow-400" },
+                { label: "Gross Margin",              value: totalRevenue > 0 ? `${grossMgnPct}%` : "—",                                                                                    note: "Revenue minus direct opex",            color: grossMgnPct >= 40 ? "text-green-400" : "text-yellow-400" },
+                { label: "Revenue / ₹ of Expense",   value: totalExpense > 0 ? `${(totalRevenue / totalExpense).toFixed(2)}x` : "—",                                                        note: "> 1x means cash-generative",           color: totalRevenue >= totalExpense ? "text-green-400" : "text-red-400" },
+                { label: "Avg Net Margin",            value: `${Math.round(avgMargin)}%`,                                                                                                   note: "6-month average",                      color: avgMargin >= 10 ? "text-green-400" : avgMargin >= 0 ? "text-yellow-400" : "text-red-400" },
+                { label: "Burn Multiple",             value: totalNet > 0 ? "Profitable ✓" : totalExpense > 0 ? `${(totalExpense / Math.max(1, Math.abs(totalNet))).toFixed(1)}x` : "—",    note: "< 2x for sustainable growth",          color: totalNet > 0 ? "text-green-400" : "text-yellow-400"     },
+                { label: "Revenue Transactions",      value: revTxnCount.toString(),                                                                                                        note: "Last 6 months",                        color: "text-[var(--color-text)]"                               },
+              ] as { label: string; value: string; note: string; color: string }[]).map(({ label, value, note, color }) => (
+                <div key={label} className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{label}</p>
+                  <p className={`text-base font-bold tabular-nums ${color}`}>{value}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Monthly Income Statement Table */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--color-border)]">
+              <p className="text-sm font-semibold">Monthly Income Statement</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">Last 6 months · Direct costs estimated at 50% of total expense</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                  <tr>
+                    {(["Month", "Revenue", "Total Expenses", "Gross Profit", "Net Income", "Margin %", "MoM Δ"] as string[]).map(h => (
+                      <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${h === "Month" ? "text-left" : "text-right"}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {monthlyData.map((m, i) => {
+                    const grossP = m.revenue - m.expense * 0.5;
+                    const mom = i > 0 ? delta(m.net, monthlyData[i - 1].net) : null;
+                    const isCurrent = i === monthlyData.length - 1;
+                    return (
+                      <tr key={m.month} className={`hover:bg-white/2 text-xs ${isCurrent ? "bg-[var(--color-accent)]/30" : ""}`}>
+                        <td className="px-4 py-2.5 font-medium">{m.month}{isCurrent ? " ·" : ""}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(m.revenue)}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-red-400">({formatAmount(m.expense)})</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{formatAmount(grossP)}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatAmount(m.net)}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${m.margin >= 10 ? "text-green-400" : m.margin >= 0 ? "text-yellow-400" : "text-red-400"}`}>{m.margin}%</td>
+                        <td className="px-4 py-2.5 text-right">{mom !== null ? <DeltaBadge pct={mom} /> : <span className="text-[var(--color-muted)] text-xs">—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]">
+                  <tr className="text-xs font-bold">
+                    <td className="px-4 py-2.5 text-[var(--color-primary)]">6-Month Total</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{formatAmount(totalRevenue)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-red-400">({formatAmount(totalExpense)})</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{formatAmount(totalRevenue - totalExpense * 0.5)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${totalNet >= 0 ? "text-green-400" : "text-red-400"}`}>{formatAmount(totalNet)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${avgMargin >= 10 ? "text-green-400" : "text-yellow-400"}`}>{Math.round(avgMargin)}%</td>
+                    <td className="px-4 py-2.5" />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* Revenue Quality */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <p className="text-sm font-semibold mb-4">Revenue Quality Analysis</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)]">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1.5">Recurring Revenue</p>
+                <p className={`text-lg font-bold ${recPct >= 60 ? "text-green-400" : recPct >= 30 ? "text-yellow-400" : "text-red-400"}`}>{formatAmount(recRevenue)}</p>
+                <div className="mt-2 mb-1 h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${recPct >= 60 ? "bg-green-500" : recPct >= 30 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${recPct}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)]">{recPct}% of revenue · target ≥ 60% for predictability</p>
+              </div>
+              <div className="bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)]">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1.5">Customer Concentration</p>
+                <p className={`text-lg font-bold ${(topCustomers[0]?.pct ?? 0) > 40 ? "text-red-400" : (topCustomers[0]?.pct ?? 0) > 20 ? "text-yellow-400" : "text-green-400"}`}>
+                  {(topCustomers[0]?.pct ?? 0) > 40 ? "High Risk" : (topCustomers[0]?.pct ?? 0) > 20 ? "Moderate" : "Diversified"}
+                </p>
+                <div className="mt-2 mb-1 h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${(topCustomers[0]?.pct ?? 0) > 40 ? "bg-red-500" : "bg-yellow-500"}`} style={{ width: `${Math.min(100, topCustomers[0]?.pct ?? 0)}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)]">Top: {topCustomers[0]?.name ?? "N/A"} at {topCustomers[0]?.pct ?? 0}% · target ≤ 30%</p>
+              </div>
+              <div className="bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)]">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1.5">Unique Revenue Sources</p>
+                <p className={`text-lg font-bold ${uniqueCustCount >= 5 ? "text-green-400" : "text-yellow-400"}`}>{uniqueCustCount} customers</p>
+                <div className="mt-2 mb-1 h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
+                  <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${Math.min(100, uniqueCustCount * 10)}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)]">HHI {Math.round(topCustomers.reduce((s, c) => s + c.pct * c.pct, 0))} · below 2500 is diversified</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -60,10 +60,38 @@ export default function FinancialHealthPage() {
     { label: "Net Margin (6 mo)", value: snap.grossMarginPct !== null ? `${snap.grossMarginPct.toFixed(0)}%` : "—", target: "≥ 10%", ok: (snap.grossMarginPct ?? 0) >= 10, path: "/analytics" },
     { label: "Runway", value: snap.runwayDays >= 999 ? "CF positive" : `${snap.runwayDays} days`, target: "≥ 90 days", ok: snap.runwayDays >= 90, path: "/forecast" },
     { label: "Net Working Capital", value: formatAmount(snap.netWorkingCapital), target: "> ₹0", ok: snap.netWorkingCapital > 0, path: "/working-capital" },
-    { label: "Top-Customer Share", value: `${snap.topCustomerPct.toFixed(0)}%`, target: "≤ 30%", ok: snap.topCustomerPct <= 30, path: "/invoices" },
+    { label: "Top-Customer Share",    value: `${snap.topCustomerPct.toFixed(0)}%`,                                target: "≤ 30%",   ok: snap.topCustomerPct <= 30,                                   path: "/invoices"   },
+    { label: "EBITDA Margin",         value: ebitdaMgnPct !== null ? `${ebitdaMgnPct}%` : "—",                     target: "≥ 15%",   ok: (ebitdaMgnPct ?? 0) >= 15,                                  path: "/analytics"  },
+    { label: "Free Cash Flow Ratio",  value: fcfRatioPct  !== null ? `${fcfRatioPct}%` : "—",                      target: "≥ 10%",   ok: (fcfRatioPct ?? 0) >= 10,                                   path: "/debt"       },
+    { label: "Revenue Growth (CMGR)", value: snap.revenueGrowthPct !== null ? `${snap.revenueGrowthPct.toFixed(1)}%/mo` : "—", target: "≥ 3%/mo", ok: (snap.revenueGrowthPct ?? 0) >= 3,            path: "/analytics"  },
   ];
 
   const weakest = [...health.components].sort((a, b) => a.score - b.score).slice(0, 3);
+
+  // ── EBITDA & Free Cash Flow ───────────────────────────────────────────────────
+  const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + snap.monthlyRevenue * 0.015;
+  const ebitdaMgnPct  = snap.monthlyRevenue > 0 ? Math.round((monthlyEbitda / snap.monthlyRevenue) * 100) : null;
+  const opCashFlow    = snap.monthlyNet + snap.monthlyDebtService;
+  const fcfRatioPct   = snap.monthlyRevenue > 0 ? Math.round((opCashFlow / snap.monthlyRevenue) * 100) : null;
+
+  // ── Altman Z' Score (private firms) ──────────────────────────────────────────
+  const estimatedFA     = snap.monthlyRevenue * 6;
+  const totalAssets     = snap.cash + snap.accountsReceivable + snap.inventoryValue + estimatedFA;
+  const totalLiab       = snap.debtOutstanding + snap.accountsPayable + snap.obligationsDue90;
+  const retainedEarnings = Math.max(0, snap.monthlyNet * 12);
+  const ebitAnnual      = (snap.monthlyNet + snap.monthlyInterest) * 12;
+  const bookEquity      = Math.max(0, totalAssets - totalLiab);
+  const zx1 = totalAssets > 0 ? snap.netWorkingCapital / totalAssets : 0;
+  const zx2 = totalAssets > 0 ? retainedEarnings / totalAssets : 0;
+  const zx3 = totalAssets > 0 ? ebitAnnual / totalAssets : 0;
+  const zx4 = totalLiab  > 0 ? bookEquity / totalLiab : 3;
+  const zx5 = totalAssets > 0 ? snap.monthlyRevenue * 12 / totalAssets : 0;
+  const altmanZ = parseFloat((0.717 * zx1 + 0.847 * zx2 + 3.107 * zx3 + 0.420 * zx4 + 0.998 * zx5).toFixed(2));
+  const altmanZone = altmanZ > 2.9
+    ? { label: "Safe Zone · Low Distress Risk",  color: "text-green-400",  border: "border-green-800/40",  bg: "bg-green-900/20"  }
+    : altmanZ > 1.23
+    ? { label: "Grey Zone · Monitor Closely",    color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20" }
+    : { label: "Distress Zone · Act Now",        color: "text-red-400",    border: "border-red-800/40",    bg: "bg-red-900/20"    };
 
   return (
     <div className="space-y-5">
@@ -180,6 +208,46 @@ export default function FinancialHealthPage() {
             <p className="text-xl font-bold tabular-nums">{s.value}</p>
           </button>
         ))}
+      </div>
+
+      {/* Altman Z' Score */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-1">Altman Z' Score — Bankruptcy Risk Predictor</p>
+        <p className="text-xs text-[var(--color-muted)] mb-5">
+          Used by lenders worldwide to assess insolvency risk. Z' &gt; 2.9 = safe, 1.23–2.9 = grey zone, &lt; 1.23 = distress. Values derived from transaction proxies — connect all accounts for best accuracy.
+        </p>
+        <div className="flex items-start gap-6 flex-wrap">
+          <div className={`rounded-xl px-7 py-5 border ${altmanZone.border} ${altmanZone.bg} shrink-0 text-center`}>
+            <p className="text-[10px] text-[var(--color-muted)] mb-1.5">Your Z' Score</p>
+            <p className={`text-5xl font-bold tabular-nums ${altmanZone.color}`}>{altmanZ}</p>
+            <p className={`text-xs font-semibold mt-2 ${altmanZone.color}`}>{altmanZone.label}</p>
+          </div>
+          <div className="flex-1 min-w-0 space-y-3">
+            {([
+              { label: "X1 · Working Capital / Total Assets",    value: zx1, coef: 0.717, note: "Short-term liquidity buffer"          },
+              { label: "X2 · Retained Earnings / Total Assets",  value: zx2, coef: 0.847, note: "Accumulated profitability & age"      },
+              { label: "X3 · EBIT / Total Assets",               value: zx3, coef: 3.107, note: "Operating efficiency (highest weight)" },
+              { label: "X4 · Equity / Total Liabilities",        value: zx4, coef: 0.420, note: "Leverage buffer (∞ if no debt)"       },
+              { label: "X5 · Revenue / Total Assets",            value: zx5, coef: 0.998, note: "Asset utilisation rate"               },
+            ] as { label: string; value: number; coef: number; note: string }[]).map(row => (
+              <div key={row.label} className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-[11px] font-medium truncate">{row.label}</p>
+                    <span className="text-[10px] text-[var(--color-muted)] shrink-0">× {row.coef}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)]">{row.note}</p>
+                </div>
+                <span className="text-sm font-bold tabular-nums text-[var(--color-primary)] shrink-0 w-14 text-right">{row.value.toFixed(3)}</span>
+                <span className="text-xs tabular-nums text-[var(--color-muted)] shrink-0 w-14 text-right">{(row.value * row.coef).toFixed(3)}</span>
+              </div>
+            ))}
+            <div className="border-t border-[var(--color-border)] pt-2 flex items-center justify-between">
+              <p className="text-[10px] text-[var(--color-muted)]">Weighted sum (Z' = Σ coef × factor)</p>
+              <span className={`text-sm font-bold tabular-nums ${altmanZone.color}`}>{altmanZ}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

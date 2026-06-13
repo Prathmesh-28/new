@@ -193,6 +193,105 @@ export default function WorkingCapitalPage() {
           </div>
         </div>
       )}
+
+      {/* Capital Efficiency Simulator */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-1">Cash Release Simulator</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          How much cash you unlock by improving each cycle leg. Based on your {formatAmount(snap.monthlyExpense)}/month run rate.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            {
+              label: "Reduce DSO by 15 days",
+              current: `${snap.dsoDays} days`,
+              release: Math.round((15 / 30) * snap.monthlyExpense),
+              how: "Send reminders at day 7, 14, 21 from invoice date. Offer 2% early-pay discount.",
+              color: "text-yellow-400",
+              barColor: "bg-yellow-500",
+              pct: Math.min(100, (snap.dsoDays / 90) * 100),
+            },
+            {
+              label: "Reduce DIO by 10 days",
+              current: `${snap.dioDays} days`,
+              release: Math.round((10 / 30) * snap.monthlyExpense),
+              how: "Reduce reorder quantities, switch slow SKUs to just-in-time procurement.",
+              color: "text-orange-400",
+              barColor: "bg-orange-500",
+              pct: Math.min(100, (snap.dioDays / 90) * 100),
+            },
+            {
+              label: "Extend DPO by 10 days",
+              current: `${snap.dpoDays} days`,
+              release: Math.round((10 / 30) * snap.monthlyExpense),
+              how: "Negotiate 45-day terms with top 3 suppliers (offer volume commitment).",
+              color: "text-green-400",
+              barColor: "bg-green-500",
+              pct: Math.min(100, (snap.dpoDays / 60) * 100),
+            },
+          ].map(row => (
+            <div key={row.label} className="bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)]">
+              <p className="text-[10px] text-[var(--color-muted)] mb-2">{row.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${row.color}`}>{formatAmount(row.release)} freed</p>
+              <div className="mt-2 mb-1 h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
+                <div className={`h-full ${row.barColor} rounded-full`} style={{ width: `${row.pct}%` }} />
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">Current: {row.current}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-2 leading-relaxed">{row.how}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 pt-3 border-t border-[var(--color-border)] flex items-center justify-between">
+          <p className="text-xs text-[var(--color-muted)]">Combined impact of all three improvements</p>
+          <p className="text-sm font-bold text-green-400">
+            {formatAmount(Math.round(((15 + 10 + 10) / 30) * snap.monthlyExpense))} unlocked
+          </p>
+        </div>
+      </div>
+
+      {/* Working Capital Ratios */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-4">Working Capital Ratios</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              label: "Current Ratio",
+              value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—",
+              target: "≥ 1.5x",
+              ok: (snap.currentRatio ?? 2) >= 1.5,
+              note: "Current assets ÷ current liabilities",
+            },
+            {
+              label: "Quick Ratio",
+              value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "—",
+              target: "≥ 1.0x",
+              ok: (snap.quickRatio ?? 1.5) >= 1.0,
+              note: "(Cash + AR) ÷ current liabilities",
+            },
+            {
+              label: "Net Working Capital",
+              value: formatAmount(snap.netWorkingCapital),
+              target: "> ₹0",
+              ok: snap.netWorkingCapital > 0,
+              note: "Current assets minus current liabilities",
+            },
+            {
+              label: "Cycle Funding Needed",
+              value: formatAmount(snap.workingCapitalGap),
+              target: "< 1 month opex",
+              ok: snap.workingCapitalGap < snap.monthlyExpense,
+              note: `${(snap.cccDays / 30).toFixed(1)} months × ${formatAmount(snap.monthlyExpense)} opex`,
+            },
+          ].map(r => (
+            <div key={r.label} className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{r.label}</p>
+              <p className={`text-base font-bold tabular-nums ${r.ok ? "text-green-400" : "text-red-400"}`}>{r.value}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Target {r.target}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">{r.note}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

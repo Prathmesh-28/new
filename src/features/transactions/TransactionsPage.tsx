@@ -159,6 +159,38 @@ export default function TransactionsPage() {
     return [...set];
   }, [selected, transactions]);
 
+  const intelligence = useMemo(() => {
+    const now = new Date();
+    const cutoff30 = new Date(now.getTime() - 30 * 86400000).toISOString().split("T")[0];
+    const cutoff7  = new Date(now.getTime() -  7 * 86400000).toISOString().split("T")[0];
+    const spend30  = transactions.filter(t => t.amount < 0 && t.date >= cutoff30).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const spend7   = transactions.filter(t => t.amount < 0 && t.date >= cutoff7).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const daily30  = spend30 / 30;
+    const daily7   = spend7  / 7;
+    const velChange = daily30 > 0 ? Math.round(((daily7 - daily30) / daily30) * 100) : 0;
+    const thisKey  = now.toISOString().slice(0, 7);
+    const lastKey  = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
+    const biggestExpense = transactions.filter(t => t.amount < 0 && t.date.startsWith(thisKey)).sort((a, b) => a.amount - b.amount)[0] ?? null;
+    const dupIds = new Set<string>();
+    for (let i = 0; i < transactions.length; i++) {
+      for (let j = i + 1; j < transactions.length; j++) {
+        const a = transactions[i], b = transactions[j];
+        const daysDiff = Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) / 86400000;
+        if (daysDiff <= 3 && a.amount === b.amount && a.counterparty && a.counterparty === b.counterparty) {
+          dupIds.add(a.id); dupIds.add(b.id);
+        }
+      }
+    }
+    const catThis: Record<string, number> = {};
+    const catLast: Record<string, number> = {};
+    transactions.filter(t => t.amount < 0 && t.date.startsWith(thisKey)).forEach(t => { catThis[t.category] = (catThis[t.category] ?? 0) + Math.abs(t.amount); });
+    transactions.filter(t => t.amount < 0 && t.date.startsWith(lastKey)).forEach(t => { catLast[t.category] = (catLast[t.category] ?? 0) + Math.abs(t.amount); });
+    const spike = Object.entries(catThis)
+      .map(([cat, val]) => ({ cat, val, prev: catLast[cat] ?? 0, pct: catLast[cat] > 0 ? Math.round(((val - catLast[cat]) / catLast[cat]) * 100) : 0 }))
+      .filter(s => s.pct > 20 && s.prev > 0).sort((a, b) => b.pct - a.pct)[0] ?? null;
+    return { daily7, daily30, velChange, biggestExpense, dupCount: dupIds.size, spike };
+  }, [transactions]);
+
   const thCls = "px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider select-none whitespace-nowrap";
   const thSortCls = `${thCls} cursor-pointer hover:text-[var(--color-text)] transition-colors`;
 
@@ -180,6 +212,42 @@ export default function TransactionsPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Financial Intelligence Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {([
+          {
+            label: "Spend Velocity (7d vs 30d avg)",
+            value: intelligence.daily7 > 0 ? `${formatCurrency(intelligence.daily7)}/day` : "—",
+            sub: intelligence.velChange === 0 ? "Stable spending pattern" : intelligence.velChange > 0 ? `+${intelligence.velChange}% acceleration — watch` : `${intelligence.velChange}% slowing down`,
+            color: intelligence.velChange > 20 ? "text-red-400" : intelligence.velChange > 10 ? "text-yellow-400" : "text-green-400",
+          },
+          {
+            label: "Largest Expense This Month",
+            value: intelligence.biggestExpense ? formatCurrency(Math.abs(intelligence.biggestExpense.amount)) : "—",
+            sub: intelligence.biggestExpense?.description ?? "No expenses this month",
+            color: "text-red-400",
+          },
+          {
+            label: "Potential Duplicates Detected",
+            value: intelligence.dupCount.toString(),
+            sub: intelligence.dupCount > 0 ? "Same amount + party within 3 days" : "No duplicates found",
+            color: intelligence.dupCount > 0 ? "text-yellow-400" : "text-green-400",
+          },
+          {
+            label: "Category Spend Spike",
+            value: intelligence.spike ? `${intelligence.spike.cat.charAt(0).toUpperCase() + intelligence.spike.cat.slice(1)} +${intelligence.spike.pct}%` : "None",
+            sub: intelligence.spike ? `${formatCurrency(intelligence.spike.val)} vs ${formatCurrency(intelligence.spike.prev)} last month` : "All categories normal",
+            color: intelligence.spike ? "text-yellow-400" : "text-green-400",
+          },
+        ] as { label: string; value: string; sub: string; color: string }[]).map(({ label, value, sub, color }) => (
+          <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1.5">{label}</p>
+            <p className={`text-sm font-bold tabular-nums ${color}`}>{value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">{sub}</p>
+          </div>
+        ))}
       </div>
 
       {/* Search + filter bar */}
