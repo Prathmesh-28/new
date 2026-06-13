@@ -60,7 +60,11 @@ router.post("/checkout-session", authenticate, requireOwnerOrAdmin, async (req, 
     });
     res.json({ url: session.url, id: session.id });
   } catch (e) {
-    console.error("[billing] checkout-session", e.message);
+    console.error("[billing] checkout-session", e.type, e.message);
+    if (e.type === "StripeConnectionError") {
+      // Transient network blip between our server and Stripe (e.g. cold start).
+      return res.status(503).json({ error: "Couldn't reach Stripe just now — please tap Upgrade again in a few seconds." });
+    }
     // Surface the real Stripe reason so misconfig is self-diagnosing.
     const hint = /api key/i.test(e.message || "")
       ? " — check STRIPE_SECRET_KEY on the server (use your sk_… secret key, no spaces)."

@@ -28,7 +28,14 @@ function getClient() {
   try {
     // Lazy require so a missing dependency never crashes the server at boot.
     const Stripe = require("stripe");
-    _stripe = new Stripe(key, { apiVersion: "2024-06-20" });
+    _stripe = new Stripe(key, {
+      apiVersion: "2024-06-20",
+      // Render free-tier cold starts can drop the first outbound connection to
+      // Stripe. Retry with backoff and allow a generous per-request timeout so a
+      // transient network blip doesn't surface as a checkout failure.
+      maxNetworkRetries: 3,
+      timeout: 30000,
+    });
   } catch (e) {
     console.error("[stripe] failed to init:", e.message);
     _stripe = null;
