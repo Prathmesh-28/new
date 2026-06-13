@@ -46,9 +46,9 @@ router.get("/current", authenticate, async (req, res) => {
 router.post("/checkout-session", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { plan, currency } = req.body || {};
   if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
-  if (!stripe.getClient()) {
-    return res.status(503).json({ error: "Payments are not configured yet. Add STRIPE_SECRET_KEY to enable upgrades." });
-  }
+  const problem = stripe.configProblem();
+  if (problem) return res.status(503).json({ error: problem });
+  if (!stripe.getClient()) return res.status(503).json({ error: "Payments are not configured yet." });
   try {
     const session = await stripe.createSubscriptionCheckout({
       plan,
@@ -61,7 +61,11 @@ router.post("/checkout-session", authenticate, requireOwnerOrAdmin, async (req, 
     res.json({ url: session.url, id: session.id });
   } catch (e) {
     console.error("[billing] checkout-session", e.message);
-    res.status(502).json({ error: "Could not start checkout. Please try again." });
+    // Surface the real Stripe reason so misconfig is self-diagnosing.
+    const hint = /api key/i.test(e.message || "")
+      ? " — check STRIPE_SECRET_KEY on the server (use your sk_… secret key, no spaces)."
+      : "";
+    res.status(502).json({ error: `Stripe: ${e.message || "could not start checkout"}${hint}` });
   }
 });
 
@@ -118,6 +122,8 @@ router.post("/portal", authenticate, requireOwnerOrAdmin, async (req, res) => {
 router.post("/invoice-link", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { invoice_id, currency } = req.body || {};
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
+  const probA = stripe.configProblem();
+  if (probA) return res.status(503).json({ error: probA });
   if (!stripe.getClient()) return res.status(503).json({ error: "Payments not configured" });
 
   const { rows: [inv] } = await pool.query(
@@ -137,7 +143,7 @@ router.post("/invoice-link", authenticate, requireOwnerOrAdmin, async (req, res)
     res.json({ url: session.url });
   } catch (e) {
     console.error("[billing] invoice-link", e.message);
-    res.status(502).json({ error: "Could not create payment link" });
+    res.status(502).json({ error: `Stripe: ${e.message || "could not create payment link"}` });
   }
 });
 

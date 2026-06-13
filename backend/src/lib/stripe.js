@@ -12,9 +12,17 @@ let _triedInit = false;
 function getClient() {
   if (_triedInit) return _stripe;
   _triedInit = true;
-  const key = process.env.STRIPE_SECRET_KEY;
+  // Trim to survive copy-paste whitespace/newlines that otherwise cause Stripe
+  // to reject the key with an opaque "Invalid API Key provided".
+  const key = (process.env.STRIPE_SECRET_KEY || "").trim();
   if (!key) {
     console.log("[stripe] STRIPE_SECRET_KEY not set — billing runs in MOCK mode.");
+    return null;
+  }
+  if (!key.startsWith("sk_") && !key.startsWith("rk_")) {
+    // Almost always means the publishable key (pk_…) was pasted into the secret
+    // slot. Surface it loudly rather than failing later with a vague error.
+    console.error(`[stripe] STRIPE_SECRET_KEY does not look like a secret key (got prefix "${key.slice(0, 3)}…"). It must start with sk_ (or rk_). Billing disabled until fixed.`);
     return null;
   }
   try {
@@ -26,6 +34,16 @@ function getClient() {
     _stripe = null;
   }
   return _stripe;
+}
+
+// A human-readable reason billing can't run, or null if it's fine. Lets the API
+// return an actionable message instead of a generic 503/502.
+function configProblem() {
+  const raw = process.env.STRIPE_SECRET_KEY;
+  if (!raw || !raw.trim()) return "Stripe isn't configured yet — set STRIPE_SECRET_KEY (your sk_test_… or sk_live_… secret key) on the server.";
+  const key = raw.trim();
+  if (!key.startsWith("sk_") && !key.startsWith("rk_")) return "STRIPE_SECRET_KEY is set to the wrong value — it must be your SECRET key (starts with sk_), not the publishable key (pk_).";
+  return null;
 }
 
 function isLive() {
@@ -120,7 +138,7 @@ function constructEvent(rawBody, signature) {
 }
 
 module.exports = {
-  getClient, isLive, PLAN_PRICING, PLAN_RANK,
+  getClient, isLive, configProblem, PLAN_PRICING, PLAN_RANK,
   createSubscriptionCheckout, createInvoiceCheckout, createPortalSession,
   retrieveSession, constructEvent,
 };
