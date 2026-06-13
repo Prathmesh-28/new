@@ -14,6 +14,7 @@ const C = {
 };
 const serif = "Georgia,'Times New Roman',serif";
 const sans  = "system-ui,-apple-system,'Segoe UI',sans-serif";
+const mono  = "'Space Mono',ui-monospace,'SF Mono',Menlo,monospace"; // HUD / terminal accents
 
 /* India-first by default (→ ₹). We only switch to USD (→ $) when the visitor is
    clearly in the US, detected from their timezone/locale. Instant + free + no API
@@ -113,7 +114,12 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 /* ─── Section label ─── */
 function Label({ text, dark = false }: { text: string; dark?: boolean }) {
-  return <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: dark ? C.pale : C.bright, marginBottom: 14 }}>{text}</div>;
+  // Mono "terminal" eyebrow with a bracket accent — the futuristic HUD signature.
+  return (
+    <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: dark ? C.pale : C.bright, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ color: C.gold }}>▚</span>{text}
+    </div>
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -146,6 +152,35 @@ export default function HomePage() {
           .hr-landing so it never leaks into the app. Collapses multi-column
           grids, trims the 48px gutters, and shrinks oversized headings on phones. */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+        /* Subtle CRT scan-line texture over the whole landing (above content,
+           below the fixed nav). Pointer-events off so it never blocks clicks. */
+        .hr-landing::before {
+          content:''; position:fixed; inset:0; z-index:60; pointer-events:none;
+          background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.022) 2px,rgba(0,0,0,0.022) 4px);
+          mix-blend-mode:multiply;
+        }
+        /* Angular clip-path on the gold CTA buttons → techy, machined corners. */
+        .hr-landing button[style*="201, 162, 39"] {
+          clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+        }
+        /* Scrolling ticker tape. */
+        .hr-ticker { display:flex; width:max-content; animation:hr-tk 30s linear infinite; }
+        @keyframes hr-tk { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+        /* Live status dot. */
+        .hr-blink { animation:hr-blink 2s infinite; }
+        @keyframes hr-blink { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+        /* Animated underline that sweeps in on stat hover. */
+        .hr-stat { position:relative; }
+        .hr-stat::after {
+          content:''; position:absolute; left:24px; right:24px; bottom:-12px; height:1px;
+          background:linear-gradient(90deg,transparent,${C.light},transparent);
+          opacity:0; transform:scaleX(0.4); transition:opacity .3s, transform .3s;
+        }
+        .hr-stat:hover::after { opacity:1; transform:scaleX(1); }
+        @media (prefers-reduced-motion: reduce) { .hr-ticker { animation:none; } }
+
         @media (max-width: 820px) {
           .hr-landing [style*="grid-template-columns"] { grid-template-columns: 1fr !important; gap: 16px !important; }
           .hr-landing [style*="px 48px"] { padding-left: 20px !important; padding-right: 20px !important; }
@@ -183,8 +218,8 @@ export default function HomePage() {
         <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
           <div className="animate-fade-up">
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.15)", border: "1px solid rgba(201,162,39,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 28 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />
-              <span style={{ fontFamily: sans, fontSize: 12, color: C.goldL }}>A 10-layer cash flow intelligence platform</span>
+              <span className="hr-blink" style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />
+              <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: C.goldL }}>[ 10-layer cash flow intelligence ]</span>
             </div>
             <h1 style={{ fontFamily: serif, fontSize: 50, lineHeight: 1.05, color: C.creamW, marginBottom: 20, letterSpacing: -1.5 }}>
               Know your cash.<br /><em style={{ fontStyle: "normal", color: C.pale }}>Before</em> it matters.
@@ -207,9 +242,30 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}><DashMockup inr={inr} /></div>
+          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(196,217,122,0.55)", marginBottom: 8 }}>
+              <span>CASH_CORE v2.4.1</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="hr-blink" style={{ width: 5, height: 5, borderRadius: "50%", background: C.light, display: "inline-block" }} />SIGNAL: ACTIVE · 10/10</span>
+            </div>
+            <DashMockup inr={inr} />
+          </div>
         </div>
       </section>
+
+      {/* ═══ TICKER ═══════════════════════════════════════════════════════════ */}
+      <div style={{ background: C.deep, borderTop: "1px solid rgba(196,217,122,0.12)", borderBottom: "1px solid rgba(196,217,122,0.12)", overflow: "hidden", padding: "12px 0" }}>
+        <div className="hr-ticker">
+          {[0, 1].map(dup => (
+            <div key={dup} style={{ display: "flex", gap: 56, paddingLeft: 56 }} aria-hidden={dup === 1}>
+              {["Free for 90 days","No credit card required","Setup in 3 minutes","10-layer cash intelligence","91% forecast accuracy at 30 days","Capital access network"].map((t, i) => (
+                <span key={i} style={{ fontFamily: mono, fontSize: 11, color: "rgba(196,217,122,0.6)", whiteSpace: "nowrap", letterSpacing: 2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ color: C.gold, fontSize: 13 }}>◆</span>{t}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* ═══ STATS STRIP ══════════════════════════════════════════════════════ */}
       <div data-h3d="stats" style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
@@ -219,7 +275,7 @@ export default function HomePage() {
           { n:"91%",      d:"Forecast accuracy at 30 days" },
           { n:"4.8 days", d:"Avg time to first insight"    },
         ].map(({ n, d }, i) => (
-          <div key={d} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.15)" : "none" }}>
+          <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.15)" : "none" }}>
             <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}>{n}</div>
             <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.55)", marginTop: 3 }}>{d}</div>
           </div>
