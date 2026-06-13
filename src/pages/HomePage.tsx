@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
+import { startCheckout } from "@/lib/billing";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -120,6 +121,14 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors
+
+  // Pricing CTA: a logged-in visitor goes straight to Stripe Checkout for a paid
+  // plan; everyone else lands on signup. Free always → signup.
+  const goPlan = (id: "free" | "growth" | "pro") => {
+    const loggedIn = typeof window !== "undefined" && !!localStorage.getItem("hr_access");
+    if (id !== "free" && loggedIn) { startCheckout(id); return; }
+    navigate(id === "free" ? "/signup" : `/signup?plan=${id}`);
+  };
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20);
@@ -542,6 +551,7 @@ export default function HomePage() {
         <div style={{ maxWidth: 940, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
           {[
             {
+              id:"free" as const,
               name:"Free", price:inr ? "₹0" : "$0", period:"forever", featured: false,
               note:inr ? "Free for SMBs under ₹25L turnover · no card ever" : "For early-stage businesses · no card ever",
               desc:"See your cash truth — free for life.",
@@ -550,6 +560,7 @@ export default function HomePage() {
               cta:"Start free",
             },
             {
+              id:"growth" as const,
               name:"Growth", price:inr ? "₹999" : "$39", period:"/mo", featured: true,
               note:inr ? "billed yearly · ₹1,499 monthly · 🔥 founding price locked for life" : "billed yearly · $59 monthly · 🔥 founding price locked for life",
               desc:inr ? "For growing SMBs that need full visibility and credit. Cheaper than a half-day of an accountant." : "For growing businesses that need full visibility and credit access.",
@@ -558,6 +569,7 @@ export default function HomePage() {
               cta:"Get my forecast",
             },
             {
+              id:"pro" as const,
               name:"Pro", price:inr ? "₹2,999" : "$99", period:"/mo", featured: false,
               note:inr ? "billed yearly · ₹3,999 monthly" : "billed yearly · $129 monthly",
               desc:"For businesses raising capital or managing investors.",
@@ -565,7 +577,7 @@ export default function HomePage() {
               disabled:[],
               cta:"Go Pro →",
             },
-          ].map(({ name, price, period, note, featured, desc, features, disabled, cta }, i) => (
+          ].map(({ id, name, price, period, note, featured, desc, features, disabled, cta }, i) => (
             <Reveal key={name} delay={i * 80}>
               <div data-h3d-tilt style={{ background: featured ? C.deepest : "#fff", border: `1px solid ${featured ? C.mid : "rgba(74,94,26,0.12)"}`, borderRadius: 16, padding: "32px 28px", textAlign: "left", display: "flex", flexDirection: "column" }}>
                 {featured && <div style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", background: C.gold, color: C.deepest, padding: "3px 12px", borderRadius: 12, display: "inline-block", marginBottom: 16 }}>Most popular</div>}
@@ -588,7 +600,7 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: 12, borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(74,94,26,0.2)"}`, color: featured ? C.deepest : C.mid }}>
+                <button onClick={() => goPlan(id)} style={{ width: "100%", padding: 12, borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(74,94,26,0.2)"}`, color: featured ? C.deepest : C.mid }}>
                   {cta}
                 </button>
               </div>

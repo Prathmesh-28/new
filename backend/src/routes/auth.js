@@ -61,7 +61,7 @@ router.post("/login", async (req, res) => {
   res.json({
     access:  signAccess(payload),
     refresh: signRefresh(payload),
-    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: user.first_login },
+    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: user.first_login, plan: user.subscription_plan || "free" },
   });
 });
 
@@ -87,7 +87,7 @@ router.post("/logout", (_req, res) => res.json({ ok: true }));
 // GET /auth/me
 router.get("/me", authenticate, async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT id, email, role, tenant_id, first_login, display_name FROM users WHERE id=$1",
+    "SELECT id, email, role, tenant_id, first_login, display_name, subscription_plan AS plan FROM users WHERE id=$1",
     [req.user.id]
   );
   if (!rows[0]) return res.status(404).json({ error: "User not found" });

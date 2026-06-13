@@ -6,6 +6,8 @@ import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
+import UpsellGate from "@/components/UpsellGate";
+import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
@@ -90,10 +92,18 @@ function landingFor(role: string): string {
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const { canAccess, effectiveRole } = useApp();
+  const { user } = useAuth();
   const location = useLocation();
   const tab = location.pathname.split("/")[1] ?? "";
   if (GUARDED_TABS.has(tab) && !canAccess(tab)) {
     return <Navigate to={landingFor(effectiveRole)} replace />;
+  }
+  // Plan entitlement gate — show the upsell instead of the feature when the
+  // tenant's plan can't reach it. super_admin (platform owner) bypasses everything.
+  const required = FEATURE_ENTITLEMENTS[tab] as Exclude<PlanTier, "free"> | undefined;
+  if (required && effectiveRole !== "super_admin" &&
+      PLAN_RANK[(user?.plan ?? "free") as PlanTier] < PLAN_RANK[required]) {
+    return <UpsellGate feature={tab} requiredPlan={required} />;
   }
   return <>{children}</>;
 }

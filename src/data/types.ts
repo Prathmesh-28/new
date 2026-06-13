@@ -16,7 +16,37 @@ export interface AuthUser {
   tenant_id: string;
   first_login: boolean;
   display_name?: string;
+  plan?: PlanTier;
 }
+
+// ── Subscription plans / entitlements ──────────────────────────────────────────
+export type PlanTier = "free" | "growth" | "pro";
+
+export const PLAN_RANK: Record<PlanTier, number> = { free: 0, growth: 1, pro: 2 };
+
+export const PLAN_LABEL: Record<PlanTier, string> = { free: "Free", growth: "Growth", pro: "Pro" };
+
+// Which plan a premium feature needs, keyed by the route slug (path's first
+// segment). Tabs not listed here are available on every plan — core daily-use
+// surfaces and role-landing pages (advisor/investor) stay open; only high-leverage
+// analysis modules are gated, so a scoped team member is never locked out of their
+// own home. super_admin bypasses all gates (see RouteGuard).
+export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
+  benchmarks:  "growth",
+  valuation:   "growth",
+  "term-sheet": "growth",
+  scenarios:   "growth",
+  capital:     "pro",
+};
+
+// Human-facing pitch for each gated feature — shown on the upsell screen.
+export const FEATURE_PITCH: Record<string, { title: string; blurb: string; perks: string[] }> = {
+  benchmarks:   { title: "Peer Benchmarks", blurb: "See exactly how your margins, runway, and burn stack up against similar SMBs.", perks: ["Percentiles from your own 12-month history", "Margin, runway, AR-days, payroll & burn", "Spot where you're an outlier — and fix it"] },
+  valuation:    { title: "Business Valuation", blurb: "Know what your company is worth before you raise or sell.", perks: ["Revenue & EBITDA multiple models", "Scenario-driven valuation ranges", "Investor-ready summary"] },
+  "term-sheet": { title: "Term Sheet Builder", blurb: "Model dilution and build investor-ready term sheets in minutes.", perks: ["Pre/post-money & dilution math", "Multiple round modelling", "Export to PDF for investors"] },
+  scenarios:    { title: "Scenario Planning", blurb: "Stress-test hiring, big contracts, and loan draws against your cash.", perks: ["What-if cash forecasting", "Stack multiple scenarios", "See the runway impact instantly"] },
+  capital:      { title: "Capital Raising", blurb: "Raise from the people who believe in your business — built into Headroom.", perks: ["Revenue-based financing, angel & SME-IPO tracks", "Live investor portal & cap table", "Compliance handled for you"] },
+};
 
 // ── Role config ───────────────────────────────────────────────────────────────
 export interface RoleConfig {

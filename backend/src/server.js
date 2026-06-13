@@ -29,6 +29,11 @@ app.use(cors({
   },
   credentials: true,
 }));
+// Stripe webhook needs the RAW body for signature verification, so it must be
+// registered BEFORE express.json() consumes the stream.
+const billing = require("./routes/billing");
+app.post("/webhook/stripe", express.raw({ type: "*/*" }), billing.webhookHandler);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false })); // Required for Twilio webhooks
 
@@ -79,6 +84,7 @@ app.use("/api/payroll",            require("./routes/payroll"));
 app.use("/api/bnpl",               require("./routes/bnpl"));
 app.use("/api/collections",        require("./routes/collections"));
 app.use("/webhook/razorpay",       require("./routes/collections")); // Razorpay payment webhook
+app.use("/api/billing",            billing);                          // Stripe subscriptions + invoice links
 app.use("/api/treasury",           require("./routes/treasury"));
 app.use("/api/ewa",                require("./routes/ewa"));
 app.use("/api/suppliers",          require("./routes/suppliers"));

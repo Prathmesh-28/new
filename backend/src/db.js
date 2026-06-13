@@ -448,6 +448,23 @@ async function initDb() {
       UNIQUE(industry, revenue_band, metric_name)
     );
 
+    -- ── Billing / subscriptions (Stripe) ──────────────────────────────────────
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free';
+
+    CREATE TABLE IF NOT EXISTS tenant_billing (
+      tenant_id              TEXT PRIMARY KEY,
+      plan                   TEXT NOT NULL DEFAULT 'free',
+      stripe_customer_id     TEXT,
+      stripe_subscription_id TEXT,
+      status                 TEXT,
+      current_period_end     TIMESTAMPTZ,
+      updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- ── WhatsApp alert preferences (per binding) ──────────────────────────────
+    ALTER TABLE whatsapp_bindings ADD COLUMN IF NOT EXISTS preferences JSONB
+      NOT NULL DEFAULT '{"low_cash":true,"overdue":true,"gst_due":true,"credit_offer":false,"payroll":true,"weekly":true}'::jsonb;
+
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 
