@@ -1,10 +1,9 @@
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { PlanTier } from "@/data/types";
-import { isNative, openCheckout, shareContent, haptic } from "@/lib/mobile";
+import { haptic } from "@/lib/mobile";
 
-// India-first currency detection — mirrors the landing page (Asia/Kolkata / India
-// locale → INR; clear US signals → USD; everything else defaults to INR).
+// India-first currency detection (kept for display; Razorpay subscriptions are INR).
 export function regionCurrency(): "inr" | "usd" {
   if (typeof window === "undefined") return "inr";
   try {
@@ -17,105 +16,27 @@ export function regionCurrency(): "inr" | "usd" {
   return "inr";
 }
 
-export type Gateway = "stripe" | "razorpay";
-
 export interface BillingState {
   plan: PlanTier;
   status: string | null;
   current_period_end: string | null;
-  provider: Gateway | null;
-  has_customer: boolean;
-  configured: boolean;
-  live: boolean;
-  gateways: { stripe: boolean; razorpay: boolean };
+  provider: string | null;
+  configured: boolean; // Razorpay keys present on the server
 }
 
 export async function fetchBilling(): Promise<BillingState> {
   return api.get<BillingState>("/api/billing/current");
 }
 
-// Default gateway by region: India → Razorpay (UPI/cards/netbanking), else Stripe.
-export function defaultGateway(): Gateway {
-  return regionCurrency() === "inr" ? "razorpay" : "stripe";
-}
-
-// Unified entry point — routes a plan upgrade through the chosen gateway.
+// Unified upgrade entry point — Razorpay Standard Checkout.
 export async function upgradePlan(
   plan: Exclude<PlanTier, "free">,
-  opts: { gateway: Gateway; email?: string; name?: string; onComplete?: () => void } = { gateway: defaultGateway() },
+  opts: { email?: string; name?: string; onComplete?: () => void } = {},
 ): Promise<void> {
-  if (opts.gateway === "razorpay") return startRazorpayCheckout(plan, opts);
-  return startCheckout(plan, opts.onComplete);
+  return startRazorpayCheckout(plan, opts);
 }
 
-// Start a subscription upgrade. On web this redirects to Stripe Checkout; on
-// native it opens Checkout in an in-app browser and, when that closes, confirms
-// the session (the native app is authenticated, so the plan applies without
-// relying on a webhook) and fires onComplete so the UI can refresh entitlements.
-export async function startCheckout(plan: Exclude<PlanTier, "free">, onComplete?: () => void): Promise<void> {
-  try {
-    haptic("medium");
-    const { url, id } = await api.post<{ url: string; id: string }>("/api/billing/checkout-session", {
-      plan,
-      currency: regionCurrency(),
-    });
-    if (!url) { toast.error("Could not start checkout. Please try again."); return; }
-    if (isNative()) {
-      await openCheckout(url, async () => {
-        await confirmCheckout(id);
-        onComplete?.();
-      });
-    } else {
-      window.location.href = url;
-    }
-  } catch (e) {
-    toast.error(apiMessage(e) || "Payments aren't enabled yet — please try again later.");
-  }
-}
-
-// Confirm a returning Checkout session (success_url) so the plan reflects
-// immediately, even before the webhook fires. Returns the resolved plan.
-export async function confirmCheckout(sessionId: string): Promise<PlanTier | null> {
-  try {
-    const { plan, applied } = await api.post<{ plan: PlanTier; applied: boolean }>("/api/billing/confirm", { session_id: sessionId });
-    if (applied) { haptic("success"); toast.success("You're upgraded — welcome aboard! 🎉"); }
-    return plan;
-  } catch { return null; }
-}
-
-export async function openBillingPortal(): Promise<void> {
-  try {
-    const { url } = await api.post<{ url: string }>("/api/billing/portal", {});
-    if (url) { window.location.href = url; return; }
-  } catch (e) {
-    toast.error(apiMessage(e) || "No active subscription to manage yet.");
-  }
-}
-
-// Create a Stripe payment link for an invoice. On native, open the OS share
-// sheet so the owner can send it to the customer (WhatsApp/SMS/email); on web,
-// open it in a new tab.
-export async function payInvoiceWithStripe(invoiceId: string): Promise<void> {
-  try {
-    haptic("light");
-    const { url } = await api.post<{ url: string }>("/api/billing/invoice-link", {
-      invoice_id: invoiceId,
-      currency: regionCurrency(),
-    });
-    if (!url) { toast.error("Could not create a payment link."); return; }
-    if (isNative()) {
-      const res = await shareContent({ title: "Pay your invoice", text: "Here's a secure card payment link for your invoice:", url, dialogTitle: "Send payment link" });
-      toast.success(res === "copied" ? "Payment link copied to clipboard" : "Payment link ready to share");
-    } else {
-      window.open(url, "_blank", "noopener");
-      toast.success("Payment link opened — share it with your customer.");
-    }
-  } catch (e) {
-    toast.error(apiMessage(e) || "Could not create a payment link.");
-  }
-}
-
-// ── Razorpay Standard Checkout (subscription upgrades) ──────────────────────
+// ── Razorpay Standard Checkout ──────────────────────────────────────────────
 interface RazorpaySuccess { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
 interface RazorpayInstance { open: () => void; on: (event: string, handler: (resp: { error?: { description?: string } }) => void) => void }
 declare global {

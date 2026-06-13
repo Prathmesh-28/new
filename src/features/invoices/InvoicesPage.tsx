@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap, CreditCard } from "lucide-react";
+import { Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { payInvoiceWithStripe } from "@/lib/billing";
 
 interface InvoiceItem { description: string; hsn_sac: string; quantity: number; unit_price: number; gst_rate: number; amount: number; }
 interface Invoice {
@@ -425,13 +424,9 @@ export default function InvoicesPage() {
                               <Send size={13} />
                             </button>
                           )}
-                          <button onClick={() => setQrInvoice(inv)} title="UPI QR code"
+                          <button onClick={() => setQrInvoice(inv)} title="UPI / card payment link"
                             className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 rounded">
                             <QrCode size={13} />
-                          </button>
-                          <button onClick={() => payInvoiceWithStripe(inv.id)} title="Pay by card (Stripe)"
-                            className="p-1.5 text-[var(--color-muted)] hover:text-indigo-400 hover:bg-indigo-900/10 rounded">
-                            <CreditCard size={13} />
                           </button>
                           {inv.aging && inv.aging !== "current" && (
                             <button onClick={async () => {

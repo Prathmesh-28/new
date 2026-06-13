@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Lock, Sparkles, Check, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { FEATURE_PITCH, PLAN_LABEL, type PlanTier } from "@/data/types";
-import { upgradePlan, defaultGateway, fetchBilling, regionCurrency, type Gateway } from "@/lib/billing";
-import GatewayToggle from "@/components/GatewayToggle";
+import { upgradePlan, regionCurrency } from "@/lib/billing";
 
 const PRICE: Record<Exclude<PlanTier, "free">, { inr: string; usd: string }> = {
   growth: { inr: "₹999", usd: "$39" },
@@ -16,25 +15,15 @@ const PRICE: Record<Exclude<PlanTier, "free">, { inr: string; usd: string }> = {
 export default function UpsellGate({ feature, requiredPlan }: { feature: string; requiredPlan: Exclude<PlanTier, "free"> }) {
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [gateway, setGateway] = useState<Gateway>(defaultGateway());
-  const [avail, setAvail] = useState<{ stripe: boolean; razorpay: boolean } | undefined>();
   const inr = regionCurrency() === "inr";
   const pitch = FEATURE_PITCH[feature] ?? { title: "This feature", blurb: "Unlock more of Headroom.", perks: [] };
   const price = PRICE[requiredPlan];
   const currentPlan = (user?.plan ?? "free") as PlanTier;
 
-  // Learn which gateways are live; fall back to whichever is configured.
-  useEffect(() => {
-    fetchBilling().then(b => {
-      setAvail(b.gateways);
-      setGateway(g => (b.gateways?.[g] ? g : b.gateways?.razorpay ? "razorpay" : "stripe"));
-    }).catch(() => {});
-  }, []);
-
   const upgrade = async () => {
     setLoading(true);
-    await upgradePlan(requiredPlan, { gateway, email: user?.email, name: user?.display_name, onComplete: refreshUser });
-    setLoading(false); // reached after Razorpay modal / native browser close, or on web-redirect failure
+    await upgradePlan(requiredPlan, { email: user?.email, name: user?.display_name, onComplete: refreshUser });
+    setLoading(false); // reached after the Razorpay modal opens / closes
   };
 
   return (
@@ -71,20 +60,15 @@ export default function UpsellGate({ feature, requiredPlan }: { feature: string;
             </div>
             <p className="text-xs text-[var(--color-muted)] mt-1">billed yearly · cancel anytime</p>
 
-            <div className="mt-4 mb-1 text-left">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1.5">Pay with</p>
-              <GatewayToggle value={gateway} onChange={setGateway} available={avail} />
-            </div>
-
             <button
               onClick={upgrade}
               disabled={loading}
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] text-white font-semibold text-sm py-3 hover:opacity-90 transition disabled:opacity-60"
+              className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] text-white font-semibold text-sm py-3 hover:opacity-90 transition disabled:opacity-60"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <>Upgrade to {PLAN_LABEL[requiredPlan]} <ArrowRight size={15} /></>}
             </button>
             <p className="text-[11px] text-[var(--color-muted)] mt-3">
-              You're on the <span className="font-semibold capitalize">{PLAN_LABEL[currentPlan]}</span> plan · 🔒 secure checkout by {gateway === "razorpay" ? "Razorpay" : "Stripe"}
+              You're on the <span className="font-semibold capitalize">{PLAN_LABEL[currentPlan]}</span> plan · 🔒 UPI · cards · netbanking via Razorpay
             </p>
           </div>
         </div>

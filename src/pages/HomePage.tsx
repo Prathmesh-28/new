@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
-import { startCheckout } from "@/lib/billing";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -132,7 +131,8 @@ export default function HomePage() {
   // plan; everyone else lands on signup. Free always → signup.
   const goPlan = (id: "free" | "growth" | "pro") => {
     const loggedIn = typeof window !== "undefined" && !!localStorage.getItem("hr_access");
-    if (id !== "free" && loggedIn) { startCheckout(id); return; }
+    // Logged-in visitors upgrade from Settings → Plan & Billing (Razorpay checkout there).
+    if (id !== "free" && loggedIn) { navigate("/settings"); return; }
     navigate(id === "free" ? "/signup" : `/signup?plan=${id}`);
   };
 

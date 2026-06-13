@@ -1,7 +1,7 @@
 // Razorpay Standard Checkout — Orders API + payment-signature verification.
-// Mirrors lib/stripe.js (graceful + env-driven) and reuses the same fetch + crypto
-// pattern already used for Razorpay payment links in routes/collections.js, so the
-// codebase has ONE way to talk to Razorpay (no extra SDK dependency).
+// Graceful + env-driven; reuses the same fetch + crypto pattern already used for
+// Razorpay payment links in routes/collections.js, so the codebase has ONE way to
+// talk to Razorpay (no extra SDK dependency).
 //   - No keys set            → isConfigured()=false; routes return a clean 503.
 //   - KEY_SECRET stays server-side only — never returned to the client.
 const crypto = require("crypto");
