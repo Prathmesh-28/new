@@ -309,6 +309,147 @@ function initStatsBars(THREE, add, isDisposed) {
   });
 }
 
+/* ── Shared helpers for section-wide decorations ─────────────────────────────── */
+function hexA(hex, a) {
+  const h = hex.replace("#", "");
+  return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
+}
+
+// Insert a decorative layer/canvas as the first child, behind existing content.
+function mountBehind(anchor, layer) {
+  if (getComputedStyle(anchor).position === "static") anchor.style.position = "relative";
+  Object.assign(layer.style, { position: "absolute", inset: "0", zIndex: "0", pointerEvents: "none", overflow: "hidden" });
+  // Lift existing content above the decorative layer so it's never obscured.
+  Array.from(anchor.children).forEach(ch => {
+    if (ch === layer || ch.nodeType !== 1) return;
+    if (getComputedStyle(ch).position === "static") ch.style.position = "relative";
+    if (!ch.style.zIndex) ch.style.zIndex = "1";
+  });
+  anchor.insertBefore(layer, anchor.firstChild);
+}
+
+/* Drifting blurred glow orbs — for dark sections (screen blend). */
+function mountOrbs(anchor, add, count = 3) {
+  anchor.querySelectorAll('[data-h3d-layer="deco-orbs"]').forEach(n => n.remove());
+  const layer = document.createElement("div");
+  layer.setAttribute("data-h3d-layer", "deco-orbs");
+  const palette = ["#C8D44E", "#8A9E2A", "#2A3015"];
+  const orbs = Array.from({ length: count }, (_, i) => ({
+    c: palette[i % palette.length],
+    size: 280 + (i * 97) % 220, x: (i * 43 + 12) % 86, y: (i * 57 + 10) % 76,
+    op: 0.06 + (i % 3) * 0.02, ax: 38 + (i * 17) % 46, ay: 30 + (i * 23) % 44,
+    dur: 12 + (i * 3) % 6, ph: i * 1.4,
+  }));
+  const els = orbs.map(o => {
+    const d = document.createElement("div");
+    Object.assign(d.style, {
+      position: "absolute", left: o.x + "%", top: o.y + "%", width: o.size + "px", height: o.size + "px",
+      borderRadius: "50%", background: o.c, filter: "blur(70px)", opacity: String(o.op),
+      mixBlendMode: "screen", transform: "translate(-50%, -50%)", willChange: "transform",
+    });
+    layer.appendChild(d); return d;
+  });
+  mountBehind(anchor, layer);
+  let raf = 0, start = 0;
+  const tick = (t) => {
+    if (!start) start = t;
+    const s = (t - start) / 1000;
+    for (let i = 0; i < orbs.length; i++) {
+      const o = orbs[i], a = (s / o.dur + o.ph) * Math.PI * 2;
+      els[i].style.transform = `translate(calc(-50% + ${Math.sin(a) * o.ax}px), calc(-50% + ${Math.cos(a * 0.8) * o.ay}px))`;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  add(() => { cancelAnimationFrame(raf); layer.remove(); });
+}
+
+/* Floating wireframe shapes rotating in 3D perspective — light or dark sections. */
+function mountShapes(anchor, add, tone = "light", count = 7) {
+  anchor.querySelectorAll('[data-h3d-layer="deco-shapes"]').forEach(n => n.remove());
+  const layer = document.createElement("div");
+  layer.setAttribute("data-h3d-layer", "deco-shapes");
+  layer.style.perspective = "700px";
+  const colors = ["#8A9E2A", "#C8D44E"];
+  const alpha = tone === "dark" ? 0.5 : 0.3;
+  const shapes = Array.from({ length: count }, (_, i) => {
+    const kind = i % 3; // 0 square · 1 diamond · 2 ring
+    const size = 30 + (i * 19) % 64;
+    const color = colors[i % colors.length];
+    const el = document.createElement("div");
+    Object.assign(el.style, {
+      position: "absolute", left: ((i * 41 + 8) % 86) + "%", top: ((i * 29 + 7) % 78) + "%",
+      width: size + "px", height: size + "px", border: `1.5px solid ${hexA(color, alpha)}`,
+      borderRadius: kind === 2 ? "50%" : "5px", transformStyle: "preserve-3d", willChange: "transform",
+    });
+    layer.appendChild(el);
+    return { el, baseZ: kind === 1 ? 45 : 0, rx: 0.2 + (i % 3) * 0.14, ry: 0.24 + (i % 4) * 0.11,
+      sp: 7 + (i * 5) % 9, ph: i * 0.7, ax: 16 + (i * 7) % 22, ay: 12 + (i * 9) % 18, dur: 10 + (i * 3) % 8 };
+  });
+  mountBehind(anchor, layer);
+  let raf = 0, start = 0;
+  const tick = (t) => {
+    if (!start) start = t;
+    const s = (t - start) / 1000;
+    for (const sh of shapes) {
+      const rotX = (s * (360 / sh.sp) * sh.rx) % 360;
+      const rotY = (s * (360 / sh.sp) * sh.ry) % 360;
+      const a = (s / sh.dur + sh.ph) * Math.PI * 2;
+      const dx = Math.sin(a) * sh.ax, dy = Math.cos(a * 0.9) * sh.ay;
+      sh.el.style.transform = `translate3d(calc(-50% + ${dx}px), calc(-50% + ${dy}px), 0) rotateX(${rotX}deg) rotateY(${rotY}deg) rotateZ(${sh.baseZ}deg)`;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  add(() => { cancelAnimationFrame(raf); layer.remove(); });
+}
+
+/* Rotating wireframe icosahedron (Three.js) — centrepiece for the final CTA. */
+function mountWire(THREE, anchor, add, isDisposed) {
+  if (!anchor || isDisposed()) return;
+  anchor.querySelectorAll('[data-h3d-canvas="wire"]').forEach(n => n.remove());
+  const canvas = document.createElement("canvas");
+  canvas.setAttribute("data-h3d-canvas", "wire");
+  canvas.style.width = "100%"; canvas.style.height = "100%";
+  mountBehind(anchor, canvas);
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setClearColor(0x000000, 0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 100);
+  camera.position.z = 5;
+  const geo = new THREE.IcosahedronGeometry(2.1, 1);
+  const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geo), new THREE.LineBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0.26 }));
+  const inner = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 0), new THREE.MeshBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0.05 }));
+  scene.add(wire); scene.add(inner);
+  const resize = () => {
+    const r = anchor.getBoundingClientRect();
+    renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
+    camera.aspect = r.width / Math.max(1, r.height);
+    camera.updateProjectionMatrix();
+  };
+  resize(); window.addEventListener("resize", resize);
+  let raf = 0;
+  const tick = () => {
+    wire.rotation.x += 0.0015; wire.rotation.y += 0.0022;
+    inner.rotation.x -= 0.001; inner.rotation.y -= 0.0016;
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  add(() => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); geo.dispose(); renderer.dispose(); canvas.remove(); });
+}
+
+// Apply CSS decorations to every tagged section.
+function mountSections(add) {
+  document.querySelectorAll("[data-h3d-deco]").forEach(el => {
+    const v = el.getAttribute("data-h3d-deco");
+    if (v === "orbs") mountOrbs(el, add, 3);
+    else if (v === "shapes-light") mountShapes(el, add, "light", 7);
+    else if (v === "shapes-dark") mountShapes(el, add, "dark", 7);
+  });
+}
+
 export function initHero3D() {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
   // Respect reduced-motion: add nothing at all.
@@ -322,14 +463,16 @@ export function initHero3D() {
   injectStyles(add);
   initFog(add);
   initCashTilt(add);
+  mountSections(add);   // CSS 3D decorations across every tagged section
 
   loadThree()
     .then((THREE) => {
       if (disposed || !THREE) return;
       initParticles(THREE, add, isDisposed);
       initStatsBars(THREE, add, isDisposed);
+      document.querySelectorAll('[data-h3d-deco="wire"]').forEach(el => mountWire(THREE, el, add, isDisposed));
     })
-    .catch(() => { /* CDN blocked — CSS layers (#1, #4) remain active */ });
+    .catch(() => { /* CDN blocked — CSS layers remain active */ });
 
   return () => {
     disposed = true;

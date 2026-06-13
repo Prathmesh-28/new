@@ -183,7 +183,7 @@ export default function HomePage() {
       </div>
 
       {/* ═══ FEATURES — 10 LAYERS ════════════════════════════════════════════ */}
-      <section id="features" style={{ background: C.creamW, padding: "88px 48px" }}>
+      <section id="features" data-h3d-deco="shapes-light" style={{ background: C.creamW, padding: "88px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 52px" }}>
             <Label text="Platform architecture" />
@@ -223,7 +223,7 @@ export default function HomePage() {
 
         {/* signal → action bar */}
         <Reveal>
-          <div style={{ maxWidth: 1100, margin: "52px auto 0", background: C.deepest, borderRadius: 16, padding: "36px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", position: "relative" }}>
+          <div data-h3d-deco="orbs" style={{ maxWidth: 1100, margin: "52px auto 0", background: C.deepest, borderRadius: 16, padding: "36px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", position: "relative" }}>
             <div style={{ position: "absolute", top: "50%", left: "12.5%", right: "12.5%", height: 1, background: "rgba(196,217,122,0.1)" }} />
             {[
               { step:"Detect",   icon:"📡", desc:"Live signals from bank + books" },
@@ -242,7 +242,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ CREDIT RESCUE ════════════════════════════════════════════════════ */}
-      <section id="credit" style={{ background: C.cream, padding: "88px 48px" }}>
+      <section id="credit" data-h3d-deco="shapes-light" style={{ background: C.cream, padding: "88px 48px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <Reveal>
             <Label text="Credit rescue" />
@@ -311,7 +311,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ CAPITAL ══════════════════════════════════════════════════════════ */}
-      <section id="capital" style={{ background: C.deepest, padding: "88px 48px" }}>
+      <section id="capital" data-h3d-deco="orbs" style={{ background: C.deepest, padding: "88px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 52px" }}>
             <Label text="Community capital" dark />
@@ -384,7 +384,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ ADVISORS ═════════════════════════════════════════════════════════ */}
-      <section id="advisors" style={{ background: C.creamW, padding: "88px 48px" }}>
+      <section id="advisors" data-h3d-deco="shapes-light" style={{ background: C.creamW, padding: "88px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 52px" }}>
             <Label text="For advisors" />
@@ -451,7 +451,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ TESTIMONIALS ═════════════════════════════════════════════════════ */}
-      <section style={{ background: C.deep, padding: "80px 48px" }}>
+      <section data-h3d-deco="orbs" style={{ background: C.deep, padding: "80px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 48px" }}>
             <Label text="What owners say" dark />
@@ -484,7 +484,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ PRICING ══════════════════════════════════════════════════════════ */}
-      <section id="pricing" style={{ background: C.creamW, padding: "88px 48px", textAlign: "center" }}>
+      <section id="pricing" data-h3d-deco="shapes-light" style={{ background: C.creamW, padding: "88px 48px", textAlign: "center" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto" }}>
             <Label text="Pricing" />
@@ -568,7 +568,7 @@ export default function HomePage() {
 
       {/* ═══ FAQ ══════════════════════════════════════════════════════════════ */}
       <Reveal>
-        <section style={{ background: C.cream, padding: "72px 48px" }}>
+        <section data-h3d-deco="shapes-light" style={{ background: C.cream, padding: "72px 48px" }}>
           <div style={{ maxWidth: 680, margin: "0 auto" }}>
             <Label text="FAQ" />
             <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
@@ -587,7 +587,7 @@ export default function HomePage() {
       </Reveal>
 
       {/* ═══ CTA ══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: C.deepest, padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+      <section data-h3d-deco="wire" style={{ background: C.deepest, padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(107,133,38,0.25) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ fontFamily: serif, fontSize: 44, color: C.creamW, letterSpacing: -1.5, marginBottom: 16 }}>Get your first Headroom forecast.</h2>
