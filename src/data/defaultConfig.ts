@@ -1,4 +1,5 @@
 import type { AppStore } from "./types";
+import { DEFAULT_WA_PREFS } from "./types";
 
 export const defaultConfig: AppStore = {
   firm: {
@@ -108,4 +109,5 @@ export const defaultConfig: AppStore = {
   orders:             [],
   inventory:          [],
   procurement:        [],
+  whatsappPreferences: { ...DEFAULT_WA_PREFS },
 };

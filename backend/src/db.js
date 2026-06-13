@@ -461,10 +461,6 @@ async function initDb() {
       updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    -- ── WhatsApp alert preferences (per binding) ──────────────────────────────
-    ALTER TABLE whatsapp_bindings ADD COLUMN IF NOT EXISTS preferences JSONB
-      NOT NULL DEFAULT '{"low_cash":true,"overdue":true,"gst_due":true,"credit_offer":false,"payroll":true,"weekly":true}'::jsonb;
-
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 

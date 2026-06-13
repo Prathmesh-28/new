@@ -251,6 +251,22 @@ export interface ProcurementOrder {
   createdAt: string;
 }
 
+// ── WhatsApp alert preferences ──────────────────────────────────────────────
+// Which proactive alerts the morning WhatsApp brief includes. Persisted per-tenant
+// in the KV 'app' namespace so the backend digest (getTenantData) can honour them.
+export interface WhatsAppPreferences {
+  low_cash: boolean;
+  overdue: boolean;
+  gst_due: boolean;
+  credit_offer: boolean;
+  payroll: boolean;
+  weekly: boolean;
+}
+
+export const DEFAULT_WA_PREFS: WhatsAppPreferences = {
+  low_cash: true, overdue: true, gst_due: true, credit_offer: false, payroll: true, weekly: true,
+};
+
 // ── Fixed assets ────────────────────────────────────────────────────────────
 export interface FixedAsset {
   id: string;
@@ -298,6 +314,7 @@ export interface AppStore {
   orders: Order[];
   inventory: InventoryItem[];
   procurement: ProcurementOrder[];
+  whatsappPreferences: WhatsAppPreferences;
 }
 
 // ── KV namespace map ──────────────────────────────────────────────────────────
@@ -321,6 +338,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   orders:              "operations",
   inventory:           "operations",
   procurement:         "operations",
+  whatsappPreferences: "app",
 };
 
 export const ROLE_NAMESPACES: Record<UserRole, string[]> = {

@@ -269,15 +269,26 @@ router.post("/send-digest", async (req, res) => {
     "SELECT wb.phone, wb.tenant_id FROM whatsapp_bindings wb"
   );
 
+  const todayISO = new Date().toISOString().split("T")[0];
+  const within = (dateStr, days) => {
+    if (!dateStr) return false;
+    const d = (new Date(dateStr) - new Date(todayISO)) / 86400000;
+    return d >= 0 && d <= days;
+  };
+
   let sent = 0, failed = 0;
   for (const { phone, tenant_id } of bindings) {
     try {
       const data    = await getTenantData(tenant_id);
+      // Per-tenant alert preferences (persisted in the KV 'app' namespace). The
+      // morning brief honours each toggle; defaults match the UI.
+      const prefs   = { low_cash: true, overdue: true, gst_due: true, credit_offer: false, payroll: true, weekly: true, ...(data.whatsappPreferences || {}) };
       const burn    = monthlyBurn(data.transactions);
       const runway  = runwayDays(data.bankAccounts, burn);
       const total   = (data.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
       const unread  = (data.alerts ?? []).filter(a => !a.isRead);
       const critical = unread.filter(a => a.severity === "critical" || a.severity === "high");
+      const safetyDays = data.firm?.safetyThresholdDays ?? 30;
 
       const today = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
       const emoji  = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
@@ -285,9 +296,48 @@ router.post("/send-digest", async (req, res) => {
       msg += `💰 Cash: *${fmt(total)}*\n`;
       msg += `🔥 Burn: ${fmt(burn)}/month\n`;
       msg += `${emoji} Runway: *${runway} days*\n`;
+
+      // Low-cash warning (gated)
+      if (prefs.low_cash && runway < safetyDays) {
+        msg += `\n🚨 *Low cash:* runway is under your ${safetyDays}-day safety threshold.\n`;
+      }
+
+      // Overdue receivables (gated)
+      if (prefs.overdue) {
+        const overdue = (data.invoices ?? []).filter(i => i.status !== "paid" && i.dueDate < todayISO);
+        if (overdue.length) {
+          msg += `\n🔴 *Overdue receivables: ${fmt(overdue.reduce((s, i) => s + (i.amount || 0), 0))}* (${overdue.length})\n`;
+        }
+      }
+
+      // GST / tax due soon (gated)
+      if (prefs.gst_due) {
+        const taxDue = (data.obligations ?? []).filter(o => o.type === "tax" && within(o.dueDate, 14));
+        if (taxDue.length) {
+          const next = taxDue.sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+          msg += `\n🧾 *${next.name}: ${fmt(next.amount)}* due ${next.dueDate}\n`;
+        }
+      }
+
+      // Payroll due soon (gated)
+      if (prefs.payroll) {
+        const pay = (data.obligations ?? []).filter(o => o.type === "payroll" && within(o.dueDate, 7));
+        if (pay.length) {
+          msg += `\n👥 *Payroll ${fmt(pay.reduce((s, o) => s + (o.amount || 0), 0))}* due within 7 days\n`;
+        }
+      }
+
+      // Credit offers available (gated)
+      if (prefs.credit_offer) {
+        const offers = (data.creditOffers ?? []).filter(o => o.status === "pending");
+        if (offers.length) {
+          msg += `\n💳 *${offers.length} credit offer${offers.length > 1 ? "s" : ""} available* — up to ${fmt(Math.max(...offers.map(o => o.amount || 0)))}\n`;
+        }
+      }
+
       if (critical.length) msg += `\n⚠️ *${critical.length} critical alert${critical.length > 1 ? "s" : ""}*\n${critical.slice(0, 2).map(a => `  • ${a.title}`).join("\n")}\n`;
       else msg += "\n✅ No critical alerts today\n";
-      msg += `\nReply *help* for commands`;
+      msg += `\nReply *help* for commands · manage alerts in Settings`;
 
       await sendWhatsApp(phone, msg);
       sent++;

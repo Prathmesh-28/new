@@ -2,6 +2,8 @@ import { useState } from "react";
 import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useApp } from "@/context/AppContext";
+import { DEFAULT_WA_PREFS, type WhatsAppPreferences } from "@/data/types";
 
 // authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
 function apiError(err: unknown): string {
@@ -106,9 +108,10 @@ export default function WhatsAppPage() {
   const [step, setStep]         = useState<"idle" | "phone" | "otp" | "done">("idle");
   const [phone, setPhone]       = useState("");
   const [otp, setOtp]           = useState("");
-  const [alerts, setAlerts]     = useState<Record<string, boolean>>(
-    Object.fromEntries(ALERT_TYPES.map(a => [a.id, a.default]))
-  );
+  // Alert prefs are persisted per-tenant in the KV store so they survive reload
+  // and the backend morning-brief digest honours them.
+  const { store, setStore, canEdit } = useApp();
+  const alerts: WhatsAppPreferences = { ...DEFAULT_WA_PREFS, ...(store.whatsappPreferences ?? {}) };
   const [showCommands, setShowCommands] = useState(false);
   const [chatStep, setChatStep] = useState(0);
 
@@ -148,7 +151,15 @@ export default function WhatsAppPage() {
     toast.success("Copied");
   };
 
-  const toggleAlert = (id: string) => setAlerts(a => ({ ...a, [id]: !a[id] }));
+  const toggleAlert = (id: string) => {
+    if (!canEdit()) { toast.error("Your role has read-only access."); return; }
+    const key = id as keyof WhatsAppPreferences;
+    setStore(s => ({
+      ...s,
+      whatsappPreferences: { ...DEFAULT_WA_PREFS, ...(s.whatsappPreferences ?? {}), [key]: !alerts[key] },
+    }));
+    toast.success(`${alerts[key] ? "Muted" : "Enabled"} — saved to your morning brief`, { id: "wa-pref" });
+  };
 
   const advanceChat = () => setChatStep(s => Math.min(s + 1, 2));
 
@@ -270,9 +281,9 @@ export default function WhatsAppPage() {
                   </div>
                   <button
                     onClick={() => toggleAlert(id)}
-                    className={`w-10 h-5 rounded-full transition-colors shrink-0 relative ${alerts[id] ? "bg-green-700" : "bg-[var(--color-border)]"}`}
+                    className={`w-10 h-5 rounded-full transition-colors shrink-0 relative ${alerts[id as keyof WhatsAppPreferences] ? "bg-green-700" : "bg-[var(--color-border)]"}`}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${alerts[id] ? "left-5" : "left-0.5"}`} />
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${alerts[id as keyof WhatsAppPreferences] ? "left-5" : "left-0.5"}`} />
                   </button>
                 </div>
               ))}
