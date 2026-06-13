@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { incomeStatement, balanceSheet, cashFlowStatement } from "@/lib/finance";
+import { incomeStatement, balanceSheet, cashFlowStatement, monthlyCashFlow } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { FileSpreadsheet, Printer, Info, Scale, TrendingUp, Wallet } from "lucide-react";
+import { exportExcel, exportPdf } from "@/lib/exporters";
+import { FileSpreadsheet, FileDown, Sheet as SheetIcon, Info, Scale, TrendingUp, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 type Tab = "income" | "balance" | "cashflow";
 type Preset = "month" | "quarter" | "fy" | "ttm";
@@ -80,6 +82,97 @@ export default function StatementsPage() {
   const pl  = useMemo(() => incomeStatement(store, range.start, range.end), [store, range]);
   const bs  = useMemo(() => balanceSheet(store, today), [store, today]);
   const cf  = useMemo(() => cashFlowStatement(store, range.start, range.end, today), [store, range, today]);
+  const monthly = useMemo(() => monthlyCashFlow(store, 12, today), [store, today]);
+
+  // ── Build export tables for the active statement ──────────────────────────────
+  const exportData = useMemo(() => {
+    if (tab === "income") {
+      return {
+        title: "Income Statement", file: "income-statement",
+        head: ["Line item", "Amount (₹)", "% of revenue"],
+        body: [
+          ["Revenue", pl.revenue, "100%"],
+          ["Cost of goods sold", -pl.cogs, ""],
+          ["Gross Profit", pl.grossProfit, `${pl.grossMarginPct}%`],
+          ["Payroll", -pl.payroll, ""],
+          ["Other operating expenses", -pl.otherOpex, ""],
+          ["EBITDA", pl.ebitda, `${pl.ebitdaMarginPct}%`],
+          ["Depreciation & amortisation (est.)", -pl.depreciation, ""],
+          ["EBIT", pl.ebit, ""],
+          ["Finance costs (interest)", -pl.interest, ""],
+          ["Profit Before Tax", pl.pbt, ""],
+          ["Income tax (est.)", -pl.tax, ""],
+          ["Net Profit", pl.netProfit, `${pl.netMarginPct}%`],
+        ] as (string | number)[][],
+      };
+    }
+    if (tab === "balance") {
+      return {
+        title: "Balance Sheet", file: "balance-sheet",
+        head: ["Line item", "Amount (₹)"],
+        body: [
+          ["ASSETS", ""],
+          ["Cash & bank balances", bs.cash],
+          ["Accounts receivable", bs.accountsReceivable],
+          ["Inventory", bs.inventory],
+          ["Total Current Assets", bs.currentAssets],
+          ["Fixed assets (net, est.)", bs.fixedAssetsNet],
+          ["Total Assets", bs.totalAssets],
+          ["LIABILITIES", ""],
+          ["Accounts payable", bs.accountsPayable],
+          ["GST payable", bs.gstPayable],
+          ["Short-term debt", bs.shortTermDebt],
+          ["Other obligations", bs.otherCurrentLiabilities],
+          ["Total Current Liabilities", bs.currentLiabilities],
+          ["Long-term debt", bs.longTermDebt],
+          ["Total Liabilities", bs.totalLiabilities],
+          ["EQUITY", ""],
+          ["Paid-in capital", bs.paidInCapital],
+          ["Retained earnings", bs.retainedEarnings],
+          ["Total Equity", bs.totalEquity],
+          ["Total Liabilities + Equity", bs.totalLiabilities + bs.totalEquity],
+        ] as (string | number)[][],
+      };
+    }
+    return {
+      title: "Cash Flow Statement", file: "cash-flow",
+      head: ["Line item", "Amount (₹)"],
+      body: [
+        ["OPERATING", ""],
+        ["Receipts from customers", cf.receiptsFromCustomers],
+        ["Payments to suppliers", -cf.paymentsToSuppliers],
+        ["Payments to employees", -cf.paymentsToEmployees],
+        ["Taxes & duties paid", -cf.taxesPaid],
+        ["Net cash from operations", cf.operating],
+        ["FINANCING", ""],
+        ["Loan proceeds", cf.loanProceeds],
+        ["Loan repayments", -cf.loanRepayments],
+        ["Equity raised", cf.equityRaised],
+        ["Net cash from financing", cf.financing],
+        ["Net change in cash", cf.netChange],
+        ["Opening cash", cf.openingCash],
+        ["Closing cash", cf.closingCash],
+      ] as (string | number)[][],
+    };
+  }, [tab, pl, bs, cf]);
+
+  const monthlySheet = useMemo(() => ({
+    head: ["Month", "Receipts", "Suppliers", "Payroll", "Taxes", "Operating", "Financing", "Net", "Closing cash"],
+    body: monthly.map(m => [m.label, m.receipts, -m.supplierPayments, -m.payroll, -m.taxes, m.operating, m.financing, m.net, m.closing]) as (string | number)[][],
+  }), [monthly]);
+
+  const doExportExcel = () => {
+    const sheets = [{ name: exportData.title, rows: [exportData.head, ...exportData.body] }];
+    if (tab === "cashflow") sheets.push({ name: "Monthly cash flow", rows: [monthlySheet.head, ...monthlySheet.body] });
+    exportExcel(`${exportData.file}-${range.end}.xlsx`, sheets);
+    toast.success("Excel downloaded");
+  };
+  const doExportPdf = () => {
+    const tables = [{ title: exportData.title, head: exportData.head, body: exportData.body }];
+    if (tab === "cashflow") tables.push({ title: "Monthly cash flow (12 months)", head: monthlySheet.head, body: monthlySheet.body });
+    exportPdf(`${exportData.file}-${range.end}.pdf`, `${firm.name} — ${exportData.title}`, `${range.label} · generated by Headroom`, tables);
+    toast.success("PDF downloaded");
+  };
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "income",   label: "Income Statement", icon: TrendingUp },
@@ -104,10 +197,16 @@ export default function StatementsPage() {
             {firm.name} · derived live from your bank data · {range.label}
           </p>
         </div>
-        <button onClick={() => window.print()}
-          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-          <Printer size={13} /> Print / PDF
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={doExportPdf}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+            <FileDown size={13} /> PDF
+          </button>
+          <button onClick={doExportExcel}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+            <SheetIcon size={13} /> Excel
+          </button>
+        </div>
       </div>
 
       {/* Period selector */}
@@ -221,6 +320,7 @@ export default function StatementsPage() {
 
       {/* ── CASH FLOW ── */}
       {tab === "cashflow" && (
+        <div className="space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <p className="text-sm font-semibold mb-1">Cash Flow Statement <span className="text-[10px] font-normal text-[var(--color-muted)]">· direct method</span></p>
@@ -263,6 +363,41 @@ export default function StatementsPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Detailed monthly cash-flow model */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)]">
+            <p className="text-sm font-semibold">Monthly Cash Flow · last 12 months</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Direct-method month-by-month, with a rolling closing-cash balance anchored to today's bank position.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[820px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>
+                  {["Month", "Receipts", "Suppliers", "Payroll", "Taxes", "Operating", "Financing", "Net", "Closing cash"].map((h, i) => (
+                    <th key={h} className={`px-3 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {monthly.map((m, i) => (
+                  <tr key={m.monthKey} className={`hover:bg-white/2 ${i === monthly.length - 1 ? "bg-[var(--color-accent)]/30" : ""}`}>
+                    <td className="px-3 py-2 font-medium">{m.label}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.supplierPayments)})</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.payroll)})</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.taxes)})</td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{m.operating < 0 ? `(${formatAmount(Math.abs(m.operating))})` : formatAmount(m.operating)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{m.financing < 0 ? `(${formatAmount(Math.abs(m.financing))})` : formatAmount(m.financing)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{m.net < 0 ? `(${formatAmount(Math.abs(m.net))})` : formatAmount(m.net)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         </div>
       )}
     </div>

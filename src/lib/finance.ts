@@ -730,6 +730,40 @@ export function cashFlowStatement(store: AppStore, start: string, end: string, t
   };
 }
 
+export interface MonthlyCashFlowRow {
+  monthKey: string; label: string;
+  receipts: number; supplierPayments: number; payroll: number; taxes: number; operating: number;
+  loanProceeds: number; loanRepayments: number; financing: number;
+  net: number; opening: number; closing: number;
+}
+
+/** Month-by-month direct-method cash flow with a rolling balance, anchored to
+ *  current cash. Granular view for detailed cash-flow modelling. */
+export function monthlyCashFlow(store: AppStore, months = 12, today = new Date()): MonthlyCashFlowRow[] {
+  const currentCash = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const base: Omit<MonthlyCashFlowRow, "opening" | "closing">[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const m = store.transactions.filter(t => t.date.startsWith(key) && t.category !== "transfer");
+    const receipts         = m.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+    const supplierPayments = Math.abs(m.filter(t => t.amount < 0 && t.category === "expense").reduce((s, t) => s + t.amount, 0));
+    const payroll          = Math.abs(m.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+    const taxes            = Math.abs(m.filter(t => t.category === "tax").reduce((s, t) => s + t.amount, 0));
+    const operating        = receipts - supplierPayments - payroll - taxes;
+    const loanTx = m.filter(t => t.category === "loan");
+    const loanProceeds   = loanTx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const loanRepayments = Math.abs(loanTx.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const financing = loanProceeds - loanRepayments;
+    const net = operating + financing;
+    base.push({ monthKey: key, label: `${MONTH_LABEL[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
+      receipts, supplierPayments, payroll, taxes, operating, loanProceeds, loanRepayments, financing, net });
+  }
+  const totalNet = base.reduce((s, r) => s + r.net, 0);
+  let opening = currentCash - totalNet;
+  return base.map(r => { const o = opening; const c = o + r.net; opening = c; return { ...r, opening: o, closing: c }; });
+}
+
 // ── GST ledger (running balance across months) ────────────────────────────────
 
 export interface GstLedgerRow {
