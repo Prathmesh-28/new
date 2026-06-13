@@ -210,9 +210,9 @@ export default function HomePage() {
             { n:"10", t:"Community capital",        d:"Revenue-share, Reg CF, and Reg A+ raises built directly into the platform." },
           ].map(({ n, t, d }, i) => (
             <Reveal key={n} delay={i * 40}>
-              <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "20px 18px", height: "100%", transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s" }}
-                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.4)"; el.style.transform = "translateY(-3px)"; el.style.boxShadow = "0 8px 24px rgba(44,58,16,0.07)"; }}
-                onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.transform = "none"; el.style.boxShadow = "none"; }}>
+              <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "20px 18px", height: "100%", transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s" }}
+                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.4)"; el.style.boxShadow = "0 8px 24px rgba(44,58,16,0.07)"; }}
+                onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.boxShadow = "none"; }}>
                 <div style={{ fontFamily: sans, fontSize: 10, color: C.bright, fontWeight: 700, letterSpacing: "0.5px", marginBottom: 10 }}>{n}</div>
                 <h4 style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 8, lineHeight: 1.3 }}>{t}</h4>
                 <p style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.6 }}>{d}</p>
@@ -262,7 +262,7 @@ export default function HomePage() {
               { n:"4", icon:"✅", t:"Repayment simulated first",       d:"See exactly how any option affects your forecast before you accept a single rupee." },
             ].map(({ n, icon, t, d }, i) => (
               <Reveal key={n} delay={i * 80}>
-                <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, position: "relative" }}>
+                <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, position: "relative" }}>
                   <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.mid, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, fontSize: 13, fontWeight: 700, color: "#fff", position: "absolute", top: -13, left: 20 }}>{n}</div>
                   <div style={{ fontSize: 22, marginBottom: 12, marginTop: 10 }}>{icon}</div>
                   <h4 style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 8 }}>{t}</h4>
@@ -295,7 +295,7 @@ export default function HomePage() {
                   { icon:"📄", t:"Invoice financing",      d:"Get paid on outstanding invoices today.",               amt:"Up to 90% of invoice value" },
                   { icon:"🔒", t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:"Up to ₹50L" },
                 ].map(({ icon, t, d, amt }) => (
-                  <div key={t} style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div key={t} data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 9, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>{icon}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 600, color: C.txt, marginBottom: 2 }}>{t}</div>
@@ -349,7 +349,7 @@ export default function HomePage() {
             },
           ].map(({ track, badge, title, range, best, features, featured }, i) => (
             <Reveal key={track} delay={i * 80}>
-              <div style={{ background: featured ? C.deep : "rgba(255,255,255,0.04)", border: `1px solid ${featured ? "rgba(196,217,122,0.2)" : "rgba(196,217,122,0.08)"}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column" }}>
+              <div data-h3d-tilt style={{ background: featured ? C.deep : "rgba(255,255,255,0.04)", border: `1px solid ${featured ? "rgba(196,217,122,0.2)" : "rgba(196,217,122,0.08)"}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <span style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, color: C.bright, letterSpacing: "0.8px", textTransform: "uppercase" }}>{track}</span>
                   <span style={{ fontFamily: sans, fontSize: 10, background: "rgba(196,217,122,0.08)", border: "1px solid rgba(196,217,122,0.14)", color: C.pale, padding: "2px 10px", borderRadius: 12 }}>{badge}</span>
@@ -405,7 +405,7 @@ export default function HomePage() {
             { role:"Startup Advisor",       emoji:"🚀", tagline:"Monitor burn and runway across your portfolio.",        perks:["Burn rate tracking","Runway visibility","Capital readiness scoring","Investor dashboard"] },
           ].map(({ role, emoji, tagline, perks }, i) => (
             <Reveal key={role} delay={i * 80}>
-              <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, height: "100%", transition: "border-color 0.2s, box-shadow 0.2s" }}
+              <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, height: "100%", transition: "border-color 0.2s, box-shadow 0.2s" }}
                 onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.35)"; el.style.boxShadow = "0 8px 28px rgba(44,58,16,0.07)"; }}
                 onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.boxShadow = "none"; }}>
                 <div style={{ width: 44, height: 44, borderRadius: 10, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 14 }}>{emoji}</div>
@@ -433,7 +433,7 @@ export default function HomePage() {
               { icon:"🏆", t:"Capital readiness scoring", d:"Know which clients are raise-ready and which track suits them best." },
               { icon:"🎨", t:"White-label ready",         d:"Your brand, your portal. Headroom powers it behind the scenes." },
             ].map(({ icon, t, d }) => (
-              <div key={t} style={{ background: C.wash, border: "1px solid rgba(74,94,26,0.1)", borderRadius: 12, padding: "20px 20px" }}>
+              <div key={t} data-h3d-tilt style={{ background: C.wash, border: "1px solid rgba(74,94,26,0.1)", borderRadius: 12, padding: "20px 20px" }}>
                 <div style={{ fontSize: 20, marginBottom: 10 }}>{icon}</div>
                 <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 6 }}>{t}</div>
                 <div style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.6 }}>{d}</div>
@@ -465,7 +465,7 @@ export default function HomePage() {
             { initials:"VS", name:"Vikram Shah",  biz:"Shah Construction, Pune",             quote:"The credit feature saved us during the monsoon gap. Headroom offered us options before it hit, and we got through it clean." },
           ].map(({ initials, name, biz, quote }, i) => (
             <Reveal key={name} delay={i * 80}>
-              <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.1)", borderRadius: 14, padding: 24 }}>
+              <div data-h3d-tilt style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.1)", borderRadius: 14, padding: 24 }}>
                 <div style={{ display: "flex", gap: 3, marginBottom: 12 }}>
                   {Array.from({length:5}).map((_,s) => <span key={s} style={{ width: 11, height: 11, background: C.gold, clipPath: "polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)", display: "inline-block" }} />)}
                 </div>
@@ -522,7 +522,7 @@ export default function HomePage() {
             },
           ].map(({ name, price, featured, desc, features, disabled, cta }, i) => (
             <Reveal key={name} delay={i * 80}>
-              <div style={{ background: featured ? C.deepest : "#fff", border: `1px solid ${featured ? C.mid : "rgba(74,94,26,0.12)"}`, borderRadius: 16, padding: "32px 28px", textAlign: "left", display: "flex", flexDirection: "column" }}>
+              <div data-h3d-tilt style={{ background: featured ? C.deepest : "#fff", border: `1px solid ${featured ? C.mid : "rgba(74,94,26,0.12)"}`, borderRadius: 16, padding: "32px 28px", textAlign: "left", display: "flex", flexDirection: "column" }}>
                 {featured && <div style={{ fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", background: C.gold, color: C.deepest, padding: "3px 12px", borderRadius: 12, display: "inline-block", marginBottom: 16 }}>Most popular</div>}
                 <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 600, color: featured ? C.pale : C.txt, marginBottom: 6 }}>{name}</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "12px 0 4px" }}>

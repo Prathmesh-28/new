@@ -440,6 +440,47 @@ function mountWire(THREE, anchor, add, isDisposed) {
   add(() => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); geo.dispose(); renderer.dispose(); canvas.remove(); });
 }
 
+/* Interactive 3D tilt — cards follow the cursor in perspective. Hover devices only. */
+function initTilt(add) {
+  if (!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches)) return;
+  const cards = Array.from(document.querySelectorAll("[data-h3d-tilt]"));
+  const TILT = 6; // max degrees each axis
+  const bound = [];
+  cards.forEach(card => {
+    let prevTransition = "";
+    const onEnter = () => {
+      prevTransition = card.style.transition;
+      card.style.transition = "transform 0.1s ease-out";
+      card.style.willChange = "transform";
+      card.style.transformStyle = "preserve-3d";
+    };
+    const onMove = (e) => {
+      const r = card.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      const ry = px * 2 * TILT;
+      const rx = -py * 2 * TILT;
+      card.style.transform = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(10px)`;
+    };
+    const onLeave = () => {
+      card.style.transition = "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)";
+      card.style.transform = "";
+      window.setTimeout(() => { card.style.transition = prevTransition; }, 520);
+    };
+    card.addEventListener("pointerenter", onEnter);
+    card.addEventListener("pointermove", onMove);
+    card.addEventListener("pointerleave", onLeave);
+    bound.push([card, onEnter, onMove, onLeave]);
+  });
+  add(() => bound.forEach(([c, en, mv, lv]) => {
+    c.removeEventListener("pointerenter", en);
+    c.removeEventListener("pointermove", mv);
+    c.removeEventListener("pointerleave", lv);
+    c.style.transform = "";
+  }));
+}
+
 // Apply CSS decorations to every tagged section.
 function mountSections(add) {
   document.querySelectorAll("[data-h3d-deco]").forEach(el => {
@@ -464,6 +505,7 @@ export function initHero3D() {
   initFog(add);
   initCashTilt(add);
   mountSections(add);   // CSS 3D decorations across every tagged section
+  initTilt(add);        // interactive 3D tilt on content cards
 
   loadThree()
     .then((THREE) => {
