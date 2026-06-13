@@ -3,6 +3,7 @@ const express   = require("express");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");
 const bcrypt    = require("bcryptjs");
+const crypto    = require("crypto");
 const cron      = require("node-cron");
 const { initDb, pool } = require("./db");
 const { sendDailyDigest, sendMondayBrief } = require("./lib/digest");
@@ -78,10 +79,63 @@ app.use("/api/ewa",                require("./routes/ewa"));
 app.use("/api/suppliers",          require("./routes/suppliers"));
 app.use("/api/lenders",            require("./routes/lenders"));
 
-// Admin endpoints (super_admin only)
+// ── Platform admin endpoints (super_admin only) ─────────────────────────────
+// These are the PLATFORM owner's god-view across every tenant/company — distinct
+// from an SMB owner, who only ever sees their own tenant.
 const { authenticate: _auth } = require("./middleware/auth");
-app.get("/api/admin/tenants", _auth, async (req, res) => {
+function requireSuper(req, res, next) {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
+  next();
+}
+
+// Unwrap the double-nested KV app blob → the live AppStore fields for a tenant.
+function appBlob(rowValue) {
+  // Stored as { value: { firm, bankAccounts, transactions, ... } }
+  return (rowValue && typeof rowValue === "object" && rowValue.value) ? rowValue.value : {};
+}
+function companyFinancials(app) {
+  const accounts = Array.isArray(app.bankAccounts) ? app.bankAccounts : [];
+  const txns     = Array.isArray(app.transactions) ? app.transactions : [];
+  const invoices = Array.isArray(app.invoices) ? app.invoices : [];
+  const cash     = accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  const revenue  = txns.filter(t => Number(t.amount) > 0).reduce((s, t) => s + Number(t.amount), 0);
+  const expense  = txns.filter(t => Number(t.amount) < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  const openAr   = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  return { cash, revenue, expense, transactions: txns.length, accounts: accounts.length, openReceivables: openAr };
+}
+
+// GET /api/admin/companies — every tenant with live financials pulled from KV
+app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
+  const { rows: tenants } = await pool.query(
+    `SELECT tenant_id,
+            COUNT(*)::int AS user_count,
+            MAX(CASE WHEN role IN ('owner','super_admin') THEN email END) AS owner_email,
+            MIN(created_at) AS created_at
+     FROM users GROUP BY tenant_id ORDER BY MIN(created_at) DESC`
+  );
+  const { rows: blobs } = await pool.query(
+    "SELECT tenant_id, value, updated_at FROM kv_store WHERE namespace='app' AND key='store'"
+  );
+  const byTenant = {};
+  for (const b of blobs) byTenant[b.tenant_id] = b;
+  const companies = tenants.map(t => {
+    const blob = byTenant[t.tenant_id];
+    const app  = appBlob(blob?.value);
+    return {
+      tenant_id:    t.tenant_id,
+      company_name: app.firm?.name || null,
+      owner_email:  t.owner_email,
+      user_count:   t.user_count,
+      created_at:   t.created_at,
+      last_activity: blob?.updated_at || null,
+      ...companyFinancials(app),
+    };
+  });
+  res.json(companies);
+});
+
+// GET /api/admin/tenants — lightweight tenant list (kept for back-compat)
+app.get("/api/admin/tenants", _auth, requireSuper, async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT tenant_id,
             COUNT(*) AS user_count,
@@ -89,6 +143,41 @@ app.get("/api/admin/tenants", _auth, async (req, res) => {
      FROM users GROUP BY tenant_id ORDER BY tenant_id`
   );
   res.json(rows.map(r => ({ tenant_id: r.tenant_id, user_count: Number(r.user_count), owner_email: r.owner_email })));
+});
+
+// GET /api/admin/stats — platform-wide totals across ALL companies
+app.get("/api/admin/stats", _auth, requireSuper, async (_req, res) => {
+  const { rows: roleRows } = await pool.query("SELECT role, COUNT(*)::int AS n FROM users GROUP BY role");
+  const { rows: tenantRow } = await pool.query("SELECT COUNT(DISTINCT tenant_id)::int AS n FROM users");
+  const { rows: blobs } = await pool.query("SELECT value FROM kv_store WHERE namespace='app' AND key='store'");
+  let totalCash = 0, totalRevenue = 0, totalTransactions = 0, totalReceivables = 0;
+  for (const b of blobs) {
+    const f = companyFinancials(appBlob(b.value));
+    totalCash += f.cash; totalRevenue += f.revenue; totalTransactions += f.transactions; totalReceivables += f.openReceivables;
+  }
+  const byRole = {};
+  let totalUsers = 0;
+  for (const r of roleRows) { byRole[r.role] = r.n; totalUsers += r.n; }
+  res.json({
+    companies: tenantRow[0].n,
+    users: totalUsers,
+    byRole,
+    totalCash, totalRevenue, totalTransactions, totalReceivables,
+    activeCompanies: blobs.length,
+  });
+});
+
+// POST /api/admin/users/:id/reset — force a password reset for any user
+app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => {
+  const { rows } = await pool.query("SELECT id FROM users WHERE id=$1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Not found" });
+  const tempPass = crypto.randomBytes(8).toString("hex");
+  const hash = await bcrypt.hash(tempPass, 10);
+  await pool.query(
+    "UPDATE users SET password=$1, first_login=true, failed_attempts=0, locked_until=NULL WHERE id=$2",
+    [hash, req.params.id]
+  );
+  res.json({ password: tempPass });
 });
 
 // 404
@@ -100,19 +189,38 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
+// Seed the platform super_admin. SAFE BY DESIGN:
+//  - No hardcoded fallback credentials (no admin@headroom.app / Headroom@2024 backdoor).
+//  - Only CREATES a brand-new super_admin from an explicit ADMIN_EMAIL + strong
+//    ADMIN_PASSWORD; never auto-promotes an already-existing account (that would let
+//    anyone self-register the admin email and get promoted on the next deploy).
+//  - To promote YOUR existing account, run: node src/scripts/make-admin.js <email>
+//    (operator-only, requires shell/DB access — no network attack surface).
 async function seed() {
-  const adminEmail = process.env.ADMIN_EMAIL    || "admin@headroom.app";
-  const adminPass  = process.env.ADMIN_PASSWORD || "Headroom@2024";
-
-  const { rows } = await pool.query("SELECT id FROM users WHERE email=$1", [adminEmail]);
-  if (!rows[0]) {
-    const hash = await bcrypt.hash(adminPass, 10);
-    await pool.query(
-      "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,'super_admin','default',false)",
-      [adminEmail, hash]
-    );
-    console.log(`[seed] super_admin: ${adminEmail}`);
+  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+  const adminPass  = process.env.ADMIN_PASSWORD || "";
+  if (!adminEmail) {
+    console.log("[seed] ADMIN_EMAIL not set — skipping super_admin seed. Promote an account with: node src/scripts/make-admin.js <email>");
+    return;
   }
+
+  const { rows } = await pool.query("SELECT id, role FROM users WHERE email=$1", [adminEmail]);
+  if (rows[0]) {
+    if (rows[0].role !== "super_admin") {
+      console.warn(`[seed] ${adminEmail} exists but is not super_admin. Refusing to auto-promote (security). Run: node src/scripts/make-admin.js ${adminEmail}`);
+    }
+    return;
+  }
+  if (!adminPass || adminPass.length < 10) {
+    console.warn("[seed] ADMIN_PASSWORD missing or too short (min 10 chars) — not creating super_admin.");
+    return;
+  }
+  const hash = await bcrypt.hash(adminPass, 10);
+  await pool.query(
+    "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,'super_admin','admin',true)",
+    [adminEmail, hash]
+  );
+  console.log(`[seed] created super_admin: ${adminEmail} (first_login=true — must set a new password on first sign-in)`);
 }
 
 initDb()
