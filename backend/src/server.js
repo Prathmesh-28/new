@@ -35,10 +35,15 @@ app.use(express.urlencoded({ extended: false })); // Required for Twilio webhook
 // Rate limiting on auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 20,
+  max: 60,                  // higher ceiling — covers normal app usage
   message: { error: "Too many requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  // Don't rate-limit the endpoints the app calls automatically on every load —
+  // /me and /refresh are token-validated and were what tripped the limit during
+  // normal browsing. Brute-force protection on /login is handled separately by
+  // the per-account 5-attempt lockout in routes/auth.js.
+  skip: (req) => /\/(me|refresh)(\/|$)/.test(req.path),
 });
 
 // Health check
