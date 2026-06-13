@@ -11,7 +11,7 @@ const PLANS: { id: Exclude<PlanTier, "free">; inr: string; usd: string; tagline:
 ];
 
 export default function BillingCard() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [params, setParams] = useSearchParams();
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -24,13 +24,15 @@ export default function BillingCard() {
   useEffect(() => {
     if (params.get("billing") === "success" && params.get("session_id")) {
       const sid = params.get("session_id")!;
-      confirmCheckout(sid).then(() => { load(); });
+      // Refresh both the billing card AND the AuthContext user so plan-gated
+      // routes unlock immediately (no hard reload needed).
+      confirmCheckout(sid).then(() => { load(); refreshUser(); });
       params.delete("billing"); params.delete("session_id");
       setParams(params, { replace: true });
     } else if (params.get("billing") === "cancelled") {
       params.delete("billing"); setParams(params, { replace: true });
     }
-  }, [params, setParams, load]);
+  }, [params, setParams, load, refreshUser]);
 
   const plan = (billing?.plan ?? user?.plan ?? "free") as PlanTier;
   const rank = PLAN_RANK[plan];

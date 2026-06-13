@@ -31,6 +31,7 @@ interface AuthCtx {
   serverReady: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -114,6 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return u as AuthUser;
   }, []);
 
+  // Re-fetch the current user (e.g. after a plan upgrade) so entitlements update
+  // in-session without a full page reload.
+  const refreshUser = useCallback(async () => {
+    let token = localStorage.getItem("hr_access");
+    if (!token) return;
+    let u = await fetchMe(token);
+    if (!u) { token = await tryRefresh(); if (token) u = await fetchMe(token); }
+    if (u) setUser(u);
+  }, [fetchMe, tryRefresh]);
+
   const logout = useCallback(async () => {
     const rt = localStorage.getItem("hr_refresh");
     if (rt) {
@@ -128,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  return <Ctx.Provider value={{ user, loading, serverReady, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, serverReady, login, logout, refreshUser }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {
