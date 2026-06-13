@@ -60,7 +60,8 @@ router.post("/checkout-session", authenticate, requireOwnerOrAdmin, async (req, 
     });
     res.json({ url: session.url, id: session.id });
   } catch (e) {
-    console.error("[billing] checkout-session", e.type, e.message);
+    // Log the underlying socket error (ENETUNREACH/ETIMEDOUT/EAI_AGAIN…) to confirm root cause.
+    console.error("[billing] checkout-session", e.type, e.message, e.detail?.code || e.detail?.message || e.cause?.code || "");
     if (e.type === "StripeConnectionError") {
       // Transient network blip between our server and Stripe (e.g. cold start).
       return res.status(503).json({ error: "Couldn't reach Stripe just now — please tap Upgrade again in a few seconds." });

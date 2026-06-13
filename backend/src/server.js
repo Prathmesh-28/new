@@ -1,4 +1,8 @@
 require("dotenv").config();
+// Prefer IPv4 for all outbound DNS. Node 18+ defaults to IPv6-first ("verbatim"),
+// and many container hosts (Render free tier) lack working IPv6 egress — which
+// surfaces as persistent "connection error" to api.stripe.com et al. Force IPv4.
+try { require("dns").setDefaultResultOrder("ipv4first"); } catch { /* older Node */ }
 const express   = require("express");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");

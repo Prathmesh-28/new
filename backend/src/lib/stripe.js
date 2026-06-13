@@ -28,13 +28,18 @@ function getClient() {
   try {
     // Lazy require so a missing dependency never crashes the server at boot.
     const Stripe = require("stripe");
+    // Force IPv4 at the socket level — belt-and-suspenders with the global
+    // ipv4first DNS order (server.js). On hosts without working IPv6 egress,
+    // an IPv6 address for api.stripe.com makes every request fail to connect.
+    const https = require("https");
+    const httpAgent = new https.Agent({ keepAlive: true, family: 4 });
     _stripe = new Stripe(key, {
       apiVersion: "2024-06-20",
-      // Render free-tier cold starts can drop the first outbound connection to
-      // Stripe. Retry with backoff and allow a generous per-request timeout so a
-      // transient network blip doesn't surface as a checkout failure.
+      // Render free-tier cold starts can also drop the first outbound connection.
+      // Retry with backoff + a generous timeout so a transient blip recovers.
       maxNetworkRetries: 3,
       timeout: 30000,
+      httpAgent,
     });
   } catch (e) {
     console.error("[stripe] failed to init:", e.message);
