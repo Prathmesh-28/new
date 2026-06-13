@@ -8,6 +8,7 @@ import {
   Line, ComposedChart, ReferenceLine,
 } from "recharts";
 import { format } from "date-fns";
+import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Scenario, CashObligation } from "@/data/types";
@@ -32,6 +33,7 @@ export default function ForecastPage() {
 
   const navigate = useNavigate();
   const activeScenario = scenarios.find(s => s.active);
+  const { hidden, toggle } = useSeriesToggle();
 
   const pressureDay = forecast.slice(0, 45).findIndex(f => f.p10 < 0);
   const slowFactor  = slowPct / 100;
@@ -245,26 +247,38 @@ export default function ForecastPage() {
 
           {/* Chart */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
-            <h2 className="text-sm font-semibold mb-4">90-Day Projection (₹L) · P10 / P50 / P90</h2>
+            <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+              <h2 className="text-sm font-semibold">90-Day Projection (₹L)</h2>
+              <SeriesLegend
+                series={[
+                  { key: "p90", label: "Best (P90)",  color: "#1A6B55" },
+                  { key: "p50", label: "Expected (P50)", color: "#1A6B55" },
+                  { key: "p10", label: "Worst (P10)", color: "#d97706" },
+                  ...(activeScenario ? [{ key: "scenario", label: "Scenario", color: "#2EA882" }] : []),
+                ]}
+                hidden={hidden}
+                onToggle={toggle}
+              />
+            </div>
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={chartData}>
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={14} />
                 <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 8, fontSize: 11 }}
-                  formatter={(v: number) => [`₹${v}L`, ""]} />
-                <Area type="monotone" dataKey="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="#1A6B5510" />
-                <Area type="monotone" dataKey="p50" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5508" />
-                <Area type="monotone" dataKey="p10" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="transparent" />
-                {activeScenario && <Line type="monotone" dataKey="scenario" stroke="#2EA882" strokeWidth={2} strokeDasharray="6 3" dot={false} />}
+                  formatter={(v: number, name: string) => [`₹${v}L`, name.toUpperCase()]} />
+                {!hidden.has("p90") && <Area type="monotone" dataKey="p90" name="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="#1A6B5510" animationDuration={400} />}
+                {!hidden.has("p50") && <Area type="monotone" dataKey="p50" name="p50" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5508" animationDuration={400} />}
+                {!hidden.has("p10") && <Area type="monotone" dataKey="p10" name="p10" stroke="#d97706" strokeWidth={1} strokeDasharray="4 2" fill="transparent" animationDuration={400} />}
+                {activeScenario && !hidden.has("scenario") && <Line type="monotone" dataKey="scenario" name="scenario" stroke="#2EA882" strokeWidth={2} strokeDasharray="6 3" dot={false} animationDuration={400} />}
                 {oblMarkers.map(o => (
                   <ReferenceLine key={o.id} x={o.chartDate} stroke="#ef4444" strokeDasharray="3 2" strokeWidth={1.5}
                     label={{ value: o.name, position: "insideTopRight", fontSize: 8, fill: "#ef4444" }} />
                 ))}
               </ComposedChart>
             </ResponsiveContainer>
-            {oblMarkers.length > 0 && (
-              <p className="text-[10px] text-red-400 mt-2">Red lines = cash obligations due</p>
-            )}
+            <p className="text-[10px] text-[var(--color-muted)] mt-2">
+              Tap a band in the legend to toggle it.{oblMarkers.length > 0 && <span className="text-red-400"> Red lines = cash obligations due.</span>}
+            </p>
           </div>
 
           {/* Slow month slider */}

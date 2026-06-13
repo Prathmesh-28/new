@@ -5,6 +5,7 @@ import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils
 import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { format, addMonths, setDate, isBefore, addDays } from "date-fns";
+import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -458,6 +459,65 @@ function AddTransactionModal({ accountId, onClose, onAdd }: { accountId: string;
   );
 }
 
+function CashForecastChart({ forecast }: { forecast: { date: string; p10: number; p50: number; p90: number }[] }) {
+  const [days, setDays] = useState<"30" | "60" | "90">("60");
+  const { hidden, toggle } = useSeriesToggle();
+  const n = Number(days);
+  const data = forecast.slice(0, n).map(f => ({
+    date: format(new Date(f.date), "MMM d"),
+    p50:  Math.round(f.p50 / 100000),
+    p90:  Math.round(f.p90 / 100000),
+    p10:  Math.round(f.p10 / 100000),
+  }));
+  const interval = n <= 30 ? 4 : n <= 60 ? 9 : 14;
+  const lastP50 = data[data.length - 1]?.p50 ?? 0;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold">{n}-Day Cash Forecast</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Projected balance · ₹ Lakhs · ends ≈ ₹{lastP50}L (expected)</p>
+        </div>
+        <SegmentedToggle
+          ariaLabel="Forecast horizon"
+          value={days}
+          onChange={setDays}
+          options={[{ value: "30", label: "30D" }, { value: "60", label: "60D" }, { value: "90", label: "90D" }]}
+        />
+      </div>
+      <div className="mb-3">
+        <SeriesLegend
+          series={[
+            { key: "p90", label: "Best case (P90)",  color: "#1A6B55" },
+            { key: "p50", label: "Expected (P50)",   color: "#2EA882" },
+            { key: "p10", label: "Worst case (P10)", color: "#d97706" },
+          ]}
+          hidden={hidden}
+          onToggle={toggle}
+        />
+      </div>
+      <ResponsiveContainer width="100%" height={210}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="grad50" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#2EA882" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#2EA882" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} interval={interval} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
+          <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number, name: string) => [`₹${v}L`, name.toUpperCase()]} />
+          {!hidden.has("p90") && <Area type="monotone" dataKey="p90" name="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="3 3" fill="#1A6B5510" animationDuration={400} />}
+          {!hidden.has("p50") && <Area type="monotone" dataKey="p50" name="p50" stroke="#2EA882" strokeWidth={2} fill="url(#grad50)" animationDuration={400} />}
+          {!hidden.has("p10") && <Area type="monotone" dataKey="p10" name="p10" stroke="#d97706" strokeWidth={1} strokeDasharray="3 3" fill="transparent" animationDuration={400} />}
+        </AreaChart>
+      </ResponsiveContainer>
+      <p className="text-[10px] text-[var(--color-muted)] mt-2">Tap a band to toggle it · change the horizon above. P10–P90 is the likely range; P50 is most probable.</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
@@ -473,13 +533,6 @@ export default function DashboardPage() {
   const burn         = monthlyBurn(transactions);
   const runway       = runwayDays(bankAccounts.map(b => b.balance), burn);
   const unread       = alerts.filter(a => !a.isRead).length;
-
-  const chartData = forecast.slice(0, 60).map(f => ({
-    date: format(new Date(f.date), "MMM d"),
-    p50:  Math.round(f.p50 / 100000),
-    p90:  Math.round(f.p90 / 100000),
-    p10:  Math.round(f.p10 / 100000),
-  }));
 
   const isEmpty = bankAccounts.length === 0 && transactions.length === 0;
 
@@ -697,30 +750,7 @@ export default function DashboardPage() {
 
           {/* Chart */}
           {forecast.length > 0 ? (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4 md:mb-6">
-                <div>
-                  <h2 className="text-sm font-semibold">60-Day Cash Forecast</h2>
-                  <p className="text-xs text-[var(--color-muted)] mt-0.5">P10 / P50 / P90 bands · ₹ Lakhs</p>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="grad50" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#1A6B55" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#1A6B55" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} interval={9} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
-                  <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}L`, ""]} />
-                  <Area type="monotone" dataKey="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="3 3" fill="#1A6B5510" />
-                  <Area type="monotone" dataKey="p50" stroke="#1A6B55" strokeWidth={2} fill="url(#grad50)" />
-                  <Area type="monotone" dataKey="p10" stroke="#1A6B55" strokeWidth={1} strokeDasharray="3 3" fill="transparent" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <CashForecastChart forecast={forecast} />
           ) : (
             <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center text-sm text-[var(--color-muted)]">
               Go to <strong className="text-[var(--color-text)]">Forecast</strong> to generate your 90-day cash projection.

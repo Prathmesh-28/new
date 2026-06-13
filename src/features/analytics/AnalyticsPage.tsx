@@ -5,8 +5,10 @@ import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minu
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+  AreaChart, Area,
 } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 
 const CATEGORY_COLORS: Record<string, string> = {
   expense:  "#ef4444",
@@ -64,18 +66,22 @@ export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
   const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl">("overview");
+  const [range, setRange] = useState<"3" | "6" | "12">("6");
+  const [chartType, setChartType] = useState<"bar" | "area">("bar");
+  const { hidden, toggle } = useSeriesToggle();
 
   const now = new Date();
+  const rangeN = Number(range);
 
-  const months = useMemo(() => Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(now, 5 - i);
+  const months = useMemo(() => Array.from({ length: rangeN }, (_, i) => {
+    const d = subMonths(now, rangeN - 1 - i);
     return {
       label:  format(d, "MMM"),
       full:   format(d, "MMM yyyy"),
       start:  startOfMonth(d).toISOString().split("T")[0],
       end:    endOfMonth(d).toISOString().split("T")[0],
     };
-  }), []);
+  }), [rangeN]);
 
   const monthlyData = useMemo(() => months.map(m => {
     const mTxns   = transactions.filter(t => t.date >= m.start && t.date <= m.end);
@@ -86,8 +92,8 @@ export default function AnalyticsPage() {
     return { month: m.label, revenue, expense, net, margin };
   }), [transactions, months]);
 
-  const currMonth = monthlyData[5];
-  const prevMonth = monthlyData[4];
+  const currMonth = monthlyData[monthlyData.length - 1] ?? { month: "", revenue: 0, expense: 0, net: 0, margin: 0 };
+  const prevMonth = monthlyData[monthlyData.length - 2] ?? { month: "", revenue: 0, expense: 0, net: 0, margin: 0 };
 
   const totalRevenue = monthlyData.reduce((s, m) => s + m.revenue, 0);
   const totalExpense = monthlyData.reduce((s, m) => s + m.expense, 0);
@@ -135,7 +141,7 @@ export default function AnalyticsPage() {
   const netPlIncome = ebit - interestEst;
   const revTxnCount = transactions.filter(t => t.amount > 0 && t.category !== "transfer").length;
   const avgTicket   = revTxnCount > 0 ? totalRevenue / revTxnCount : 0;
-  const annualRunRate = (totalRevenue / 6) * 12;
+  const annualRunRate = (totalRevenue / rangeN) * 12;
   const ebitdaMgnPct  = totalRevenue > 0 ? Math.round((ebitda / totalRevenue) * 100) : 0;
   const grossMgnPct   = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
   const recRevenue    = transactions.filter(t => t.amount > 0 && t.isRecurring).reduce((s, t) => s + t.amount, 0);
@@ -176,14 +182,14 @@ export default function AnalyticsPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold">Analytics</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">{firm.name} · Last 6 months · {transactions.length} transactions analysed</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{firm.name} · Last {rangeN} months · {transactions.length} transactions analysed</p>
       </div>
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "6-Month Revenue",  value: totalRevenue,  color: "text-green-400",                delta: delta(currMonth.revenue, prevMonth.revenue) },
-          { label: "6-Month Expenses", value: totalExpense,  color: "text-red-400",                  delta: delta(currMonth.expense, prevMonth.expense), inverse: true },
+          { label: `${rangeN}-Month Revenue`,  value: totalRevenue,  color: "text-green-400",                delta: delta(currMonth.revenue, prevMonth.revenue) },
+          { label: `${rangeN}-Month Expenses`, value: totalExpense,  color: "text-red-400",                  delta: delta(currMonth.expense, prevMonth.expense), inverse: true },
           { label: "Net P&L",          value: totalNet,      color: totalNet >= 0 ? "text-green-400" : "text-red-400", delta: null },
           { label: "Avg Net Margin",   value: null,          color: avgMargin >= 10 ? "text-green-400" : avgMargin >= 0 ? "text-yellow-400" : "text-red-400", delta: null, pct: avgMargin },
         ].map(({ label, value, color, delta: d, inverse, pct }) => (
@@ -212,25 +218,65 @@ export default function AnalyticsPage() {
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (
         <div className="space-y-5">
-          {/* Revenue vs Expense Bar Chart */}
+          {/* Revenue vs Expense — interactive */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
               <p className="text-sm font-semibold">Revenue vs Expenses · Monthly</p>
-              <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--color-primary)] inline-block" />Revenue</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Expenses</span>
+              <div className="flex items-center gap-2">
+                <SegmentedToggle
+                  ariaLabel="Time range"
+                  value={range}
+                  onChange={setRange}
+                  options={[{ value: "3", label: "3M" }, { value: "6", label: "6M" }, { value: "12", label: "12M" }]}
+                />
+                <SegmentedToggle
+                  ariaLabel="Chart type"
+                  value={chartType}
+                  onChange={setChartType}
+                  options={[{ value: "bar", label: "Bars" }, { value: "area", label: "Trend" }]}
+                />
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={monthlyData} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="revenue" name="Revenue" fill="var(--color-primary)" radius={[3,3,0,0]} />
-                <Bar dataKey="expense" name="Expenses" fill="#ef4444" radius={[3,3,0,0]} />
-              </BarChart>
+            <div className="mb-3">
+              <SeriesLegend
+                series={[
+                  { key: "revenue", label: "Revenue",  color: "var(--color-primary)" },
+                  { key: "expense", label: "Expenses", color: "#ef4444" },
+                  { key: "net",     label: "Net P&L",  color: "#3b82f6" },
+                ]}
+                hidden={hidden}
+                onToggle={toggle}
+              />
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              {chartType === "bar" ? (
+                <BarChart data={monthlyData} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--color-accent)", opacity: 0.4 }} />
+                  {!hidden.has("revenue") && <Bar dataKey="revenue" name="Revenue"  fill="var(--color-primary)" radius={[3,3,0,0]} animationDuration={400} />}
+                  {!hidden.has("expense") && <Bar dataKey="expense" name="Expenses" fill="#ef4444"             radius={[3,3,0,0]} animationDuration={400} />}
+                  {!hidden.has("net")     && <Bar dataKey="net"     name="Net P&L"  fill="#3b82f6"             radius={[3,3,0,0]} animationDuration={400} />}
+                </BarChart>
+              ) : (
+                <AreaChart data={monthlyData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="aRev" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.02} /></linearGradient>
+                    <linearGradient id="aExp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} /><stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} /></linearGradient>
+                    <linearGradient id="aNet" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} /><stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                  <Tooltip content={<CustomTooltip />} />
+                  {!hidden.has("revenue") && <Area type="monotone" dataKey="revenue" name="Revenue"  stroke="var(--color-primary)" strokeWidth={2} fill="url(#aRev)" animationDuration={400} />}
+                  {!hidden.has("expense") && <Area type="monotone" dataKey="expense" name="Expenses" stroke="#ef4444"             strokeWidth={2} fill="url(#aExp)" animationDuration={400} />}
+                  {!hidden.has("net")     && <Area type="monotone" dataKey="net"     name="Net P&L"  stroke="#3b82f6"             strokeWidth={2} fill="url(#aNet)" animationDuration={400} />}
+                </AreaChart>
+              )}
             </ResponsiveContainer>
+            <p className="text-[10px] text-[var(--color-muted)] mt-2">Tap a series in the legend to show or hide it · switch range and chart type above.</p>
           </div>
 
           {/* Net Profit Margin Trend + Category Split */}
