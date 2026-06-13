@@ -6,7 +6,7 @@ import {
   Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
   Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
   Landmark, FilePlus, Calculator, Wallet, Receipt, Rocket, PlugZap, PiggyBank, ShieldCheck,
-  HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
+  HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch, FileSpreadsheet, ScrollText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -19,6 +19,8 @@ const NAV_ITEMS = [
   { label: "Working Capital", path: "/working-capital", icon: RefreshCcw, desc: "DSO, DPO, DIO & cash conversion cycle" },
   { label: "Debt Manager", path: "/debt",         icon: Scale,           desc: "Amortisation, prepayment & refinance maths" },
   { label: "Valuation",    path: "/valuation",    icon: Gem,             desc: "DCF, multiples & dilution simulator" },
+  { label: "Financial Statements", path: "/statements", icon: FileSpreadsheet, desc: "Income statement, balance sheet & cash flow" },
+  { label: "Term Sheet",   path: "/term-sheet",   icon: ScrollText,      desc: "Generate a fundraise term sheet" },
   { label: "Compliance",   path: "/compliance",   icon: CalendarCheck,   desc: "GST, TDS & advance-tax calendar" },
   { label: "Invoices",     path: "/invoices",     icon: FilePlus,        desc: "Invoices & auto-collect" },
   { label: "Receivables",  path: "/receivables",  icon: Receipt,         desc: "Aging pipeline & kanban" },

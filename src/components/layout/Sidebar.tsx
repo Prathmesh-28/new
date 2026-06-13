@@ -9,7 +9,7 @@ import {
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
-  MessageCircle, Sliders, PhoneCall, Award, FolderOpen,
+  MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -29,6 +29,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
       { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
       { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
+      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
+      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
@@ -71,6 +73,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
       { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
       { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
+      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
+      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
@@ -111,6 +115,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
       { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
       { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
+      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
@@ -181,6 +186,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/investor",     label: "Portfolio",    icon: Briefcase,       tab: "investor"     },
       { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
       { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
+      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
       { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
     ]},
   ],

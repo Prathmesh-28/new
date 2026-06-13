@@ -49,6 +49,8 @@ const ScenariosPage      = lazy(() => import("@/features/scenarios/ScenariosPage
 const CollectionsPage    = lazy(() => import("@/features/collections/CollectionsPage"));
 const BenchmarksPage     = lazy(() => import("@/features/benchmarks/BenchmarksPage"));
 const DocumentsPage      = lazy(() => import("@/features/documents/DocumentsPage"));
+const StatementsPage     = lazy(() => import("@/features/statements/StatementsPage"));
+const TermSheetPage      = lazy(() => import("@/features/termsheet/TermSheetPage"));
 
 function PageLoader() {
   return (
@@ -76,7 +78,7 @@ const GUARDED_TABS = new Set([
   "operations", "advisor", "investor", "connectors", "settings", "admin", "invoices",
   "gst", "payroll", "suppliers", "lenders", "analytics", "cfo-brief", "vendors", "budgets",
   "tax", "health", "working-capital", "debt", "valuation", "compliance", "spend", "whatsapp",
-  "scenarios", "collections", "benchmarks", "documents",
+  "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet",
 ]);
 
 function landingFor(role: string): string {
@@ -153,6 +155,8 @@ function AppShell() {
                 <Route path="/collections"   element={<CollectionsPage />} />
                 <Route path="/benchmarks"    element={<BenchmarksPage />} />
                 <Route path="/documents"     element={<DocumentsPage />} />
+                <Route path="/statements"    element={<StatementsPage />} />
+                <Route path="/term-sheet"    element={<TermSheetPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>

@@ -547,3 +547,307 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
 
   return opts.sort((a, b) => a.effectiveAnnualCostPct - b.effectiveAnnualCostPct);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Derived financial statements
+// Headroom is bank/cash-centric (no general ledger), so we derive the three
+// core statements from transaction data. The Cash Flow Statement uses the
+// DIRECT method — transactions ARE cash movements, so it reconciles exactly.
+// The Income Statement and Balance Sheet carry a few clearly-labelled estimates
+// (depreciation, income tax, fixed assets) since those aren't captured as data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const INCOME_TAX_RATE = 0.25;   // India corporate rate proxy for small companies
+const DEP_RATE_OF_REV = 0.015;  // depreciation ≈ 1.5% of revenue (estimate)
+
+function inWindow(date: string, start: string, end: string): boolean {
+  return date >= start && date <= end;
+}
+
+export interface IncomeStatement {
+  start: string; end: string; monthsInWindow: number;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  payroll: number;
+  otherOpex: number;
+  ebitda: number;
+  depreciation: number;
+  ebit: number;
+  interest: number;
+  pbt: number;
+  tax: number;
+  netProfit: number;
+  grossMarginPct: number;
+  ebitdaMarginPct: number;
+  netMarginPct: number;
+}
+
+/** Derived P&L for a [start,end] window. Depreciation & income tax are estimates. */
+export function incomeStatement(store: AppStore, start: string, end: string): IncomeStatement {
+  const { transactions, procurement, activeLoans } = store;
+  const win = transactions.filter(t => inWindow(t.date, start, end));
+
+  const revenue   = win.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+  const payroll   = Math.abs(win.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+  const otherOpex = Math.abs(win.filter(t => t.amount < 0 && t.category === "expense").reduce((s, t) => s + t.amount, 0));
+
+  // COGS proxy: goods received from suppliers in the window (real data when present)
+  const cogs = procurement
+    .filter(p => p.status === "received" && p.createdAt.slice(0, 10) >= start && p.createdAt.slice(0, 10) <= end)
+    .reduce((s, p) => s + p.totalValue, 0);
+
+  const grossProfit = revenue - cogs;
+  const ebitda = grossProfit - payroll - otherOpex;
+
+  // Window length in months (≥1) to scale annualised interest estimate
+  const months = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / DAY_MS / 30));
+  const monthlyInterest = activeLoans.reduce((s, l) => s + (l.outstanding * (l.rate / 100)) / 12, 0);
+  const interest = Math.round(monthlyInterest * months);
+
+  const depreciation = Math.round(revenue * DEP_RATE_OF_REV);
+  const ebit = ebitda - depreciation;
+  const pbt  = ebit - interest;
+  const tax  = pbt > 0 ? Math.round(pbt * INCOME_TAX_RATE) : 0;
+  const netProfit = pbt - tax;
+
+  const pct = (n: number) => revenue > 0 ? Math.round((n / revenue) * 100) : 0;
+  return {
+    start, end, monthsInWindow: months,
+    revenue, cogs, grossProfit, payroll, otherOpex, ebitda,
+    depreciation, ebit, interest, pbt, tax, netProfit,
+    grossMarginPct: pct(grossProfit), ebitdaMarginPct: pct(ebitda), netMarginPct: pct(netProfit),
+  };
+}
+
+export interface BalanceSheet {
+  asOf: string;
+  // Assets
+  cash: number; accountsReceivable: number; inventory: number; currentAssets: number;
+  fixedAssetsNet: number; nonCurrentAssets: number; totalAssets: number;
+  // Liabilities
+  accountsPayable: number; gstPayable: number; shortTermDebt: number; otherCurrentLiabilities: number; currentLiabilities: number;
+  longTermDebt: number; nonCurrentLiabilities: number; totalLiabilities: number;
+  // Equity
+  paidInCapital: number; retainedEarnings: number; totalEquity: number;
+  balances: boolean;
+}
+
+/** Derived balance sheet as of `today`. Equity (retained earnings) is the
+ *  balancing figure, so Assets = Liabilities + Equity by construction.
+ *  Fixed assets are estimated (no asset register yet). */
+export function balanceSheet(store: AppStore, today = new Date()): BalanceSheet {
+  const snap = computeFinancialSnapshot(store, today);
+
+  const cash = snap.cash;
+  const accountsReceivable = snap.accountsReceivable;
+  const inventory = snap.inventoryValue;
+  const currentAssets = cash + accountsReceivable + inventory;
+
+  // Fixed assets estimate: ~3 months of operating spend tied up in equipment/premises
+  const fixedAssetsNet = Math.round(snap.monthlyExpense * 3);
+  const nonCurrentAssets = fixedAssetsNet;
+  const totalAssets = currentAssets + nonCurrentAssets;
+
+  const accountsPayable = snap.accountsPayable;
+  const gstPayable = snap.gstThisMonth.netPayable;
+  const shortTermDebt = Math.min(snap.debtOutstanding, snap.monthlyDebtService * 12);
+  const otherCurrentLiabilities = snap.obligationsDue90;
+  const currentLiabilities = accountsPayable + gstPayable + shortTermDebt + otherCurrentLiabilities;
+
+  const longTermDebt = Math.max(0, snap.debtOutstanding - shortTermDebt);
+  const nonCurrentLiabilities = longTermDebt;
+  const totalLiabilities = currentLiabilities + nonCurrentLiabilities;
+
+  const paidInCapital = store.capitalInvestments
+    .filter(i => i.status === "confirmed")
+    .reduce((s, i) => s + i.amount, 0);
+  const retainedEarnings = totalAssets - totalLiabilities - paidInCapital; // balancing figure
+  const totalEquity = paidInCapital + retainedEarnings;
+
+  return {
+    asOf: iso(today),
+    cash, accountsReceivable, inventory, currentAssets,
+    fixedAssetsNet, nonCurrentAssets, totalAssets,
+    accountsPayable, gstPayable, shortTermDebt, otherCurrentLiabilities, currentLiabilities,
+    longTermDebt, nonCurrentLiabilities, totalLiabilities,
+    paidInCapital, retainedEarnings, totalEquity,
+    balances: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 1,
+  };
+}
+
+export interface CashFlowStatement {
+  start: string; end: string;
+  receiptsFromCustomers: number;
+  paymentsToSuppliers: number;   // positive number = outflow
+  paymentsToEmployees: number;
+  taxesPaid: number;
+  operating: number;
+  capex: number;
+  investing: number;
+  loanProceeds: number;
+  loanRepayments: number;        // positive number = outflow
+  equityRaised: number;
+  financing: number;
+  netChange: number;
+  openingCash: number;
+  closingCash: number;
+}
+
+/** Direct-method cash flow for a [start,end] window. Transactions are real cash
+ *  movements so operating+investing+financing reconciles to the change in cash. */
+export function cashFlowStatement(store: AppStore, start: string, end: string, today = new Date()): CashFlowStatement {
+  const { transactions, capitalInvestments } = store;
+  const win = transactions.filter(t => inWindow(t.date, start, end) && t.category !== "transfer");
+
+  const receiptsFromCustomers = win.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+  const paymentsToSuppliers   = Math.abs(win.filter(t => t.amount < 0 && t.category === "expense").reduce((s, t) => s + t.amount, 0));
+  const paymentsToEmployees   = Math.abs(win.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+  const taxesPaid             = Math.abs(win.filter(t => t.category === "tax").reduce((s, t) => s + t.amount, 0));
+  const operating = receiptsFromCustomers - paymentsToSuppliers - paymentsToEmployees - taxesPaid;
+
+  const capex = 0; // capex isn't tracked yet → assume nil
+  const investing = -capex;
+
+  const loanTxns = win.filter(t => t.category === "loan");
+  const loanProceeds   = loanTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const loanRepayments = Math.abs(loanTxns.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+  const equityRaised   = capitalInvestments
+    .filter(i => i.createdAt.slice(0, 10) >= start && i.createdAt.slice(0, 10) <= end && i.status === "confirmed")
+    .reduce((s, i) => s + i.amount, 0);
+  const financing = loanProceeds - loanRepayments + equityRaised;
+
+  const netChange = operating + investing + financing;
+  const closingCash = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const openingCash = closingCash - netChange;
+
+  return {
+    start, end,
+    receiptsFromCustomers, paymentsToSuppliers, paymentsToEmployees, taxesPaid, operating,
+    capex, investing,
+    loanProceeds, loanRepayments, equityRaised, financing,
+    netChange, openingCash, closingCash,
+  };
+}
+
+// ── GST ledger (running balance across months) ────────────────────────────────
+
+export interface GstLedgerRow {
+  monthKey: string;        // "YYYY-MM"
+  label: string;           // "Apr 2026"
+  outputTax: number;       // GST collected on sales
+  inputCredit: number;     // ITC on purchases
+  netThisMonth: number;    // output − input (can be negative → adds to credit)
+  itcCarryForward: number; // running unused input credit
+  cashPayable: number;     // actually payable in cash after using carry-forward
+  taxableSales: number;
+  taxablePurchases: number;
+}
+
+/** Month-by-month GST position with input-credit carry-forward — a real ledger,
+ *  not a single-month snapshot. Returns the most recent `months` entries. */
+export function gstLedger(store: AppStore, ratePct: number, months = 12, today = new Date()): GstLedgerRow[] {
+  const rows: GstLedgerRow[] = [];
+  let carry = 0;
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const g = gstSummary(store.transactions, ratePct, monthKey);
+    const net = g.outputTax - g.inputCredit;            // +ve owed, -ve surplus credit
+    let cashPayable = 0;
+    if (net >= 0) {
+      const used = Math.min(carry, net);
+      cashPayable = net - used;
+      carry -= used;
+    } else {
+      carry += -net;                                    // surplus adds to carry-forward
+    }
+    rows.push({
+      monthKey,
+      label: `${MONTH_LABEL[d.getMonth()]} ${d.getFullYear()}`,
+      outputTax: g.outputTax,
+      inputCredit: g.inputCredit,
+      netThisMonth: net,
+      itcCarryForward: Math.round(carry),
+      cashPayable: Math.round(cashPayable),
+      taxableSales: g.taxableSales,
+      taxablePurchases: g.taxablePurchases,
+    });
+  }
+  return rows;
+}
+
+// ── Term sheet maths ───────────────────────────────────────────────────────────
+
+export type RoundType = "priced" | "safe" | "convertible" | "rev_share";
+
+export interface TermSheetInput {
+  roundType: RoundType;
+  investment: number;
+  preMoney: number;        // priced round
+  valuationCap: number;    // SAFE / convertible
+  discountPct: number;     // SAFE / convertible
+  interestPct: number;     // convertible note (annual)
+  termMonths: number;      // convertible note maturity / rev-share term
+  optionPoolPct: number;   // new option pool created pre-money (priced)
+  revShareMultiple: number;// rev-share cap (e.g. 1.5x)
+}
+
+export interface TermSheetResult {
+  postMoney: number;
+  investorPct: number;
+  founderPctAfter: number;
+  optionPoolPct: number;
+  effectivePreMoney: number;   // for SAFE/convertible, the cap-implied pre-money
+  pricePerShareNote: string;
+  conversionNote: string;
+  repaymentTotal: number;      // rev-share / convertible payout
+}
+
+/** Compute ownership + conversion economics for a term sheet. */
+export function termSheetMath(input: TermSheetInput): TermSheetResult {
+  const { roundType, investment, preMoney, valuationCap, discountPct, interestPct, termMonths, optionPoolPct, revShareMultiple } = input;
+
+  if (roundType === "rev_share") {
+    return {
+      postMoney: 0, investorPct: 0, founderPctAfter: 100, optionPoolPct: 0,
+      effectivePreMoney: 0, pricePerShareNote: "No equity issued — revenue-share instrument.",
+      conversionNote: `Repaid as a fixed share of monthly revenue until ${revShareMultiple}× cap is met.`,
+      repaymentTotal: Math.round(investment * revShareMultiple),
+    };
+  }
+
+  // Equity-style: priced uses preMoney; SAFE/convertible use the valuation cap as the
+  // effective pre-money for ownership-at-conversion modelling.
+  const effPre = roundType === "priced" ? preMoney : valuationCap;
+  const post = effPre + investment;
+  const rawInvestorPct = post > 0 ? (investment / post) * 100 : 0;
+  // Discount only matters for SAFE/convertible — it raises the investor's effective %.
+  const discAdj = (roundType === "safe" || roundType === "convertible") && discountPct > 0
+    ? rawInvestorPct / (1 - discountPct / 100)
+    : rawInvestorPct;
+  const investorPct = Math.min(100, discAdj);
+  const pool = roundType === "priced" ? optionPoolPct : 0;
+  const founderPctAfter = Math.max(0, 100 - investorPct - pool);
+
+  const noteInterest = roundType === "convertible"
+    ? investment * (interestPct / 100) * (termMonths / 12)
+    : 0;
+
+  return {
+    postMoney: Math.round(post),
+    investorPct: Math.round(investorPct * 100) / 100,
+    founderPctAfter: Math.round(founderPctAfter * 100) / 100,
+    optionPoolPct: pool,
+    effectivePreMoney: Math.round(effPre),
+    pricePerShareNote: roundType === "priced"
+      ? `Priced round at ₹${Math.round(preMoney).toLocaleString("en-IN")} pre-money.`
+      : `Converts at the lower of ₹${Math.round(valuationCap).toLocaleString("en-IN")} cap or ${discountPct}% discount to the next round.`,
+    conversionNote: roundType === "convertible"
+      ? `Accrues ${interestPct}% p.a.; converts to equity at the next priced round or ${termMonths}-month maturity.`
+      : roundType === "safe"
+      ? "Converts to equity automatically at the next priced round. No interest, no maturity."
+      : "Equity issued at close.",
+    repaymentTotal: Math.round(investment + noteInterest),
+  };
+}
