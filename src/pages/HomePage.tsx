@@ -14,17 +14,20 @@ const C = {
 const serif = "Georgia,'Times New Roman',serif";
 const sans  = "system-ui,-apple-system,'Segoe UI',sans-serif";
 
-/* Detect India (→ ₹) vs everywhere else (→ $) from the visitor's timezone/locale.
-   Instant + free + no API key, so there's no network flash or geo-IP dependency. */
-function detectIndia(): boolean {
-  if (typeof window === "undefined") return false;
+/* India-first by default (→ ₹). We only switch to USD (→ $) when the visitor is
+   clearly in the US, detected from their timezone/locale. Instant + free + no API
+   key, so there's no network flash or geo-IP dependency. India + rest-of-world → ₹. */
+function detectUS(): boolean {
+  if (typeof window === "undefined") return false; // SSR / unknown → India default
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    if (/Kolkata|Calcutta/i.test(tz)) return true;
+    // US timezones: America/* (excl. non-US like America/Sao_Paulo) + Pacific/Honolulu
+    if (/^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Indiana|Kentucky|Boise|Juneau|Sitka|Nome|Adak|Menominee|North_Dakota)/.test(tz)) return true;
+    if (/Pacific\/(Honolulu|Pago_Pago)/.test(tz)) return true;
     const lang = (navigator.language || (navigator.languages && navigator.languages[0]) || "").toLowerCase();
-    if (/-in\b/.test(lang) || lang === "hi" || lang.startsWith("hi-")) return true;
+    if (lang === "en-us" || lang === "es-us") return true;
   } catch { /* ignore */ }
-  return false; // default → USD (US + rest of world)
+  return false; // default → India (₹) for India + everywhere else
 }
 
 /* ─── Scroll reveal ─── */
@@ -51,7 +54,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
 /* ─── Bar chart hero mockup ─── */
 const BARS = [82,78,85,75,70,62,55,48,40,35,42,50,58,65,70,68,72,78,80,76];
 
-function DashMockup() {
+function DashMockup({ inr }: { inr: boolean }) {
   return (
     <div style={{ background: C.deep, border: `1px solid rgba(196,217,122,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
       <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -61,9 +64,9 @@ function DashMockup() {
       <div style={{ padding: 18 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
           {[
-            { label: "Current Balance", val: "₹4.2L",  sub: "+8% vs last month", subC: C.light },
+            { label: "Current Balance", val: inr ? "₹4.2L"  : "$52K", sub: "+8% vs last month", subC: C.light },
             { label: "Runway",          val: "68 days", sub: "at current burn",   subC: C.light },
-            { label: "Low Point",       val: "Day 41",  sub: "₹80K warning",      subC: C.gold  },
+            { label: "Low Point",       val: "Day 41",  sub: inr ? "₹80K warning" : "$10K warning", subC: C.gold  },
           ].map(s => (
             <div key={s.label} style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "11px 12px" }}>
               <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(196,217,122,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>{s.label}</div>
@@ -83,7 +86,7 @@ function DashMockup() {
         <div style={{ background: "rgba(201,162,39,0.1)", border: "1px solid rgba(201,162,39,0.22)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
           <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(201,162,39,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.gold, flexShrink: 0, marginTop: 1 }}>!</div>
           <div style={{ fontFamily: sans, fontSize: 11, color: C.goldL, lineHeight: 1.45 }}>
-            You go below your safety threshold in <strong>41 days</strong>. A ₹1.5L revenue advance would keep you positive through October. <span style={{ textDecoration: "underline" }}>See options →</span>
+            You go below your safety threshold in <strong>41 days</strong>. A {inr ? "₹1.5L" : "$18K"} revenue advance would keep you positive through October. <span style={{ textDecoration: "underline" }}>See options →</span>
           </div>
         </div>
       </div>
@@ -116,7 +119,7 @@ function Label({ text, dark = false }: { text: string; dark?: boolean }) {
 export default function HomePage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
-  const [inr] = useState(detectIndia); // ₹ for India, $ everywhere else — by geolocation
+  const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20);
@@ -177,14 +180,14 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}><DashMockup /></div>
+          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}><DashMockup inr={inr} /></div>
         </div>
       </section>
 
       {/* ═══ STATS STRIP ══════════════════════════════════════════════════════ */}
       <div data-h3d="stats" style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
         {[
-          { n:"₹340Cr+",  d:"Forecasted cash tracked"     },
+          { n:inr ? "₹340Cr+" : "$40M+",  d:"Forecasted cash tracked"     },
           { n:"12,000+",  d:"SMBs on the platform"         },
           { n:"91%",      d:"Forecast accuracy at 30 days" },
           { n:"4.8 days", d:"Avg time to first insight"    },
@@ -307,7 +310,7 @@ export default function HomePage() {
                 {[
                   { icon:"📈", t:"Revenue-based advance",  d:"Repay as % of monthly revenue. No fixed EMI.",         amt:"Up to 3× monthly revenue" },
                   { icon:"📄", t:"Invoice financing",      d:"Get paid on outstanding invoices today.",               amt:"Up to 90% of invoice value" },
-                  { icon:"🔒", t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:"Up to ₹50L" },
+                  { icon:"🔒", t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:inr ? "Up to ₹50L" : "Up to $60K" },
                 ].map(({ icon, t, d, amt }) => (
                   <div key={t} data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 9, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>{icon}</div>
@@ -339,7 +342,29 @@ export default function HomePage() {
         </Reveal>
 
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
-          {[
+          {(inr ? [
+            {
+              track:"Track A", badge:"Revenue-based", title:"Revenue-based financing",
+              range:"₹5L – ₹2Cr",
+              best:"Restaurants, retail, D2C, and service businesses with steady revenue.",
+              features:["Repay as % of monthly revenue","No equity dilution","No collateral, no EMI lock-in","Live investor portal"],
+              featured: false,
+            },
+            {
+              track:"Track B", badge:"Angel / AIF", title:"Angel & AIF round",
+              range:"₹50L – ₹5Cr",
+              best:"Businesses ready for institutional angels and AIF participation.",
+              features:["Private-placement framework","Companies Act 2013 compliant","Investor & cap-table dashboard","SEBI-registered AIF network"],
+              featured: true,
+            },
+            {
+              track:"Track C", badge:"SME IPO", title:"SME IPO listing",
+              range:"₹5Cr – ₹50Cr+",
+              best:"Growth-stage SMBs ready to list on NSE Emerge / BSE SME.",
+              features:["NSE Emerge / BSE SME platform","Merchant-banker support included","Shares tradeable after listing","Full SEBI compliance layer"],
+              featured: false,
+            },
+          ] : [
             {
               track:"Track A", badge:"Revenue-share", title:"Crowdfunding raise",
               range:"$10K – $500K",
@@ -361,7 +386,7 @@ export default function HomePage() {
               features:["Broadest investor pool","Shares tradeable after close","Full compliance layer","Dedicated raise support"],
               featured: false,
             },
-          ].map(({ track, badge, title, range, best, features, featured }, i) => (
+          ]).map(({ track, badge, title, range, best, features, featured }, i) => (
             <Reveal key={track} delay={i * 80}>
               <div data-h3d-tilt style={{ background: featured ? C.deep : "rgba(255,255,255,0.04)", border: `1px solid ${featured ? "rgba(196,217,122,0.2)" : "rgba(196,217,122,0.08)"}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -390,7 +415,7 @@ export default function HomePage() {
           <div style={{ maxWidth: 1100, margin: "40px auto 0", background: C.deep, border: "1px solid rgba(196,217,122,0.1)", borderRadius: 12, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.pale, marginBottom: 4 }}>Compliance first.</div>
-              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. Revenue-share, Reg CF, and Reg A+ frameworks are handled by Headroom — you focus on the raise.</p>
+              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. {inr ? "Revenue-based financing, private placement, and SME IPO frameworks (SEBI / Companies Act)" : "Revenue-share, Reg CF, and Reg A+ frameworks"} are handled by Headroom — you focus on the raise.</p>
             </div>
             <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>See launch requirements →</button>
           </div>
