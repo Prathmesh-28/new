@@ -314,7 +314,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               <Eye size={10} className="text-blue-400 shrink-0 mt-px" />
               <p className="text-[10px] text-blue-300 truncate font-medium leading-tight">
                 {selectedClientLabel || selectedClientTenantId}
-                <span className="block text-blue-400/60">read-only</span>
+                <span className="block text-blue-400/60">{user?.role === "super_admin" ? "editing — changes save to this company" : "read-only"}</span>
               </p>
             </div>
             <button

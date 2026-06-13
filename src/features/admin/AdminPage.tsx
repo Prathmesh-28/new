@@ -94,7 +94,7 @@ export default function AdminPage() {
   };
   const inspect = (c: Company) => {
     setSelectedClient(c.tenant_id, c.company_name || c.owner_email || c.tenant_id);
-    toast.success(`Inspecting ${c.company_name || c.tenant_id} — read-only`);
+    toast.success(`Opened ${c.company_name || c.tenant_id} — you can view and edit; changes save to this company`);
     navigate("/dashboard");
   };
 

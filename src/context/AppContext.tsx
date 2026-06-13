@@ -145,21 +145,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const persist = useCallback(async (s: AppStore) => {
-    localStorage.setItem(LS_KEY, JSON.stringify(s));
-    const namespaces = ROLE_NAMESPACES[currentRole] ?? [];
+  const persist = useCallback(async (s: AppStore, clientId: string | null) => {
+    // Only cache OWN data locally — never clobber it with an inspected tenant's data.
+    if (!clientId) localStorage.setItem(LS_KEY, JSON.stringify(s));
+    // When a super_admin is editing another tenant, write to that tenant's app+forecast.
+    const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
     const split = splitByNs(s);
     const results = await Promise.allSettled(
-      namespaces.map(ns => api.put(`/api/kv/${ns}/store`, { value: split[ns] ?? {} }))
+      namespaces.map(ns => api.put(kvUrl(ns, clientId), { value: split[ns] ?? {} }))
     );
     if (results.some(r => r.status === "rejected")) {
       toast.error("Changes saved locally but failed to sync to server.", { id: "sync-error", duration: 4000 });
     }
   }, [currentRole]);
 
-  // Gate every write: client view (advisor) and read-only roles (viewer) bail out.
+  // Gate every write: in client view only a super_admin may edit (advisors are
+  // read-only); read-only roles (viewer) never write.
   const setStore: SetStore = useCallback((fn) => {
-    if (clientIdRef.current !== null) {
+    const cid = clientIdRef.current;
+    const isSuper = roleRef.current === "super_admin";
+    if (cid !== null && !isSuper) {
       toast.error(RO_MSG, { id: "readonly", duration: 3000 });
       return;
     }
@@ -169,9 +174,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     _setStore(prev => {
       const next = fn(prev);
-      localStorage.setItem(LS_KEY, JSON.stringify(next));
+      if (cid === null) localStorage.setItem(LS_KEY, JSON.stringify(next));
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => persist(next), DEBOUNCE);
+      debounceRef.current = setTimeout(() => persist(next, cid), DEBOUNCE);
       return next;
     });
   }, [persist]);

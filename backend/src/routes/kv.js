@@ -2,15 +2,30 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 
+// Must stay in sync with src/data/types.ts ROLE_NAMESPACES — otherwise a role
+// gets 403 on its own data and the app silently fails to load/save for them.
 const ROLE_NAMESPACES = {
-  super_admin: ["app", "forecast", "credit", "capital", "operations"],
-  owner:       ["app", "forecast", "credit", "capital", "operations"],
-  accountant:  ["app", "forecast"],
-  investor:    ["app", "capital"],
+  super_admin:        ["app", "forecast", "credit", "capital", "operations"],
+  owner:              ["app", "forecast", "credit", "capital", "operations"],
+  finance_manager:    ["app", "forecast", "credit", "operations"],
+  accountant:         ["app", "forecast", "operations"],
+  sales:              ["app"],
+  operations_manager: ["app", "operations"],
+  viewer:             ["app", "forecast"],
+  investor:           ["app", "capital"],
 };
 
 function canAccess(role, ns) {
   return (ROLE_NAMESPACES[role] || []).includes(ns);
+}
+
+// Writes: a user writes their own tenant; only a super_admin may target another
+// tenant (advisors stay read-only on client data).
+async function resolveWriteTenantId(req) {
+  const requested = req.query.tenant_id;
+  if (!requested || requested === req.user.tenant_id) return req.user.tenant_id;
+  if (req.user.role === "super_admin") return requested;
+  return null;
 }
 
 // Resolve tenant: own data OR a linked client's data (accountants/super_admin only)
@@ -63,12 +78,15 @@ router.put("/:ns/:key", authenticate, async (req, res) => {
   const { ns, key } = req.params;
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
+  const tenantId = await resolveWriteTenantId(req);
+  if (!tenantId) return res.status(403).json({ error: "Forbidden" });
+
   const value = req.body;
   await pool.query(`
     INSERT INTO kv_store(tenant_id, namespace, key, value, updated_at)
     VALUES($1,$2,$3,$4,now())
     ON CONFLICT(tenant_id, namespace, key) DO UPDATE SET value=$4, updated_at=now()
-  `, [req.user.tenant_id, ns, key, JSON.stringify(value)]);
+  `, [tenantId, ns, key, JSON.stringify(value)]);
   res.json({ ok: true });
 });
 
@@ -77,9 +95,12 @@ router.delete("/:ns/:key", authenticate, async (req, res) => {
   const { ns, key } = req.params;
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
+  const tenantId = await resolveWriteTenantId(req);
+  if (!tenantId) return res.status(403).json({ error: "Forbidden" });
+
   await pool.query(
     "DELETE FROM kv_store WHERE tenant_id=$1 AND namespace=$2 AND key=$3",
-    [req.user.tenant_id, ns, key]
+    [tenantId, ns, key]
   );
   res.json({ ok: true });
 });
