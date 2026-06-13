@@ -23,9 +23,10 @@ async function sendWhatsApp(to, body) {
   const toWa = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
   if (!c) {
     console.log(`[whatsapp] MOCK → ${toWa}: ${body.slice(0, 80)}`);
-    return;
+    return false; // not actually delivered (Twilio not configured)
   }
   await c.messages.create({ from: FROM, to: toWa, body });
+  return true;
 }
 
 // Returns true when signature is valid. Skips check in dev mode (no auth token).

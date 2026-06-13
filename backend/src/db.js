@@ -238,6 +238,16 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS wa_tenant ON whatsapp_bindings(tenant_id);
 
+    -- ── WhatsApp OTP verification (short-lived codes) ─────────────────────────
+    CREATE TABLE IF NOT EXISTS whatsapp_otps (
+      phone      TEXT PRIMARY KEY,
+      tenant_id  TEXT NOT NULL,
+      code       TEXT NOT NULL,
+      attempts   INT  NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     -- ── Advisor links ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS advisor_client_links (
       id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

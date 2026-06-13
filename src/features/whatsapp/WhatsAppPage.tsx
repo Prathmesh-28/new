@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+
+// authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
+function apiError(err: unknown): string {
+  const m = err instanceof Error ? err.message : String(err);
+  const i = m.indexOf("{");
+  if (i >= 0) { try { return JSON.parse(m.slice(i)).error ?? m; } catch { /* ignore */ } }
+  return m;
+}
 
 const DIGEST_PREVIEW = [
   { type: "header", text: "☀️ Headroom Morning Brief · Mon 9 Jun" },
@@ -105,19 +114,33 @@ export default function WhatsAppPage() {
 
   const connected = step === "done";
 
-  const handleSendOtp = () => {
-    if (!/^\d{10}$/.test(phone.replace(/\s/g, ""))) {
-      toast.error("Enter a valid 10-digit mobile number");
-      return;
-    }
-    setStep("otp");
-    toast.success("OTP sent to +91 " + phone);
+  const [sending, setSending]   = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const e164 = () => "+91" + phone.replace(/\D/g, "");
+
+  const handleSendOtp = async () => {
+    const digits = phone.replace(/\D/g, "");
+    if (!/^\d{10}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    setSending(true);
+    try {
+      await api.post("/api/whatsapp/send-otp", { phone: e164() });
+      setStep("otp");
+      toast.success("Code sent to +91 " + digits + " on WhatsApp");
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally { setSending(false); }
   };
 
-  const handleVerifyOtp = () => {
-    if (otp.length < 4) { toast.error("Enter the OTP"); return; }
-    setStep("done");
-    toast.success("WhatsApp connected! Your first digest arrives tomorrow at 9 AM.");
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6) { toast.error("Enter the 6-digit code from WhatsApp"); return; }
+    setVerifying(true);
+    try {
+      await api.post("/api/whatsapp/verify-otp", { phone: e164(), code: otp });
+      setStep("done");
+      toast.success("WhatsApp connected! Your morning brief arrives at 9 AM daily.");
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally { setVerifying(false); }
   };
 
   const handleCopy = (text: string) => {
@@ -183,9 +206,10 @@ export default function WhatsAppPage() {
                 </div>
                 <button
                   onClick={handleSendOtp}
-                  className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
+                  disabled={sending}
+                  className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
-                  Send OTP via WhatsApp →
+                  {sending ? "Sending…" : "Send OTP via WhatsApp →"}
                 </button>
               </div>
             )}
@@ -202,9 +226,10 @@ export default function WhatsAppPage() {
                 />
                 <button
                   onClick={handleVerifyOtp}
-                  className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
+                  disabled={verifying}
+                  className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
-                  Verify & Connect
+                  {verifying ? "Verifying…" : "Verify & Connect"}
                 </button>
                 <button onClick={() => setStep("phone")} className="w-full text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
                   ← Change number
@@ -223,7 +248,7 @@ export default function WhatsAppPage() {
                   <span className="font-medium">{Object.values(alerts).filter(Boolean).length} of {ALERT_TYPES.length}</span>
                 </div>
                 <button
-                  onClick={() => setStep("phone")}
+                  onClick={async () => { try { await api.delete("/api/whatsapp/register"); } catch { /* ignore */ } setStep("idle"); setPhone(""); setOtp(""); toast.success("WhatsApp disconnected"); }}
                   className="text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors mt-1"
                 >
                   Disconnect

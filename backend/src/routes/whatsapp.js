@@ -1,7 +1,10 @@
 const router   = require("express").Router();
+const crypto   = require("crypto");
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/whatsapp");
+
+const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +155,71 @@ async function dispatch(text, data) {
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
+
+// POST /api/whatsapp/send-otp — send a real 6-digit code over WhatsApp
+router.post("/send-otp", authenticate, async (req, res) => {
+  const phone = normalizePhone(req.body.phone ?? "");
+  if (!phone.match(/^\+[1-9]\d{6,14}$/)) {
+    return res.status(400).json({ error: "Invalid phone — use a valid mobile number with country code." });
+  }
+  // 30-second resend cooldown
+  const { rows: prev } = await pool.query(
+    "SELECT created_at FROM whatsapp_otps WHERE phone=$1 AND expires_at > now()", [phone]
+  );
+  if (prev[0] && Date.now() - new Date(prev[0].created_at).getTime() < 30_000) {
+    return res.status(429).json({ error: "Please wait a few seconds before requesting another code." });
+  }
+
+  const code    = crypto.randomInt(100000, 1000000).toString();
+  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  await pool.query(
+    `INSERT INTO whatsapp_otps(phone, tenant_id, code, attempts, expires_at, created_at)
+     VALUES($1,$2,$3,0,$4,now())
+     ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, code=$3, attempts=0, expires_at=$4, created_at=now()`,
+    [phone, req.user.tenant_id, sha256(code), expires]
+  );
+
+  let delivered;
+  try {
+    delivered = await sendWhatsApp(phone,
+      `🔐 Your Headroom verification code is *${code}*\n\nIt expires in 10 minutes. If you didn't request this, ignore this message.`);
+  } catch (e) {
+    console.error("[wa send-otp]", e.message);
+    return res.status(502).json({ error: "Couldn't send the code. On the Twilio sandbox you must first send the join code to the sandbox number from this WhatsApp, then retry." });
+  }
+  if (!delivered) {
+    return res.status(503).json({ error: "WhatsApp isn't configured on the server yet (missing Twilio keys)." });
+  }
+  res.json({ ok: true });
+});
+
+// POST /api/whatsapp/verify-otp — verify the code, then link the number
+router.post("/verify-otp", authenticate, async (req, res) => {
+  const phone = normalizePhone(req.body.phone ?? "");
+  const code  = (req.body.code ?? "").trim();
+  const { rows } = await pool.query(
+    "SELECT code, attempts, expires_at FROM whatsapp_otps WHERE phone=$1 AND tenant_id=$2",
+    [phone, req.user.tenant_id]
+  );
+  const rec = rows[0];
+  if (!rec) return res.status(400).json({ error: "No code found — tap Send OTP first." });
+  if (new Date(rec.expires_at) < new Date()) return res.status(400).json({ error: "Code expired — request a new one." });
+  if (rec.attempts >= 5) return res.status(429).json({ error: "Too many wrong attempts — request a new code." });
+  if (sha256(code) !== rec.code) {
+    await pool.query("UPDATE whatsapp_otps SET attempts=attempts+1 WHERE phone=$1", [phone]);
+    return res.status(400).json({ error: "Incorrect code." });
+  }
+
+  await pool.query(
+    "INSERT INTO whatsapp_bindings(phone, tenant_id, user_id) VALUES($1,$2,$3) ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, user_id=$3",
+    [phone, req.user.tenant_id, req.user.id]
+  );
+  await pool.query("DELETE FROM whatsapp_otps WHERE phone=$1", [phone]);
+  await sendWhatsApp(phone,
+    `✅ *Headroom connected!*\n\nYou're all set. Reply *help* to see commands, or just ask your numbers in plain language — e.g. "What's my cash balance?"`
+  ).catch(() => {});
+  res.json({ ok: true, phone });
+});
 
 // POST /api/whatsapp/register — link a phone number to the authenticated user's tenant
 router.post("/register", authenticate, async (req, res) => {
