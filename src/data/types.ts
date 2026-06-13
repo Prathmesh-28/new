@@ -251,6 +251,20 @@ export interface ProcurementOrder {
   createdAt: string;
 }
 
+// ── Fixed assets ────────────────────────────────────────────────────────────
+export interface FixedAsset {
+  id: string;
+  name: string;
+  category?: string;          // e.g. "Plant & Machinery", "Computers", "Furniture"
+  cost: number;
+  purchaseDate: string;       // YYYY-MM-DD
+  usefulLifeYears: number;
+  method: "straight_line" | "wdv";
+  salvageValue?: number;      // residual value; default 0
+  wdvRate?: number;           // optional explicit WDV % (Companies Act Schedule II)
+  disposalDate?: string;      // set when sold/scrapped — depreciation freezes here
+}
+
 // ── Receivables ───────────────────────────────────────────────────────────────
 export interface Invoice {
   id: string;
@@ -280,6 +294,7 @@ export interface AppStore {
   capitalInvestments: CapitalInvestment[];
   connectors: BankConnector[];
   invoices: Invoice[];
+  fixedAssets: FixedAsset[];
   orders: Order[];
   inventory: InventoryItem[];
   procurement: ProcurementOrder[];
@@ -294,6 +309,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   alerts:              "app",
   connectors:          "app",
   invoices:            "app",
+  fixedAssets:         "app",
   forecast:            "forecast",
   scenarios:           "forecast",
   obligations:         "forecast",

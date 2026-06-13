@@ -1,4 +1,4 @@
-import type { AppStore, Transaction, Invoice, ActiveLoan, BankAccount, CashObligation } from "@/data/types";
+import type { AppStore, Transaction, Invoice, ActiveLoan, BankAccount, CashObligation, FixedAsset } from "@/data/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Deterministic multi-year demo dataset spanning FY23 → FY28 (Indian FY, Apr–Mar:
@@ -89,6 +89,16 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
     { id: "demo-obl-4", name: "Loan EMI", amount: 65000, dueDate: addDaysIso(today, 12), type: "loan" },
   ];
 
+  // A small fixed-asset register so the P&L shows real depreciation and the
+  // balance sheet shows net fixed assets from day one.
+  const y = today.getFullYear();
+  const fixedAssets: FixedAsset[] = [
+    { id: "demo-fa-1", name: "CNC milling machine", category: "Plant & Machinery", cost: 2_800_000, purchaseDate: `${y - 2}-05-12`, usefulLifeYears: 15, method: "wdv", salvageValue: 140000 },
+    { id: "demo-fa-2", name: "Delivery van (Tata Ace)", category: "Vehicles", cost: 850_000, purchaseDate: `${y - 1}-08-03`, usefulLifeYears: 8, method: "wdv", salvageValue: 85000 },
+    { id: "demo-fa-3", name: "Workstations & laptops (x12)", category: "Computers & IT", cost: 960_000, purchaseDate: `${y - 1}-01-20`, usefulLifeYears: 3, method: "straight_line", salvageValue: 0 },
+    { id: "demo-fa-4", name: "Factory furniture & fittings", category: "Furniture & Fixtures", cost: 540_000, purchaseDate: `${y - 3}-11-01`, usefulLifeYears: 10, method: "straight_line", salvageValue: 54000 },
+  ];
+
   return {
     firm: {
       name: "Acme Manufacturing Co",
@@ -105,5 +115,6 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
     invoices,
     activeLoans,
     obligations,
+    fixedAssets,
   };
 }

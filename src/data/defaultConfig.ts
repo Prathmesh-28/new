@@ -104,6 +104,7 @@ export const defaultConfig: AppStore = {
   capitalInvestments: [],
   connectors:         [],
   invoices:           [],
+  fixedAssets:        [],
   orders:             [],
   inventory:          [],
   procurement:        [],

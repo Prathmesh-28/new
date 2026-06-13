@@ -3,10 +3,11 @@ import { useApp } from "@/context/AppContext";
 import { incomeStatement, balanceSheet, cashFlowStatement, monthlyCashFlow } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { exportExcel, exportPdf } from "@/lib/exporters";
-import { FileSpreadsheet, FileDown, Sheet as SheetIcon, Info, Scale, TrendingUp, Wallet } from "lucide-react";
+import { FileSpreadsheet, FileDown, Sheet as SheetIcon, Info, Scale, TrendingUp, Wallet, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import FixedAssetRegister from "./FixedAssetRegister";
 
-type Tab = "income" | "balance" | "cashflow";
+type Tab = "income" | "balance" | "cashflow" | "assets";
 type Preset = "month" | "quarter" | "fy" | "ttm";
 
 function iso(d: Date) { return d.toISOString().split("T")[0]; }
@@ -178,6 +179,7 @@ export default function StatementsPage() {
     { id: "income",   label: "Income Statement", icon: TrendingUp },
     { id: "balance",  label: "Balance Sheet",    icon: Scale },
     { id: "cashflow", label: "Cash Flow",        icon: Wallet },
+    { id: "assets",   label: "Fixed Assets",     icon: Building2 },
   ];
   const PRESETS: { id: Preset; label: string }[] = [
     { id: "month",   label: "This Month" },
@@ -197,20 +199,22 @@ export default function StatementsPage() {
             {firm.name} · derived live from your bank data · {range.label}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={doExportPdf}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <FileDown size={13} /> PDF
-          </button>
-          <button onClick={doExportExcel}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <SheetIcon size={13} /> Excel
-          </button>
-        </div>
+        {tab !== "assets" && (
+          <div className="flex items-center gap-2">
+            <button onClick={doExportPdf}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <FileDown size={13} /> PDF
+            </button>
+            <button onClick={doExportExcel}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <SheetIcon size={13} /> Excel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Period selector */}
-      {tab !== "balance" && (
+      {(tab === "income" || tab === "cashflow") && (
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
           {PRESETS.map(p => (
             <button key={p.id} onClick={() => setPreset(p.id)}
@@ -245,7 +249,7 @@ export default function StatementsPage() {
             <Row label="Employee benefits (payroll)" value={-pl.payroll} pct={pl.revenue > 0 ? Math.round(pl.payroll / pl.revenue * 100) : 0} />
             <Row label="Other operating expenses" value={-pl.otherOpex} pct={pl.revenue > 0 ? Math.round(pl.otherOpex / pl.revenue * 100) : 0} />
             <Row label="EBITDA" value={pl.ebitda} level={2} pct={pl.ebitdaMarginPct} />
-            <Row label="Depreciation & amortisation" value={-pl.depreciation} note="estimated at 1.5% of revenue" />
+            <Row label="Depreciation & amortisation" value={-pl.depreciation} note={store.fixedAssets?.length ? undefined : "add assets in the Fixed Assets tab"} />
             <Row label="EBIT (operating profit)" value={pl.ebit} level={2} />
             <Row label="Finance costs (interest)" value={-pl.interest} note="from active loans" />
             <Row label="Profit Before Tax" value={pl.pbt} level={2} />
@@ -266,7 +270,10 @@ export default function StatementsPage() {
             <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg p-3 flex gap-2">
               <Info size={13} className="text-[var(--color-muted)] shrink-0 mt-px" />
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-                Derived from revenue, expense and payroll transactions. COGS uses goods received from suppliers; depreciation and income tax are estimates until you add a fixed-asset register.
+                Derived from revenue, expense and payroll transactions. COGS uses goods received from suppliers.
+                {store.fixedAssets?.length
+                  ? " Depreciation is calculated from your fixed-asset register; income tax is estimated at 25% of PBT."
+                  : " Depreciation is ₹0 until you add assets in the Fixed Assets tab; income tax is estimated at 25% of PBT."}
               </p>
             </div>
           </div>
@@ -285,7 +292,7 @@ export default function StatementsPage() {
             <Row label="Inventory" value={bs.inventory} />
             <Row label="Total Current Assets" value={bs.currentAssets} level={2} />
             <Row label="Non-Current Assets" level={0} />
-            <Row label="Fixed assets (net)" value={bs.fixedAssetsNet} note="estimated" />
+            <Row label="Fixed assets (net)" value={bs.fixedAssetsNet} note={store.fixedAssets?.length ? undefined : "estimated — add a register"} />
             <Row label="Total Non-Current Assets" value={bs.nonCurrentAssets} level={2} />
             <Row label="Total Assets" value={bs.totalAssets} level={3} accent="blue" />
           </div>
@@ -400,6 +407,9 @@ export default function StatementsPage() {
         </div>
         </div>
       )}
+
+      {/* ── FIXED ASSETS ── */}
+      {tab === "assets" && <FixedAssetRegister />}
     </div>
   );
 }

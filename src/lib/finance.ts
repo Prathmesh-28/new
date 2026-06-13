@@ -8,6 +8,7 @@ import type {
   AppStore, Transaction, Invoice, ActiveLoan, InventoryItem, ProcurementOrder,
   CashObligation,
 } from "@/data/types";
+import { totalDepreciation, totalNetBookValue } from "@/lib/depreciation";
 
 const DAY_MS = 86_400_000;
 
@@ -558,7 +559,6 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INCOME_TAX_RATE = 0.25;   // India corporate rate proxy for small companies
-const DEP_RATE_OF_REV = 0.015;  // depreciation ≈ 1.5% of revenue (estimate)
 
 function inWindow(date: string, start: string, end: string): boolean {
   return date >= start && date <= end;
@@ -583,7 +583,8 @@ export interface IncomeStatement {
   netMarginPct: number;
 }
 
-/** Derived P&L for a [start,end] window. Depreciation & income tax are estimates. */
+/** Derived P&L for a [start,end] window. Depreciation comes from the fixed-asset
+ *  register when present (else 0); income tax is an estimate. */
 export function incomeStatement(store: AppStore, start: string, end: string): IncomeStatement {
   const { transactions, procurement, activeLoans } = store;
   const win = transactions.filter(t => inWindow(t.date, start, end));
@@ -605,7 +606,8 @@ export function incomeStatement(store: AppStore, start: string, end: string): In
   const monthlyInterest = activeLoans.reduce((s, l) => s + (l.outstanding * (l.rate / 100)) / 12, 0);
   const interest = Math.round(monthlyInterest * months);
 
-  const depreciation = Math.round(revenue * DEP_RATE_OF_REV);
+  // Real depreciation from the fixed-asset register for this window (0 if none).
+  const depreciation = Math.round(totalDepreciation(store.fixedAssets ?? [], start, end));
   const ebit = ebitda - depreciation;
   const pbt  = ebit - interest;
   const tax  = pbt > 0 ? Math.round(pbt * INCOME_TAX_RATE) : 0;
@@ -635,7 +637,7 @@ export interface BalanceSheet {
 
 /** Derived balance sheet as of `today`. Equity (retained earnings) is the
  *  balancing figure, so Assets = Liabilities + Equity by construction.
- *  Fixed assets are estimated (no asset register yet). */
+ *  Fixed assets come from the asset register (net book value) when present. */
 export function balanceSheet(store: AppStore, today = new Date()): BalanceSheet {
   const snap = computeFinancialSnapshot(store, today);
 
@@ -644,8 +646,12 @@ export function balanceSheet(store: AppStore, today = new Date()): BalanceSheet 
   const inventory = snap.inventoryValue;
   const currentAssets = cash + accountsReceivable + inventory;
 
-  // Fixed assets estimate: ~3 months of operating spend tied up in equipment/premises
-  const fixedAssetsNet = Math.round(snap.monthlyExpense * 3);
+  // Fixed assets: net book value from the register when present, else fall back to
+  // a rough estimate (~3 months of operating spend) so the sheet still balances.
+  const assets = store.fixedAssets ?? [];
+  const fixedAssetsNet = assets.length
+    ? Math.round(totalNetBookValue(assets, iso(today)))
+    : Math.round(snap.monthlyExpense * 3);
   const nonCurrentAssets = fixedAssetsNet;
   const totalAssets = currentAssets + nonCurrentAssets;
 
