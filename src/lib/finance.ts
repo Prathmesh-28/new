@@ -120,6 +120,18 @@ export function monthlyAggregates(transactions: Transaction[], n: number, today 
   return out;
 }
 
+/** P25/P50/P75 of a numeric series via linear interpolation. Null if <3 points. */
+export function percentiles(series: number[]): { p25: number; p50: number; p75: number } | null {
+  const xs = series.filter(n => typeof n === "number" && isFinite(n)).sort((a, b) => a - b);
+  if (xs.length < 3) return null;
+  const q = (p: number) => {
+    const idx = (xs.length - 1) * p;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    return lo === hi ? xs[lo] : xs[lo] + (xs[hi] - xs[lo]) * (idx - lo);
+  };
+  return { p25: q(0.25), p50: q(0.5), p75: q(0.75) };
+}
+
 /** Compound monthly growth rate (%) of a positive series; null if not computable. */
 export function cmgr(series: number[]): number | null {
   const vals = series.filter(v => v > 0);

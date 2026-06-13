@@ -27,16 +27,8 @@ const CATEGORIES: { id: DocCategory; label: string; color: string; bg: string }[
   { id: "other",   label: "Other",      color: "text-[var(--color-muted)]", bg: "bg-[var(--color-accent)]"  },
 ];
 
-const INITIAL_DOCS: Doc[] = [
-  { id: "d1", name: "GSTIN Registration Certificate.pdf",  category: "gst",     size: "245 KB", uploadedAt: new Date(2025, 3, 10), status: "valid",    tags: ["GST", "Registration"], type: "pdf",   expiresAt: new Date(2027, 3, 10) },
-  { id: "d2", name: "HDFC Current Account Statement.pdf",  category: "banking", size: "1.2 MB", uploadedAt: new Date(2026, 4, 1),  status: "uploaded", tags: ["HDFC", "Statement"],   type: "pdf"   },
-  { id: "d3", name: "Company PAN Card.pdf",                category: "legal",   size: "88 KB",  uploadedAt: new Date(2024, 8, 15), status: "valid",    tags: ["PAN", "Identity"],     type: "pdf"   },
-  { id: "d4", name: "MOA & AOA.pdf",                       category: "legal",   size: "3.4 MB", uploadedAt: new Date(2023, 1, 20), status: "valid",    tags: ["Incorporation"],       type: "pdf"   },
-  { id: "d5", name: "Form 16 FY2024-25.pdf",               category: "tax",     size: "512 KB", uploadedAt: new Date(2025, 5, 10), status: "valid",    tags: ["Form 16", "ITR"],      type: "pdf"   },
-  { id: "d6", name: "June 2026 Payroll Register.xlsx",     category: "payroll", size: "78 KB",  uploadedAt: new Date(2026, 5, 1),  status: "uploaded", tags: ["Payroll", "Jun 2026"], type: "excel" },
-  { id: "d7", name: "Trade License 2026.pdf",              category: "legal",   size: "190 KB", uploadedAt: new Date(2026, 0, 5),  expiresAt: new Date(2026, 11, 31), status: "expiring", tags: ["License"], type: "pdf" },
-  { id: "d8", name: "Shop Act Registration.pdf",           category: "legal",   size: "110 KB", uploadedAt: new Date(2025, 9, 1),  expiresAt: new Date(2026, 8, 30),  status: "valid",   tags: ["Shop Act"],type: "pdf" },
-];
+// Honest: start empty. Documents the owner uploads live here (no fabricated files).
+const INITIAL_DOCS: Doc[] = [];
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
 
@@ -302,7 +294,14 @@ export default function DocumentsPage() {
           {filtered.length === 0 && (
             <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
               <File size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-              <p className="text-sm text-[var(--color-muted)]">No documents found</p>
+              <p className="text-sm text-[var(--color-muted)]">
+                {docs.length === 0 ? "No documents yet" : "No documents match your search"}
+              </p>
+              {docs.length === 0 && (
+                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm mx-auto">
+                  Upload your GST certificate, bank statements, PAN, licenses and payroll registers to keep every compliance document in one searchable place.
+                </p>
+              )}
             </div>
           )}
 

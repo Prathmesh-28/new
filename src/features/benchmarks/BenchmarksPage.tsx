@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
+import { percentiles } from "@/lib/finance";
 import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 
@@ -27,6 +28,7 @@ type BenchmarkMetric = {
   p50: number;
   p75: number;
   higherIsBetter: boolean;
+  source?: "self" | "sector";
 };
 
 const SECTOR_DATA: Record<string, BenchmarkMetric[]> = {
@@ -102,17 +104,56 @@ export default function BenchmarksPage() {
   const payrollRatio= thisRev > 0 ? Math.round((payroll / thisRev) * 100) : null;
   const burnMultiple= thisRev > lastRev ? parseFloat((burn / Math.max(1, thisRev - lastRev)).toFixed(1)) : null;
 
+  // ── Real self-benchmarks: the tenant's OWN trailing-12-month quartiles ────────
+  // For metrics with a monthly series we compute genuine P25/P50/P75 from history,
+  // so "your position" is measured against your own typical months — not invented
+  // peer data. Metrics without a clean monthly series keep the sector reference.
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const selfRanges = (() => {
+    const gm: number[] = [], pr: number[] = [], rg: number[] = [];
+    let prevRev = 0;
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const mt = transactions.filter(t => t.date.startsWith(k));
+      const rev = mt.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+      const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
+      const pay = Math.abs(mt.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+      if (rev > 0) {
+        gm.push(((rev - cost) / rev) * 100);
+        pr.push((pay / rev) * 100);
+        if (prevRev > 0) rg.push(((rev - prevRev) / prevRev) * 100);
+        prevRev = rev;
+      }
+    }
+    return {
+      gross_margin:   percentiles(gm),
+      payroll_ratio:  percentiles(pr),
+      revenue_growth: percentiles(rg),
+    } as Record<string, { p25: number; p50: number; p75: number } | null>;
+  })();
+
   const baseBenchmarks = SECTOR_DATA[sector] ?? SECTOR_DATA["default"];
-  const metrics: BenchmarkMetric[] = baseBenchmarks.map(m => ({
-    ...m,
-    yours: m.key === "gross_margin"   ? grossMargin
+  const metrics: BenchmarkMetric[] = baseBenchmarks.map(m => {
+    const yours = m.key === "gross_margin"   ? grossMargin
          : m.key === "runway"          ? (runway || null)
          : m.key === "revenue_growth"  ? revGrowth
          : m.key === "payroll_ratio"   ? payrollRatio
          : m.key === "burn_multiple"   ? burnMultiple
-         : null,
-  }));
+         : null;
+    const sr = selfRanges[m.key];
+    if (sr) {
+      // For "higher is better" the p75 column is the best (high); for "lower is
+      // better" the page's convention puts the best (low) value in the p75 column.
+      const [p25, p50, p75] = m.higherIsBetter
+        ? [r1(sr.p25), r1(sr.p50), r1(sr.p75)]
+        : [r1(sr.p75), r1(sr.p50), r1(sr.p25)];
+      return { ...m, yours, p25, p50, p75, source: "self" as const };
+    }
+    return { ...m, yours, source: "sector" as const };
+  });
 
+  const usingSelf = metrics.some(m => m.source === "self");
   const hasData = balance > 0 || transactions.length > 0;
 
   const radarData = metrics.map(m => ({
@@ -137,7 +178,9 @@ export default function BenchmarksPage() {
             Benchmarks
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
-            See how your business compares to peers in your sector — anonymized data from Headroom network.
+            {usingSelf
+              ? "Gross margin, payroll and growth are measured against your own trailing-12-month quartiles; the rest use typical sector reference ranges."
+              : "Typical reference ranges for your sector. Add 3+ months of data to benchmark against your own history."}
           </p>
         </div>
 
@@ -186,7 +229,7 @@ export default function BenchmarksPage() {
               </span>
             )}
           </div>
-          <p className="text-xs text-[var(--color-muted)] mb-4">Your business vs {sector} median</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">{usingSelf ? "This month vs your 12-month norm + sector reference" : `Your business vs ${sector} reference`}</p>
           <ResponsiveContainer width="100%" height={220}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="var(--color-border)" />
@@ -197,7 +240,7 @@ export default function BenchmarksPage() {
           </ResponsiveContainer>
           <div className="flex items-center justify-center gap-4 mt-2">
             <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><span className="w-3 h-0.5 bg-[var(--color-primary)] inline-block rounded" /> Your business</div>
-            <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><span className="w-3 h-0.5 bg-[#7D8590] inline-block rounded" style={{ borderTop: "2px dashed #7D8590" }} /> Sector median</div>
+            <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><span className="w-3 h-0.5 bg-[#7D8590] inline-block rounded" style={{ borderTop: "2px dashed #7D8590" }} /> Median (50th pct)</div>
           </div>
         </div>
 
@@ -298,7 +341,7 @@ export default function BenchmarksPage() {
                   </div>
                   <div className="flex justify-between text-[9px] text-[var(--color-muted)] mt-1">
                     <span>P25: {m.p25}{m.unit}</span>
-                    <span>Median: {m.p50}{m.unit}</span>
+                    <span>{m.source === "self" ? "Your median" : "Median"}: {m.p50}{m.unit} · {m.source === "self" ? "your 12-mo" : "sector ref"}</span>
                     <span>P75: {m.p75}{m.unit}</span>
                   </div>
                 </div>
@@ -323,7 +366,9 @@ export default function BenchmarksPage() {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)] text-center">
-        Benchmarks are anonymized aggregates from Headroom's SMB network segmented by sector and revenue band. Updated quarterly.
+        {usingSelf
+          ? "“Your norm” bands are computed from your own last 12 months of data. Sector reference ranges are directional guides for typical Indian SMBs, not live peer data."
+          : "Sector reference ranges are directional guides for typical Indian SMBs. Add more history to benchmark against your own months."}
       </p>
     </div>
   );

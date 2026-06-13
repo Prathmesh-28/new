@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
+import EmptyState from "@/components/EmptyState";
 import { differenceInDays, format, parseISO } from "date-fns";
 import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
@@ -133,15 +134,8 @@ export default function CollectionsPage() {
       }));
   }, [store]);
 
-  // If no invoices in store, show mock data
-  const displayData = receivables.length > 0 ? receivables : [
-    { id: "r1", clientName: "Mehta Corp",          amount: 320000, dueDate: "2026-05-26", status: "pending", aging: "1-30"  as Aging, daysOverdue: 18 },
-    { id: "r2", clientName: "Reddy Industries",    amount: 185000, dueDate: "2026-05-10", status: "pending", aging: "31-60" as Aging, daysOverdue: 34 },
-    { id: "r3", clientName: "Sharma Textiles",     amount: 92000,  dueDate: "2026-04-15", status: "pending", aging: "61-90" as Aging, daysOverdue: 59 },
-    { id: "r4", clientName: "Kapoor Electronics",  amount: 445000, dueDate: "2026-03-20", status: "pending", aging: "90+"   as Aging, daysOverdue: 85 },
-    { id: "r5", clientName: "Gupta Traders",       amount: 67000,  dueDate: "2026-06-20", status: "pending", aging: "current" as Aging, daysOverdue: 0 },
-    { id: "r6", clientName: "Singh Distributors",  amount: 230000, dueDate: "2026-06-05", status: "pending", aging: "1-30"  as Aging, daysOverdue: 8 },
-  ];
+  // Honest: only real outstanding receivables derived from the tenant's invoices.
+  const displayData = receivables;
 
   const filtered = filter === "all" ? displayData : displayData.filter(r => r.aging === filter);
   const sorted   = [...filtered].sort((a, b) => b.daysOverdue - a.daysOverdue);
@@ -260,7 +254,16 @@ export default function CollectionsPage() {
         </div>
 
         <div className="divide-y divide-[var(--color-border)]">
-          {sorted.length === 0 && (
+          {sorted.length === 0 && displayData.length === 0 && (
+            <EmptyState
+              icon={PhoneCall}
+              title="No outstanding receivables"
+              description="When customers owe you money, overdue invoices appear here so you can chase them. Create your first invoice to start tracking collections."
+              ctaText="Create an invoice"
+              ctaHref="/invoices"
+            />
+          )}
+          {sorted.length === 0 && displayData.length > 0 && (
             <div className="py-12 text-center">
               <CheckCircle2 size={28} className="mx-auto mb-2 text-green-400 opacity-50" />
               <p className="text-sm text-[var(--color-muted)]">No outstanding receivables in this bucket</p>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
+import { percentiles } from "@/lib/finance";
 import { TrendingUp, TrendingDown, AlertTriangle, Repeat, Eye, ChevronRight } from "lucide-react";
 import { format, startOfMonth, subMonths, isWithinInterval } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -13,15 +14,17 @@ function monthWindow(monthsAgo: number, from: Date): { start: Date; end: Date } 
   return { start, end };
 }
 
-// ── Benchmark data (mock industry medians) ────────────────────────────────────
-const BENCHMARKS: Record<string, { label: string; median_pct: number }> = {
-  payroll:    { label: "Payroll",     median_pct: 42 },
-  expense:    { label: "Operations",  median_pct: 18 },
-  vendor:     { label: "Vendors",     median_pct: 22 },
-  rent:       { label: "Rent",        median_pct: 8  },
-  marketing:  { label: "Marketing",   median_pct: 7  },
-  tax:        { label: "Tax",         median_pct: 6  },
-  misc:       { label: "Misc",        median_pct: 5  },
+// Static reference ranges (typical Indian SMB cost mix) used as a fallback only
+// when the tenant doesn't yet have enough history to compute their own norm.
+const REFERENCE: Record<string, { label: string; median_pct: number }> = {
+  payroll:  { label: "Payroll",       median_pct: 42 },
+  expense:  { label: "Operations",    median_pct: 30 },
+  tax:      { label: "Tax & duties",  median_pct: 8  },
+  loan:     { label: "Debt service",  median_pct: 12 },
+  transfer: { label: "Transfers",     median_pct: 8  },
+};
+const CAT_LABEL: Record<string, string> = {
+  payroll: "Payroll", expense: "Operations", tax: "Tax & duties", loan: "Debt service", transfer: "Transfers",
 };
 
 export default function SpendPage() {
@@ -104,15 +107,44 @@ export default function SpendPage() {
     .slice(0, 6);
   }, [expenses, curStart, curEnd, prv3Start, prv3End]);
 
-  // ── Category vs benchmark ─────────────────────────────────────────────────
+  // ── Category benchmark from the tenant's OWN trailing-12-month norm ─────────
+  // For each category we collect its monthly % of total spend over the last 12
+  // months and take the median — that's "your typical" mix. Categories without
+  // enough history fall back to the static reference. This is real, not invented.
+  const selfMedian = useMemo<Record<string, number>>(() => {
+    const series: Record<string, number[]> = {};
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const mx = expenses.filter(t => t.date.startsWith(key));
+      const byCat: Record<string, number> = {};
+      let total = 0;
+      mx.forEach(t => { const a = Math.abs(t.amount); byCat[t.category] = (byCat[t.category] ?? 0) + a; total += a; });
+      if (total <= 0) continue;
+      for (const [cat, amt] of Object.entries(byCat)) (series[cat] ??= []).push((amt / total) * 100);
+    }
+    const out: Record<string, number> = {};
+    for (const [cat, arr] of Object.entries(series)) {
+      const p = percentiles(arr);
+      if (p) out[cat] = Math.round(p.p50 * 10) / 10;
+    }
+    return out;
+  }, [expenses, today]);
+
+  const usingOwnNorm = Object.keys(selfMedian).length > 0;
+
   const categoryBenchmarks = useMemo(() =>
-    Object.entries(BENCHMARKS).map(([key, { label, median_pct }]) => {
+    Object.keys(curSpend).map(key => {
       const actual = curSpend[key] ?? 0;
       const actual_pct = totalCur > 0 ? (actual / totalCur) * 100 : 0;
-      const delta = actual_pct - median_pct;
-      return { key, label, actual, actual_pct, median_pct, delta };
-    }).filter(c => c.actual > 0).sort((a, b) => b.delta - a.delta),
-  [curSpend, totalCur]);
+      const self = selfMedian[key];
+      const ref = REFERENCE[key]?.median_pct;
+      const median_pct = self != null ? self : (ref ?? null);
+      const source: "self" | "reference" = self != null ? "self" : "reference";
+      const label = CAT_LABEL[key] ?? REFERENCE[key]?.label ?? key;
+      return { key, label, actual, actual_pct, median_pct, source, delta: median_pct != null ? actual_pct - median_pct : 0 };
+    }).filter(c => c.actual > 0 && c.median_pct != null).sort((a, b) => b.delta - a.delta),
+  [curSpend, totalCur, selfMedian]);
 
   // ── 3-month spend trend ───────────────────────────────────────────────────
   const months = [
@@ -127,7 +159,7 @@ export default function SpendPage() {
       <div>
         <h1 className="text-xl font-bold">Spend Intelligence</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Duplicate vendors · silently-growing subscriptions · category vs sector benchmark
+          Duplicate vendors · silently-growing subscriptions · category mix vs your own norm
         </p>
       </div>
 
@@ -243,8 +275,8 @@ export default function SpendPage() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <Eye size={13} className="text-[var(--color-primary)]" />
-          <h2 className="text-sm font-semibold">Category vs Sector Benchmark</h2>
-          <span className="ml-auto text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Indian SMB median</span>
+          <h2 className="text-sm font-semibold">{usingOwnNorm ? "Category vs Your 12-Month Norm" : "Category vs Reference"}</h2>
+          <span className="ml-auto text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">{usingOwnNorm ? "your typical mix" : "Indian SMB reference"}</span>
         </div>
 
         {categoryBenchmarks.length === 0 ? (
@@ -255,7 +287,7 @@ export default function SpendPage() {
               const over = c.delta > 5;
               const under = c.delta < -5;
               const barW = Math.min(c.actual_pct, 100);
-              const benchW = Math.min(c.median_pct, 100);
+              const benchW = Math.min(c.median_pct ?? 0, 100);
               return (
                 <div key={c.key}>
                   <div className="flex items-center justify-between mb-1">
@@ -267,7 +299,7 @@ export default function SpendPage() {
                     <div className="text-right">
                       <span className="text-xs font-bold tabular-nums">{c.actual_pct.toFixed(1)}%</span>
                       <span className="text-[10px] text-[var(--color-muted)] ml-1">of spend</span>
-                      <span className="text-[10px] text-[var(--color-muted)] ml-1">(median {c.median_pct}%)</span>
+                      <span className="text-[10px] text-[var(--color-muted)] ml-1">({c.source === "self" ? "your median" : "ref"} {Math.round(c.median_pct ?? 0)}%)</span>
                     </div>
                   </div>
                   <div className="relative h-2 bg-[var(--color-bg)] rounded-full overflow-visible">
@@ -277,7 +309,7 @@ export default function SpendPage() {
                     <div className="absolute top-0 bottom-0 w-0.5 bg-yellow-500/70" style={{ left: `${benchW}%` }} />
                   </div>
                   <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
-                    {formatCurrency(c.actual)} spent · benchmark line at {c.median_pct}%
+                    {formatCurrency(c.actual)} spent · {c.source === "self" ? "your norm" : "reference"} at {Math.round(c.median_pct ?? 0)}%
                   </p>
                 </div>
               );
@@ -287,7 +319,7 @@ export default function SpendPage() {
 
         <div className="mt-4 flex items-center gap-4 text-[10px] text-[var(--color-muted)]">
           <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-[var(--color-primary)]/60 rounded inline-block" /> Your spend %</span>
-          <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-yellow-500/70 inline-block" /> Benchmark median</span>
+          <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-yellow-500/70 inline-block" /> {usingOwnNorm ? "Your 12-month median" : "Reference median"}</span>
         </div>
       </div>
 
