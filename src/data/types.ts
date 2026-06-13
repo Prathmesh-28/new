@@ -1,5 +1,13 @@
 // ── Auth ──────────────────────────────────────────────────────────────────────
-export type UserRole = "super_admin" | "owner" | "accountant" | "investor";
+export type UserRole =
+  | "super_admin"
+  | "owner"
+  | "finance_manager"
+  | "accountant"
+  | "sales"
+  | "operations_manager"
+  | "viewer"
+  | "investor";
 
 export interface AuthUser {
   id: string;
@@ -269,8 +277,12 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
 };
 
 export const ROLE_NAMESPACES: Record<UserRole, string[]> = {
-  super_admin: ["app", "forecast", "credit", "capital", "operations"],
-  owner:       ["app", "forecast", "credit", "capital", "operations"],
-  accountant:  ["app", "forecast", "operations"],
-  investor:    ["app", "capital"],
+  super_admin:        ["app", "forecast", "credit", "capital", "operations"],
+  owner:              ["app", "forecast", "credit", "capital", "operations"],
+  finance_manager:    ["app", "forecast", "credit", "operations"],
+  accountant:         ["app", "forecast", "operations"],
+  sales:              ["app"],
+  operations_manager: ["app", "operations"],
+  viewer:             ["app", "forecast"],
+  investor:           ["app", "capital"],
 };

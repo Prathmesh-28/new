@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { ROLE_META, ASSIGNABLE_ROLES, roleLabel, roleBadge } from "@/data/roles";
 
 type TeamUser = {
   id: string;
@@ -14,20 +15,6 @@ type TeamUser = {
   first_login: boolean;
 };
 
-const ROLE_BADGE: Record<string, string> = {
-  super_admin: "bg-purple-900/30 text-purple-400 border-purple-800/30",
-  owner:       "bg-[var(--color-primary)]/20 text-[var(--color-primary)] border-[var(--color-primary)]/30",
-  accountant:  "bg-blue-900/30 text-blue-400 border-blue-800/30",
-  investor:    "bg-green-900/30 text-green-400 border-green-800/30",
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  super_admin: "Super Admin",
-  owner:       "Business Owner",
-  accountant:  "Accountant / CA / CFO",
-  investor:    "Investor / Banker",
-};
-
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm } = useApp();
@@ -35,9 +22,10 @@ export default function SettingsPage() {
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [email,    setEmail]    = useState("");
-  const [role,     setRole]     = useState("accountant");
+  const [role,     setRole]     = useState("finance_manager");
   const [inviting, setInviting] = useState(false);
   const [copied,   setCopied]   = useState(false);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
 
   // Firm profile form state (synced from store.firm)
   const [firmName,     setFirmName]     = useState(store.firm.name ?? "");
@@ -162,16 +150,41 @@ export default function SettingsPage() {
     else toast.error("Failed to remove user");
   };
 
+  const handleChangeRole = async (u: TeamUser, newRole: string) => {
+    if (newRole === u.role) return;
+    if (u.id === user.id) { toast.error("You can't change your own role"); return; }
+    setSavingRoleId(u.id);
+    try {
+      const res = await fetch(`${BASE}/api/users/${u.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
+        body:    JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      toast.success(`${u.email} is now ${roleLabel(newRole)}`);
+      loadUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setSavingRoleId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">Settings</h1>
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-sm font-semibold">Team Members</h2>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">Manage who has access to your workspace</p>
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+              <Users size={16} className="text-[var(--color-primary)]" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">Your Team{users.length > 0 ? ` · ${users.length}` : ""}</h2>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your finance person, CA, sales and ops staff in — each sees only their part of Headroom.</p>
+            </div>
           </div>
           <button
             onClick={() => setShowForm(v => !v)}
@@ -183,10 +196,10 @@ export default function SettingsPage() {
 
         {showForm && (
           <form onSubmit={handleInvite} className="mb-6 p-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg space-y-3">
-            <h3 className="text-sm font-semibold">Invite Team Member</h3>
+            <h3 className="text-sm font-semibold">Invite a team member</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input
-                type="email" required placeholder="email@company.com"
+                type="email" required placeholder="name@yourbusiness.com"
                 value={email} onChange={e => setEmail(e.target.value)}
                 className="md:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
               />
@@ -194,13 +207,29 @@ export default function SettingsPage() {
                 value={role} onChange={e => setRole(e.target.value)}
                 className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none"
               >
-                <option value="owner">Business Owner</option>
-                <option value="accountant">Accountant / CA / CFO</option>
-                <option value="investor">Investor / Banker</option>
+                {ASSIGNABLE_ROLES.map(r => (
+                  <option key={r.id} value={r.id}>{r.label}</option>
+                ))}
               </select>
             </div>
+
+            {/* Live preview of what the chosen role can do */}
+            <div className="p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleBadge(role)}`}>{roleLabel(role)}</span>
+                <span className="text-xs text-[var(--color-muted)]">{ROLE_META[role as keyof typeof ROLE_META]?.blurb}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {(ROLE_META[role as keyof typeof ROLE_META]?.scope ?? []).map(s => (
+                  <span key={s} className="text-[11px] text-[var(--color-muted)] flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-[var(--color-primary)]/60 shrink-0" />{s}
+                  </span>
+                ))}
+              </div>
+            </div>
+
             <div className="p-3 bg-[var(--color-accent)] rounded-lg text-xs text-[var(--color-muted)]">
-              <strong className="text-[var(--color-text)]">What happens:</strong> A temporary password is emailed to them. They'll set their own password on first login.
+              <strong className="text-[var(--color-text)]">What happens:</strong> a temporary password is emailed to them. They set their own password on first login and only ever see the parts of Headroom their role allows.
             </div>
             <div className="flex gap-2">
               <button type="submit" disabled={inviting}
@@ -221,36 +250,59 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="divide-y divide-[var(--color-border)]">
-            {users.map(u => (
-              <div key={u.id} className="flex items-center justify-between py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-sm font-bold text-[var(--color-primary)] shrink-0">
-                    {u.email[0].toUpperCase()}
+            {users.map(u => {
+              const isSelf = u.id === user.id;
+              return (
+                <div key={u.id} className="flex items-center justify-between py-3.5 gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-sm font-bold text-[var(--color-primary)] shrink-0">
+                      {u.email[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {u.email}
+                        {isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)] font-normal">(you)</span>}
+                      </p>
+                      <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">
+                        {u.first_login
+                          ? <span className="text-yellow-500">Awaiting first login</span>
+                          : ROLE_META[u.role as keyof typeof ROLE_META]?.blurb ?? "Active"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{u.email}</p>
-                    {u.first_login && (
-                      <p className="text-xs text-yellow-500 mt-0.5">Awaiting first login</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isSelf || u.role === "super_admin" ? (
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${roleBadge(u.role)}`}>
+                        {roleLabel(u.role)}
+                      </span>
+                    ) : (
+                      <select
+                        value={u.role}
+                        disabled={savingRoleId === u.id}
+                        onChange={e => handleChangeRole(u, e.target.value)}
+                        className={`text-xs font-semibold rounded-lg border px-2.5 py-1 outline-none cursor-pointer disabled:opacity-50 ${roleBadge(u.role)}`}
+                        title="Change this member's role"
+                      >
+                        {ASSIGNABLE_ROLES.map(r => (
+                          <option key={r.id} value={r.id} className="bg-[var(--color-surface)] text-[var(--color-text)]">{r.label}</option>
+                        ))}
+                      </select>
+                    )}
+                    {!isSelf && (
+                      <button
+                        onClick={() => handleRemove(u)}
+                        className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1"
+                        title="Remove from workspace"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${ROLE_BADGE[u.role] ?? ""}`}>
-                    {ROLE_LABEL[u.role] ?? u.role}
-                  </span>
-                  {u.id !== user.id && (
-                    <button
-                      onClick={() => handleRemove(u)}
-                      className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {users.length === 0 && (
-              <p className="py-8 text-center text-sm text-[var(--color-muted)]">No team members yet</p>
+              <p className="py-8 text-center text-sm text-[var(--color-muted)]">No team members yet — invite your finance person, accountant or sales staff above.</p>
             )}
           </div>
         )}
@@ -434,21 +486,24 @@ export default function SettingsPage() {
 
       {/* Role reference */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-        <h2 className="text-sm font-semibold mb-4">Role Permissions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { r: "owner",       label: "Business Owner",        perms: ["Dashboard", "Forecast", "Credit", "Capital", "Operations", "Connectors", "Invite users"] },
-            { r: "accountant",  label: "Accountant / CA / CFO", perms: ["Dashboard", "Forecast", "Operations", "Advisor portal (My Clients)"] },
-            { r: "investor",    label: "Investor / Banker",      perms: ["Investor portfolio", "Live raises marketplace"] },
-            { r: "super_admin", label: "Super Admin",            perms: ["All tabs", "All tenants", "Admin panel", "Connectors"] },
-          ].map(({ r, label, perms }) => (
-            <div key={r} className="border border-[var(--color-border)] rounded-lg p-4">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${ROLE_BADGE[r] ?? ""}`}>
-                {ROLE_LABEL[r]}
-              </span>
-              <p className="text-sm font-medium mt-2 mb-2">{label}</p>
+        <h2 className="text-sm font-semibold mb-1">What each role can do</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick the role that matches the person's job. You can change it anytime from the list above.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {ASSIGNABLE_ROLES.map(meta => (
+            <div key={meta.id} className="border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${meta.badge}`}>
+                  {meta.label}
+                </span>
+                {meta.readOnly && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
+                    <Lock size={9} /> read-only
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[var(--color-muted)] mb-2.5 leading-relaxed">{meta.blurb}</p>
               <ul className="space-y-1">
-                {perms.map(p => (
+                {meta.scope.map(p => (
                   <li key={p} className="text-xs text-[var(--color-muted)] flex items-center gap-1.5">
                     <span className="w-1 h-1 rounded-full bg-[var(--color-primary)]/60 shrink-0" />
                     {p}

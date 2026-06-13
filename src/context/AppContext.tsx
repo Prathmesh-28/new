@@ -3,6 +3,7 @@ import {
 } from "react";
 import type { AppStore, UserRole, RoleConfig } from "@/data/types";
 import { FIELD_NAMESPACE, ROLE_NAMESPACES } from "@/data/types";
+import { isReadOnlyRole } from "@/data/roles";
 import { defaultConfig } from "@/data/defaultConfig";
 import { api } from "@/lib/api";
 import { useAuth } from "./AuthContext";
@@ -12,7 +13,8 @@ const LS_KEY   = "hr_store";
 const DEBOUNCE = 400;
 const POLL_MS  = 5000;
 
-const RO_MSG = "You're viewing a client's data — exit client view to make changes.";
+const RO_MSG    = "You're viewing a client's data — exit client view to make changes.";
+const VIEWER_MSG = "Your role has read-only access — ask a workspace owner for edit rights.";
 
 type SetStore = (fn: (s: AppStore) => AppStore) => void;
 
@@ -23,6 +25,7 @@ interface AppCtx {
   setCurrentRole: (r: UserRole) => void;
   canAccess: (tab: string) => boolean;
   canExport: () => boolean;
+  canEdit: () => boolean;
   setStore: SetStore;
   // Client view (advisor feature)
   selectedClientTenantId: string | null;
@@ -98,6 +101,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const role = (user?.role ?? "owner") as UserRole;
 
   const [currentRole, setCurrentRole] = useState<UserRole>(role);
+  // Ref mirror so the write-gate inside setStore never reads a stale role.
+  const roleRef = useRef<UserRole>(role);
+  useEffect(() => { roleRef.current = currentRole; }, [currentRole]);
   const [store, _setStore] = useState<AppStore>(() => {
     try { return { ...defaultConfig, ...JSON.parse(localStorage.getItem(LS_KEY) ?? "{}") }; }
     catch { return defaultConfig; }
@@ -139,10 +145,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [currentRole]);
 
-  // Gate every write: if in client view, show error and bail out
+  // Gate every write: client view (advisor) and read-only roles (viewer) bail out.
   const setStore: SetStore = useCallback((fn) => {
     if (clientIdRef.current !== null) {
       toast.error(RO_MSG, { id: "readonly", duration: 3000 });
+      return;
+    }
+    if (isReadOnlyRole(roleRef.current)) {
+      toast.error(VIEWER_MSG, { id: "viewer-readonly", duration: 3000 });
       return;
     }
     _setStore(prev => {
@@ -216,8 +226,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const canExport = () => {
     if (currentRole === "super_admin") return true;
-    return store.roles.find(r => r.id === currentRole)?.canExport ?? false;
+    const rc = store.roles.find(r => r.id === currentRole);
+    const dc = defaultConfig.roles.find(r => r.id === currentRole);
+    return rc?.canExport ?? dc?.canExport ?? false;
   };
+
+  // False when viewing a client's data (advisor) or when the role is read-only.
+  const canEdit = () => !isReadOnly && !isReadOnlyRole(currentRole);
 
   // ── CRUD factories ─────────────────────────────────────────────────────────
   const add    = <K extends keyof AppStore>(key: K) => (x: AppStore[K] extends (infer I)[] ? I : never) =>
@@ -228,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStore(s => ({ ...s, [key]: (s[key] as { id: string }[]).filter(i => i.id !== id) } as AppStore));
 
   const value: AppCtx = {
-    store, loading, currentRole, setCurrentRole, canAccess, canExport, setStore,
+    store, loading, currentRole, setCurrentRole, canAccess, canExport, canEdit, setStore,
     selectedClientTenantId, selectedClientLabel, setSelectedClient, isReadOnly,
     addBankAccount:          add("bankAccounts"),
     updateBankAccount:       update("bankAccounts"),

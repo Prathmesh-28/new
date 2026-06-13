@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useApp } from "@/context/AppContext";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -67,6 +67,34 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Every routable feature tab. Anything in here that the current role can't access
+// is bounced to their landing page — so a scoped team member (e.g. Sales) can't
+// reach /payroll by typing the URL. Routes NOT in this set (e.g. /profile, unknown
+// paths) fall through untouched so universal pages and the 404 still work.
+const GUARDED_TABS = new Set([
+  "dashboard", "transactions", "alerts", "receivables", "forecast", "credit", "capital",
+  "operations", "advisor", "investor", "connectors", "settings", "admin", "invoices",
+  "gst", "payroll", "suppliers", "lenders", "analytics", "cfo-brief", "vendors", "budgets",
+  "tax", "health", "working-capital", "debt", "valuation", "compliance", "spend", "whatsapp",
+  "scenarios", "collections", "benchmarks", "documents",
+]);
+
+function landingFor(role: string): string {
+  if (role === "investor") return "/investor";
+  if (role === "accountant") return "/advisor";
+  return "/dashboard";
+}
+
+function RouteGuard({ children }: { children: React.ReactNode }) {
+  const { canAccess, currentRole } = useApp();
+  const location = useLocation();
+  const tab = location.pathname.split("/")[1] ?? "";
+  if (GUARDED_TABS.has(tab) && !canAccess(tab)) {
+    return <Navigate to={landingFor(currentRole)} replace />;
+  }
+  return <>{children}</>;
+}
+
 function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette  = useCallback(() => setPaletteOpen(true),  []);
@@ -88,6 +116,7 @@ function AppShell() {
         <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
+              <RouteGuard>
               <Routes>
                 <Route path="/set-password"  element={<SetPasswordPage />} />
                 <Route path="/dashboard"     element={<Dashboard />} />
@@ -127,6 +156,7 @@ function AppShell() {
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />
               </Routes>
+              </RouteGuard>
             </Suspense>
           </ErrorBoundary>
         </main>
