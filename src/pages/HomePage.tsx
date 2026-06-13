@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown } from "lucide-react";
+import { initHero3D } from "@/animations/hero3d";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -60,7 +61,7 @@ function DashMockup() {
         </div>
         <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(196,217,122,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position — next 90 days</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
+          <div data-h3d="cashbars" style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
             {BARS.map((h, i) => (
               <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7, height: `${Math.round(h * 0.72)}%`, background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright, opacity: i < 10 ? 0.5 : 0.85 }} />
             ))}
@@ -109,6 +110,9 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
+  // Decorative 3D/WebGL hero background layers (behind all content, reduced-motion aware)
+  useEffect(() => initHero3D(), []);
+
   return (
     <div style={{ background: C.creamW, color: C.txt, fontFamily: sans, overflowX: "hidden" }}>
 
@@ -130,7 +134,7 @@ export default function HomePage() {
       </nav>
 
       {/* ═══ HERO ═════════════════════════════════════════════════════════════ */}
-      <section style={{ background: C.deepest, paddingTop: 128, paddingBottom: 80, paddingLeft: 48, paddingRight: 48, position: "relative", overflow: "hidden" }}>
+      <section data-h3d="hero" style={{ background: C.deepest, paddingTop: 128, paddingBottom: 80, paddingLeft: 48, paddingRight: 48, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, right: 0, width: "50%", height: "100%", background: C.deep, clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0% 100%)", zIndex: 0 }} />
         <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
           <div className="animate-fade-up">
@@ -159,12 +163,12 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="animate-fade-up delay-200"><DashMockup /></div>
+          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}><DashMockup /></div>
         </div>
       </section>
 
       {/* ═══ STATS STRIP ══════════════════════════════════════════════════════ */}
-      <div style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
+      <div data-h3d="stats" style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
         {[
           { n:"₹340Cr+",  d:"Forecasted cash tracked"     },
           { n:"12,000+",  d:"SMBs on the platform"         },
