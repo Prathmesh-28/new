@@ -37,7 +37,7 @@ export default function BillingCard() {
   const plan = (billing?.plan ?? user?.plan ?? "free") as PlanTier;
   const rank = PLAN_RANK[plan];
 
-  const upgrade = async (id: Exclude<PlanTier, "free">) => { setBusy(id); await startCheckout(id); setBusy(null); };
+  const upgrade = async (id: Exclude<PlanTier, "free">) => { setBusy(id); await startCheckout(id, () => { load(); refreshUser(); }); setBusy(null); };
   const manage = async () => { setBusy("portal"); await openBillingPortal(); setBusy(null); };
 
   return (

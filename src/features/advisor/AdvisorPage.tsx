@@ -869,8 +869,8 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
           <p className="text-sm text-[var(--color-muted)]">No invoices yet. Create your first invoice to a client.</p>
         </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>
                 {["Client", "Description", "Amount", "Due", "Status", "Actions"].map(h => (

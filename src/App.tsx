@@ -7,6 +7,8 @@ import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import UpsellGate from "@/components/UpsellGate";
+import OfflineBanner from "@/components/OfflineBanner";
+import { onAppResume } from "@/lib/mobile";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
@@ -129,6 +131,7 @@ function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette  = useCallback(() => setPaletteOpen(true),  []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
+  const { refreshUser } = useAuth();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -138,10 +141,15 @@ function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Refresh entitlements when the app returns to the foreground (e.g. after an
+  // upgrade completed elsewhere, or on native resume).
+  useEffect(() => onAppResume(() => { refreshUser(); }), [refreshUser]);
+
   return (
     <div className="flex min-h-screen bg-[var(--color-bg)]">
       <Sidebar onOpenSearch={openPalette} />
       <div className="flex-1 flex flex-col min-w-0">
+        <OfflineBanner />
         <PreviewBanner />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
         <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">

@@ -192,8 +192,8 @@ export default function VendorsPage() {
           <p className="text-sm text-[var(--color-muted)]">No vendors found. Import transactions to populate the vendor directory.</p>
         </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Vendor</th>

@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { PlanTier } from "@/data/types";
+import { isNative, openCheckout, shareContent, haptic } from "@/lib/mobile";
 
 // India-first currency detection — mirrors the landing page (Asia/Kolkata / India
 // locale → INR; clear US signals → USD; everything else defaults to INR).
@@ -29,15 +30,26 @@ export async function fetchBilling(): Promise<BillingState> {
   return api.get<BillingState>("/api/billing/current");
 }
 
-// Start a subscription upgrade — redirects the browser to Stripe Checkout.
-export async function startCheckout(plan: Exclude<PlanTier, "free">): Promise<void> {
+// Start a subscription upgrade. On web this redirects to Stripe Checkout; on
+// native it opens Checkout in an in-app browser and, when that closes, confirms
+// the session (the native app is authenticated, so the plan applies without
+// relying on a webhook) and fires onComplete so the UI can refresh entitlements.
+export async function startCheckout(plan: Exclude<PlanTier, "free">, onComplete?: () => void): Promise<void> {
   try {
-    const { url } = await api.post<{ url: string }>("/api/billing/checkout-session", {
+    haptic("medium");
+    const { url, id } = await api.post<{ url: string; id: string }>("/api/billing/checkout-session", {
       plan,
       currency: regionCurrency(),
     });
-    if (url) { window.location.href = url; return; }
-    toast.error("Could not start checkout. Please try again.");
+    if (!url) { toast.error("Could not start checkout. Please try again."); return; }
+    if (isNative()) {
+      await openCheckout(url, async () => {
+        await confirmCheckout(id);
+        onComplete?.();
+      });
+    } else {
+      window.location.href = url;
+    }
   } catch (e) {
     toast.error(apiMessage(e) || "Payments aren't enabled yet — please try again later.");
   }
@@ -48,7 +60,7 @@ export async function startCheckout(plan: Exclude<PlanTier, "free">): Promise<vo
 export async function confirmCheckout(sessionId: string): Promise<PlanTier | null> {
   try {
     const { plan, applied } = await api.post<{ plan: PlanTier; applied: boolean }>("/api/billing/confirm", { session_id: sessionId });
-    if (applied) toast.success("You're upgraded — welcome aboard! 🎉");
+    if (applied) { haptic("success"); toast.success("You're upgraded — welcome aboard! 🎉"); }
     return plan;
   } catch { return null; }
 }
@@ -62,14 +74,24 @@ export async function openBillingPortal(): Promise<void> {
   }
 }
 
-// Create a Stripe payment link for an invoice and open it in a new tab.
+// Create a Stripe payment link for an invoice. On native, open the OS share
+// sheet so the owner can send it to the customer (WhatsApp/SMS/email); on web,
+// open it in a new tab.
 export async function payInvoiceWithStripe(invoiceId: string): Promise<void> {
   try {
+    haptic("light");
     const { url } = await api.post<{ url: string }>("/api/billing/invoice-link", {
       invoice_id: invoiceId,
       currency: regionCurrency(),
     });
-    if (url) { window.open(url, "_blank", "noopener"); toast.success("Payment link opened — share it with your customer."); return; }
+    if (!url) { toast.error("Could not create a payment link."); return; }
+    if (isNative()) {
+      const res = await shareContent({ title: "Pay your invoice", text: "Here's a secure card payment link for your invoice:", url, dialogTitle: "Send payment link" });
+      toast.success(res === "copied" ? "Payment link copied to clipboard" : "Payment link ready to share");
+    } else {
+      window.open(url, "_blank", "noopener");
+      toast.success("Payment link opened — share it with your customer.");
+    }
   } catch (e) {
     toast.error(apiMessage(e) || "Could not create a payment link.");
   }

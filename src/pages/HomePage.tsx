@@ -140,7 +140,25 @@ export default function HomePage() {
   useEffect(() => initHero3D(), []);
 
   return (
-    <div style={{ background: C.creamW, color: C.txt, fontFamily: sans, overflowX: "hidden" }}>
+    <div className="hr-landing" style={{ background: C.creamW, color: C.txt, fontFamily: sans, overflowX: "hidden" }}>
+
+      {/* Mobile responsiveness for the inline-styled landing page. Scoped to
+          .hr-landing so it never leaks into the app. Collapses multi-column
+          grids, trims the 48px gutters, and shrinks oversized headings on phones. */}
+      <style>{`
+        @media (max-width: 820px) {
+          .hr-landing [style*="grid-template-columns"] { grid-template-columns: 1fr !important; gap: 16px !important; }
+          .hr-landing [style*="px 48px"] { padding-left: 20px !important; padding-right: 20px !important; }
+          .hr-landing [style*="padding-left: 48px"] { padding-left: 20px !important; }
+          .hr-landing [style*="padding-right: 48px"] { padding-right: 20px !important; }
+          .hr-landing [style*="font-size: 56px"] { font-size: 34px !important; }
+          .hr-landing [style*="font-size: 50px"] { font-size: 32px !important; line-height: 1.1 !important; }
+          .hr-landing [style*="font-size: 40px"] { font-size: 26px !important; }
+        }
+        @media (max-width: 420px) {
+          .hr-landing [style*="font-size: 50px"] { font-size: 27px !important; }
+        }
+      `}</style>
 
       {/* ═══ NAV ══════════════════════════════════════════════════════════════ */}
       <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(196,217,122,0.1)` : "none" }}>

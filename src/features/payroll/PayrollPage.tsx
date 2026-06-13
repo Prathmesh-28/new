@@ -234,8 +234,8 @@ export default function PayrollPage() {
             <button onClick={() => setShowAdd(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">Add Employee</button>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>
                   {["Name", "Email", "Gross Salary", "TDS / month", "Net Pay", "Status"].map(h => (

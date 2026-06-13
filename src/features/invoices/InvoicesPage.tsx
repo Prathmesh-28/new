@@ -371,8 +371,8 @@ export default function InvoicesPage() {
           <button onClick={() => setShowNew(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">Create Invoice</button>
         </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
             <thead className="bg-[var(--color-surface)] border-b border-[var(--color-border)]">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Invoice</th>

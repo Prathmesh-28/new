@@ -13,7 +13,7 @@ const PRICE: Record<Exclude<PlanTier, "free">, { inr: string; usd: string }> = {
    premium feature. The carrot: clear value, social proof, one-click upgrade to
    Stripe Checkout. super_admin never sees this (handled upstream). */
 export default function UpsellGate({ feature, requiredPlan }: { feature: string; requiredPlan: Exclude<PlanTier, "free"> }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const inr = regionCurrency() === "inr";
   const pitch = FEATURE_PITCH[feature] ?? { title: "This feature", blurb: "Unlock more of Headroom.", perks: [] };
@@ -22,8 +22,8 @@ export default function UpsellGate({ feature, requiredPlan }: { feature: string;
 
   const upgrade = async () => {
     setLoading(true);
-    await startCheckout(requiredPlan);
-    setLoading(false); // only reached if redirect failed
+    await startCheckout(requiredPlan, refreshUser); // native: refresh entitlements on return
+    setLoading(false); // only reached on web if redirect failed, or native after close
   };
 
   return (
