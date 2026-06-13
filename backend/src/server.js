@@ -3,6 +3,10 @@ require("dotenv").config();
 // and many container hosts (Render free tier) lack working IPv6 egress — which
 // surfaces as persistent "connection error" to api.stripe.com et al. Force IPv4.
 try { require("dns").setDefaultResultOrder("ipv4first"); } catch { /* older Node */ }
+// `dns` order only helps clients that use dns.lookup (e.g. Node's https module).
+// Node's global fetch()/undici (used for Razorpay) ignores it and can HANG on a
+// dead IPv6 route. Happy Eyeballs races IPv4+IPv6 so the working one wins fast.
+try { require("net").setDefaultAutoSelectFamily(true); } catch { /* Node < 18.13 */ }
 const express   = require("express");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");

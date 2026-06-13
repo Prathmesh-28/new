@@ -27,11 +27,24 @@ async function createOrder({ amount, currency = "INR", receipt, notes }) {
     throw e;
   }
   const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
-  const resp = await fetch("https://api.razorpay.com/v1/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
-    body: JSON.stringify({ amount, currency, receipt, notes, payment_capture: 1 }),
-  });
+  // Hard timeout so a stalled outbound connection fails fast (clean 500) instead
+  // of leaving the request — and the client's button spinner — hanging forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch("https://api.razorpay.com/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ amount, currency, receipt, notes, payment_capture: 1 }),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay — please try again.");
+    throw new Error(`Couldn't reach Razorpay: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const e = new Error(data?.error?.description || `Razorpay order failed (${resp.status})`);
