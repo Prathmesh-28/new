@@ -220,6 +220,85 @@ export default function CreditPage() {
             </div>
           )}
 
+          {/* Optimal Borrow Timing */}
+          {(() => {
+            // Compute next-month projected score improvement
+            const now = new Date();
+            const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+            const lastMDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+            const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
+            const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
+            const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
+            const trending = thisRev > lastRev * 1.05;
+            const emiLoad  = activeLoans.length > 0 ? activeLoans.reduce((s,l) => s + l.monthlyEmi, 0) : 0;
+            const capacity = burn > 0 ? Math.max(0, Math.round(((burn * 0.3) - emiLoad) / 1000)) : 0;
+            const emiPct   = burn > 0 ? Math.round((emiLoad / burn) * 100) : 0;
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Borrow timing */}
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp size={14} className="text-[var(--color-primary)]" />
+                    <h3 className="text-sm font-semibold">Right time to borrow?</h3>
+                  </div>
+                  {bestScore === 0 ? (
+                    <p className="text-xs text-[var(--color-muted)]">Apply first to get a score, then we'll tell you the optimal timing.</p>
+                  ) : bestScore >= 65 ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-2.5 bg-green-950/20 border border-green-800/30 rounded-lg">
+                        <CheckCircle2 size={13} className="text-green-400 shrink-0" />
+                        <p className="text-xs text-green-300 font-medium">Now is a good time — score {bestScore}/100</p>
+                      </div>
+                      <p className="text-xs text-[var(--color-muted)]">Your score qualifies for competitive rates. Borrowing now vs waiting 3 months saves on rate drift.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-2.5 bg-yellow-950/20 border border-yellow-800/30 rounded-lg">
+                        <Clock size={13} className="text-yellow-400 shrink-0" />
+                        <p className="text-xs text-yellow-300 font-medium">
+                          {trending ? "Wait 30 days — revenue trending up, score will improve" : `Score ${bestScore}/100 — ${50 - bestScore} pts to approval`}
+                        </p>
+                      </div>
+                      <p className="text-xs text-[var(--color-muted)]">
+                        {trending
+                          ? "Revenue growing month-over-month. One more consistent month adds ~8 pts to your score."
+                          : "Fix the items in the 'Not yet' tab to reach the 50-pt threshold. Each fix adds measurable points."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* EMI capacity gauge */}
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle size={14} className={emiPct > 40 ? "text-red-400" : emiPct > 25 ? "text-yellow-400" : "text-green-400"} />
+                    <h3 className="text-sm font-semibold">EMI capacity</h3>
+                  </div>
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-[var(--color-muted)]">EMI as % of monthly burn</span>
+                      <span className={`font-bold ${emiPct > 40 ? "text-red-400" : emiPct > 25 ? "text-yellow-400" : "text-green-400"}`}>{emiPct}%</span>
+                    </div>
+                    <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, emiPct)}%`, background: emiPct > 40 ? "#ef4444" : emiPct > 25 ? "#eab308" : "#22c55e" }} />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-[var(--color-muted)] mt-1">
+                      <span>Safe (0–25%)</span><span>Caution (25–40%)</span><span>High risk (40%+)</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--color-muted)]">
+                    {emiLoad === 0
+                      ? `You have no active EMIs. You can safely take on up to ₹${capacity}K/month.`
+                      : emiPct > 40
+                        ? "EMI load is high. Adding another loan increases default risk significantly."
+                        : `You can absorb ~₹${capacity}K/month in additional EMI without stress.`}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Score factors */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <h3 className="text-sm font-semibold mb-3">How your score is computed</h3>

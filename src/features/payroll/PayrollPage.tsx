@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2 } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
 interface Employee {
@@ -113,7 +114,10 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips">("employees");
+  const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
+  const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
+  const [slipYear, setSlipYear]   = useState(now.getFullYear());
   const [ewaData, setEwaData]     = useState<{ day_of_month: number; employees: { id: string; name: string; gross_salary: number; earned_to_date: number; max_advance: number; advances_taken: number }[] } | null>(null);
   const [ewaLoading, setEwaLoading] = useState(false);
   const [requesting, setRequesting] = useState<Record<string, boolean>>({});
@@ -211,8 +215,8 @@ export default function PayrollPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote]] as const).map(([id, label, Icon]) => (
+      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -381,6 +385,148 @@ export default function PayrollPage() {
           </div>
         )
       )}
+
+      {/* Salary Slips tab */}
+      {tab === "slips" && (() => {
+        const emp = slipEmp ?? (employees[0] ?? null);
+        if (!emp) return (
+          <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center">
+            <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">Add employees first to generate salary slips.</p>
+          </div>
+        );
+
+        const gross     = parseFloat(String(emp.gross_salary));
+        const basic     = Math.round(gross * 0.50);
+        const hra       = Math.round(gross * 0.20);
+        const special   = Math.round(gross * 0.20);
+        const transport = Math.round(gross * 0.10);
+        const pf        = Math.round(basic * 0.12);
+        const profTax   = gross > 15000 ? 200 : 0;
+        const tds       = Math.round(parseFloat(String(emp.tds_monthly)));
+        const totalDeductions = pf + profTax + tds;
+        const net       = gross - totalDeductions;
+        const monthName = MONTH_NAMES[slipMonth - 1];
+
+        return (
+          <div className="space-y-4">
+            {/* Controls */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <select value={emp?.id} onChange={e => setSlipEmp(employees.find(em => em.id === e.target.value) ?? null)}
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                {employees.map(em => <option key={em.id} value={em.id}>{em.name}</option>)}
+              </select>
+              <select value={slipMonth} onChange={e => setSlipMonth(parseInt(e.target.value))}
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+              <input type="number" value={slipYear} onChange={e => setSlipYear(parseInt(e.target.value) || slipYear)}
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none w-20" />
+              <button
+                onClick={() => toast.success("PDF download coming soon — salary slip generated")}
+                className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+                <Download size={12} /> Download PDF
+              </button>
+            </div>
+
+            {/* Salary slip preview */}
+            <div className="bg-white text-gray-900 rounded-lg border border-gray-200 p-6 max-w-2xl text-xs font-mono">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
+                <div>
+                  <p className="text-base font-bold text-gray-900 font-sans">SALARY SLIP</p>
+                  <p className="text-gray-600 font-sans">For the month of {monthName} {slipYear}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-900 font-sans">Headroom Business</p>
+                  <p className="text-gray-600">payroll@headroom.in</p>
+                </div>
+              </div>
+
+              {/* Employee details */}
+              <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-200">
+                <div>
+                  <p className="text-gray-500 mb-0.5">Employee Name</p>
+                  <p className="font-semibold">{emp.name}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-0.5">PAN</p>
+                  <p className="font-semibold">{emp.pan || "XXXXX0000X"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-0.5">Bank Account</p>
+                  <p className="font-semibold">{emp.bank_account ? "****" + emp.bank_account.slice(-4) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-0.5">Pay Date</p>
+                  <p className="font-semibold">28 {monthName} {slipYear}</p>
+                </div>
+              </div>
+
+              {/* Earnings + Deductions */}
+              <div className="grid grid-cols-2 gap-6 mb-4">
+                <div>
+                  <p className="font-bold text-gray-700 mb-2 font-sans">EARNINGS</p>
+                  <table className="w-full">
+                    <tbody>
+                      {[
+                        ["Basic Salary",          basic],
+                        ["House Rent Allowance",  hra],
+                        ["Special Allowance",     special],
+                        ["Transport Allowance",   transport],
+                      ].map(([label, val]) => (
+                        <tr key={label as string} className="border-b border-gray-100">
+                          <td className="py-1 text-gray-600">{label as string}</td>
+                          <td className="py-1 text-right font-semibold">₹{(val as number).toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-bold">
+                        <td className="pt-2">Gross Earnings</td>
+                        <td className="pt-2 text-right">₹{gross.toLocaleString("en-IN")}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div>
+                  <p className="font-bold text-gray-700 mb-2 font-sans">DEDUCTIONS</p>
+                  <table className="w-full">
+                    <tbody>
+                      {[
+                        ["Provident Fund (12%)", pf],
+                        ["Professional Tax",    profTax],
+                        ["TDS (Income Tax)",    tds],
+                      ].map(([label, val]) => (
+                        <tr key={label as string} className="border-b border-gray-100">
+                          <td className="py-1 text-gray-600">{label as string}</td>
+                          <td className="py-1 text-right text-red-600 font-semibold">₹{(val as number).toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-bold">
+                        <td className="pt-2">Total Deductions</td>
+                        <td className="pt-2 text-right text-red-700">₹{totalDeductions.toLocaleString("en-IN")}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Net pay */}
+              <div className="bg-gray-50 border border-gray-200 rounded p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-[10px]">NET PAY (take-home)</p>
+                  <p className="text-xl font-bold text-green-700 font-sans">₹{net.toLocaleString("en-IN")}</p>
+                </div>
+                <div className="text-right text-[10px] text-gray-500">
+                  <p>Amount in words:</p>
+                  <p className="italic">{net.toLocaleString("en-IN")} Rupees only</p>
+                </div>
+              </div>
+
+              <p className="text-gray-400 text-[9px] mt-3 text-center">This is a computer-generated salary slip. No signature required. · Generated by Headroom</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>

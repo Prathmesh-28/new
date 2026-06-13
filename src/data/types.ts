@@ -151,7 +151,7 @@ export interface CapitalInvestment {
 }
 
 // ── Connectors ────────────────────────────────────────────────────────────────
-export type ConnectorProvider = "aa_network" | "finbox" | "tally" | "zoho_books" | "quickbooks" | "manual";
+export type ConnectorProvider = "aa_network" | "finbox" | "tally" | "zoho_books" | "quickbooks" | "manual" | "razorpay" | "stripe" | "phonepe";
 
 export interface BankConnector {
   id: string;

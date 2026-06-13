@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Star, TrendingDown, TrendingUp, Award } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
 
@@ -366,6 +366,65 @@ export default function ReceivablesPage() {
           </div>
         </div>
       )}
+
+      {/* Customer Payment DNA */}
+      {invoices.length >= 2 && (() => {
+        // Build per-customer stats from all invoices
+        const customerMap: Record<string, { total: number; paidCount: number; totalCount: number; avgDays: number; daysArr: number[] }> = {};
+        invoices.forEach(inv => {
+          const c = inv.customer;
+          if (!customerMap[c]) customerMap[c] = { total: 0, paidCount: 0, totalCount: 0, avgDays: 0, daysArr: [] };
+          customerMap[c].total += inv.amount;
+          customerMap[c].totalCount++;
+          if (inv.status === "paid") {
+            customerMap[c].paidCount++;
+            const daysOverdue = differenceInDays(new Date(), parseISO(inv.dueDate));
+            customerMap[c].daysArr.push(Math.max(0, daysOverdue));
+          }
+        });
+        const customers = Object.entries(customerMap).map(([name, stats]) => {
+          const payRate = stats.totalCount > 0 ? (stats.paidCount / stats.totalCount) * 100 : 0;
+          const avgDaysLate = stats.daysArr.length > 0 ? stats.daysArr.reduce((a, b) => a + b, 0) / stats.daysArr.length : 0;
+          const score = Math.max(0, Math.min(100, Math.round(payRate * 0.6 + Math.max(0, 40 - avgDaysLate * 2))));
+          const reliability = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Poor";
+          const reliabilityColor = score >= 80 ? "text-green-400" : score >= 60 ? "text-[var(--color-primary)]" : score >= 40 ? "text-yellow-400" : "text-red-400";
+          return { name, score, payRate, avgDaysLate: Math.round(avgDaysLate), total: stats.total, paidCount: stats.paidCount, totalCount: stats.totalCount, reliability, reliabilityColor };
+        }).sort((a, b) => b.score - a.score);
+
+        return (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Award size={14} className="text-[var(--color-primary)]" />
+              <h2 className="text-sm font-semibold">Customer Payment DNA</h2>
+              <span className="text-xs text-[var(--color-muted)] ml-auto">Who pays on time, who stalls</span>
+            </div>
+            <div className="space-y-3">
+              {customers.slice(0, 8).map((c, i) => (
+                <div key={c.name} className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--color-muted)] w-4 shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <span className={`text-xs font-semibold shrink-0 ml-2 ${c.reliabilityColor}`}>{c.reliability}</span>
+                    </div>
+                    <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${c.score}%`, background: c.score >= 80 ? "#22c55e" : c.score >= 60 ? "#1A6B55" : c.score >= 40 ? "#eab308" : "#ef4444" }} />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 min-w-[90px]">
+                    <p className="text-xs text-[var(--color-text)] font-semibold tabular-nums">{formatCurrency(c.total)}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">
+                      {c.paidCount}/{c.totalCount} paid
+                      {c.avgDaysLate > 0 && ` · avg ${c.avgDaysLate}d late`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-[var(--color-muted)] mt-3">Score = payment rate × 60% + speed × 40%. Use this to decide credit terms per customer.</p>
+          </div>
+        );
+      })()}
 
       {showAdd && (
         <AddInvoiceModal

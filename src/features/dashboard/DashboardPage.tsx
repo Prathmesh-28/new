@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
-import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { format, addMonths, setDate, isBefore } from "date-fns";
+import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { format, addMonths, setDate, isBefore, addDays } from "date-fns";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -77,6 +77,148 @@ function StatCard({ label, raw, display, icon: Icon, color, trend, delta, onClic
             {delta > 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}% vs last mo
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CashThisWeekWidget() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+
+  const balance  = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const avgDaily = monthlyBurn(transactions) / 30;
+
+  // Compute expected daily patterns from last 4 weeks
+  const now = new Date();
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date     = addDays(now, i);
+    const dow      = date.getDay(); // 0=Sun, 1=Mon...
+    const dayLabel = i === 0 ? "Today" : i === 1 ? "Tomorrow" : format(date, "EEE d");
+
+    // Revenue pattern: avg inflow for same day-of-week over last 4 weeks
+    const inflows = [1, 2, 3, 4].map(w => {
+      const d = addDays(date, -w * 7);
+      const key = d.toISOString().split("T")[0];
+      return transactions.filter(t => t.date === key && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    });
+    const avgInflow = inflows.reduce((s, v) => s + v, 0) / 4;
+
+    // Outflow: daily burn + weekend suppression
+    const isWeekend   = dow === 0 || dow === 6;
+    const dailyOutflow = isWeekend ? avgDaily * 0.3 : avgDaily;
+
+    const net = avgInflow - dailyOutflow;
+    return { label: dayLabel, inflow: Math.round(avgInflow / 1000), outflow: Math.round(dailyOutflow / 1000), net: Math.round(net / 1000), isWeekend };
+  });
+
+  const maxVal = Math.max(...days.map(d => Math.max(d.inflow, d.outflow)), 1);
+  const hasPattern = days.some(d => d.inflow > 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <Target size={13} className="text-[var(--color-primary)]" />
+            Cash This Week
+          </h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Expected daily inflows vs outflows · based on your transaction patterns</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-[var(--color-muted)]">Current balance</p>
+          <p className="text-sm font-bold text-[var(--color-primary)]">{formatCurrency(balance)}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d, i) => {
+          const inflowPct  = (d.inflow  / maxVal) * 100;
+          const outflowPct = (d.outflow / maxVal) * 100;
+          const isGood     = d.net >= 0;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1">
+              {/* Bars */}
+              <div className="relative w-full flex gap-0.5 items-end h-14">
+                <div className="flex-1 rounded-t transition-all" style={{ height: `${Math.max(4, inflowPct)}%`, background: "#1A6B55", opacity: d.inflow > 0 ? 1 : 0.15 }} title={`Inflow: ₹${d.inflow}K`} />
+                <div className="flex-1 rounded-t transition-all" style={{ height: `${Math.max(4, outflowPct)}%`, background: "#ef4444", opacity: 0.7 }} title={`Outflow: ₹${d.outflow}K`} />
+              </div>
+              {/* Net indicator */}
+              <div className={`text-[9px] font-bold tabular-nums ${isGood ? "text-green-400" : "text-red-400"}`}>
+                {d.net >= 0 ? "+" : ""}{d.net}K
+              </div>
+              {/* Day label */}
+              <p className={`text-[9px] text-center leading-tight ${d.isWeekend ? "text-[var(--color-muted)]/50" : "text-[var(--color-muted)]"}`}>{d.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]"><span className="w-2.5 h-2.5 rounded-sm bg-[#1A6B55] inline-block" /> Expected inflow</div>
+        <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-muted)]"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/70 inline-block" /> Expected outflow</div>
+        {!hasPattern && <span className="text-[10px] text-[var(--color-muted)] italic">Add transactions to see inflow patterns</span>}
+      </div>
+    </div>
+  );
+}
+
+function SmartActionsPanel() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, alerts } = store;
+  const navigate = useNavigate();
+
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const burn    = monthlyBurn(transactions);
+  const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);
+
+  const today = new Date().toISOString().split("T")[0];
+  const invs  = (store as { invoices?: { dueDate: string; amount: number; customer: string; status: string }[] }).invoices ?? [];
+  const overdue = invs.filter(i => i.dueDate < today && i.status !== "paid");
+  const overdueAmt = overdue.reduce((s, i) => s + i.amount, 0);
+
+  const actions: { urgency: number; label: string; detail: string; path: string; color: string }[] = [];
+
+  if (runway > 0 && runway < 30) {
+    actions.push({ urgency: 10, label: "Cash crunch in " + runway + " days", detail: "Explore working capital options now — don't wait.", path: "/credit", color: "text-red-400" });
+  }
+  if (overdueAmt > 0) {
+    actions.push({ urgency: 9, label: `Chase ${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, detail: `${formatCurrency(overdueAmt)} outstanding — ${overdue[0]?.customer} is highest priority.`, path: "/receivables", color: "text-orange-400" });
+  }
+  const unread = alerts.filter(a => !a.isRead);
+  if (unread.length > 0) {
+    actions.push({ urgency: 7, label: `${unread.length} unread alert${unread.length > 1 ? "s" : ""}`, detail: unread[0]?.message ?? "Review your alerts.", path: "/alerts", color: "text-yellow-400" });
+  }
+  if (burn > balance * 0.3 && runway < 90) {
+    actions.push({ urgency: 6, label: "High burn relative to balance", detail: `Monthly burn ₹${Math.round(burn / 1000)}K is ${Math.round((burn / balance) * 100)}% of balance. Review spend.`, path: "/spend", color: "text-orange-400" });
+  }
+  actions.push({ urgency: 3, label: "Review sector benchmarks", detail: "See how your margins compare to industry peers.", path: "/benchmarks", color: "text-[var(--color-primary)]" });
+
+  const top3 = actions.sort((a, b) => b.urgency - a.urgency).slice(0, 3);
+
+  if (top3.length === 0) return null;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <h2 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+        <Zap size={13} className="text-yellow-400" />
+        Priority actions
+      </h2>
+      <div className="space-y-2">
+        {top3.map((a, i) => (
+          <button
+            key={i}
+            onClick={() => navigate(a.path)}
+            className="w-full flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-white/3 transition-colors text-left group border border-transparent hover:border-[var(--color-primary)]/20"
+          >
+            <span className={`text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${i === 0 ? "bg-red-950/50 text-red-400" : i === 1 ? "bg-orange-950/50 text-orange-400" : "bg-yellow-950/50 text-yellow-400"}`}>{i + 1}</span>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${a.color}`}>{a.label}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5 leading-snug">{a.detail}</p>
+            </div>
+            <ChevronRight size={13} className="text-[var(--color-muted)] shrink-0 mt-1 group-hover:text-[var(--color-primary)] transition-colors" />
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -534,6 +676,8 @@ export default function DashboardPage() {
             ))}
           </div>
 
+          <CashThisWeekWidget />
+          <SmartActionsPanel />
           <TreasuryBanner />
           <HealthScoreWidget />
 

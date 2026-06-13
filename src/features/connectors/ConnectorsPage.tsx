@@ -64,6 +64,39 @@ const PROVIDERS: {
       { key: "accountName", label: "Company name", placeholder: "Acme Pvt Ltd" },
     ],
   },
+  {
+    id: "razorpay",
+    name: "Razorpay",
+    desc: "Sync all Razorpay settlements, payment links, and refunds as transactions automatically. Real-time webhooks.",
+    tag: "Indian Payments",
+    icon: "💙",
+    setupFields: [
+      { key: "accountName", label: "Razorpay account name", placeholder: "My Business" },
+      { key: "webhookSecret", label: "Webhook secret key", placeholder: "whsec_…", type: "password" },
+    ],
+  },
+  {
+    id: "stripe",
+    name: "Stripe",
+    desc: "Automatically import Stripe payouts, charges, and refunds. Ideal for SaaS and e-commerce revenue tracking.",
+    tag: "Global Payments",
+    icon: "💳",
+    setupFields: [
+      { key: "accountName", label: "Stripe account name", placeholder: "My Company" },
+      { key: "webhookSecret", label: "Stripe webhook secret", placeholder: "whsec_…", type: "password" },
+    ],
+    webhookNote: undefined,
+  },
+  {
+    id: "phonepe",
+    name: "PhonePe Business",
+    desc: "Pull PhonePe Business settlement data and reconcile UPI receipts automatically with your cash balance.",
+    tag: "UPI Payments",
+    icon: "📱",
+    setupFields: [
+      { key: "accountName", label: "Merchant ID", placeholder: "PGTESTPAYUAT" },
+    ],
+  },
 ];
 
 const STATUS_UI = {
