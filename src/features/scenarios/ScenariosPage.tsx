@@ -104,8 +104,12 @@ export default function ScenariosPage() {
     },
   })), [events]);
 
-  const base = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600 }), [store]);
-  const scen = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600, scenarios }), [store, scenarios]);
+  // Pin the SAME seed on both runs so base vs scenario differ only by the
+  // scenario delta — not by RNG noise (runForecast otherwise derives its seed
+  // from the config, which changes when scenarios are present).
+  const SEED = 1337;
+  const base = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600, seed: SEED }), [store]);
+  const scen = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600, seed: SEED, scenarios }), [store, scenarios]);
 
   const baseRunway = base.risk.runwayDist.p50;
   const scenRunway = scen.risk.runwayDist.p50;
