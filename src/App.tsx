@@ -154,7 +154,7 @@ function AppShell() {
         <TenantSwitcher />
         <PreviewBanner />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
-        <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
+        <main className="flex-1 px-5 py-5 pt-16 md:p-6 md:pt-6 overflow-auto">
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <RouteGuard>
