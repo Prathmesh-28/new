@@ -62,6 +62,12 @@ export default function CfoBriefPage() {
   const [rawBrief,  setRawBrief]  = useState("");
   const [loading,   setLoading]   = useState(false);
   const [generated, setGenerated] = useState<Date | null>(null);
+  const [mode,      setMode]      = useState<"brief" | "investor">("brief");
+  const isInvestor = mode === "investor";
+
+  // Switching audience clears the stale output so an investor update never shows
+  // under the CFO-brief heading (and vice versa).
+  const switchMode = (m: "brief" | "investor") => { if (m !== mode) { setMode(m); setBrief(null); setRawBrief(""); setGenerated(null); } };
 
   const burn    = monthlyBurn(transactions);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
@@ -90,19 +96,38 @@ export default function CfoBriefPage() {
   const totalDebt    = activeLoans.reduce((s, l) => s + l.outstanding, 0);
   const totalEmi     = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0);
 
+  const momPct = lastMRev > 0 ? `${thisMRev >= lastMRev ? "+" : ""}${Math.round(((thisMRev - lastMRev) / lastMRev) * 100)}%` : "n/a";
+
+  const DATA_BLOCK = `- Cash balance: ${formatCurrency(balance)}
+- Cash runway: ${runway} days
+- Monthly burn rate: ${formatAmount(burn)}
+- This month revenue: ${formatAmount(thisMRev)} (vs last month ${formatAmount(lastMRev)}, MoM ${momPct})
+- This month expenses: ${formatAmount(thisMExp)} (vs last month ${formatAmount(lastMExp)})
+- Active loans: ${activeLoans.length} loans, ${formatAmount(totalDebt)} outstanding, ${formatAmount(totalEmi)}/month EMI
+- Open alerts/risks: ${unreadAlerts.length} (${unreadAlerts.slice(0,2).map(a=>a.title).join(", ") || "none"})
+- Top 3 vendors by spend: ${topVendors || "none"}
+- Industry: ${firm.industry || "unknown"}`;
+
   const buildPrompt = useCallback(() => {
+    if (isInvestor) {
+      return `You are the founder of ${firm.name || "this business"} writing a transparent MONTHLY INVESTOR / BOARD UPDATE. Use ONLY the real data below — never invent metrics you don't have.
+
+DATA:
+${DATA_BLOCK}
+
+Write the update in these exact sections with ## headers:
+## Headline
+## Performance
+## Cash & Runway
+## Risks & Mitigations
+## Asks
+
+In "Headline" give two sentences capturing the month. In "Asks" be specific about help/intros/capital needed; if there's nothing material, write "No asks this month." Tone: confident, candid, concise. Use ₹ and L/Cr. Max 350 words. Do not fabricate any number.`;
+    }
     return `You are the CFO of ${firm.name || "this business"}. Write a concise weekly CFO brief for the business owner. Use the following real financial data:
 
 FINANCIALS:
-- Cash balance: ${formatCurrency(balance)}
-- Cash runway: ${runway} days
-- Monthly burn rate: ${formatAmount(burn)}
-- This month revenue: ${formatAmount(thisMRev)} (vs last month: ${formatAmount(lastMRev)})
-- This month expenses: ${formatAmount(thisMExp)} (vs last month: ${formatAmount(lastMExp)})
-- Active loans: ${activeLoans.length} loans, ${formatAmount(totalDebt)} outstanding, ${formatAmount(totalEmi)}/month EMI
-- Unread alerts: ${unreadAlerts.length} (${unreadAlerts.slice(0,2).map(a=>a.title).join(", ")})
-- Top 3 vendors by spend: ${topVendors || "none"}
-- Industry: ${firm.industry || "unknown"}
+${DATA_BLOCK}
 
 Write the brief in these exact sections with ## headers:
 ## Key Metrics
@@ -112,7 +137,7 @@ Write the brief in these exact sections with ## headers:
 ## Strategic Observations
 
 Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak directly to the business owner.`;
-  }, [balance, runway, burn, thisMRev, lastMRev, thisMExp, lastMExp, activeLoans, totalDebt, totalEmi, unreadAlerts, topVendors, firm]);
+  }, [isInvestor, DATA_BLOCK, firm]);
 
   const generate = async () => {
     setLoading(true);
@@ -120,31 +145,24 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
     try {
       const result = await api.post<{ content: string }>("/api/ai/ask", {
         messages: [{ role: "user", content: buildPrompt() }],
-        system: "You are a senior CFO writing a weekly brief for an Indian SMB owner. Be specific, data-driven, and actionable. Use Indian number formatting (L for lakhs, Cr for crores).",
+        system: isInvestor
+          ? "You are a founder writing a transparent monthly update to investors/board for an Indian SMB. Be specific and honest; never invent numbers. Use Indian formatting (L for lakhs, Cr for crores)."
+          : "You are a senior CFO writing a weekly brief for an Indian SMB owner. Be specific, data-driven, and actionable. Use Indian number formatting (L for lakhs, Cr for crores).",
       });
       const raw = result.content || "";
       setRawBrief(raw);
       setBrief(parseBrief(raw));
       setGenerated(new Date());
-      toast.success("CFO Brief generated");
+      toast.success(isInvestor ? "Investor update generated" : "CFO Brief generated");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate brief — AI not configured");
-      setBrief([{
-        title: "Key Metrics",
-        icon: "📊",
-        type: "metric",
-        content: `Cash balance: ${formatCurrency(balance)}\nRunway: ${runway} days\nMonthly burn: ${formatAmount(burn)}\nThis month revenue: ${formatAmount(thisMRev)}\nThis month expenses: ${formatAmount(thisMExp)}`,
-      }, {
-        title: "Cash & Risk Alerts",
-        icon: "⚠️",
-        type: "alert",
-        content: runway < 60 ? `⚠️ Runway is only ${runway} days — below the recommended 90-day threshold. Review burn and consider tightening expenses or accelerating collections.` : `Cash runway of ${runway} days is healthy. Monitor monthly burn closely.`,
-      }, {
-        title: "Top 3 Action Items",
-        icon: "✅",
-        type: "action",
-        content: `1. Review overdue receivables and send collection reminders\n2. Reconcile this month's GST liability before the 20th\n3. ${runway < 90 ? "Consider applying for a credit facility before runway drops below 60 days" : "Review top vendor spend for optimization opportunities"}`,
-      }]);
+      toast.error(err instanceof Error ? err.message : "Failed to generate — AI not configured");
+      // Deterministic fallback built from the same real numbers (no AI needed).
+      const metrics = `Cash balance: ${formatCurrency(balance)}\nRunway: ${runway} days\nMonthly burn: ${formatAmount(burn)}\nThis month revenue: ${formatAmount(thisMRev)} (MoM ${momPct})\nThis month expenses: ${formatAmount(thisMExp)}`;
+      const fallbackRaw = isInvestor
+        ? `## Headline\n${firm.name || "We"} ended the month with ${formatAmount(balance)} cash and ${runway} days of runway; revenue is ${momPct} MoM.\n\n## Performance\nRevenue ${formatAmount(thisMRev)} vs ${formatAmount(lastMRev)} last month. Expenses ${formatAmount(thisMExp)}.\n\n## Cash & Runway\n${formatCurrency(balance)} in the bank, ~${runway} days at the current ${formatAmount(burn)}/mo burn.\n\n## Risks & Mitigations\n${unreadAlerts.length} open alert(s). ${runway < 90 ? "Runway under 90 days — tightening spend and accelerating collections." : "Runway healthy."}\n\n## Asks\n${runway < 90 ? "Intros to working-capital lenders would help us extend runway." : "No asks this month."}`
+        : `## Key Metrics\n${metrics}\n\n## Cash & Risk Alerts\n${runway < 60 ? `⚠️ Runway is only ${runway} days — below the recommended 90-day threshold.` : `Cash runway of ${runway} days is healthy.`}\n\n## Top 3 Action Items\n1. Review overdue receivables and send collection reminders\n2. Reconcile this month's GST liability before the 20th\n3. ${runway < 90 ? "Consider a credit facility before runway drops below 60 days" : "Review top vendor spend for optimization"}`;
+      setRawBrief(fallbackRaw);
+      setBrief(parseBrief(fallbackRaw));
       setGenerated(new Date());
     } finally {
       setLoading(false);
@@ -153,8 +171,9 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
 
   const downloadTxt = () => {
     if (!rawBrief) return;
-    const blob = new Blob([`CFO Brief — ${firm.name}\nGenerated: ${generated?.toLocaleString("en-IN")}\n\n${rawBrief}`], { type: "text/plain" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cfo-brief.txt"; a.click();
+    const heading = isInvestor ? "Investor Update" : "CFO Brief";
+    const blob = new Blob([`${heading} — ${firm.name}\nGenerated: ${generated?.toLocaleString("en-IN")}\n\n${rawBrief}`], { type: "text/plain" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = isInvestor ? "investor-update.txt" : "cfo-brief.txt"; a.click();
   };
 
   const quickStats = [
@@ -168,8 +187,12 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
     <div className="space-y-5">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold">AI CFO Brief</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Weekly executive summary generated from your live financial data</p>
+          <h1 className="text-xl font-bold">{isInvestor ? "AI Investor Update" : "AI CFO Brief"}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            {isInvestor
+              ? "Board-ready monthly update drafted from your live numbers — no fabricated metrics"
+              : "Weekly executive summary generated from your live financial data"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {brief && (
@@ -180,9 +203,19 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
           <button onClick={generate} disabled={loading}
             className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
             {loading ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {loading ? "Generating…" : brief ? "Regenerate" : "Generate Brief"}
+            {loading ? "Generating…" : brief ? "Regenerate" : isInvestor ? "Generate Update" : "Generate Brief"}
           </button>
         </div>
+      </div>
+
+      {/* Audience toggle */}
+      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
+        {([["brief", "CFO Brief (you)"], ["investor", "Investor Update (board)"]] as const).map(([m, label]) => (
+          <button key={m} onClick={() => switchMode(m)}
+            className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${mode === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Quick stats always visible */}
@@ -198,13 +231,15 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
       {!brief && !loading && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-12 text-center">
           <Sparkles size={32} className="mx-auto mb-4 text-[var(--color-primary)] opacity-50" />
-          <h2 className="text-base font-semibold mb-2">Your CFO Brief is ready to generate</h2>
+          <h2 className="text-base font-semibold mb-2">{isInvestor ? "Your investor update is ready to draft" : "Your CFO Brief is ready to generate"}</h2>
           <p className="text-sm text-[var(--color-muted)] max-w-sm mx-auto mb-6">
-            AI analyses your live cash data, revenue trends, burn rate, and alerts to write a concise executive brief — like having a CFO on call.
+            {isInvestor
+              ? "AI drafts a board-ready monthly update — performance, cash & runway, risks, and asks — straight from your live numbers. Review, edit, and send."
+              : "AI analyses your live cash data, revenue trends, burn rate, and alerts to write a concise executive brief — like having a CFO on call."}
           </p>
           <button onClick={generate}
             className="flex items-center gap-2 mx-auto bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-6 py-3 rounded-lg hover:opacity-90">
-            <Sparkles size={16} /> Generate My CFO Brief
+            <Sparkles size={16} /> {isInvestor ? "Draft My Investor Update" : "Generate My CFO Brief"}
           </button>
         </div>
       )}
