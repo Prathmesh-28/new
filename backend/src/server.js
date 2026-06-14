@@ -15,9 +15,15 @@ const crypto    = require("crypto");
 const cron      = require("node-cron");
 const { initDb, pool } = require("./db");
 const { sendDailyDigest, sendMondayBrief } = require("./lib/digest");
+const { securityHeaders } = require("./middleware/security");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
+
+// Behind Render/Vercel's proxy: trust exactly one hop so req.ip and the rate
+// limiter see the real client IP (X-Forwarded-For) rather than the proxy's —
+// otherwise every user shares one bucket and throttles each other.
+app.set("trust proxy", 1);
 
 const ALLOWED_ORIGINS = new Set([
   process.env.FRONTEND_URL,
@@ -37,6 +43,7 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use(securityHeaders);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false })); // Required for Twilio webhooks
 
@@ -53,6 +60,19 @@ const authLimiter = rateLimit({
   // the per-account 5-attempt lockout in routes/auth.js.
   skip: (req) => /\/(me|refresh)(\/|$)/.test(req.path),
 });
+
+// General ceiling for the whole API surface — guards every non-auth endpoint
+// from scraping/abuse. Generous so normal use (incl. the 5s KV poll) never
+// trips it; the KV store + capability map are skipped since they're polled.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 min
+  max: 240,            // ~4 req/s sustained per IP
+  message: { error: "Too many requests, please slow down" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith("/kv") || req.path === "/capabilities",
+});
+app.use("/api", apiLimiter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));

@@ -5,9 +5,15 @@ const { pool } = require("../db");
 const { signAccess, signRefresh, verifyRefresh } = require("../lib/jwt");
 const { authenticate } = require("../middleware/auth");
 const { sendOtp, sendWelcome } = require("../lib/email");
+const { validateBody } = require("../lib/validate");
 
 // POST /auth/signup
-router.post("/signup", async (req, res) => {
+router.post("/signup", validateBody({
+  email:        { type: "email",  required: true, maxLen: 254 },
+  password:     { type: "string", required: true, minLen: 8, maxLen: 200 },
+  company_name: { type: "string", maxLen: 120 },
+  role:         { type: "string", enum: ["owner", "accountant", "investor"] },
+}), async (req, res) => {
   const { email, password, company_name, role = "owner" } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
   if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -31,7 +37,10 @@ router.post("/signup", async (req, res) => {
 });
 
 // POST /auth/login
-router.post("/login", async (req, res) => {
+router.post("/login", validateBody({
+  email:    { type: "email",  required: true, maxLen: 254 },
+  password: { type: "string", required: true, maxLen: 200 },
+}), async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 

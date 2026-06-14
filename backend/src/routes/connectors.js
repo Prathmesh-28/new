@@ -96,8 +96,25 @@ router.post("/normalise", authenticate, (req, res) => {
   res.json(normaliseMany(transactions));
 });
 
-// POST /api/connectors/tally/webhook — Tally sync push
+// Constant-time secret check for the unauthenticated Tally push endpoint.
+// Fails CLOSED: if no secret is configured the endpoint is disabled entirely,
+// so it can never be left wide open in production.
+const crypto = require("crypto");
+function tallyAuthorised(req) {
+  const expected = process.env.TALLY_WEBHOOK_SECRET;
+  if (!expected) return false;
+  const got = String(req.headers["x-tally-secret"] || "");
+  const a = Buffer.from(got);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// POST /api/connectors/tally/webhook — Tally sync push (shared-secret protected)
 router.post("/tally/webhook", async (req, res) => {
+  if (!tallyAuthorised(req)) {
+    return res.status(process.env.TALLY_WEBHOOK_SECRET ? 401 : 503)
+      .json({ error: process.env.TALLY_WEBHOOK_SECRET ? "Invalid Tally webhook secret" : "Tally webhook not configured" });
+  }
   const { tenant_id, transactions: txns } = req.body;
   if (!tenant_id || !Array.isArray(txns)) return res.status(400).json({ error: "tenant_id and transactions required" });
 
