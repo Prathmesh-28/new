@@ -55,14 +55,22 @@ router.post("/upi-link", authenticate, requireOwnerOrAdmin, async (req, res) => 
   res.json({ url: razorpay_url || upiLink, qr, provider: razorpay_url ? "razorpay" : "upi", demo: !razorpay_url });
 });
 
-// POST /webhook/razorpay — Razorpay payment captured webhook
+// POST /webhook/razorpay — Razorpay payment captured webhook.
+// FAIL CLOSED: a "payment.captured" event marks an invoice paid, so we must not
+// trust it unless the HMAC signature verifies. Without a configured webhook
+// secret we cannot verify authenticity → refuse (else anyone could forge a
+// captured event and mark any invoice paid).
 router.post("/", async (req, res) => {
-  // Verify signature
   const secret    = process.env.RAZORPAY_WEBHOOK_SECRET;
-  const signature = req.headers["x-razorpay-signature"];
-  if (secret && signature) {
-    const expected = crypto.createHmac("sha256", secret).update(JSON.stringify(req.body)).digest("hex");
-    if (expected !== signature) return res.status(403).json({ error: "Invalid signature" });
+  const signature = String(req.headers["x-razorpay-signature"] || "");
+  if (!secret) return res.status(503).json({ error: "Webhook not configured" });
+  // HMAC over the exact raw bytes Razorpay signed (set in server.js).
+  const payload  = req.rawBody || Buffer.from(JSON.stringify(req.body));
+  const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  const expBuf = Buffer.from(expected);
+  const gotBuf = Buffer.from(signature);
+  if (expBuf.length !== gotBuf.length || !crypto.timingSafeEqual(expBuf, gotBuf)) {
+    return res.status(403).json({ error: "Invalid signature" });
   }
 
   const event   = req.body.event;

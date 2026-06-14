@@ -3,6 +3,7 @@ const crypto   = require("crypto");
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { normalise } = require("../lib/normalise");
+const { validateSignature } = require("../lib/whatsapp");
 
 // ── ORDERS ─────────────────────────────────────────────────────────────────────
 
@@ -197,8 +198,18 @@ router.patch("/procurement/:id/status", authenticate, requireOwnerOrAdmin, async
 });
 
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
-// POST /api/operations/whatsapp/webhook — Twilio/Wati push
+// POST /api/operations/whatsapp/webhook?tenant_id=… — Twilio push (order intake)
+//
+// SECURITY: this writes an order row scoped to the tenant_id in the query string,
+// so it MUST NOT be callable anonymously (else anyone could inject orders into any
+// company's books). We require a genuine, signature-verified Twilio request: only
+// the tenant's own configured Twilio integration — which signs the exact webhook
+// URL (incl. ?tenant_id=…) with that tenant's auth token — can produce a valid
+// signature. If Twilio isn't configured at all, the endpoint stays closed.
 router.post("/whatsapp/webhook", async (req, res) => {
+  if (!process.env.TWILIO_AUTH_TOKEN || !validateSignature(req)) {
+    return res.status(403).send("Forbidden");
+  }
   const body = req.body;
   const tenant_id = req.query.tenant_id;
   if (!tenant_id) return res.status(400).send("tenant_id required");

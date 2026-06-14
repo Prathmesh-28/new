@@ -7,7 +7,7 @@ router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const { rows: employees } = await pool.query(
-      "SELECT id, name, gross_salary, status FROM payroll_employees WHERE tenant_id=$1 AND status='active'",
+      "SELECT id, name, gross_salary, status FROM employees WHERE tenant_id=$1 AND status='active'",
       [tenantId]
     );
     const now = new Date();

@@ -258,11 +258,20 @@ router.get("/status", authenticate, async (req, res) => {
   res.json({ registered: rows.length > 0, phone: rows[0]?.phone ?? null });
 });
 
-// POST /api/whatsapp/send-digest — called by morning digest cron
+// POST /api/whatsapp/send-digest — called by the morning digest cron only.
+// FAIL CLOSED: requires a matching shared secret. server.js guarantees
+// INTERNAL_CRON_SECRET is always set (env in prod, generated at boot otherwise),
+// so the in-process cron self-call always carries it while the public internet
+// cannot — this endpoint fans out WhatsApp + push to every tenant, so it must
+// never be world-callable (was previously skipped entirely when the env was unset).
 router.post("/send-digest", async (req, res) => {
-  // Internal call from cron — allow only from localhost or with a shared secret
-  const secret = req.headers["x-internal-secret"];
-  if (process.env.INTERNAL_CRON_SECRET && secret !== process.env.INTERNAL_CRON_SECRET) {
+  const expected = process.env.INTERNAL_CRON_SECRET || "";
+  const provided = String(req.headers["x-internal-secret"] || "");
+  const expBuf = Buffer.from(expected);
+  const gotBuf = Buffer.from(provided);
+  const okSecret = expected.length > 0 && expBuf.length === gotBuf.length &&
+    crypto.timingSafeEqual(expBuf, gotBuf);
+  if (!okSecret) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

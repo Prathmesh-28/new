@@ -4,6 +4,7 @@ const QRCode    = require("qrcode");
 const { pool }  = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { sendMail } = require("../lib/email");
+const { sendWhatsApp } = require("../lib/whatsapp");
 
 function nextInvoiceNumber(existing) {
   const year = new Date().getFullYear();
@@ -181,29 +182,55 @@ router.post("/:id/remind", authenticate, requireOwnerOrAdmin, async (req, res) =
   const { id } = req.params;
   const tenantId = req.user.tenant_id;
   try {
+    // The invoice row already carries the customer's contact details — there is
+    // no separate tenants table to join (the previous LEFT JOIN tenants crashed).
     const { rows } = await pool.query(
-      `SELECT i.*, t.phone as customer_phone FROM invoices i
-       LEFT JOIN tenants t ON t.id = $2
-       WHERE i.id = $1 AND i.tenant_id = $2`,
+      `SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
     const invoice = rows[0];
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
-    // Record the reminder
-    await pool.query(
-      `INSERT INTO invoice_reminders (invoice_id, tenant_id, reminded_at, channel, status)
-       VALUES ($1, $2, NOW(), 'whatsapp', 'sent')
-       ON CONFLICT DO NOTHING`,
-      [id, tenantId]
-    ).catch(() => {});
+    const amount = Number(invoice.total_amount || 0);
+    const msg = `Reminder from ${req.user.display_name || "your supplier"}: invoice ${invoice.invoice_number} for ₹${amount.toLocaleString("en-IN")} is due${invoice.due_date ? ` on ${new Date(invoice.due_date).toLocaleDateString("en-IN")}` : ""}.` +
+      (invoice.upi_link ? ` Pay here: ${invoice.upi_link}` : "");
 
-    // Update invoice status to sent if still draft
-    if (invoice.status === 'draft') {
-      await pool.query(`UPDATE invoices SET status='sent', updated_at=NOW() WHERE id=$1`, [id]);
+    // Try WhatsApp first (if we have a phone), then email. Record what happened.
+    let channel = null, delivered = false;
+    if (invoice.customer_phone) {
+      channel = "whatsapp";
+      delivered = await sendWhatsApp(invoice.customer_phone, msg).catch(() => false);
+    } else if (invoice.customer_email) {
+      channel = "email";
+      delivered = await sendMail({
+        to: invoice.customer_email,
+        subject: `Payment reminder — invoice ${invoice.invoice_number}`,
+        html: `<p>${msg.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`,
+      }).then(() => true).catch(() => false);
+    }
+    if (!channel) {
+      return res.status(400).json({ error: "No customer phone or email on this invoice" });
     }
 
-    res.json({ success: true, message: "Reminder queued" });
+    await pool.query(
+      `INSERT INTO invoice_reminders (invoice_id, tenant_id, channel, status)
+       VALUES ($1, $2, $3, $4)`,
+      [id, tenantId, channel, delivered ? "sent" : "queued"]
+    ).catch(() => {});
+
+    // Move a still-draft invoice to "sent" once a reminder goes out.
+    if (invoice.status === "draft") {
+      await pool.query(`UPDATE invoices SET status='sent' WHERE id=$1`, [id]);
+    }
+
+    res.json({
+      success: true,
+      channel,
+      delivered,
+      message: delivered
+        ? `Reminder sent via ${channel}`
+        : `Reminder recorded (${channel} not delivered — provider not configured)`,
+    });
   } catch (err) {
     console.error("remind error", err);
     res.status(500).json({ error: "Failed to send reminder" });

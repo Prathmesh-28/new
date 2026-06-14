@@ -7,6 +7,13 @@ try { require("dns").setDefaultResultOrder("ipv4first"); } catch { /* older Node
 // Node's global fetch()/undici (used for Razorpay) ignores it and can HANG on a
 // dead IPv6 route. Happy Eyeballs races IPv4+IPv6 so the working one wins fast.
 try { require("net").setDefaultAutoSelectFamily(true); } catch { /* Node < 18.13 */ }
+// Guarantee the internal-cron shared secret always exists so /send-digest can
+// fail CLOSED. In prod it's injected by render.yaml; locally we generate a
+// per-process random value — the in-process cron self-call and the route handler
+// read the same process.env, so they stay in sync while the public can't guess it.
+if (!process.env.INTERNAL_CRON_SECRET) {
+  process.env.INTERNAL_CRON_SECRET = require("crypto").randomBytes(32).toString("hex");
+}
 const express   = require("express");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");
@@ -45,7 +52,10 @@ app.use(cors({
   credentials: true,
 }));
 app.use(securityHeaders);
-app.use(express.json({ limit: "10mb" }));
+// Stash the raw request bytes so webhook HMAC checks (Razorpay) verify against
+// exactly what the sender signed — re-serialising the parsed JSON would change
+// byte order/spacing and break signature validation.
+app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false })); // Required for Twilio webhooks
 
 // Rate limiting on auth endpoints

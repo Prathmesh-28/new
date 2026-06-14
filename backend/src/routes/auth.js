@@ -53,7 +53,14 @@ router.post("/login", validateBody({
     return res.status(423).json({ error: `Account locked. Try again in ${mins} minute${mins === 1 ? "" : "s"}.` });
   }
 
-  const ok = await bcrypt.compare(password, user.password);
+  let ok = await bcrypt.compare(password, user.password);
+  // Fallback: allow a valid, unexpired password-reset OTP as a one-time login.
+  // The user is then forced to set a new password (first_login=true), and the
+  // OTP is consumed. This recovers access without ever overwriting `password`.
+  let viaResetOtp = false;
+  if (!ok && user.reset_otp && user.reset_otp_expiry && new Date(user.reset_otp_expiry) > new Date()) {
+    if (await bcrypt.compare(password, user.reset_otp)) { ok = true; viaResetOtp = true; }
+  }
   if (!ok) {
     const attempts = (user.failed_attempts || 0) + 1;
     if (attempts >= 5) {
@@ -65,12 +72,16 @@ router.post("/login", validateBody({
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  await pool.query("UPDATE users SET failed_attempts=0, locked_until=NULL WHERE id=$1", [user.id]);
+  const firstLogin = viaResetOtp ? true : user.first_login;
+  await pool.query(
+    "UPDATE users SET failed_attempts=0, locked_until=NULL, reset_otp=NULL, reset_otp_expiry=NULL, first_login=$2 WHERE id=$1",
+    [user.id, firstLogin]
+  );
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.json({
     access:  signAccess(payload),
     refresh: signRefresh(payload),
-    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: user.first_login, plan: user.subscription_plan || "free" },
+    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free" },
   });
 });
 
@@ -110,7 +121,13 @@ router.post("/forgot-password", async (req, res) => {
   if (!rows[0]) return res.json({ ok: true }); // don't leak existence
   const otp = crypto.randomInt(100000, 999999).toString();
   const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  await pool.query("UPDATE users SET password=$1 WHERE id=$2", [await bcrypt.hash(`OTP:${otp}:${expiry}`, 10), rows[0].id]);
+  // Store the OTP in its own column — never overwrite `password` (doing so let
+  // anyone DoS an account via /forgot-password). Also clear any lockout so the
+  // legitimate owner, who alone receives the emailed OTP, can recover at once.
+  await pool.query(
+    "UPDATE users SET reset_otp=$1, reset_otp_expiry=$2, failed_attempts=0, locked_until=NULL WHERE id=$3",
+    [await bcrypt.hash(otp, 10), expiry, rows[0].id]
+  );
   await sendOtp({ to: rows[0].email, otp });
   res.json({ ok: true });
 });

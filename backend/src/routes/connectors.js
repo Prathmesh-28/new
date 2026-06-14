@@ -119,19 +119,29 @@ router.post("/tally/webhook", async (req, res) => {
   if (!tenant_id || !Array.isArray(txns)) return res.status(400).json({ error: "tenant_id and transactions required" });
 
   const normalised = normaliseMany(txns);
+  let imported = 0;
   for (const t of normalised) {
     const date = t.date || t.transaction_date || new Date().toISOString().slice(0, 10);
-    await pool.query(
-      `INSERT INTO transactions(tenant_id, amount, description_raw, merchant_name, category, transaction_date, source)
-       VALUES($1,$2,$3,$4,$5,$6,'tally') ON CONFLICT DO NOTHING`,
-      [tenant_id, t.amount, t.description || t.description_raw, t.merchant_name, t.category, date]
+    const desc = t.description || t.description_raw || "";
+    // Idempotency key: prefer a real Tally voucher id; else a deterministic hash
+    // of the voucher's natural key so re-syncing the same data is a no-op.
+    const extId = String(
+      t.external_id || t.voucher_id || t.guid || t.id ||
+      crypto.createHash("sha1").update(`${date}|${t.amount}|${desc}`).digest("hex")
     );
+    const { rowCount } = await pool.query(
+      `INSERT INTO transactions(tenant_id, amount, description_raw, merchant_name, category, transaction_date, source, external_id)
+       VALUES($1,$2,$3,$4,$5,$6,'tally',$7)
+       ON CONFLICT (tenant_id, source, external_id) DO NOTHING`,
+      [tenant_id, t.amount, desc, t.merchant_name, t.category, date, extId]
+    );
+    imported += rowCount;
   }
   await pool.query(
     "UPDATE connector_consents SET last_sync=now(), status='connected' WHERE tenant_id=$1 AND provider='tally'",
     [tenant_id]
   );
-  res.json({ ok: true, imported: normalised.length });
+  res.json({ ok: true, received: normalised.length, imported });
 });
 
 module.exports = router;

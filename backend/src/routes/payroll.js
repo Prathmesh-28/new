@@ -12,8 +12,10 @@ function computeTds(grossAnnual) {
   return 150000 + (grossAnnual - 1500000) * 0.30;
 }
 
-// GET /api/payroll/employees
-router.get("/employees", authenticate, async (req, res) => {
+// GET /api/payroll/employees — salary + PAN is sensitive; restrict reads to
+// owner/admin (matches the create/update/run guards below) so a sales/ops
+// teammate can't read the whole payroll.
+router.get("/employees", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM employees WHERE tenant_id=$1 AND status='active' ORDER BY name",
     [req.user.tenant_id]
@@ -64,8 +66,8 @@ router.patch("/employees/:id", authenticate, requireOwnerOrAdmin, async (req, re
   res.json(updated);
 });
 
-// GET /api/payroll/runs
-router.get("/runs", authenticate, async (req, res) => {
+// GET /api/payroll/runs — payroll totals expose pay data; owner/admin only.
+router.get("/runs", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM payroll_runs WHERE tenant_id=$1 ORDER BY run_year DESC, run_month DESC",
     [req.user.tenant_id]

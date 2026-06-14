@@ -210,6 +210,11 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 
+    -- ── Password-reset OTP (stored separately so a reset request can never
+    --    overwrite/destroy the user's real password — see auth.js) ─────────────
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expiry TIMESTAMPTZ;
+
     -- ── Profile ───────────────────────────────────────────────────────────────
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
 
@@ -338,6 +343,19 @@ async function initDb() {
       qr_code_url    TEXT,
       upi_link       TEXT,
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- Customer phone (E.164) for WhatsApp payment reminders.
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+    -- Reminder history for invoices (used by /:id/remind and /:id/reminders).
+    CREATE TABLE IF NOT EXISTS invoice_reminders (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      invoice_id  UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      tenant_id   TEXT NOT NULL,
+      reminded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      channel     TEXT NOT NULL DEFAULT 'whatsapp',
+      status      TEXT NOT NULL DEFAULT 'sent'
     );
 
     CREATE TABLE IF NOT EXISTS invoice_items (
@@ -500,10 +518,16 @@ async function initDb() {
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 
+    -- External id for idempotent imports (e.g. a Tally voucher GUID) so the same
+    -- voucher re-synced doesn't create duplicate transactions. NULLs stay distinct,
+    -- so manually-entered rows (no external id) are unaffected.
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS external_id TEXT;
+
     -- ── Indexes ───────────────────────────────────────────────────────────────
     CREATE INDEX IF NOT EXISTS kv_tenant_ns         ON kv_store(tenant_id, namespace);
     CREATE INDEX IF NOT EXISTS notes_entity         ON notes(tenant_id, entity, entity_id);
     CREATE INDEX IF NOT EXISTS txn_tenant_date      ON transactions(tenant_id, transaction_date DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS txn_tenant_source_extid ON transactions(tenant_id, source, external_id);
     CREATE INDEX IF NOT EXISTS forecast_tenant      ON forecasts(tenant_id, is_current, generated_at DESC);
     CREATE INDEX IF NOT EXISTS alerts_tenant        ON alerts(tenant_id, is_read, created_at DESC);
     CREATE INDEX IF NOT EXISTS credit_app_tenant    ON credit_applications(tenant_id, created_at DESC);
