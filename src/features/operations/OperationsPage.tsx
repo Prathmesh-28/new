@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
@@ -7,6 +7,8 @@ import {
   Package, ShoppingCart, Truck, BarChart2, Plus, X, MessageCircle,
   Mail, FileSpreadsheet, Phone, CheckCircle2, Clock, AlertTriangle,
   Radar, Copy, TrendingUp, ArrowUpRight, UserPlus, Banknote, Download,
+  Layers, CalendarClock, Wrench, Factory, Warehouse, ScanLine, Route,
+  ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -14,7 +16,8 @@ import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables";
+type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
+  | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -160,6 +163,13 @@ export default function OperationsPage() {
           ["leadtime",      "Lead Time",     null],
           ["reorder",       "Reorder Alert", null],
           ["payables",      "Aged Payables", null],
+          ["stockledger",   "Stock Ledger",  null],
+          ["batchtrack",    "Batch / Expiry", null],
+          ["jobwork",       "Job-Work",      null],
+          ["production",    "Production",    null],
+          ["warehouse",     "Warehouses",    null],
+          ["stocktake",     "Stock Take",    null],
+          ["dispatch",      "Dispatch",      null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -711,6 +721,13 @@ export default function OperationsPage() {
       {tab === "leadtime" && <LeadTimeScorecardTab />}
       {tab === "reorder" && <ReorderAlertTab />}
       {tab === "payables" && <AgedPayablesTab />}
+      {tab === "stockledger" && <StockLedgerTab />}
+      {tab === "batchtrack" && <BatchExpiryTab />}
+      {tab === "jobwork" && <JobWorkTab />}
+      {tab === "production" && <ProductionCostingTab />}
+      {tab === "warehouse" && <WarehouseStockTab />}
+      {tab === "stocktake" && <StockTakeTab />}
+      {tab === "dispatch" && <DispatchPlannerTab />}
     </div>
   );
 }
@@ -1521,6 +1538,1001 @@ function AgedPayablesTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">MSME vendors must be paid within 45 days (15 if no agreement) under the MSMED Act. Amounts unpaid to MSMEs beyond the limit are disallowed as expense under Sec 43B(h) until actually paid. Consult a CA.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #69 Stock Ledger (in/out + FIFO / WA valuation) ───────────────────────── */
+function StockLedgerTab() {
+  const { store } = useApp();
+  type Move = { id: string; date: string; sku: string; product: string; type: "in" | "out"; qty: number; rate: number; note: string };
+  const [moves, setMoves] = useFeatureState<Move[]>("stock-ledger-moves", []);
+  const [method, setMethod] = useState<"FIFO" | "WA">("FIFO");
+  const [filterSku, setFilterSku] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fSku, setFSku] = useState("");
+  const [fProduct, setFProduct] = useState("");
+  const [fType, setFType] = useState<"in" | "out">("in");
+  const [fQty, setFQty] = useState("");
+  const [fRate, setFRate] = useState("");
+  const [fNote, setFNote] = useState("");
+
+  const addMove = () => {
+    if (!fProduct || !fQty) { toast.error("Product and quantity required"); return; }
+    setMoves(prev => [...prev, {
+      id: generateId(), date: fDate, sku: fSku, product: fProduct, type: fType,
+      qty: Math.abs(parseFloat(fQty)) || 0, rate: Math.abs(parseFloat(fRate)) || 0, note: fNote,
+    }]);
+    toast.success(`Stock ${fType === "in" ? "receipt" : "issue"} recorded`);
+    setFSku(""); setFProduct(""); setFQty(""); setFRate(""); setFNote(""); setShowForm(false);
+  };
+
+  // Group by product key (sku||product), run a chronological FIFO/WA cost engine.
+  const keyOf = (m: Move) => (m.sku || m.product).toLowerCase();
+  const valuation = useMemo(() => {
+    const byKey: Record<string, Move[]> = {};
+    [...moves].sort((a, b) => (a.date + a.id).localeCompare(b.date + b.id)).forEach(m => {
+      (byKey[keyOf(m)] ??= []).push(m);
+    });
+    return Object.entries(byKey).map(([key, list]) => {
+      let qty = 0, value = 0;                       // weighted-average running totals
+      const lots: { qty: number; rate: number }[] = []; // FIFO lots
+      let cogs = 0;
+      for (const m of list) {
+        if (m.type === "in") {
+          qty += m.qty; value += m.qty * m.rate;
+          lots.push({ qty: m.qty, rate: m.rate });
+        } else {
+          if (method === "WA") {
+            const avg = qty > 0 ? value / qty : m.rate;
+            const issue = Math.min(m.qty, qty);
+            cogs += issue * avg; qty -= issue; value -= issue * avg;
+          } else {
+            let rem = m.qty;
+            while (rem > 0 && lots.length) {
+              const lot = lots[0];
+              const take = Math.min(rem, lot.qty);
+              cogs += take * lot.rate; lot.qty -= take; rem -= take; qty -= take;
+              if (lot.qty <= 0) lots.shift();
+            }
+          }
+        }
+      }
+      const closingQty = method === "WA" ? qty : lots.reduce((s, l) => s + l.qty, 0);
+      const closingValue = method === "WA" ? value : lots.reduce((s, l) => s + l.qty * l.rate, 0);
+      const avgRate = closingQty > 0 ? closingValue / closingQty : 0;
+      return { key, product: list[list.length - 1].product, sku: list[0].sku, closingQty, closingValue, avgRate, cogs };
+    });
+  }, [moves, method]);
+
+  const totalValue = valuation.reduce((s, v) => s + v.closingValue, 0);
+  const filtered = filterSku ? moves.filter(m => keyOf(m).includes(filterSku.toLowerCase())) : moves;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Layers size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Stock Ledger</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Every in/out move, valued by your chosen method.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-0.5">
+            {(["FIFO", "WA"] as const).map(m => (
+              <button key={m} onClick={() => setMethod(m)}
+                className={`text-xs px-3 py-1 rounded font-semibold transition-colors ${method === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)]"}`}>
+                {m === "WA" ? "Weighted Avg" : "FIFO"}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <Plus size={11} /> Record move
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Tracked SKUs", value: valuation.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Total Moves", value: moves.length.toString(), color: "text-blue-400" },
+          { label: `Closing Value (${method})`, value: formatCurrency(Math.round(totalValue)), color: "text-green-400" },
+          { label: "Total COGS", value: formatCurrency(Math.round(valuation.reduce((s, v) => s + v.cogs, 0))), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="Product *" className={inp} list="ledger-products" />
+            <datalist id="ledger-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
+            <input value={fSku} onChange={e => setFSku(e.target.value)} placeholder="SKU (optional)" className={inp} />
+            <select value={fType} onChange={e => setFType(e.target.value as "in" | "out")} className={inp}>
+              <option value="in">Stock In (receipt)</option>
+              <option value="out">Stock Out (issue)</option>
+            </select>
+            <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Quantity *" className={inp} />
+            <input type="number" value={fRate} onChange={e => setFRate(e.target.value)} placeholder="Rate ₹ (in only)" className={inp} />
+            <input value={fNote} onChange={e => setFNote(e.target.value)} placeholder="Note / ref" className={`${inp} md:col-span-2`} />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addMove} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {valuation.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Valuation Summary ({method})</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "SKU", "Closing Qty", "Avg Rate", "Closing Value", "COGS"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {valuation.map(v => (
+                  <tr key={v.key} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium">{v.product}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{v.sku || "—"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${v.closingQty < 0 ? "text-red-400" : ""}`}>{v.closingQty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(v.avgRate))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(v.closingValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(v.cogs))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Movement Log</p>
+          <input value={filterSku} onChange={e => setFilterSku(e.target.value)} placeholder="Filter SKU / product…" className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-44" />
+        </div>
+        {filtered.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No stock moves yet. Record receipts and issues to build a valued ledger.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Product", "Type", "Qty", "Rate", "Value", "Note", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...filtered].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).map(m => (
+                  <tr key={m.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{m.date}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{m.product}{m.sku && <span className="ml-1 text-[10px] text-[var(--color-muted)] font-mono">{m.sku}</span>}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold ${m.type === "in" ? "text-green-400" : "text-red-400"}`}>
+                        {m.type === "in" ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}{m.type === "in" ? "In" : "Out"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">{m.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{m.rate > 0 ? formatCurrency(m.rate) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{m.rate > 0 ? formatCurrency(m.qty * m.rate) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m.note || "—"}</td>
+                    <td className="px-4 py-2.5"><button onClick={() => setMoves(prev => prev.filter(x => x.id !== m.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">FIFO issues consume oldest receipts first; Weighted Average values issues at the running average cost. Rate applies to receipts; issues are auto-valued.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #70 Batch / Expiry / Serial tracking ───────────────────────── */
+function BatchExpiryTab() {
+  const { store } = useApp();
+  type Batch = { id: string; product: string; batchNo: string; serial: string; qty: number; mfgDate: string; expiryDate: string; location: string };
+  const [batches, setBatches] = useFeatureState<Batch[]>("batch-tracking", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fProduct, setFProduct] = useState("");
+  const [fBatch, setFBatch] = useState("");
+  const [fSerial, setFSerial] = useState("");
+  const [fQty, setFQty] = useState("");
+  const [fMfg, setFMfg] = useState("");
+  const [fExp, setFExp] = useState("");
+  const [fLoc, setFLoc] = useState("");
+
+  const addBatch = () => {
+    if (!fProduct || !fBatch) { toast.error("Product and batch number required"); return; }
+    setBatches(prev => [...prev, {
+      id: generateId(), product: fProduct, batchNo: fBatch, serial: fSerial,
+      qty: parseFloat(fQty) || 0, mfgDate: fMfg, expiryDate: fExp, location: fLoc,
+    }]);
+    toast.success("Batch recorded");
+    setFProduct(""); setFBatch(""); setFSerial(""); setFQty(""); setFMfg(""); setFExp(""); setFLoc(""); setShowForm(false);
+  };
+
+  const today = new Date();
+  const statusOf = (b: Batch): { label: string; cls: string; days: number | null } => {
+    if (!b.expiryDate) return { label: "No expiry", cls: "text-[var(--color-muted)]", days: null };
+    const days = differenceInDays(parseISO(b.expiryDate), today);
+    if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, cls: "text-red-400", days };
+    if (days <= 30) return { label: `${days}d left`, cls: "text-red-400", days };
+    if (days <= 90) return { label: `${days}d left`, cls: "text-yellow-400", days };
+    return { label: `${days}d left`, cls: "text-green-400", days };
+  };
+
+  const expired = batches.filter(b => { const s = statusOf(b); return s.days !== null && s.days < 0; });
+  const expiring = batches.filter(b => { const s = statusOf(b); return s.days !== null && s.days >= 0 && s.days <= 90; });
+  const atRiskValue = expired.reduce((s, b) => s + b.qty, 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Batch / Expiry / Serial Tracking</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">FEFO-ready: track lots, serials and shelf life for pharma, food &amp; FMCG.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Add batch
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Tracked Batches", value: batches.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Expiring ≤90d", value: expiring.length.toString(), color: expiring.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Expired Units", value: `${atRiskValue} (${expired.length} lots)`, color: expired.length > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="Product *" className={inp} list="batch-products" />
+            <datalist id="batch-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
+            <input value={fBatch} onChange={e => setFBatch(e.target.value)} placeholder="Batch / lot no. *" className={inp} />
+            <input value={fSerial} onChange={e => setFSerial(e.target.value)} placeholder="Serial (optional)" className={inp} />
+            <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Qty" className={inp} />
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Mfg date</label><input type="date" value={fMfg} onChange={e => setFMfg(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Expiry date</label><input type="date" value={fExp} onChange={e => setFExp(e.target.value)} className={inp} /></div>
+            <input value={fLoc} onChange={e => setFLoc(e.target.value)} placeholder="Location" className={`${inp} md:col-span-2`} />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addBatch} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {batches.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No batches tracked. Add lots with expiry dates to get FEFO and shelf-life alerts.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Batch", "Serial", "Qty", "Mfg", "Expiry", "Status", "Loc", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...batches].sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999")).map(b => {
+                  const s = statusOf(b);
+                  return (
+                    <tr key={b.id} className={`border-b border-[var(--color-border)] last:border-0 ${s.days !== null && s.days < 0 ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                      <td className="px-4 py-2.5 font-medium text-xs">{b.product}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs">{b.batchNo}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{b.serial || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{b.qty}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.mfgDate || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.expiryDate || "—"}</td>
+                      <td className={`px-4 py-2.5 text-xs font-semibold ${s.cls}`}>{s.label}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{b.location || "—"}</td>
+                      <td className="px-4 py-2.5"><button onClick={() => setBatches(prev => prev.filter(x => x.id !== b.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Rows sorted earliest-expiry-first (FEFO). Red ≤30d / expired, amber ≤90d. Essential for pharma, food and cosmetics compliance.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #71 Job-Work tracker (Sec 143 / ITC-04) ───────────────────────── */
+function JobWorkTab() {
+  type Challan = { id: string; challanNo: string; jobWorker: string; gstin: string; product: string; sentQty: number; receivedQty: number; sentDate: string; dueDate: string; process: string; status: "sent" | "partial" | "received" };
+  const [rows, setRows] = useFeatureState<Challan[]>("job-work-challans", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fNo, setFNo] = useState("");
+  const [fWorker, setFWorker] = useState("");
+  const [fGstin, setFGstin] = useState("");
+  const [fProduct, setFProduct] = useState("");
+  const [fSent, setFSent] = useState("");
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fDue, setFDue] = useState("");
+  const [fProcess, setFProcess] = useState("");
+
+  const addRow = () => {
+    if (!fWorker || !fProduct || !fSent) { toast.error("Job worker, product and qty required"); return; }
+    setRows(prev => [...prev, {
+      id: generateId(), challanNo: fNo || `JW-${Date.now().toString(36).toUpperCase()}`, jobWorker: fWorker, gstin: fGstin,
+      product: fProduct, sentQty: parseFloat(fSent) || 0, receivedQty: 0, sentDate: fDate, dueDate: fDue, process: fProcess, status: "sent",
+    }]);
+    toast.success("Delivery challan recorded");
+    setFNo(""); setFWorker(""); setFGstin(""); setFProduct(""); setFSent(""); setFDue(""); setFProcess(""); setShowForm(false);
+  };
+
+  const receiveQty = (id: string, qty: number) => setRows(prev => prev.map(r => {
+    if (r.id !== id) return r;
+    const received = Math.min(r.sentQty, r.receivedQty + qty);
+    return { ...r, receivedQty: received, status: received >= r.sentQty ? "received" : received > 0 ? "partial" : "sent" };
+  }));
+
+  const today = new Date();
+  // Sec 143: inputs must return within 1 year (365d), capital goods within 3 years.
+  const overdueOf = (r: Challan) => r.status !== "received" ? differenceInDays(today, parseISO(r.sentDate)) : 0;
+  const pending = rows.filter(r => r.status !== "received");
+  const overdue1yr = pending.filter(r => overdueOf(r) > 365);
+  const pendingQty = pending.reduce((s, r) => s + (r.sentQty - r.receivedQty), 0);
+  const STATUS: Record<Challan["status"], string> = {
+    sent: "bg-yellow-950/30 text-yellow-400", partial: "bg-blue-950/30 text-blue-400", received: "bg-green-950/30 text-green-400",
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Wrench size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Job-Work Tracker (Sec 143 / ITC-04)</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Track goods sent to job workers under delivery challans and their return.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> New challan
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Open Challans", value: pending.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Qty With Workers", value: pendingQty.toString(), color: "text-blue-400" },
+          { label: "Overdue >1yr (143)", value: overdue1yr.length.toString(), color: overdue1yr.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Total Challans", value: rows.length.toString(), color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <input value={fNo} onChange={e => setFNo(e.target.value)} placeholder="Challan no. (auto)" className={inp} />
+            <input value={fWorker} onChange={e => setFWorker(e.target.value)} placeholder="Job worker *" className={inp} />
+            <input value={fGstin} onChange={e => setFGstin(e.target.value.toUpperCase())} placeholder="Worker GSTIN" className={inp} maxLength={15} />
+            <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="Goods / product *" className={inp} />
+            <input type="number" value={fSent} onChange={e => setFSent(e.target.value)} placeholder="Qty sent *" className={inp} />
+            <input value={fProcess} onChange={e => setFProcess(e.target.value)} placeholder="Process (e.g. galvanising)" className={inp} />
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Sent date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Expected return</label><input type="date" value={fDue} onChange={e => setFDue(e.target.value)} className={inp} /></div>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addRow} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No job-work challans. Record goods sent out for processing to track ITC-04 returns.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Challan", "Job Worker", "Goods", "Sent", "Received", "Sent Date", "Age", "Status", "Receive", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => b.sentDate.localeCompare(a.sentDate)).map(r => {
+                  const age = overdueOf(r);
+                  return (
+                    <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${age > 365 ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                      <td className="px-3 py-2.5 font-mono text-xs">{r.challanNo}</td>
+                      <td className="px-3 py-2.5 text-xs font-medium">{r.jobWorker}{r.gstin && <span className="block text-[10px] text-[var(--color-muted)] font-mono">{r.gstin}</span>}</td>
+                      <td className="px-3 py-2.5 text-xs">{r.product}{r.process && <span className="block text-[10px] text-[var(--color-muted)]">{r.process}</span>}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.sentQty}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.receivedQty}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.sentDate}</td>
+                      <td className={`px-3 py-2.5 tabular-nums text-xs ${age > 365 ? "text-red-400 font-bold" : "text-[var(--color-muted)]"}`}>{r.status === "received" ? "—" : `${age}d`}</td>
+                      <td className="px-3 py-2.5"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS[r.status]}`}>{r.status}</span></td>
+                      <td className="px-3 py-2.5">
+                        {r.status !== "received" && (
+                          <button onClick={() => receiveQty(r.id, r.sentQty - r.receivedQty)} className="text-[10px] text-[var(--color-primary)] hover:underline whitespace-nowrap">Receive all</button>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Under Sec 143 of CGST, inputs sent for job work must return within 1 year (capital goods 3 years) or GST is payable. File ITC-04 with these challan details. Consult a CA.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #72 Production / BOM costing run ───────────────────────── */
+function ProductionCostingTab() {
+  type Comp = { id: string; material: string; qtyPerUnit: number; unitCost: number };
+  type Run = { id: string; date: string; product: string; plannedQty: number; producedQty: number; laborCost: number; overheadCost: number; components: Comp[] };
+  const [runs, setRuns] = useFeatureState<Run[]>("production-runs", []);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const [pProduct, setPProduct] = useState("");
+  const [pQty, setPQty] = useState("1");
+  const [pDate, setPDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const [cMat, setCMat] = useState("");
+  const [cQty, setCQty] = useState("");
+  const [cCost, setCCost] = useState("");
+
+  const createRun = () => {
+    if (!pProduct) { toast.error("Product name required"); return; }
+    const id = generateId();
+    setRuns(prev => [...prev, { id, date: pDate, product: pProduct, plannedQty: parseFloat(pQty) || 1, producedQty: 0, laborCost: 0, overheadCost: 0, components: [] }]);
+    setActiveId(id); setPProduct(""); setPQty("1");
+    toast.success("Production run created");
+  };
+
+  const active = runs.find(r => r.id === activeId) ?? null;
+  const patch = (id: string, p: Partial<Run>) => setRuns(prev => prev.map(r => r.id === id ? { ...r, ...p } : r));
+  const addComp = (id: string) => {
+    if (!cMat || !cQty || !cCost) return;
+    patch(id, { components: [...(active?.components ?? []), { id: generateId(), material: cMat, qtyPerUnit: parseFloat(cQty) || 0, unitCost: parseFloat(cCost) || 0 }] });
+    setCMat(""); setCQty(""); setCCost("");
+  };
+
+  const cost = (r: Run) => {
+    const matPerUnit = r.components.reduce((s, c) => s + c.qtyPerUnit * c.unitCost, 0);
+    const totalMat = matPerUnit * r.plannedQty;
+    const totalCost = totalMat + r.laborCost + r.overheadCost;
+    const made = r.producedQty || r.plannedQty;
+    const costPerUnit = made > 0 ? totalCost / made : 0;
+    const yieldPct = r.plannedQty > 0 && r.producedQty > 0 ? Math.round((r.producedQty / r.plannedQty) * 100) : null;
+    return { matPerUnit, totalMat, totalCost, costPerUnit, yieldPct };
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="flex items-center gap-2">
+        <Factory size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Production / BOM Costing</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Cost a manufacturing batch: materials + labour + overhead, with yield.</p>
+        </div>
+      </div>
+
+      {runs.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Runs ({runs.length})</p></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {[...runs].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+              const { costPerUnit, totalCost, yieldPct } = cost(r);
+              return (
+                <button key={r.id} onClick={() => setActiveId(r.id === activeId ? null : r.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm hover:bg-[var(--color-accent)] ${r.id === activeId ? "bg-[var(--color-primary)]/10" : ""}`}>
+                  <div>
+                    <p className="font-medium">{r.product}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{r.date} · {r.plannedQty} planned{yieldPct !== null ? ` · ${yieldPct}% yield` : ""}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="tabular-nums font-semibold">{formatCurrency(Math.round(costPerUnit))}/unit</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{formatCurrency(Math.round(totalCost))} total</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">New Production Run</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <input value={pProduct} onChange={e => setPProduct(e.target.value)} placeholder="Finished product *" className={inp} />
+          <input type="number" value={pQty} onChange={e => setPQty(e.target.value)} placeholder="Planned qty" className={inp} />
+          <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={pDate} onChange={e => setPDate(e.target.value)} className={inp} /></div>
+        </div>
+        <button onClick={createRun} className="mt-2 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Create run</button>
+      </div>
+
+      {active && (() => {
+        const { matPerUnit, totalMat, totalCost, costPerUnit, yieldPct } = cost(active);
+        return (
+          <div className="space-y-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">{active.product}</h3>
+                <button onClick={() => { setRuns(prev => prev.filter(r => r.id !== active.id)); setActiveId(null); }} className="text-xs text-red-400 hover:underline">Delete run</button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div><label className="text-[10px] text-[var(--color-muted)] block">Produced qty</label><input type="number" value={active.producedQty || ""} onChange={e => patch(active.id, { producedQty: parseFloat(e.target.value) || 0 })} className={inp} /></div>
+                <div><label className="text-[10px] text-[var(--color-muted)] block">Labour cost ₹</label><input type="number" value={active.laborCost || ""} onChange={e => patch(active.id, { laborCost: parseFloat(e.target.value) || 0 })} className={inp} /></div>
+                <div><label className="text-[10px] text-[var(--color-muted)] block">Overhead ₹</label><input type="number" value={active.overheadCost || ""} onChange={e => patch(active.id, { overheadCost: parseFloat(e.target.value) || 0 })} className={inp} /></div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {[
+                  { label: "Material/unit", value: formatCurrency(Math.round(matPerUnit)), color: "text-[var(--color-text)]" },
+                  { label: "Total material", value: formatCurrency(Math.round(totalMat)), color: "text-blue-400" },
+                  { label: "Batch total", value: formatCurrency(Math.round(totalCost)), color: "text-red-400" },
+                  { label: "Cost/unit", value: formatCurrency(Math.round(costPerUnit)), color: "text-[var(--color-primary)]" },
+                ].map(k => (
+                  <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                    <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                    <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              {yieldPct !== null && (
+                <div className={`mt-3 rounded-lg px-4 py-2 text-xs border ${yieldPct >= 95 ? "bg-green-950/30 border-green-800/40 text-green-400" : yieldPct >= 85 ? "bg-yellow-950/30 border-yellow-800/40 text-yellow-400" : "bg-red-950/30 border-red-800/40 text-red-400"}`}>
+                  Yield {yieldPct}% — {active.producedQty} of {active.plannedQty} planned ({active.plannedQty - active.producedQty} loss)
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Components (per unit)</p></div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {active.components.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className="flex-1 font-medium">{c.material}</span>
+                    <span className="text-xs text-[var(--color-muted)] tabular-nums">{c.qtyPerUnit} × {formatCurrency(c.unitCost)}</span>
+                    <span className="tabular-nums font-semibold text-xs w-20 text-right">{formatCurrency(Math.round(c.qtyPerUnit * c.unitCost))}</span>
+                    <button onClick={() => patch(active.id, { components: active.components.filter(x => x.id !== c.id) })} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                ))}
+                {active.components.length === 0 && <p className="px-4 py-3 text-sm text-[var(--color-muted)]">No components. Add raw materials below.</p>}
+              </div>
+              <div className="px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-bg)] flex items-end gap-2 flex-wrap">
+                <input value={cMat} onChange={e => setCMat(e.target.value)} placeholder="Material *" className="flex-1 min-w-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                <input type="number" value={cQty} onChange={e => setCQty(e.target.value)} placeholder="Qty/unit" className="w-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                <input type="number" value={cCost} onChange={e => setCCost(e.target.value)} placeholder="Unit cost ₹" className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                <button onClick={() => addComp(active.id)} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">+ Add</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {runs.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Factory size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No production runs. Create one to cost a manufacturing batch with materials, labour and overhead.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── #73 Warehouse / multi-location stock + transfers ───────────────────────── */
+function WarehouseStockTab() {
+  type Loc = { id: string; name: string };
+  type Bal = { id: string; locId: string; product: string; qty: number };
+  type Transfer = { id: string; date: string; fromId: string; toId: string; product: string; qty: number };
+  const [locs, setLocs] = useFeatureState<Loc[]>("warehouse-locations", []);
+  const [bals, setBals] = useFeatureState<Bal[]>("warehouse-balances", []);
+  const [transfers, setTransfers] = useFeatureState<Transfer[]>("warehouse-transfers", []);
+
+  const [newLoc, setNewLoc] = useState("");
+  const [bLoc, setBLoc] = useState("");
+  const [bProduct, setBProduct] = useState("");
+  const [bQty, setBQty] = useState("");
+
+  const [tFrom, setTFrom] = useState("");
+  const [tTo, setTTo] = useState("");
+  const [tProduct, setTProduct] = useState("");
+  const [tQty, setTQty] = useState("");
+
+  const addLoc = () => {
+    if (!newLoc.trim()) return;
+    setLocs(prev => [...prev, { id: generateId(), name: newLoc.trim() }]);
+    setNewLoc(""); toast.success("Location added");
+  };
+
+  const addStock = () => {
+    if (!bLoc || !bProduct || !bQty) { toast.error("Location, product and qty required"); return; }
+    const q = parseFloat(bQty) || 0;
+    setBals(prev => {
+      const ex = prev.find(b => b.locId === bLoc && b.product.toLowerCase() === bProduct.toLowerCase());
+      if (ex) return prev.map(b => b.id === ex.id ? { ...b, qty: b.qty + q } : b);
+      return [...prev, { id: generateId(), locId: bLoc, product: bProduct, qty: q }];
+    });
+    setBProduct(""); setBQty(""); toast.success("Stock added");
+  };
+
+  const doTransfer = () => {
+    if (!tFrom || !tTo || !tProduct || !tQty) { toast.error("Fill all transfer fields"); return; }
+    if (tFrom === tTo) { toast.error("Source and destination must differ"); return; }
+    const q = parseFloat(tQty) || 0;
+    const src = bals.find(b => b.locId === tFrom && b.product.toLowerCase() === tProduct.toLowerCase());
+    if (!src || src.qty < q) { toast.error("Insufficient stock at source"); return; }
+    setBals(prev => {
+      let next = prev.map(b => b.id === src.id ? { ...b, qty: b.qty - q } : b);
+      const dest = next.find(b => b.locId === tTo && b.product.toLowerCase() === tProduct.toLowerCase());
+      if (dest) next = next.map(b => b.id === dest.id ? { ...b, qty: b.qty + q } : b);
+      else next = [...next, { id: generateId(), locId: tTo, product: src.product, qty: q }];
+      return next;
+    });
+    setTransfers(prev => [...prev, { id: generateId(), date: new Date().toISOString().split("T")[0], fromId: tFrom, toId: tTo, product: src.product, qty: q }]);
+    setTProduct(""); setTQty(""); toast.success("Transfer completed");
+  };
+
+  const locName = (id: string) => locs.find(l => l.id === id)?.name ?? "—";
+  const products = [...new Set(bals.map(b => b.product))];
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Warehouse size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Warehouses &amp; Multi-Location Stock</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Stock per location with inter-warehouse transfers.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-2">Locations</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {locs.map(l => (
+            <span key={l.id} className="inline-flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1 rounded-full">
+              <Warehouse size={11} className="text-[var(--color-primary)]" />{l.name}
+              <button onClick={() => { setLocs(prev => prev.filter(x => x.id !== l.id)); setBals(prev => prev.filter(b => b.locId !== l.id)); }} className="text-[var(--color-muted)] hover:text-red-400 ml-0.5"><X size={11} /></button>
+            </span>
+          ))}
+          {locs.length === 0 && <span className="text-xs text-[var(--color-muted)]">No locations yet.</span>}
+        </div>
+        <div className="flex gap-2">
+          <input value={newLoc} onChange={e => setNewLoc(e.target.value)} onKeyDown={e => e.key === "Enter" && addLoc()} placeholder="Warehouse / shop name" className={`${inp} flex-1`} />
+          <button onClick={addLoc} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">+ Add</button>
+        </div>
+      </div>
+
+      {locs.length > 0 && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-sm font-semibold mb-2">Add Stock</p>
+            <div className="space-y-2">
+              <select value={bLoc} onChange={e => setBLoc(e.target.value)} className={inp}>
+                <option value="">Select location…</option>
+                {locs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              <input value={bProduct} onChange={e => setBProduct(e.target.value)} placeholder="Product" className={inp} />
+              <input type="number" value={bQty} onChange={e => setBQty(e.target.value)} placeholder="Quantity" className={inp} />
+              <button onClick={addStock} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Add to location</button>
+            </div>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-sm font-semibold mb-2 flex items-center gap-1"><Route size={13} className="text-[var(--color-primary)]" /> Transfer Stock</p>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <select value={tFrom} onChange={e => setTFrom(e.target.value)} className={inp}>
+                  <option value="">From…</option>{locs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <select value={tTo} onChange={e => setTTo(e.target.value)} className={inp}>
+                  <option value="">To…</option>{locs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <select value={tProduct} onChange={e => setTProduct(e.target.value)} className={inp}>
+                <option value="">Product…</option>{products.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <input type="number" value={tQty} onChange={e => setTQty(e.target.value)} placeholder="Quantity" className={inp} />
+              <button onClick={doTransfer} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Transfer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bals.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Stock by Location</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Location", "Product", "Qty", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...bals].sort((a, b) => locName(a.locId).localeCompare(locName(b.locId)) || a.product.localeCompare(b.product)).map(b => (
+                  <tr key={b.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 text-xs">{locName(b.locId)}</td>
+                    <td className="px-4 py-2.5 font-medium">{b.product}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${b.qty <= 0 ? "text-red-400" : ""}`}>{b.qty}</td>
+                    <td className="px-4 py-2.5"><button onClick={() => setBals(prev => prev.filter(x => x.id !== b.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {transfers.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Transfer History ({transfers.length})</p></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {[...transfers].reverse().slice(0, 20).map(t => (
+              <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
+                <span className="text-[var(--color-muted)]">{t.date}</span>
+                <span className="flex items-center gap-1.5"><span className="font-medium">{t.product}</span> × {t.qty}</span>
+                <span className="flex items-center gap-1 text-[var(--color-muted)]">{locName(t.fromId)} <ArrowUpRight size={11} className="text-[var(--color-primary)]" /> {locName(t.toId)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {locs.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Warehouse size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add a warehouse or shop above to start tracking stock across locations.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── #74 Barcode / QR stock-take reconciliation ───────────────────────── */
+function StockTakeTab() {
+  const { store } = useApp();
+  type Count = { id: string; sku: string; product: string; systemQty: number; countedQty: number };
+  const [counts, setCounts] = useFeatureState<Count[]>("stock-take-counts", []);
+  const [scan, setScan] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Scan/lookup: matches an inventory SKU or product name, seeds the system qty.
+  const submitScan = () => {
+    const code = scan.trim();
+    if (!code) return;
+    const match = store.inventory.find(i =>
+      (i.sku && i.sku.toLowerCase() === code.toLowerCase()) || i.productName.toLowerCase() === code.toLowerCase()
+    );
+    const sku = match?.sku || code;
+    setCounts(prev => {
+      const ex = prev.find(c => c.sku.toLowerCase() === sku.toLowerCase());
+      if (ex) return prev.map(c => c.id === ex.id ? { ...c, countedQty: c.countedQty + 1 } : c);
+      return [...prev, { id: generateId(), sku, product: match?.productName || code, systemQty: match?.quantity ?? 0, countedQty: 1 }];
+    });
+    setScan("");
+    inputRef.current?.focus();
+  };
+
+  const setCounted = (id: string, v: number) => setCounts(prev => prev.map(c => c.id === id ? { ...c, countedQty: Math.max(0, v) } : c));
+  const variances = counts.map(c => ({ ...c, variance: c.countedQty - c.systemQty }));
+  const mismatches = variances.filter(v => v.variance !== 0);
+  const netVar = variances.reduce((s, v) => s + v.variance, 0);
+
+  const exportCsv = () => {
+    const header = ["SKU", "Product", "System Qty", "Counted Qty", "Variance"];
+    const lines = variances.map(v => [v.sku, v.product, v.systemQty, v.countedQty, v.variance].join(","));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" }));
+    a.download = "stock-take.csv"; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <ScanLine size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Barcode / QR Stock-Take</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Scan or type a code; each scan adds 1. Reconcile counted vs system stock.</p>
+          </div>
+        </div>
+        {counts.length > 0 && (
+          <div className="flex gap-2">
+            <button onClick={exportCsv} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40"><Download size={11} /> CSV</button>
+            <button onClick={() => setCounts([])} className="text-xs text-[var(--color-muted)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:text-red-400">Reset</button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <ScanLine size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+            <input ref={inputRef} value={scan} onChange={e => setScan(e.target.value)} onKeyDown={e => e.key === "Enter" && submitScan()} autoFocus
+              placeholder="Scan barcode / QR or type SKU, then Enter"
+              className="w-full pl-9 pr-3 py-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] font-mono" />
+          </div>
+          <button onClick={submitScan} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">+ Count</button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">USB / Bluetooth scanners type the code and send Enter automatically — this field is ready for them.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Lines Counted", value: counts.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Mismatches", value: mismatches.length.toString(), color: mismatches.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Net Variance", value: (netVar > 0 ? "+" : "") + netVar, color: netVar === 0 ? "text-green-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {counts.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Start scanning to build a count sheet. Known SKUs pull their system quantity automatically.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["SKU", "Product", "System", "Counted", "Variance", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {variances.map(v => (
+                  <tr key={v.id} className={`border-b border-[var(--color-border)] last:border-0 ${v.variance !== 0 ? "bg-yellow-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                    <td className="px-4 py-2.5 font-mono text-xs">{v.sku}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{v.product}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{v.systemQty}</td>
+                    <td className="px-4 py-2.5">
+                      <input type="number" value={v.countedQty} onChange={e => setCounted(v.id, parseFloat(e.target.value) || 0)}
+                        className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                    </td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${v.variance > 0 ? "text-green-400" : v.variance < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{v.variance > 0 ? `+${v.variance}` : v.variance}</td>
+                    <td className="px-4 py-2.5"><button onClick={() => setCounts(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Positive variance = more physical stock than system (under-recorded); negative = shrinkage / loss. Export the variance sheet to adjust your inventory.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #75 Dispatch / Route planner ───────────────────────── */
+function DispatchPlannerTab() {
+  type Stop = { id: string; date: string; customer: string; address: string; area: string; weightKg: number; status: "pending" | "loaded" | "delivered" };
+  const [stops, setStops] = useFeatureState<Stop[]>("dispatch-stops", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fCustomer, setFCustomer] = useState("");
+  const [fAddress, setFAddress] = useState("");
+  const [fArea, setFArea] = useState("");
+  const [fWeight, setFWeight] = useState("");
+
+  const addStop = () => {
+    if (!fCustomer || !fAddress) { toast.error("Customer and address required"); return; }
+    setStops(prev => [...prev, { id: generateId(), date: fDate, customer: fCustomer, address: fAddress, area: fArea, weightKg: parseFloat(fWeight) || 0, status: "pending" }]);
+    toast.success("Stop added to plan");
+    setFCustomer(""); setFAddress(""); setFArea(""); setFWeight(""); setShowForm(false);
+  };
+
+  const cycle = (id: string) => setStops(prev => prev.map(s => s.id === id
+    ? { ...s, status: s.status === "pending" ? "loaded" : s.status === "loaded" ? "delivered" : "pending" } : s));
+
+  // Build a route per day, grouping stops by area to minimise back-tracking.
+  const today = new Date().toISOString().split("T")[0];
+  const todayStops = stops.filter(s => s.date === today);
+  const route = useMemo(() => {
+    return [...todayStops].sort((a, b) =>
+      (a.area || "zzz").localeCompare(b.area || "zzz") || a.customer.localeCompare(b.customer)
+    );
+  }, [todayStops]);
+  const totalWeight = todayStops.reduce((s, x) => s + x.weightKg, 0);
+  const delivered = todayStops.filter(s => s.status === "delivered").length;
+  const STATUS: Record<Stop["status"], string> = {
+    pending: "bg-[var(--color-accent)] text-[var(--color-muted)]", loaded: "bg-blue-950/30 text-blue-400", delivered: "bg-green-950/30 text-green-400",
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Route size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Dispatch / Route Planner</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Plan today's delivery run, grouped by area for an efficient route.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Add stop
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Stops Today", value: todayStops.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Delivered", value: `${delivered}/${todayStops.length}`, color: "text-green-400" },
+          { label: "Total Load", value: `${totalWeight} kg`, color: "text-blue-400" },
+          { label: "All Planned Stops", value: stops.length.toString(), color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <input value={fCustomer} onChange={e => setFCustomer(e.target.value)} placeholder="Customer *" className={inp} />
+            <input value={fArea} onChange={e => setFArea(e.target.value)} placeholder="Area / zone" className={inp} />
+            <input type="number" value={fWeight} onChange={e => setFWeight(e.target.value)} placeholder="Weight (kg)" className={inp} />
+            <input value={fAddress} onChange={e => setFAddress(e.target.value)} placeholder="Delivery address *" className={`${inp} md:col-span-4`} />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addStop} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Today's Route ({route.length} stops, area-optimised)</p></div>
+        {route.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No stops planned for today. Add deliveries to build an area-grouped route.</p>
+        ) : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {route.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)] text-xs font-bold flex items-center justify-center tabular-nums">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{s.customer}{s.area && <span className="ml-2 text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] px-1.5 py-0.5 rounded">{s.area}</span>}</p>
+                  <p className="text-xs text-[var(--color-muted)] truncate">{s.address}{s.weightKg > 0 ? ` · ${s.weightKg} kg` : ""}</p>
+                </div>
+                <button onClick={() => cycle(s.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS[s.status]}`}>{s.status}</button>
+                <button onClick={() => setStops(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {stops.some(s => s.date !== today) && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Other-Day Stops</p></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {stops.filter(s => s.date !== today).sort((a, b) => a.date.localeCompare(b.date)).map(s => (
+              <div key={s.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
+                <span className="text-[var(--color-muted)] tabular-nums">{s.date}</span>
+                <span className="font-medium flex-1 px-3 truncate">{s.customer} <span className="text-[var(--color-muted)]">{s.area}</span></span>
+                <button onClick={() => setStops(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Stops are grouped by area to reduce back-tracking. Tap a status chip to cycle pending → loaded → delivered.</p>
     </div>
   );
 }

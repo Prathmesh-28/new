@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Star, TrendingDown, TrendingUp, Award } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
+
+const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
 function agingBucket(daysOverdue: number): "current" | "30d" | "60d" | "90d" {
   if (daysOverdue <= 0) return "current";
@@ -180,11 +183,14 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
   );
 }
 
+type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm";
+
 export default function ReceivablesPage() {
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
   const { invoices } = store;
   const [showAdd, setShowAdd] = useState(false);
   const [view, setView] = useState<"list" | "kanban">("list");
+  const [tab, setTab] = useState<ReceivablesTab>("overview");
   const today = new Date().toISOString().split("T")[0];
 
   const pending = invoices.filter(i => i.status !== "paid");
@@ -242,6 +248,23 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
+      {/* Tab selector */}
+      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
+        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck]] as const).map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Icon size={11} />{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "risk-score" && <CustomerRiskScoring />}
+      {tab === "factoring" && <FactoringEstimator />}
+      {tab === "cash-app" && <CashApplication />}
+      {tab === "concentration" && <ConcentrationRisk />}
+      {tab === "ar-confirm" && <ARConfirmationMailer />}
+
+      {tab === "overview" && <>
       {/* Aging summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {buckets.map(b => (
@@ -425,6 +448,7 @@ export default function ReceivablesPage() {
           </div>
         );
       })()}
+      </>}
 
       {showAdd && (
         <AddInvoiceModal
@@ -432,6 +456,635 @@ export default function ReceivablesPage() {
           onAdd={inv => { addInvoice(inv); toast.success(`Invoice from ${inv.customer} added`); setShowAdd(false); }}
         />
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #55 — CUSTOMER RISK SCORING (pay-behaviour + exposure score per customer)
+// ════════════════════════════════════════════════════════════════════════════
+interface CustomerRisk {
+  name: string;
+  exposure: number;        // outstanding (unpaid) amount
+  totalBilled: number;
+  paidCount: number;
+  totalCount: number;
+  payRate: number;         // % invoices paid
+  avgDaysLate: number;
+  worstOverdue: number;    // current open max days overdue
+  score: number;           // 0–100, higher = safer
+  band: "Low" | "Medium" | "High" | "Severe";
+}
+
+function riskBand(score: number): CustomerRisk["band"] {
+  if (score >= 75) return "Low";
+  if (score >= 55) return "Medium";
+  if (score >= 35) return "High";
+  return "Severe";
+}
+const RISK_COLOR: Record<CustomerRisk["band"], string> = {
+  Low: "text-green-400", Medium: "text-yellow-400", High: "text-orange-400", Severe: "text-red-400",
+};
+const RISK_BG: Record<CustomerRisk["band"], string> = {
+  Low: "#22c55e", Medium: "#eab308", High: "#f97316", Severe: "#ef4444",
+};
+
+function CustomerRiskScoring() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+
+  const rows = useMemo<CustomerRisk[]>(() => {
+    const map: Record<string, Invoice[]> = {};
+    invoices.forEach(inv => { (map[inv.customer] ||= []).push(inv); });
+    const out: CustomerRisk[] = Object.entries(map).map(([name, list]) => {
+      const totalCount = list.length;
+      const paid = list.filter(i => i.status === "paid");
+      const open = list.filter(i => i.status !== "paid");
+      const exposure = open.reduce((s, i) => s + i.amount, 0);
+      const totalBilled = list.reduce((s, i) => s + i.amount, 0);
+      const payRate = totalCount > 0 ? (paid.length / totalCount) * 100 : 0;
+      // average days late uses paid invoices (settled after due date)
+      const lateArr = paid.map(i => Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))));
+      const avgDaysLate = lateArr.length ? lateArr.reduce((a, b) => a + b, 0) / lateArr.length : 0;
+      const worstOverdue = open.reduce((m, i) => Math.max(m, differenceInDays(new Date(), parseISO(i.dueDate))), 0);
+      // Score: pay-rate 45%, lateness penalty 30%, open-overdue penalty 25%
+      const lateScore = Math.max(0, 30 - avgDaysLate * 0.6);
+      const overdueScore = Math.max(0, 25 - Math.max(0, worstOverdue) * 0.4);
+      const score = Math.round(Math.max(0, Math.min(100, payRate * 0.45 + lateScore + overdueScore)));
+      return { name, exposure, totalBilled, paidCount: paid.length, totalCount, payRate, avgDaysLate: Math.round(avgDaysLate), worstOverdue: Math.max(0, worstOverdue), score, band: riskBand(score) };
+    });
+    return out.sort((a, b) => (b.exposure - a.exposure) || (a.score - b.score));
+  }, [invoices]);
+
+  const totalExposure = rows.reduce((s, r) => s + r.exposure, 0);
+  const atRisk = rows.filter(r => r.band === "High" || r.band === "Severe");
+  const atRiskExposure = atRisk.reduce((s, r) => s + r.exposure, 0);
+
+  if (rows.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Gauge size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">Add invoices to score customers by pay-behaviour and exposure.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total open exposure", value: formatCurrency(totalExposure), color: "text-[var(--color-primary)]" },
+          { label: "High / Severe risk", value: `${atRisk.length} customer${atRisk.length !== 1 ? "s" : ""}`, color: "text-red-400" },
+          { label: "Exposure at risk", value: formatCurrency(atRiskExposure), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+          <Gauge size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Customer Risk Scoring</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Higher score = safer to extend credit</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {rows.map(r => (
+            <div key={r.name} className="px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm font-semibold truncate">{r.name}</p>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${RISK_COLOR[r.band]}`}>{r.band} risk</span>
+                </div>
+                <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${r.score}%`, background: RISK_BG[r.band] }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">
+                  {r.paidCount}/{r.totalCount} paid · {Math.round(r.payRate)}% pay-rate
+                  {r.avgDaysLate > 0 && ` · avg ${r.avgDaysLate}d late`}
+                  {r.worstOverdue > 0 && ` · ${r.worstOverdue}d max overdue`}
+                </p>
+              </div>
+              <div className="text-right shrink-0 min-w-[96px]">
+                <p className={`text-base font-bold tabular-nums ${RISK_COLOR[r.band]}`}>{r.score}<span className="text-[10px] text-[var(--color-muted)]">/100</span></p>
+                <p className="text-xs text-[var(--color-text)] font-semibold tabular-nums">{formatCurrency(r.exposure)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Score = pay-rate (45%) + payment-speed (30%) + open-overdue health (25%). Use bands to set credit limits and hold thresholds per customer.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #56 — FACTORING / DISCOUNTING ESTIMATOR (net proceeds if you sell invoices)
+// ════════════════════════════════════════════════════════════════════════════
+function FactoringEstimator() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid"), [invoices]);
+
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [advanceRate, setAdvanceRate] = useState("85");   // % advanced upfront
+  const [discountPa, setDiscountPa] = useState("18");     // financier interest % p.a.
+  const [feePct, setFeePct] = useState("1.5");            // processing/service fee % of face
+  const [tenorDays, setTenorDays] = useState("60");       // expected days to collection
+
+  const toggle = (id: string) => setSelected(s => ({ ...s, [id]: !s[id] }));
+  const allOn = open.length > 0 && open.every(i => selected[i.id]);
+  const selectAll = () => {
+    if (allOn) setSelected({});
+    else setSelected(Object.fromEntries(open.map(i => [i.id, true])));
+  };
+
+  const chosen = open.filter(i => selected[i.id]);
+  const face = chosen.reduce((s, i) => s + i.amount, 0);
+  const adv = (parseFloat(advanceRate) || 0) / 100;
+  const rate = (parseFloat(discountPa) || 0) / 100;
+  const fee = (parseFloat(feePct) || 0) / 100;
+  const days = parseFloat(tenorDays) || 0;
+
+  const advanced = face * adv;                         // cash you get upfront
+  const discountCost = advanced * rate * (days / 365); // interest on the advance for the tenor
+  const serviceFee = face * fee;                       // flat service/processing fee
+  const totalCost = discountCost + serviceFee;
+  const reserveReleased = face - advanced;             // released on collection (less costs)
+  const netProceeds = face - totalCost;                // total cash you ultimately net
+  const effectiveCostPct = face > 0 ? (totalCost / face) * 100 : 0;
+  const annualisedPct = (advanced > 0 && days > 0) ? (totalCost / advanced) * (365 / days) * 100 : 0;
+
+  const inp = INP;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Banknote size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Factoring / Invoice-Discounting Estimator</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Advance rate (%)</label>
+            <input type="number" value={advanceRate} onChange={e => setAdvanceRate(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount rate (% p.a.)</label>
+            <input type="number" value={discountPa} onChange={e => setDiscountPa(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Service fee (% of face)</label>
+            <input type="number" value={feePct} onChange={e => setFeePct(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expected tenor (days)</label>
+            <input type="number" value={tenorDays} onChange={e => setTenorDays(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {open.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Banknote size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No open invoices available to factor.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Select invoices to discount</h3>
+            <button onClick={selectAll} className="text-xs text-[var(--color-primary)] font-medium hover:underline">{allOn ? "Clear all" : "Select all"}</button>
+          </div>
+          <div className="divide-y divide-[var(--color-border)] max-h-72 overflow-y-auto">
+            {open.map(i => (
+              <label key={i.id} className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--color-accent)] transition-colors">
+                <input type="checkbox" checked={!!selected[i.id]} onChange={() => toggle(i.id)} className="accent-[var(--color-primary)]" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{i.customer}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{i.invoiceNumber ?? i.id} · due {format(parseISO(i.dueDate), "d MMM yyyy")}</p>
+                </div>
+                <p className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(i.amount)}</p>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {face > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Face value selected", value: formatCurrency(face), color: "text-[var(--color-text)]" },
+              { label: "Advance now", value: formatCurrency(Math.round(advanced)), color: "text-[var(--color-primary)]" },
+              { label: "Total financing cost", value: formatCurrency(Math.round(totalCost)), color: "text-red-400" },
+              { label: "Net proceeds", value: formatCurrency(Math.round(netProceeds)), color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[420px]">
+              <tbody>
+                {[
+                  { label: `Advance @ ${advanceRate}% of face`, val: Math.round(advanced) },
+                  { label: `Discount interest (${discountPa}% p.a. × ${tenorDays}d)`, val: -Math.round(discountCost) },
+                  { label: `Service fee (${feePct}% of face)`, val: -Math.round(serviceFee) },
+                  { label: "Reserve released on collection", val: Math.round(reserveReleased) },
+                  { label: "Net proceeds", val: Math.round(netProceeds), bold: true },
+                ].map(r => (
+                  <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                    <td className="px-4 py-2.5">{r.label}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-right">{r.val < 0 ? `(${formatCurrency(Math.abs(r.val))})` : formatCurrency(r.val)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">
+            Effective cost {effectiveCostPct.toFixed(2)}% of face · annualised ≈ {annualisedPct.toFixed(1)}% on the advance.
+            Compare against your cost of capital before factoring. Estimate only — actual KredX/TReDS terms vary.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #57 — CASH APPLICATION / AUTO-MATCH RECEIPTS (bank credits → open invoices)
+// ════════════════════════════════════════════════════════════════════════════
+interface CashMatch {
+  txnId: string;
+  date: string;
+  amount: number;
+  counterparty: string;
+  description: string;
+  invoiceId?: string;
+  invoiceLabel?: string;
+  confidence: "exact" | "likely" | "none";
+}
+
+function normalise(s: string): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function CashApplication() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const transactions = store.transactions ?? [];
+  // applied = invoiceId -> txnId user has confirmed
+  const [applied, setApplied] = useFeatureState<Record<string, string>>("receivables-cash-applied", {});
+
+  const matches = useMemo<CashMatch[]>(() => {
+    // candidate receipts: revenue inflows (positive) not yet applied as a txn
+    const appliedTxnIds = new Set(Object.values(applied));
+    const receipts = transactions.filter(t => t.category === "revenue" && t.amount > 0 && !appliedTxnIds.has(t.id));
+    const openInvoices = invoices.filter(i => i.status !== "paid" && !applied[i.id]);
+
+    return receipts.map(t => {
+      const tcp = normalise(t.counterparty);
+      const tdesc = normalise(t.description);
+      // 1) exact: amount equal (±1) AND customer name appears in counterparty/desc
+      let inv = openInvoices.find(i => {
+        const ic = normalise(i.customer);
+        const num = normalise(i.invoiceNumber ?? "");
+        const nameHit = ic.length > 2 && (tcp.includes(ic) || tdesc.includes(ic) || (num.length > 2 && (tcp.includes(num) || tdesc.includes(num))));
+        return nameHit && Math.abs(i.amount - t.amount) <= 1;
+      });
+      if (inv) return { txnId: t.id, date: t.date, amount: t.amount, counterparty: t.counterparty, description: t.description, invoiceId: inv.id, invoiceLabel: `${inv.customer} · ${inv.invoiceNumber ?? inv.id}`, confidence: "exact" as const };
+      // 2) likely: amount within 2% OR a name hit alone
+      inv = openInvoices.find(i => {
+        const ic = normalise(i.customer);
+        const nameHit = ic.length > 2 && (tcp.includes(ic) || tdesc.includes(ic));
+        const amtClose = i.amount > 0 && Math.abs(i.amount - t.amount) / i.amount <= 0.02;
+        return nameHit || amtClose;
+      });
+      if (inv) return { txnId: t.id, date: t.date, amount: t.amount, counterparty: t.counterparty, description: t.description, invoiceId: inv.id, invoiceLabel: `${inv.customer} · ${inv.invoiceNumber ?? inv.id}`, confidence: "likely" as const };
+      return { txnId: t.id, date: t.date, amount: t.amount, counterparty: t.counterparty, description: t.description, confidence: "none" as const };
+    });
+  }, [transactions, invoices, applied]);
+
+  const matched = matches.filter(m => m.invoiceId);
+  const unmatched = matches.filter(m => !m.invoiceId);
+
+  const apply = (m: CashMatch) => {
+    if (!m.invoiceId) return;
+    setApplied(prev => ({ ...prev, [m.invoiceId!]: m.txnId }));
+    toast.success(`Applied ${formatCurrency(m.amount)} to ${m.invoiceLabel}`);
+  };
+
+  const appliedRows = Object.entries(applied)
+    .map(([invId, txnId]) => {
+      const inv = invoices.find(i => i.id === invId);
+      const txn = transactions.find(t => t.id === txnId);
+      return inv && txn ? { inv, txn } : null;
+    })
+    .filter((x): x is { inv: Invoice; txn: typeof transactions[number] } => x !== null);
+
+  const unapply = (invId: string) => {
+    setApplied(prev => { const n = { ...prev }; delete n[invId]; return n; });
+    toast.success("Receipt un-applied");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-2">
+        <Link2 size={14} className="text-[var(--color-primary)]" />
+        <h3 className="text-sm font-semibold">Cash Application — auto-match receipts to invoices</h3>
+        <span className="text-xs text-[var(--color-muted)] ml-auto">{matched.length} suggested · {appliedRows.length} applied</span>
+      </div>
+
+      {matches.length === 0 && appliedRows.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Link2 size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No unapplied revenue receipts found. Receipts auto-match by amount and customer name.</p>
+        </div>
+      )}
+
+      {matched.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Suggested matches</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {matched.map(m => (
+              <div key={m.txnId} className="px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-accent)] transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-medium truncate">{m.counterparty || m.description}</p>
+                    <span className={`text-[10px] font-bold shrink-0 ${m.confidence === "exact" ? "text-green-400" : "text-yellow-400"}`}>{m.confidence === "exact" ? "Exact match" : "Likely match"}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)] truncate">{format(parseISO(m.date), "d MMM yyyy")} → {m.invoiceLabel}</p>
+                </div>
+                <p className="text-sm font-semibold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(m.amount)}</p>
+                <button onClick={() => apply(m)} className="shrink-0 flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-2.5 py-1.5 rounded-lg font-semibold hover:opacity-90">
+                  <CheckCircle2 size={12} /> Apply
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {unmatched.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold text-[var(--color-muted)]">Unmatched receipts ({unmatched.length})</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {unmatched.map(m => (
+              <div key={m.txnId} className="px-4 py-3 flex items-center gap-3">
+                <AlertTriangle size={13} className="text-orange-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{m.counterparty || m.description}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{format(parseISO(m.date), "d MMM yyyy")} · no open invoice matched</p>
+                </div>
+                <p className="text-sm font-medium tabular-nums shrink-0 text-[var(--color-muted)]">{formatCurrency(m.amount)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {appliedRows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Applied</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {appliedRows.map(({ inv, txn }) => (
+              <div key={inv.id} className="px-4 py-3 flex items-center gap-3 opacity-80">
+                <CheckCircle2 size={13} className="text-green-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{inv.customer} · {inv.invoiceNumber ?? inv.id}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">Receipt {format(parseISO(txn.date), "d MMM yyyy")} · {txn.counterparty || txn.description}</p>
+                </div>
+                <p className="text-sm font-medium tabular-nums shrink-0">{formatCurrency(txn.amount)}</p>
+                <button onClick={() => unapply(inv.id)} title="Un-apply" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Auto-matches revenue inflows to open invoices by amount and customer name. Applying records the link locally; confirm payment on the Overview tab to mark the invoice paid.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #58 — CONCENTRATION RISK ALERT (flags when >X% of AR is one customer)
+// ════════════════════════════════════════════════════════════════════════════
+function ConcentrationRisk() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [threshold, setThreshold] = useState("25"); // % alert level
+
+  const { rows, total, top1, top3, hhi } = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, number> = {};
+    open.forEach(i => { map[i.customer] = (map[i.customer] || 0) + i.amount; });
+    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    const rows = Object.entries(map)
+      .map(([name, amount]) => ({ name, amount, pct: total > 0 ? (amount / total) * 100 : 0 }))
+      .sort((a, b) => b.amount - a.amount);
+    const top1 = rows[0]?.pct ?? 0;
+    const top3 = rows.slice(0, 3).reduce((s, r) => s + r.pct, 0);
+    // Herfindahl–Hirschman Index on shares (0–10000); >2500 = highly concentrated
+    const hhi = Math.round(rows.reduce((s, r) => s + (r.pct) ** 2, 0));
+    return { rows, total, top1, top3, hhi };
+  }, [invoices]);
+
+  const limit = parseFloat(threshold) || 0;
+  const breaches = rows.filter(r => r.pct > limit);
+  const inp = INP;
+
+  if (total === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <PieChart size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No outstanding receivables to analyse for concentration.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <PieChart size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Concentration Risk</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when one customer &gt; (%)</label>
+          <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} className={`${inp} w-32`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Top customer share", value: `${top1.toFixed(1)}%`, color: top1 > limit ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Top 3 share", value: `${top3.toFixed(1)}%`, color: top3 > 60 ? "text-orange-400" : "text-[var(--color-text)]" },
+          { label: "HHI (0–10,000)", value: String(hhi), color: hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-yellow-400" : "text-green-400" },
+          { label: "Breaches", value: `${breaches.length}`, color: breaches.length ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {breaches.length > 0 && (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 flex items-start gap-2">
+          <AlertTriangle size={15} className="text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-red-400">Concentration alert</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">
+              {breaches.map(b => `${b.name} (${b.pct.toFixed(1)}%)`).join(", ")} each exceed your {limit}% threshold. A default by any of these would materially hit cash flow — diversify or tighten credit.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <h3 className="text-sm font-semibold">AR by customer</h3>
+          <span className="text-xs text-[var(--color-muted)]">{formatCurrency(total)} total</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {rows.map(r => {
+            const over = r.pct > limit;
+            return (
+              <div key={r.name} className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium truncate">{r.name}</p>
+                    <span className={`text-xs font-semibold shrink-0 ml-2 ${over ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${r.pct}%`, background: over ? "#ef4444" : "#1A6B55" }} />
+                  </div>
+                </div>
+                <p className="text-sm font-semibold tabular-nums shrink-0 min-w-[88px] text-right">{formatCurrency(r.amount)}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">HHI = sum of squared % shares; &gt;2,500 = highly concentrated, &lt;1,500 = diversified. Lenders watch customer concentration when sizing your AR-backed limit.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #59 — AR CONFIRMATION / BALANCE STATEMENT MAILER (audit-time confirmations)
+// ════════════════════════════════════════════════════════════════════════════
+function ARConfirmationMailer() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const firmName = store.firm?.name || "our company";
+  const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
+  // store per-customer contact details + sent log durably
+  const [contacts, setContacts] = useFeatureState<Record<string, { email?: string; phone?: string }>>("receivables-ar-contacts", {});
+  const [sentLog, setSentLog] = useFeatureState<Record<string, string>>("receivables-ar-confirm-sent", {});
+
+  const balances = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, { items: Invoice[]; total: number }> = {};
+    open.forEach(i => { (map[i.customer] ||= { items: [], total: 0 }); map[i.customer].items.push(i); map[i.customer].total += i.amount; });
+    return Object.entries(map).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
+  }, [invoices]);
+
+  const buildMessage = (name: string, total: number, items: Invoice[]): string => {
+    const lines = items
+      .map(i => `  • ${i.invoiceNumber ?? i.id} dated ${format(parseISO(i.invoiceDate), "d MMM yyyy")} — ${formatCurrency(i.amount)}`)
+      .join("\n");
+    return `Dear ${name},
+
+For audit purposes, please confirm the balance receivable by ${firmName} from you as on ${format(parseISO(asOf), "d MMM yyyy")}.
+
+As per our books, the outstanding balance is ${formatCurrency(total)}, comprising:
+${lines}
+
+Kindly reply confirming whether this balance agrees with your records. If you note any discrepancy, please share details.
+
+Thank you,
+${firmName}`;
+  };
+
+  const setContact = (name: string, field: "email" | "phone", value: string) =>
+    setContacts(prev => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
+
+  const sendEmail = (name: string, total: number, items: Invoice[]) => {
+    const c = contacts[name] || {};
+    const subject = `Balance confirmation request as on ${format(parseISO(asOf), "d MMM yyyy")} — ${firmName}`;
+    const body = buildMessage(name, total, items);
+    const to = c.email ? encodeURIComponent(c.email) : "";
+    window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
+    setSentLog(prev => ({ ...prev, [name]: new Date().toISOString() }));
+    toast.success(`Confirmation drafted for ${name}`);
+  };
+
+  const sendWhatsApp = (name: string, total: number, items: Invoice[]) => {
+    const c = contacts[name] || {};
+    const phone = (c.phone || "").replace(/[^0-9]/g, "");
+    const text = encodeURIComponent(buildMessage(name, total, items));
+    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+    setSentLog(prev => ({ ...prev, [name]: new Date().toISOString() }));
+    toast.success(`WhatsApp confirmation opened for ${name}`);
+  };
+
+  if (balances.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <MailCheck size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No outstanding balances to confirm. Balance confirmations are sent for open receivables.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <MailCheck size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">AR Balance Confirmation Mailer</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Confirm balance as on</label>
+          <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={`${INP} w-44`} />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {balances.map(b => {
+          const sentAt = sentLog[b.name];
+          const c = contacts[b.name] || {};
+          return (
+            <div key={b.name} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{b.name}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{b.items.length} open invoice{b.items.length !== 1 ? "s" : ""}{sentAt && ` · last sent ${format(parseISO(sentAt), "d MMM yyyy")}`}</p>
+                </div>
+                <p className="text-base font-bold tabular-nums text-[var(--color-primary)] shrink-0">{formatCurrency(b.total)}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                <input value={c.email ?? ""} onChange={e => setContact(b.name, "email", e.target.value)} placeholder="customer@email.com" className={INP} />
+                <input value={c.phone ?? ""} onChange={e => setContact(b.name, "phone", e.target.value)} placeholder="WhatsApp e.g. 919876543210" className={INP} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => sendEmail(b.name, b.total, b.items)} className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90">
+                  <Send size={12} /> Email confirmation
+                </button>
+                <button onClick={() => sendWhatsApp(b.name, b.total, b.items)} className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg font-medium hover:bg-[var(--color-accent)]">
+                  <MailCheck size={12} /> WhatsApp
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Drafts a positive-confirmation letter (auditor-style) per customer with the open-invoice breakdown as on the chosen date. Opens your mail / WhatsApp client; nothing is sent automatically.</p>
     </div>
   );
 }

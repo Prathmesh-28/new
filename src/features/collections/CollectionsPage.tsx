@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
-import { differenceInDays, format, parseISO } from "date-fns";
+import { differenceInDays, format, parseISO, addDays } from "date-fns";
 import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
   Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star, FileText, Copy,
+  Layers, LineChart, HandCoins, Users, Scissors, Plus, Trash2, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,7 +125,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -226,6 +228,11 @@ export default function CollectionsPage() {
               { id: "clv",           label: "CLV",            icon: <Star size={10} /> },
               { id: "score",         label: "Risk Score",     icon: <AlertTriangle size={10} /> },
               { id: "statement",     label: "Statement",      icon: <FileText size={10} /> },
+              { id: "dunning",       label: "Dunning",        icon: <Layers size={10} /> },
+              { id: "dso",           label: "DSO Trend",      icon: <LineChart size={10} /> },
+              { id: "promise",       label: "Promise-to-Pay", icon: <HandCoins size={10} /> },
+              { id: "agents",        label: "Agents",         icon: <Users size={10} /> },
+              { id: "settlement",    label: "Settlement",     icon: <Scissors size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -471,6 +478,11 @@ export default function CollectionsPage() {
       {view === "clv" && <ClvCalculator />}
       {view === "score" && <LatePaymentScorer />}
       {view === "statement" && <CustomerStatement />}
+      {view === "dunning" && <DunningSequence />}
+      {view === "dso" && <DsoTrend />}
+      {view === "promise" && <PromiseToPay />}
+      {view === "agents" && <AgentAssignment />}
+      {view === "settlement" && <SettlementWorkflow />}
     </div>
   );
 }
@@ -828,6 +840,764 @@ function CustomerStatement() {
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Simplified statement derived from invoice records (invoice = debit, payment = credit). For a GST-compliant statement of account, include actual payment dates, TDS adjustments and credit/debit notes.</p>
+    </div>
+  );
+}
+
+// ── #50 DUNNING SEQUENCE AUTOMATION ─────────────────────────────────────────
+// Staged reminder ladder (D+1 / D+7 / D+15 / D+30) across WhatsApp / email / SMS.
+// Computes, per overdue invoice, which ladder step is due now from its days-overdue.
+const DUNNING_LADDER = [
+  { day: 1,  step: "Gentle nudge",  tone: "soft",  cls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  { day: 7,  step: "Reminder",      tone: "firm",  cls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  { day: 15, step: "Follow-up",     tone: "firm",  cls: "bg-orange-950/40 text-orange-300 border-orange-700/40" },
+  { day: 30, step: "Final notice",  tone: "final", cls: "bg-red-950/40 text-red-300 border-red-700/40" },
+] as const;
+
+function dunningMessage(tone: string, name: string, amt: string, days: number, ref: string) {
+  if (tone === "soft")  return `Hi ${name}, a gentle reminder that invoice ${ref} for ${amt} is now ${days} day(s) past due. Could you confirm the payment date? Thank you!`;
+  if (tone === "final") return `FINAL NOTICE — ${name}: invoice ${ref} for ${amt} is ${days} days overdue and remains unpaid. Please clear it within 7 days to avoid further action. Reply with a payment date.`;
+  return `Dear ${name}, invoice ${ref} for ${amt} is now ${days} days overdue. Kindly arrange payment at the earliest. Let us know if there is any issue with the invoice.`;
+}
+
+function DunningSequence() {
+  const { store } = useApp();
+  const [channel, setChannel] = useState<"whatsapp" | "email" | "sms">("whatsapp");
+
+  const queue = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(inv => inv.status !== "paid")
+      .map(inv => {
+        const days = Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate)));
+        // Highest ladder step whose threshold has been crossed.
+        let stepIdx = -1;
+        DUNNING_LADDER.forEach((l, i) => { if (days >= l.day) stepIdx = i; });
+        const ref = inv.invoiceNumber || inv.id.slice(0, 6);
+        return { id: inv.id, customer: inv.customer, amount: inv.amount, days, ref, stepIdx };
+      })
+      .filter(r => r.stepIdx >= 0)
+      .sort((a, b) => b.days - a.days);
+  }, [store.invoices]);
+
+  const send = (r: { customer: string; amount: number; days: number; ref: string; stepIdx: number }) => {
+    const tone = DUNNING_LADDER[r.stepIdx].tone;
+    const text = dunningMessage(tone, r.customer, formatCurrency(r.amount), r.days, r.ref);
+    const msg = encodeURIComponent(text);
+    if (channel === "whatsapp")  window.open(`https://wa.me/?text=${msg}`, "_blank", "noopener");
+    else if (channel === "email") window.location.href = `mailto:?subject=${encodeURIComponent(`Reminder: invoice ${r.ref} — ${formatCurrency(r.amount)} overdue`)}&body=${msg}`;
+    else                          window.location.href = `sms:?&body=${msg}`;
+    toast.success(`${DUNNING_LADDER[r.stepIdx].step} opened for ${r.customer}`);
+  };
+
+  const stepCounts = DUNNING_LADDER.map((_, i) => queue.filter(q => q.stepIdx === i).length);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Layers size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Dunning ladder</span>
+        </div>
+        <div className="flex gap-2 ml-auto">
+          {(["whatsapp", "email", "sms"] as const).map(c => (
+            <button key={c} onClick={() => setChannel(c)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${channel === c ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {c === "whatsapp" ? "WhatsApp" : c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {DUNNING_LADDER.map((l, i) => (
+          <div key={l.day} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-[var(--color-muted)]">D+{l.day} · {l.step}</p>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${l.cls}`}>{stepCounts[i]}</span>
+            </div>
+            <p className="text-xl font-bold tabular-nums">{stepCounts[i]}</p>
+            <p className="text-[10px] text-[var(--color-muted)]">accounts at this stage</p>
+          </div>
+        ))}
+      </div>
+
+      {queue.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Layers size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No invoices have crossed a dunning threshold yet. Overdue invoices appear here when D+1 is reached.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <Send size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Reminders due now</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">{queue.length} account(s) · {channel}</span>
+          </div>
+          <table className="w-full text-sm min-w-[620px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Invoice", "Amount", "Days Overdue", "Ladder Step", "Action"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {queue.map(r => {
+                const l = DUNNING_LADDER[r.stepIdx];
+                return (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{r.ref}</td>
+                    <td className="px-4 py-3 tabular-nums">{formatCurrency(r.amount)}</td>
+                    <td className="px-4 py-3 tabular-nums text-red-400">{r.days}d</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${l.cls}`}>D+{l.day} · {l.step}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => send(r)}
+                        className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40 transition-colors font-medium">
+                        {channel === "email" ? <Mail size={11} /> : <MessageSquare size={11} />} Send
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Ladder triggers at D+1 (gentle) → D+7 → D+15 → D+30 (final). The step shown is the highest threshold each invoice has crossed. Sending opens your own WhatsApp/email/SMS prefilled — you choose the recipient and hit send.</p>
+    </div>
+  );
+}
+
+// ── #51 DSO TREND & AGING ANALYTICS ─────────────────────────────────────────
+// Days-Sales-Outstanding per month + worst payers, from live invoices.
+function DsoTrend() {
+  const { store } = useApp();
+
+  const { months, worstPayers, currentDso, prevDso } = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    // Build last-6-month buckets.
+    const buckets: { key: string; label: string; sales: number; outstanding: number }[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ key: format(d, "yyyy-MM"), label: format(d, "MMM yy"), sales: 0, outstanding: 0 });
+    }
+    const byKey: Record<string, { sales: number; outstanding: number }> = {};
+    buckets.forEach(b => { byKey[b.key] = b; });
+
+    invoices.forEach(inv => {
+      const key = (inv.invoiceDate || "").slice(0, 7);
+      if (byKey[key]) {
+        byKey[key].sales += inv.amount;
+        if (inv.status !== "paid") byKey[key].outstanding += inv.amount;
+      }
+    });
+
+    // DSO per month = (outstanding AR for the month / month sales) × days-in-month.
+    const months = buckets.map(b => {
+      const dsoVal = b.sales > 0 ? Math.round((b.outstanding / b.sales) * 30) : 0;
+      return { ...b, dso: dsoVal };
+    });
+
+    // Worst payers: avg days-late on their open invoices, sorted descending.
+    const payerMap: Record<string, { sumDays: number; n: number; open: number }> = {};
+    invoices.filter(i => i.status !== "paid").forEach(i => {
+      const days = Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate)));
+      if (!payerMap[i.customer]) payerMap[i.customer] = { sumDays: 0, n: 0, open: 0 };
+      payerMap[i.customer].sumDays += days;
+      payerMap[i.customer].n += 1;
+      payerMap[i.customer].open += i.amount;
+    });
+    const worstPayers = Object.entries(payerMap)
+      .map(([customer, d]) => ({ customer, avgDays: Math.round(d.sumDays / Math.max(d.n, 1)), open: d.open, count: d.n }))
+      .sort((a, b) => b.avgDays - a.avgDays)
+      .slice(0, 8);
+
+    const withData = months.filter(m => m.dso > 0);
+    const currentDso = months[months.length - 1]?.dso ?? 0;
+    const prevDso = withData.length >= 2 ? withData[withData.length - 2].dso : 0;
+    return { months, worstPayers, currentDso, prevDso };
+  }, [store.invoices]);
+
+  const maxDso = Math.max(...months.map(m => m.dso), 1);
+  const delta = currentDso - prevDso;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Current DSO", value: `${currentDso}d`, color: "text-[var(--color-primary)]" },
+          { label: "Prev. month DSO", value: prevDso > 0 ? `${prevDso}d` : "—", color: "text-[var(--color-muted)]" },
+          { label: "MoM change", value: `${delta >= 0 ? "+" : ""}${delta}d`, color: delta > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Worst payers", value: worstPayers.length.toString(), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <LineChart size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">DSO trend — last 6 months</span>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">lower is better</span>
+        </div>
+        <div className="flex items-end gap-3 h-40">
+          {months.map(m => (
+            <div key={m.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+              <span className="text-[10px] font-semibold tabular-nums">{m.dso > 0 ? `${m.dso}d` : "—"}</span>
+              <div className="w-full rounded-t bg-[var(--color-primary)] transition-all" style={{ height: `${(m.dso / maxDso) * 100}%`, minHeight: m.dso > 0 ? "4px" : "0" }} />
+              <span className="text-[10px] text-[var(--color-muted)]">{m.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {worstPayers.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <LineChart size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add invoices to see DSO trends and your slowest-paying customers.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]">
+            <span className="text-sm font-semibold">Worst payers (open invoices)</span>
+          </div>
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Open Invoices", "Outstanding", "Avg Days Late"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {worstPayers.map(p => (
+                <tr key={p.customer} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-semibold">{p.customer}</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{p.count}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(p.open)}</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{p.avgDays}d</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">DSO ≈ (open AR for the month ÷ that month&apos;s sales) × 30 days. A rising trend means cash is taking longer to collect. Worst payers ranked by average days past due on their open invoices.</p>
+    </div>
+  );
+}
+
+// ── #52 PROMISE-TO-PAY TRACKER ──────────────────────────────────────────────
+// Log customer commitments; auto-flag breaches when the promised date passes.
+type PromiseRow = {
+  id: string;
+  customer: string;
+  amount: number;
+  promiseDate: string;
+  note: string;
+  status: "open" | "kept" | "broken";
+  createdAt: string;
+};
+
+function PromiseToPay() {
+  const { store } = useApp();
+  const [rows, setRows] = useFeatureState<PromiseRow[]>("collections-promise-to-pay", []);
+  const customers = Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean)));
+
+  const [customer, setCustomer] = useState("");
+  const [amount, setAmount] = useState("");
+  const [promiseDate, setPromiseDate] = useState(format(addDays(new Date(), 7), "yyyy-MM-dd"));
+  const [note, setNote] = useState("");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!customer.trim() || amt <= 0) { toast.error("Pick a customer and a promised amount"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), amount: amt, promiseDate, note: note.trim(), status: "open", createdAt: new Date().toISOString() }, ...rows]);
+    setAmount(""); setNote("");
+    toast.success("Promise-to-pay logged");
+  };
+
+  const setStatus = (id: string, status: PromiseRow["status"]) =>
+    setRows(rows.map(r => (r.id === id ? { ...r, status } : r)));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  // A row is breached when still open and the promised date has passed.
+  const display = rows.map(r => {
+    const overdue = r.status === "open" && differenceInDays(new Date(), parseISO(r.promiseDate)) > 0;
+    return { ...r, breached: overdue, daysLate: overdue ? differenceInDays(new Date(), parseISO(r.promiseDate)) : 0 };
+  });
+
+  const followUp = (r: PromiseRow & { daysLate: number }) => {
+    const text = `Hi ${r.customer}, you had committed to pay ${formatCurrency(r.amount)} by ${format(parseISO(r.promiseDate), "d MMM yyyy")}, which is now ${r.daysLate} day(s) past. Could you confirm a fresh payment date today? Thank you.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    toast.success(`Follow-up opened for ${r.customer}`);
+  };
+
+  const openCount = display.filter(r => r.status === "open" && !r.breached).length;
+  const breachedCount = display.filter(r => r.breached).length;
+  const keptCount = display.filter(r => r.status === "kept").length;
+  const promisedValue = display.filter(r => r.status === "open").reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <HandCoins size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Log a promise-to-pay</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            {customers.length > 0 ? (
+              <select value={customer} onChange={e => setCustomer(e.target.value)} className={inp}>
+                <option value="">Select…</option>
+                {customers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : (
+              <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer name" className={inp} />
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Promised amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Promised by</label>
+            <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="optional" className={inp} />
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          <Plus size={13} /> Add promise
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Open promises", value: openCount.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Broken", value: breachedCount.toString(), color: "text-red-400" },
+          { label: "Kept", value: keptCount.toString(), color: "text-green-400" },
+          { label: "Promised value (open)", value: formatCurrency(promisedValue), color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {display.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <HandCoins size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No promises logged yet. When a customer commits to a payment date, record it here to auto-track breaches.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Amount", "Promised By", "Status", "Note", "Actions"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {display.map(r => (
+                <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${r.breached ? "bg-red-950/5" : ""}`}>
+                  <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(r.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{format(parseISO(r.promiseDate), "d MMM yyyy")}</td>
+                  <td className="px-4 py-3">
+                    {r.status === "kept" ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-950/30 text-green-400">Kept</span>
+                    ) : r.status === "broken" ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-950/40 text-red-300">Broken</span>
+                    ) : r.breached ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-950/30 text-red-400">Breached · {r.daysLate}d late</span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-950/30 text-yellow-400">Open</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-muted)] truncate max-w-[140px]">{r.note || "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      {r.breached && (
+                        <button onClick={() => followUp(r)} title="Follow up on WhatsApp"
+                          className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-[var(--color-primary)]/40 transition-colors">
+                          <MessageSquare size={11} /> Chase
+                        </button>
+                      )}
+                      {r.status === "open" && (
+                        <button onClick={() => setStatus(r.id, "kept")} title="Mark kept"
+                          className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-green-700/40 transition-colors text-green-400">
+                          <CheckCircle2 size={11} /> Kept
+                        </button>
+                      )}
+                      {r.status === "open" && (
+                        <button onClick={() => setStatus(r.id, "broken")} title="Mark broken"
+                          className="text-xs text-[var(--color-muted)] hover:text-red-400 px-1.5 py-1">Broken</button>
+                      )}
+                      <button onClick={() => remove(r.id)} title="Delete"
+                        className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={12} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Promises auto-flag as breached once the committed date passes while still open. Use Chase to send a WhatsApp follow-up. Records sync across your devices.</p>
+    </div>
+  );
+}
+
+// ── #53 COLLECTION AGENT ASSIGNMENT & TARGETS ──────────────────────────────
+// Route overdue accounts to reps, set a per-rep collection target, track progress.
+type AgentRow = { id: string; name: string; target: number };
+
+function AgentAssignment() {
+  const { store } = useApp();
+  const [agents, setAgents] = useFeatureState<AgentRow[]>("collections-agents", []);
+  const [assignments, setAssignments] = useFeatureState<Record<string, string>>("collections-agent-assignments", {});
+
+  const [agentName, setAgentName] = useState("");
+  const [agentTarget, setAgentTarget] = useState("");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const overdue = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(inv => inv.status !== "paid" && differenceInDays(new Date(), parseISO(inv.dueDate)) > 0)
+      .map(inv => ({
+        id: inv.id,
+        customer: inv.customer,
+        amount: inv.amount,
+        days: Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate))),
+        ref: inv.invoiceNumber || inv.id.slice(0, 6),
+      }))
+      .sort((a, b) => b.days - a.days);
+  }, [store.invoices]);
+
+  const addAgent = () => {
+    if (!agentName.trim()) { toast.error("Enter an agent name"); return; }
+    setAgents([...agents, { id: crypto.randomUUID(), name: agentName.trim(), target: parseFloat(agentTarget) || 0 }]);
+    setAgentName(""); setAgentTarget("");
+    toast.success("Agent added");
+  };
+
+  const removeAgent = (id: string) => {
+    setAgents(agents.filter(a => a.id !== id));
+    const next: Record<string, string> = {};
+    Object.entries(assignments).forEach(([invId, agId]) => { if (agId !== id) next[invId] = agId; });
+    setAssignments(next);
+  };
+
+  const assign = (invId: string, agentId: string) => setAssignments({ ...assignments, [invId]: agentId });
+
+  // Per-agent progress = sum of assigned overdue amounts vs their target.
+  const agentStats = agents.map(a => {
+    const assigned = overdue.filter(o => assignments[o.id] === a.id);
+    const assignedValue = assigned.reduce((s, o) => s + o.amount, 0);
+    const pct = a.target > 0 ? Math.min(100, Math.round((assignedValue / a.target) * 100)) : 0;
+    return { ...a, count: assigned.length, assignedValue, pct };
+  });
+
+  const unassigned = overdue.filter(o => !assignments[o.id]).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Users size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Add collection agent</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Agent / rep name</label>
+            <input value={agentName} onChange={e => setAgentName(e.target.value)} placeholder="e.g. Priya" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Collection target (₹)</label>
+            <input type="number" value={agentTarget} onChange={e => setAgentTarget(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={addAgent} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+              <Plus size={13} /> Add agent
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {agentStats.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {agentStats.map(a => (
+            <div key={a.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold">{a.name}</p>
+                <button onClick={() => removeAgent(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+              </div>
+              <p className="text-xs text-[var(--color-muted)]">{a.count} account(s) · {formatCurrency(a.assignedValue)} assigned</p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${a.pct}%` }} />
+                </div>
+                <span className="text-xs font-semibold tabular-nums">{a.target > 0 ? `${a.pct}%` : "—"}</span>
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">Target {a.target > 0 ? formatCurrency(a.target) : "not set"}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {overdue.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Users size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No overdue accounts to route. Overdue invoices appear here for assignment to your reps.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <span className="text-sm font-semibold">Overdue accounts</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">{unassigned} unassigned</span>
+          </div>
+          <table className="w-full text-sm min-w-[620px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Invoice", "Amount", "Days Overdue", "Assigned To"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {overdue.map(o => (
+                <tr key={o.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-semibold">{o.customer}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)]">{o.ref}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(o.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{o.days}d</td>
+                  <td className="px-4 py-3">
+                    <select value={assignments[o.id] ?? ""} onChange={e => assign(o.id, e.target.value)}
+                      className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 outline-none focus:border-[var(--color-primary)]">
+                      <option value="">Unassigned</option>
+                      {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Add reps with a collection target, then route each overdue account to a rep. Progress = assigned overdue value ÷ target. Agents and assignments sync across devices.</p>
+    </div>
+  );
+}
+
+// ── #54 SETTLEMENT / WRITE-OFF WORKFLOW ─────────────────────────────────────
+// Discount-to-settle approval + bad-debt (write-off) posting calculator.
+type SettlementRow = {
+  id: string;
+  customer: string;
+  original: number;
+  type: "settlement" | "writeoff";
+  discountPct: number;
+  reason: string;
+  status: "proposed" | "approved" | "rejected";
+  createdAt: string;
+};
+
+function SettlementWorkflow() {
+  const { store } = useApp();
+  const [rows, setRows] = useFeatureState<SettlementRow[]>("collections-settlements", []);
+
+  const openAccounts = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(inv => inv.status !== "paid")
+      .map(inv => ({ id: inv.id, customer: inv.customer, amount: inv.amount, ref: inv.invoiceNumber || inv.id.slice(0, 6) }));
+  }, [store.invoices]);
+
+  const [selId, setSelId] = useState("");
+  const [type, setType] = useState<"settlement" | "writeoff">("settlement");
+  const [discountPct, setDiscountPct] = useState(20);
+  const [reason, setReason] = useState("");
+
+  const sel = openAccounts.find(a => a.id === selId);
+  const original = sel?.amount ?? 0;
+  const recoverable = type === "writeoff" ? 0 : Math.round(original * (1 - discountPct / 100));
+  const loss = original - recoverable;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const propose = () => {
+    if (!sel) { toast.error("Select an open account"); return; }
+    setRows([{
+      id: crypto.randomUUID(),
+      customer: sel.customer,
+      original,
+      type,
+      discountPct: type === "writeoff" ? 100 : discountPct,
+      reason: reason.trim(),
+      status: "proposed",
+      createdAt: new Date().toISOString(),
+    }, ...rows]);
+    setReason("");
+    toast.success(type === "writeoff" ? "Write-off proposed for approval" : "Settlement proposed for approval");
+  };
+
+  const setStatus = (id: string, status: SettlementRow["status"]) =>
+    setRows(rows.map(r => (r.id === id ? { ...r, status } : r)));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const approvedLoss = rows.filter(r => r.status === "approved").reduce((s, r) => s + Math.round(r.original * (r.discountPct / 100)), 0);
+  const recovered = rows.filter(r => r.status === "approved").reduce((s, r) => s + Math.round(r.original * (1 - r.discountPct / 100)), 0);
+  const pending = rows.filter(r => r.status === "proposed").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Scissors size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Propose settlement or write-off</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Open account</label>
+            <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
+              <option value="">Select…</option>
+              {openAccounts.map(a => <option key={a.id} value={a.id}>{a.customer} · {a.ref} · {formatCurrency(a.amount)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Action</label>
+            <div className="flex gap-1">
+              {(["settlement", "writeoff"] as const).map(t => (
+                <button key={t} onClick={() => setType(t)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all capitalize ${type === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                  {t === "writeoff" ? "Write-off" : "Settle"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{type === "writeoff" ? "Write-off = 100%" : `Discount ${discountPct}%`}</label>
+            <input type="range" min={0} max={90} value={discountPct} disabled={type === "writeoff"}
+              onChange={e => setDiscountPct(Number(e.target.value))}
+              className="w-full accent-[var(--color-primary)] disabled:opacity-40" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Reason / approval note</label>
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. customer in financial distress, partial recovery agreed" className={inp} />
+        </div>
+
+        {sel && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Original due", value: formatCurrency(original), color: "text-[var(--color-text)]" },
+              { label: type === "writeoff" ? "Recoverable" : "Recover (net)", value: formatCurrency(recoverable), color: "text-green-400" },
+              { label: type === "writeoff" ? "Bad debt" : "Discount loss", value: formatCurrency(loss), color: "text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button onClick={propose} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          <Plus size={13} /> Submit for approval
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Pending approval", value: pending.toString(), color: "text-yellow-400" },
+          { label: "Approved recovery", value: formatCurrency(recovered), color: "text-green-400" },
+          { label: "Bad debt / discount", value: formatCurrency(approvedLoss), color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Scissors size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No settlement or write-off proposals yet. Propose a discount-to-settle or a bad-debt write-off above for approval.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Type", "Original", "Recover", "Loss", "Status", "Actions"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const rRecover = Math.round(r.original * (1 - r.discountPct / 100));
+                const rLoss = r.original - rRecover;
+                return (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.type === "writeoff" ? "bg-red-950/30 text-red-400" : "bg-blue-950/30 text-blue-400"}`}>
+                        {r.type === "writeoff" ? "Write-off" : `Settle −${r.discountPct}%`}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{formatCurrency(r.original)}</td>
+                    <td className="px-4 py-3 tabular-nums text-green-400">{formatCurrency(rRecover)}</td>
+                    <td className="px-4 py-3 tabular-nums text-red-400">{formatCurrency(rLoss)}</td>
+                    <td className="px-4 py-3">
+                      {r.status === "approved" ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-950/30 text-green-400">Approved</span>
+                      ) : r.status === "rejected" ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--color-accent)] text-[var(--color-muted)]">Rejected</span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-950/30 text-yellow-400">Proposed</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        {r.status === "proposed" && (
+                          <>
+                            <button onClick={() => setStatus(r.id, "approved")} title="Approve"
+                              className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-green-700/40 transition-colors text-green-400">
+                              <CheckCircle2 size={11} /> Approve
+                            </button>
+                            <button onClick={() => setStatus(r.id, "rejected")} title="Reject"
+                              className="text-xs text-[var(--color-muted)] hover:text-red-400 px-1.5 py-1">Reject</button>
+                          </>
+                        )}
+                        <button onClick={() => remove(r.id)} title="Delete"
+                          className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={12} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Settlement = accept a discounted amount to close the account; write-off = recognise the full balance as bad debt (Dr Bad-debt expense, Cr Debtors). Approved figures feed the recovery/loss summary. Records sync across devices.</p>
     </div>
   );
 }
