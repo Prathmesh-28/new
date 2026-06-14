@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { runForecast } from "@/lib/forecastEngine";
+import { updateWidgetData } from "@/lib/widgetBridge";
 import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { format, addMonths, setDate, isBefore, addDays } from "date-fns";
@@ -540,6 +541,19 @@ export default function DashboardPage() {
   // Probabilistic early-warning from the Monte-Carlo engine (memoised on the store).
   const fcRisk = useMemo(() => (transactions.length ? runForecast(store).risk : null), [store, transactions.length]);
   const showBreachWarning = !!fcRisk && fcRisk.probBreachByDay[Math.min(44, fcRisk.probBreachByDay.length - 1)] >= 0.5;
+
+  // Keep the home-screen widget's snapshot fresh (native only; no-op on web).
+  useEffect(() => {
+    const low = store.forecast?.length ? store.forecast.reduce((m, p) => Math.min(m, p.p50), store.forecast[0].p50) : totalBalance;
+    const lowPt = store.forecast?.length ? store.forecast.reduce((a, p) => (p.p50 < a.p50 ? p : a), store.forecast[0]) : null;
+    updateWidgetData({
+      balance: totalBalance,
+      runwayDays: fcRisk?.runwayDist.p50 ?? runway,
+      lowPoint: Math.round(low),
+      lowPointDate: lowPt?.date ?? null,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [totalBalance, runway, fcRisk, store.forecast]);
 
   // Onboarding steps (computed from store)
   const onboardingSteps = [
