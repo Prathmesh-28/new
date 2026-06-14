@@ -4,8 +4,18 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, gstLatePenalty } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { CalendarCheck, AlertTriangle, ArrowRight, ShieldCheck, FileText, Plus, X } from "lucide-react";
+import {
+  CalendarCheck, AlertTriangle, ArrowRight, ShieldCheck, FileText, Plus, X,
+  FileStack, UserCheck, Users, BookMarked, Store, BadgeCheck, CalendarClock,
+  FileSignature, ScrollText, Gavel, Activity, CheckCircle2, Copy,
+} from "lucide-react";
+import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
+
+type ComplianceTab =
+  | "overview" | "roc-prep" | "kyc-dpt3" | "board-agm" | "registers"
+  | "shop-license" | "fssai-license" | "labour-calendar" | "templates"
+  | "posh-policy" | "penalty-multi" | "health-score";
 
 interface ComplianceEvent {
   date: Date;
@@ -30,6 +40,7 @@ export default function CompliancePage() {
   const navigate = useNavigate();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const [lateDays, setLateDays] = useState(15);
+  const [tab, setTab] = useState<ComplianceTab>("overview");
 
   type Contract = { id: string; name: string; party: string; kind: string; expiry: string; value: number; notes: string };
   const [contracts, setContracts]     = useFeatureState<Contract[]>("contracts", []);
@@ -113,13 +124,50 @@ export default function CompliancePage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><CalendarCheck size={18} className="text-[var(--color-primary)]" /> Compliance Calendar</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Every statutory date — GST, TDS, advance tax, PF/ESI — derived from your firm profile and transactions, with cash amounts attached.
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><CalendarCheck size={18} className="text-[var(--color-primary)]" /> Compliance Calendar</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            Every statutory date — GST, TDS, advance tax, PF/ESI — derived from your firm profile and transactions, with cash amounts attached.
+          </p>
+        </div>
       </div>
 
+      <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        {([
+          ["overview", "Overview", CalendarCheck],
+          ["roc-prep", "ROC Auto-Prep", FileStack],
+          ["kyc-dpt3", "DIR-3 KYC / DPT-3", UserCheck],
+          ["board-agm", "Board / AGM", Users],
+          ["registers", "Statutory Registers", BookMarked],
+          ["shop-license", "Shop & License Renewals", Store],
+          ["fssai-license", "FSSAI / Industry Licenses", BadgeCheck],
+          ["labour-calendar", "Labour-Law Calendar", CalendarClock],
+          ["templates", "Agreement Templates", FileSignature],
+          ["posh-policy", "POSH / Policies", ScrollText],
+          ["penalty-multi", "Penalty Estimator", Gavel],
+          ["health-score", "Health Score", Activity],
+        ] as const).map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Icon size={11} />{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "roc-prep" && <RocAutoPrep />}
+      {tab === "kyc-dpt3" && <KycDpt3Tracker />}
+      {tab === "board-agm" && <BoardAgmManager />}
+      {tab === "registers" && <StatutoryRegisters />}
+      {tab === "shop-license" && <ShopLicenseRenewals />}
+      {tab === "fssai-license" && <FssaiLicenseTracker />}
+      {tab === "labour-calendar" && <LabourLawCalendar />}
+      {tab === "templates" && <AgreementTemplateLibrary />}
+      {tab === "posh-policy" && <PoshPolicyTracker />}
+      {tab === "penalty-multi" && <MultiActPenaltyEstimator />}
+      {tab === "health-score" && <ComplianceHealthScore />}
+
+      {tab === "overview" && <>
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -327,6 +375,7 @@ export default function CompliancePage() {
 
       {/* Insurance Calendar */}
       <InsuranceCalendar />
+      </>}
     </div>
   );
 }
@@ -742,6 +791,602 @@ function InsuranceCalendar() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Shared input class matching the existing `inp` pattern used across this file.
+const CINP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+// ── #123 ROC Filing Auto-Prep (AOC-4 / MGT-7) ───────────────────────────────────
+function RocAutoPrep() {
+  const { store } = useApp();
+  const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
+  const fcFy = new Date();
+  // FY just closed: if today is in/after April, the most recent completed FY ended 31-Mar of this calendar year.
+  const fyEndYear = fcFy.getMonth() >= 3 ? fcFy.getFullYear() : fcFy.getFullYear() - 1;
+  const [agm, setAgm] = useState(`${fyEndYear}-09-30`);
+  const [entity, setEntity] = useState<"private" | "public" | "opc" | "small">("private");
+
+  const revenue = useMemo(() => store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [store.transactions]);
+
+  const agmDate = new Date(agm);
+  const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const fmt = (d: Date) => format(d, "dd MMM yyyy");
+  const days = (d: Date) => differenceInDays(d, new Date());
+
+  // Small company: paid-up ≤ ₹4 cr and turnover ≤ ₹40 cr → MGT-7A, no cash-flow statement, fewer board meetings.
+  const isSmall = entity === "small" || entity === "opc";
+  const annualReturnForm = isSmall ? "MGT-7A" : "MGT-7";
+  const usesXbrl = revenue >= 1000000000; // ₹100 cr turnover → XBRL (indicative; also paid-up ≥ ₹5 cr)
+
+  const filings = [
+    { form: usesXbrl ? "AOC-4 XBRL" : "AOC-4", title: "Financial Statements", due: entity === "opc" ? addDays(new Date(`${fyEndYear}-09-27`), 180) : addDays(agmDate, 30), fee: "₹100/day late", note: "Audited Balance Sheet, P&L, board & auditor reports. OPC: 180 days from FY-end (no AGM)." },
+    { form: annualReturnForm, title: "Annual Return", due: addDays(agmDate, 60), fee: "₹100/day late", note: `${isSmall ? "Small co/OPC use MGT-7A." : "Signed by director + practising CS for listed/large cos."} Filed within 60 days of AGM.` },
+    { form: "ADT-1", title: "Auditor Appointment", due: addDays(agmDate, 15), fee: "₹100/day + ₹300+ MCA", note: "Intimation of auditor appointed/ratified at AGM, within 15 days." },
+  ];
+
+  const dataReady = [
+    { item: "Total Revenue (turnover)", value: formatCurrency(revenue) },
+    { item: "Net Profit / (Loss)", value: formatCurrency(snap.estAnnualProfit ?? 0) },
+    { item: "Cash & bank balance", value: formatCurrency(snap.cash ?? 0) },
+    { item: "Financial Year", value: `01 Apr ${fyEndYear} → 31 Mar ${(fyEndYear + 1).toString().slice(2)}` },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileStack size={14} className="text-[var(--color-primary)]" /> ROC Filing Auto-Prep — AOC-4 / MGT-7</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pre-fills annual MCA filing data from your books and computes statutory due dates off your AGM date.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">AGM Date (default: 30 Sep)</label>
+            <input type="date" value={agm} onChange={e => setAgm(e.target.value)} className={CINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Entity Type</label>
+            <select value={entity} onChange={e => setEntity(e.target.value as typeof entity)} className={CINP}>
+              <option value="private">Private Limited</option>
+              <option value="public">Public Limited</option>
+              <option value="small">Small Company</option>
+              <option value="opc">One Person Company (OPC)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-3">Auto-Filled Filing Data</p>
+          <div className="space-y-2">
+            {dataReady.map(r => (
+              <div key={r.item} className="flex justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.item}</span>
+                <span className="tabular-nums font-medium">{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-3">Annual return form: <span className="text-[var(--color-primary)] font-semibold">{annualReturnForm}</span> · Financials: <span className="text-[var(--color-primary)] font-semibold">{usesXbrl ? "AOC-4 XBRL" : "AOC-4"}</span></p>
+        </div>
+
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-3">Computed Due Dates</p>
+          <div className="space-y-2.5">
+            {filings.map(f => {
+              const dleft = days(f.due);
+              const urgent = dleft >= 0 && dleft <= 30;
+              const overdue = dleft < 0;
+              return (
+                <div key={f.form} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium"><span className="font-mono text-[var(--color-primary)] text-xs">{f.form}</span> · {f.title}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{fmt(f.due)} · {f.fee}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${overdue ? "bg-red-950/30 text-red-400" : urgent ? "bg-yellow-950/30 text-yellow-400" : "bg-green-950/30 text-green-400"}`}>
+                    {overdue ? `${-dleft}d overdue` : `${dleft}d`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-2">Filing Notes</p>
+        <div className="space-y-1.5">
+          {filings.map(f => (
+            <p key={f.form} className="text-xs text-[var(--color-muted)]"><span className="font-mono text-[var(--color-primary)]">{f.form}</span> — {f.note}</p>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Late MCA filing fee is ₹100/day per form with no upper cap. AOC-4: within 30 days of AGM; MGT-7/7A: within 60 days; ADT-1: within 15 days. Figures auto-filled from your books are indicative — reconcile with audited financials before filing.
+      </div>
+    </div>
+  );
+}
+
+// ── #124 DIR-3 KYC & DPT-3 Tracker ───────────────────────────────────────────────
+type DinHolder = { id: string; name: string; din: string; mode: "DIR-3 KYC" | "DIR-3 KYC-WEB"; done: boolean };
+function KycDpt3Tracker() {
+  const [holders, setHolders] = useFeatureState<DinHolder[]>("compliance-din-holders", []);
+  const [name, setName] = useState("");
+  const [din, setDin] = useState("");
+  const [mode, setMode] = useState<DinHolder["mode"]>("DIR-3 KYC-WEB");
+  // DPT-3 inputs
+  const [hasDeposits, setHasDeposits] = useFeatureState<boolean>("compliance-dpt3-applies", false);
+  const [exemptAmt, setExemptAmt] = useState("");
+
+  const now = new Date();
+  const yr = now.getFullYear();
+  // DIR-3 KYC due 30 Sep (for DINs allotted by 31 Mar). DPT-3 due 30 Jun annually.
+  const kycDue = new Date(yr, 8, 30);
+  const dpt3Due = new Date(yr, 5, 30);
+  const kycEffective = isBefore(kycDue, now) ? new Date(yr + 1, 8, 30) : kycDue;
+  const dpt3Effective = isBefore(dpt3Due, now) ? new Date(yr + 1, 5, 30) : dpt3Due;
+
+  const add = () => {
+    if (!name || !din) { toast.error("Enter director name and DIN"); return; }
+    setHolders(prev => [...prev, { id: Math.random().toString(36).slice(2), name, din, mode, done: false }]);
+    setName(""); setDin(""); toast.success("Director added");
+  };
+
+  const pending = holders.filter(h => !h.done).length;
+  const fmt = (d: Date) => format(d, "dd MMM yyyy");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-1 flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> DIR-3 KYC</p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">Annual KYC for every DIN holder. Due {fmt(kycEffective)}. Late filing: DIN deactivated + ₹5,000 reactivation fee.</p>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Director name" className={CINP} />
+            <input value={din} onChange={e => setDin(e.target.value)} placeholder="DIN (8 digits)" className={CINP} />
+            <select value={mode} onChange={e => setMode(e.target.value as DinHolder["mode"])} className={CINP}>
+              <option value="DIR-3 KYC-WEB">DIR-3 KYC-WEB (no change)</option>
+              <option value="DIR-3 KYC">DIR-3 KYC (e-form, details changed)</option>
+            </select>
+            <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold rounded-lg hover:opacity-90 flex items-center justify-center gap-1"><Plus size={12} /> Add director</button>
+          </div>
+          {holders.length === 0 ? (
+            <p className="text-xs text-[var(--color-muted)] text-center py-4">No DIN holders tracked. Add directors to monitor KYC status.</p>
+          ) : (
+            <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+              {holders.map(h => (
+                <div key={h.id} className="flex items-center gap-3 py-2.5">
+                  <button onClick={() => setHolders(prev => prev.map(x => x.id === h.id ? { ...x, done: !x.done } : x))}
+                    className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${h.done ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                    {h.done ? "Filed" : "Pending"}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{h.name}</p>
+                    <p className="text-[10px] text-[var(--color-muted)] font-mono">DIN {h.din} · {h.mode}</p>
+                  </div>
+                  <button onClick={() => setHolders(prev => prev.filter(x => x.id !== h.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          {pending > 0 && <p className="text-[11px] text-yellow-400 mt-2">{pending} director(s) pending KYC — file before {fmt(kycEffective)}.</p>}
+        </div>
+
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> DPT-3 — Return of Deposits</p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">Annual return of deposits & exempted deposits (loans from directors, advances) outstanding as on 31 Mar. Due {fmt(dpt3Effective)}.</p>
+          <label className="flex items-center gap-2 text-xs cursor-pointer mb-3">
+            <input type="checkbox" checked={hasDeposits} onChange={e => setHasDeposits(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Company has deposits / exempted loans outstanding as on 31 Mar
+          </label>
+          {hasDeposits && (
+            <div className="mb-3">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Total outstanding (incl. exempted) (₹)</label>
+              <input type="number" value={exemptAmt} onChange={e => setExemptAmt(e.target.value)} placeholder="e.g. 2500000" className={CINP} />
+              {parseFloat(exemptAmt) > 0 && <p className="text-[11px] text-[var(--color-muted)] mt-2">DPT-3 must report {formatCurrency(parseFloat(exemptAmt))} of outstanding money. Even purely exempted deposits require the return.</p>}
+            </div>
+          )}
+          <div className={`rounded-lg p-3 border text-xs ${hasDeposits ? "bg-yellow-950/20 border-yellow-800/40 text-yellow-300" : "bg-green-950/20 border-green-800/40 text-green-400"}`}>
+            {hasDeposits ? `DPT-3 filing required by ${fmt(dpt3Effective)}. Penalty: ₹5,000 + ₹500/day continuing default.` : "No outstanding deposits flagged — DPT-3 may not apply. Re-check at year-end (31 Mar)."}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        DIR-3 KYC: WEB form if no detail changed, else e-form. DPT-3 covers both deposits and exempted deposits (e.g. director loans) — most private companies must still file the "nil deposit but money outstanding" return. Consult your CS.
+      </div>
+    </div>
+  );
+}
+
+// ── #125 Board / AGM Meeting Manager ─────────────────────────────────────────────
+type Meeting = {
+  id: string; kind: "Board" | "AGM" | "EGM" | "Committee"; date: string;
+  agenda: string; minutes: string; resolutions: string; done: boolean;
+};
+function BoardAgmManager() {
+  const [meetings, setMeetings] = useFeatureState<Meeting[]>("compliance-meetings", []);
+  const [kind, setKind] = useState<Meeting["kind"]>("Board");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [agenda, setAgenda] = useState("");
+  const [resolutions, setResolutions] = useState("");
+
+  const boardCount = meetings.filter(m => m.kind === "Board").length;
+
+  const add = () => {
+    if (!date) { toast.error("Pick a meeting date"); return; }
+    setMeetings(prev => [...prev, { id: Math.random().toString(36).slice(2), kind, date, agenda, minutes: "", resolutions, done: false }]);
+    setAgenda(""); setResolutions(""); toast.success(`${kind} meeting added`);
+  };
+
+  const TIMELINES = [
+    { rule: "Board meetings — minimum", val: "4 per year (1 per quarter), gap ≤ 120 days", flag: boardCount < 4 },
+    { rule: "Board notice", val: "≥ 7 days before meeting (shorter with consent)", flag: false },
+    { rule: "AGM — first", val: "Within 9 months of first FY-end", flag: false },
+    { rule: "AGM — subsequent", val: "Within 6 months of FY-end; gap ≤ 15 months", flag: false },
+    { rule: "AGM notice", val: "≥ 21 clear days to members", flag: false },
+    { rule: "Minutes finalised", val: "Within 30 days of meeting; entered in minute book", flag: false },
+    { rule: "MGT-14 (special resolutions)", val: "Within 30 days of passing the resolution", flag: false },
+  ];
+
+  const sorted = [...meetings].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Board / AGM Meeting Manager</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log meetings with agenda, resolutions and minutes. Track against Companies Act, 2013 statutory timelines.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+          <select value={kind} onChange={e => setKind(e.target.value as Meeting["kind"])} className={CINP}>
+            {(["Board", "AGM", "EGM", "Committee"] as const).map(k => <option key={k} value={k}>{k} Meeting</option>)}
+          </select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={CINP} />
+          <input value={agenda} onChange={e => setAgenda(e.target.value)} placeholder="Agenda items" className={`${CINP} md:col-span-2`} />
+          <input value={resolutions} onChange={e => setResolutions(e.target.value)} placeholder="Resolutions passed" className={`${CINP} md:col-span-3`} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold rounded-lg hover:opacity-90 flex items-center justify-center gap-1"><Plus size={12} /> Add meeting</button>
+        </div>
+        {sorted.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-4">No meetings logged yet.</p>
+        ) : (
+          <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+            {sorted.map(m => (
+              <div key={m.id} className="py-3 flex items-start gap-3">
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--color-bg)] border-[var(--color-border)] text-[var(--color-primary)] shrink-0">{m.kind}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{format(new Date(m.date), "dd MMM yyyy")}</p>
+                  {m.agenda && <p className="text-[11px] text-[var(--color-muted)]">Agenda: {m.agenda}</p>}
+                  {m.resolutions && <p className="text-[11px] text-[var(--color-muted)]">Resolutions: {m.resolutions}</p>}
+                  <textarea value={m.minutes} onChange={e => setMeetings(prev => prev.map(x => x.id === m.id ? { ...x, minutes: e.target.value } : x))}
+                    placeholder="Minutes of the meeting…" rows={2}
+                    className="w-full mt-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                </div>
+                <button onClick={() => setMeetings(prev => prev.filter(x => x.id !== m.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-3">Statutory Timelines (Companies Act, 2013)</p>
+        <div className="space-y-2">
+          {TIMELINES.map(t => (
+            <div key={t.rule} className="flex items-start justify-between gap-3 text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+              <div>
+                <p className="font-medium text-[var(--color-text)]">{t.rule}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">{t.val}</p>
+              </div>
+              {t.flag && <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-red-900/30 text-red-400 border border-red-800/40 shrink-0">Action needed</span>}
+            </div>
+          ))}
+        </div>
+        {boardCount < 4 && <p className="text-[11px] text-yellow-400 mt-3">Only {boardCount} board meeting(s) logged this cycle — minimum is 4 per year with no gap exceeding 120 days (one-person/small/dormant companies: 2 per year).</p>}
+      </div>
+    </div>
+  );
+}
+
+const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+// ── #126 STATUTORY REGISTERS ────────────────────────────────────────────────
+function StatutoryRegisters() {
+  interface Reg { id: string; name: string; form: string; maintained: boolean; updated: string }
+  const SEED: Reg[] = [
+    { id: "mbr", name: "Register of Members", form: "MGT-1", maintained: false, updated: "" },
+    { id: "dir", name: "Register of Directors & KMP", form: "Sec 170", maintained: false, updated: "" },
+    { id: "chg", name: "Register of Charges", form: "CHG-7", maintained: false, updated: "" },
+    { id: "rpt", name: "Register of Contracts w/ Related Parties", form: "MBP-4", maintained: false, updated: "" },
+    { id: "trf", name: "Register of Share Transfers", form: "SH-6", maintained: false, updated: "" },
+    { id: "loan", name: "Register of Loans & Investments", form: "MBP-2", maintained: false, updated: "" },
+    { id: "dep", name: "Register of Deposits", form: "DPT-2", maintained: false, updated: "" },
+  ];
+  const [regs, setRegs] = useFeatureState<Reg[]>("compliance-registers", SEED);
+  const done = regs.filter(r => r.maintained).length;
+  const toggle = (id: string) => setRegs(prev => prev.map(r => r.id === id ? { ...r, maintained: !r.maintained, updated: !r.maintained ? new Date().toISOString().slice(0, 10) : "" } : r));
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><BookMarked size={14} /> Statutory Registers (Companies Act, 2013)</h3>
+          <span className="text-xs text-[var(--color-muted)]">{done}/{regs.length} maintained</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {regs.map(r => (
+            <div key={r.id} className="py-2.5 flex items-center gap-3">
+              <button onClick={() => toggle(r.id)} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${r.maintained ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-[var(--color-bg)]" : "border-[var(--color-border)]"}`}>{r.maintained && <CheckCircle2 size={12} />}</button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{r.name}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">{r.form}{r.maintained && r.updated ? ` · updated ${r.updated}` : ""}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-3">Statutory registers must be kept at the registered office and updated within the prescribed time of each event. Mark maintained once entries are current.</p>
+      </div>
+    </div>
+  );
+}
+
+interface LicRow { id: string; name: string; authority: string; number: string; expiry: string }
+function LicenseTracker({ storeKey, title, Icon, seedAuthority }: { storeKey: string; title: string; Icon: typeof Store; seedAuthority: string }) {
+  const [lics, setLics] = useFeatureState<LicRow[]>(storeKey, []);
+  const [f, setF] = useState<{ name: string; authority: string; number: string; expiry: string }>({ name: "", authority: seedAuthority, number: "", expiry: "" });
+  const add = () => {
+    if (!f.name || !f.expiry) { toast.error("Name and expiry date are required"); return; }
+    setLics(prev => [{ id: `lic-${Date.now()}`, ...f }, ...prev]);
+    setF({ name: "", authority: seedAuthority, number: "", expiry: "" });
+    toast.success("License added");
+  };
+  const sorted = [...lics].sort((a, b) => a.expiry.localeCompare(b.expiry));
+  const band = (days: number) => days < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : days <= 30 ? "bg-red-900/30 text-red-400 border-red-800/40" : days <= 60 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]";
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><Icon size={14} /> {title}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input className={INP} placeholder="License name" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
+          <input className={INP} placeholder="Authority" value={f.authority} onChange={e => setF({ ...f, authority: e.target.value })} />
+          <input className={INP} placeholder="License / Reg. no." value={f.number} onChange={e => setF({ ...f, number: e.target.value })} />
+          <input type="date" className={INP} value={f.expiry} onChange={e => setF({ ...f, expiry: e.target.value })} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add license</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {sorted.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No licenses tracked yet.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {sorted.map(l => {
+              const days = differenceInDays(new Date(l.expiry), new Date());
+              return (
+                <div key={l.id} className="py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{l.name}</p>
+                    <p className="text-[11px] text-[var(--color-muted)]">{[l.authority, l.number].filter(Boolean).join(" · ")} · expires {format(new Date(l.expiry), "dd MMM yyyy")}</p>
+                  </div>
+                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${band(days)}`}>{days < 0 ? `Expired ${-days}d ago` : `${days}d left`}</span>
+                  <button onClick={() => setLics(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #127 SHOP & ESTABLISHMENT / TRADE LICENSE RENEWALS ──────────────────────
+function ShopLicenseRenewals() {
+  return <LicenseTracker storeKey="compliance-shop-licenses" title="Shop & Establishment / Trade License Renewals" Icon={Store} seedAuthority="State Labour Dept" />;
+}
+
+// ── #128 FSSAI / INDUSTRY LICENSE TRACKER ───────────────────────────────────
+function FssaiLicenseTracker() {
+  return <LicenseTracker storeKey="compliance-industry-licenses" title="FSSAI / Industry License Tracker" Icon={BadgeCheck} seedAuthority="FSSAI" />;
+}
+
+// ── #129 LABOUR-LAW COMPLIANCE CALENDAR ─────────────────────────────────────
+function LabourLawCalendar() {
+  const today = new Date();
+  const dueThisMonth = (day: number) => {
+    let d = setDate(today, day);
+    if (isBefore(d, today)) d = setDate(addMonths(today, 1), day);
+    return d;
+  };
+  const items = [
+    { name: "PF (EPF) contribution & ECR", form: "EPFO", date: dueThisMonth(15), freq: "Monthly", note: "Deposit by 15th of following month." },
+    { name: "ESI contribution", form: "ESIC", date: dueThisMonth(15), freq: "Monthly", note: "Deposit by 15th of following month." },
+    { name: "Professional Tax (PT)", form: "State", date: dueThisMonth(21), freq: "Monthly", note: "Due date varies by state (≈ 21st)." },
+    { name: "TDS on salary deposit", form: "194-Sec 192", date: dueThisMonth(7), freq: "Monthly", note: "By 7th of following month." },
+    { name: "Labour Welfare Fund (LWF)", form: "State", date: setDate(addMonths(today, (today.getMonth() % 6 === 5 ? 0 : 5 - (today.getMonth() % 6))), 30), freq: "Half-yearly", note: "Half-yearly in most states (Jun/Dec)." },
+  ];
+  const sorted = [...items].sort((a, b) => a.date.getTime() - b.date.getTime());
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><CalendarClock size={14} /> Labour-Law Compliance Calendar</h3>
+        <div className="divide-y divide-[var(--color-border)]">
+          {sorted.map(i => {
+            const days = differenceInDays(i.date, today);
+            return (
+              <div key={i.name} className="py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{i.name} <span className="text-[10px] text-[var(--color-muted)]">· {i.form}</span></p>
+                  <p className="text-[11px] text-[var(--color-muted)]">{i.note}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-medium tabular-nums">{format(i.date, "dd MMM")}</p>
+                  <p className={`text-[10px] ${days <= 3 ? "text-red-400" : days <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{days <= 0 ? "due" : `in ${days}d`} · {i.freq}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #130 CONTRACT / AGREEMENT TEMPLATE LIBRARY ──────────────────────────────
+function AgreementTemplateLibrary() {
+  const { store } = useApp();
+  const firm = store.firm?.name || "[Company Name]";
+  const [party, setParty] = useState("");
+  const [picked, setPicked] = useState("nda");
+  const today = format(new Date(), "dd MMMM yyyy");
+  const cp = party || "[Counterparty]";
+  const TEMPLATES: Record<string, { label: string; body: string }> = {
+    nda: { label: "Non-Disclosure Agreement", body: `MUTUAL NON-DISCLOSURE AGREEMENT\n\nThis Agreement is made on ${today} between ${firm} ("Disclosing Party") and ${cp} ("Receiving Party").\n\n1. Confidential Information includes all business, technical and financial information shared between the parties.\n2. The Receiving Party shall not disclose Confidential Information to any third party and shall use it solely to evaluate the proposed business relationship.\n3. Obligations survive for 3 years from disclosure.\n4. This Agreement is governed by the laws of India; courts at [City] have exclusive jurisdiction.\n\n_____________________        _____________________\n${firm}                       ${cp}` },
+    employment: { label: "Employment Agreement", body: `EMPLOYMENT AGREEMENT\n\nThis Agreement is entered into on ${today} between ${firm} ("Company") and ${cp} ("Employee").\n\n1. Position & Duties: as per the appointment letter.\n2. Remuneration: CTC as agreed, paid monthly subject to statutory deductions (PF, ESI, PT, TDS).\n3. Probation: 6 months. Notice period: 30 days post-confirmation.\n4. Confidentiality, IP assignment and non-solicitation clauses apply.\n5. Governed by the laws of India.\n\n_____________________        _____________________\nFor ${firm}                   ${cp}` },
+    msa: { label: "Master Services Agreement", body: `MASTER SERVICES AGREEMENT\n\nThis MSA is made on ${today} between ${firm} ("Service Provider") and ${cp} ("Client").\n\n1. Scope: services described in each Statement of Work (SOW).\n2. Fees & Taxes: as per SOW, exclusive of GST.\n3. Payment: within 30 days of invoice; interest @18% p.a. on delays.\n4. IP, confidentiality, limitation of liability and termination (30 days' notice) apply.\n5. Governed by the laws of India; arbitration seat at [City].\n\n_____________________        _____________________\n${firm}                       ${cp}` },
+    vendor: { label: "Vendor / Supply Agreement", body: `VENDOR SUPPLY AGREEMENT\n\nThis Agreement is made on ${today} between ${firm} ("Buyer") and ${cp} ("Vendor").\n\n1. Vendor shall supply goods/services per purchase orders.\n2. Quality, delivery timelines and warranty as specified.\n3. Pricing inclusive of applicable GST; e-invoice/e-way bill compliance required.\n4. MSME vendors: payment within 45 days (Sec 43B(h)).\n5. Governed by the laws of India.\n\n_____________________        _____________________\n${firm}                       ${cp}` },
+  };
+  const t = TEMPLATES[picked];
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><FileSignature size={14} /> Contract / Agreement Templates</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <select className={INP} value={picked} onChange={e => setPicked(e.target.value)}>
+            {Object.entries(TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <input className={INP} placeholder="Counterparty name" value={party} onChange={e => setParty(e.target.value)} />
+        </div>
+        <button onClick={() => { navigator.clipboard?.writeText(t.body); toast.success("Template copied"); }} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Copy size={12} /> Copy template</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <pre className="text-[11px] text-[var(--color-text)] whitespace-pre-wrap font-mono leading-relaxed">{t.body}</pre>
+        <p className="text-[10px] text-[var(--color-muted)] mt-3">Starter templates only — have a lawyer review before signing. Replace bracketed placeholders.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── #131 POSH / STATUTORY POLICY TRACKER ────────────────────────────────────
+function PoshPolicyTracker() {
+  interface Pol { id: string; name: string; required: string; done: boolean }
+  const SEED: Pol[] = [
+    { id: "posh", name: "POSH Policy adopted & circulated", required: "≥10 employees", done: false },
+    { id: "icc", name: "Internal Committee (IC) constituted", required: "Presiding officer (woman) + 2 employees + 1 external NGO member", done: false },
+    { id: "report", name: "Annual POSH report filed with District Officer", required: "By 31 Jan", done: false },
+    { id: "training", name: "POSH awareness training conducted", required: "Annual", done: false },
+    { id: "coc", name: "Code of Conduct / HR policy", required: "All firms", done: false },
+    { id: "register", name: "Complaints register maintained", required: "All firms", done: false },
+  ];
+  const [pols, setPols] = useFeatureState<Pol[]>("compliance-posh-policies", SEED);
+  const [iccWomen, setIccWomen] = useState(false);
+  const [iccExternal, setIccExternal] = useState(false);
+  const done = pols.filter(p => p.done).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} /> POSH & Statutory Policies</h3>
+          <span className="text-xs text-[var(--color-muted)]">{done}/{pols.length} done</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {pols.map(p => (
+            <div key={p.id} className="py-2.5 flex items-center gap-3">
+              <button onClick={() => setPols(prev => prev.map(x => x.id === p.id ? { ...x, done: !x.done } : x))} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${p.done ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-[var(--color-bg)]" : "border-[var(--color-border)]"}`}>{p.done && <CheckCircle2 size={12} />}</button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{p.name}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">{p.required}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-2">
+        <p className="text-sm font-semibold">IC Validity Check</p>
+        <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={iccWomen} onChange={e => setIccWomen(e.target.checked)} className="accent-[var(--color-primary)]" /> Presiding officer is a woman & ≥50% members are women</label>
+        <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={iccExternal} onChange={e => setIccExternal(e.target.checked)} className="accent-[var(--color-primary)]" /> One external member from an NGO/association familiar with POSH</label>
+        <p className={`text-xs font-medium ${iccWomen && iccExternal ? "text-green-400" : "text-yellow-400"}`}>{iccWomen && iccExternal ? "IC composition is valid under the POSH Act, 2013." : "IC composition is incomplete — non-compliant IC orders can be challenged."}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── #132 MULTI-ACT PENALTY ESTIMATOR ────────────────────────────────────────
+function MultiActPenaltyEstimator() {
+  const [act, setAct] = useState("roc");
+  const [amount, setAmount] = useState("");
+  const [days, setDays] = useState("");
+  const amt = parseFloat(amount) || 0;
+  const d = parseInt(days) || 0;
+  const months = Math.ceil(d / 30) || (d > 0 ? 1 : 0);
+  let penalty = 0; let basis = "";
+  switch (act) {
+    case "roc": penalty = d * 100; basis = "₹100 per day of delay per form (MCA additional fee)"; break;
+    case "tds-deposit": penalty = Math.round(amt * 0.015 * months); basis = "1.5% per month (part) on late deposit of deducted TDS (Sec 201(1A))"; break;
+    case "tds-return": penalty = Math.min(d * 200, amt); basis = "₹200 per day late-filing fee, capped at the TDS amount (Sec 234E)"; break;
+    case "pf": penalty = Math.round(amt * 0.12 * months / 12) + Math.round(amt * (d > 180 ? 0.25 : d > 60 ? 0.15 : 0.05)); basis = "Interest @12% p.a. (Sec 7Q) + damages 5–25% (Sec 14B) by delay slab"; break;
+    case "esi": penalty = Math.round(amt * 0.12 * months / 12); basis = "Simple interest @12% p.a. on delayed ESI contribution"; break;
+    case "gst": penalty = d * 50 + Math.round(amt * 0.18 * d / 365); basis = "Late fee ₹50/day (₹20 nil) + interest @18% p.a. on tax"; break;
+    default: break;
+  }
+  const ACTS: [string, string][] = [["roc", "ROC / MCA form"], ["tds-deposit", "Late TDS deposit"], ["tds-return", "Late TDS return (234E)"], ["pf", "EPF / PF"], ["esi", "ESI"], ["gst", "GST return"]];
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><Gavel size={14} /> Multi-Act Penalty Estimator</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select className={INP} value={act} onChange={e => setAct(e.target.value)}>{ACTS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          <input type="number" className={INP} placeholder="Tax / contribution amount (₹)" value={amount} onChange={e => setAmount(e.target.value)} />
+          <input type="number" className={INP} placeholder="Days delayed" value={days} onChange={e => setDays(e.target.value)} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Estimated penalty / fee</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(penalty)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Delay</p><p className="text-lg font-bold tabular-nums">{d} days</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Months (part)</p><p className="text-lg font-bold tabular-nums">{months}</p></div>
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />{basis}. Indicative only — actual penalties depend on facts and officer discretion.</p>
+    </div>
+  );
+}
+
+// ── #133 COMPLIANCE HEALTH SCORE & RISK HEATMAP ─────────────────────────────
+function ComplianceHealthScore() {
+  type Status = "good" | "warning" | "bad";
+  interface Area { id: string; name: string; weight: number; status: Status }
+  const SEED: Area[] = [
+    { id: "gst", name: "GST returns (GSTR-1/3B)", weight: 20, status: "good" },
+    { id: "tds", name: "TDS deposits & returns", weight: 15, status: "good" },
+    { id: "roc", name: "ROC / MCA filings", weight: 15, status: "warning" },
+    { id: "payroll", name: "PF / ESI / PT", weight: 15, status: "good" },
+    { id: "incometax", name: "Income tax & advance tax", weight: 15, status: "good" },
+    { id: "licenses", name: "Licenses & renewals", weight: 10, status: "warning" },
+    { id: "posh", name: "POSH & labour policies", weight: 10, status: "bad" },
+  ];
+  const [areas, setAreas] = useFeatureState<Area[]>("compliance-health-areas", SEED);
+  const score = useMemo(() => {
+    const w = areas.reduce((s, a) => s + a.weight, 0) || 1;
+    const pts = areas.reduce((s, a) => s + a.weight * (a.status === "good" ? 1 : a.status === "warning" ? 0.5 : 0), 0);
+    return Math.round((pts / w) * 100);
+  }, [areas]);
+  const cycle = (id: string) => setAreas(prev => prev.map(a => a.id === id ? { ...a, status: a.status === "good" ? "warning" : a.status === "warning" ? "bad" : "good" } : a));
+  const col = (s: Status) => s === "good" ? "bg-green-900/40 text-green-400 border-green-800/50" : s === "warning" ? "bg-yellow-900/40 text-yellow-400 border-yellow-800/50" : "bg-red-900/40 text-red-400 border-red-800/50";
+  const grade = score >= 85 ? "Strong" : score >= 65 ? "Moderate" : score >= 40 ? "At risk" : "Critical";
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Compliance Health</p><p className={`text-2xl font-bold tabular-nums ${score >= 85 ? "text-green-400" : score >= 65 ? "text-yellow-400" : "text-red-400"}`}>{score}<span className="text-sm text-[var(--color-muted)]">/100</span></p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Rating</p><p className="text-lg font-bold">{grade}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Areas at risk</p><p className="text-lg font-bold tabular-nums text-red-400">{areas.filter(a => a.status !== "good").length}</p></div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><Activity size={14} /> Risk Heatmap <span className="text-[10px] text-[var(--color-muted)] font-normal">(tap a tile to update status)</span></h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {areas.map(a => (
+            <button key={a.id} onClick={() => cycle(a.id)} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left ${col(a.status)}`}>
+              <span className="text-xs font-medium">{a.name} <span className="opacity-60">· {a.weight}%</span></span>
+              <span className="text-[9px] font-semibold uppercase shrink-0">{a.status}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
