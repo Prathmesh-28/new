@@ -399,7 +399,19 @@ export function scenarioToDailyDelta(scenarios: Scenario[], horizon: number, tod
       const e = months > 0 ? (amt * (0.18 / 12)) / (1 - (1 + 0.18 / 12) ** -months) : 0;
       if (s < horizon) delta[s] += amt;
       for (let t = s + 30; t < horizon; t += 30) delta[t] -= e;
-    } else if (sc.type === "custom") { const i = startIdx(p, 0); if (i < horizon) delta[i] += num(p.amount); }
+    } else if (sc.type === "custom") {
+      const i = startIdx(p, 0);
+      const monthly = num(p.monthlyAmount);
+      if (monthly !== 0) {
+        // Recurring monthly impact spread per-day over a duration (the Scenario
+        // Planner models "₹X/month for D months").
+        const durDays = num(p.durationDays, 30);
+        const perDay = monthly / 30;
+        for (let t = Math.max(0, i); t < Math.min(horizon, i + durDays); t++) delta[t] += perDay;
+      } else if (i < horizon) {
+        delta[i] += num(p.amount); // one-time
+      }
+    }
   }
   return delta;
 }

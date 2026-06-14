@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
-import { formatCurrency, monthlyBurn, runwayDays } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
+import { runForecast } from "@/lib/forecastEngine";
+import type { Scenario } from "@/data/types";
+
+const HORIZON = 180; // 6-month planning window, driven by the real Monte-Carlo engine
 
 type ScenarioEvent = {
   id: string;
@@ -58,12 +62,6 @@ const TYPE_COLORS: Record<string, string> = {
 export default function ScenariosPage() {
   const { store } = useApp();
   const navigate  = useNavigate();
-  const { transactions, bankAccounts, forecast } = store;
-
-  const baseBurn    = monthlyBurn(transactions);
-  const baseBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
-  const baseRunway  = runwayDays(bankAccounts.map(b => b.balance), baseBurn);
-
   const [events, setEvents] = useState<ScenarioEvent[]>([]);
   const [newLabel, setNewLabel]  = useState("");
   const [newType, setNewType]    = useState<ScenarioEvent["type"]>("revenue");
@@ -89,44 +87,50 @@ export default function ScenariosPage() {
 
   const removeEvent = (id: string) => setEvents(ev => ev.filter(e => e.id !== id));
 
+  // Map the planner's events to the forecast engine's Scenario format (custom
+  // recurring monthly impact), then run the REAL Monte-Carlo engine for both the
+  // base and the with-scenario projection — revenue, recurring series, invoice
+  // collections and volatility all included, instead of the old straight-line.
+  const scenarios = useMemo<Scenario[]>(() => events.map(e => ({
+    id: e.id,
+    name: e.label,
+    type: "custom",
+    active: true,
+    createdAt: new Date(0).toISOString(),
+    params: {
+      monthlyAmount: e.monthlyImpact,
+      startDate: addDays(new Date(), e.startMonth * 30).toISOString().split("T")[0],
+      durationDays: e.durationMonths * 30,
+    },
+  })), [events]);
+
+  const base = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600 }), [store]);
+  const scen = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600, scenarios }), [store, scenarios]);
+
+  const baseRunway = base.risk.runwayDist.p50;
+  const scenRunway = scen.risk.runwayDist.p50;
+
+  // Sample ~fortnightly for a readable chart; base p50 vs scenario p50 with the
+  // scenario's P10 downside line.
   const scenarioData = useMemo(() => {
-    const months = 12;
-    const data: { month: string; base: number; scenario: number; diff: number }[] = [];
-    let base = baseBalance;
-    let scen = baseBalance;
-    for (let m = 0; m < months; m++) {
-      const date = addDays(new Date(), m * 30);
-      const monthlyBaseNet = -baseBurn;
-      const scenarioNet = events.reduce((sum, ev) => {
-        if (m >= ev.startMonth && m < ev.startMonth + ev.durationMonths) {
-          return sum + ev.monthlyImpact;
-        }
-        return sum;
-      }, 0);
-      base += monthlyBaseNet;
-      scen += monthlyBaseNet + scenarioNet;
-      data.push({
-        month: format(date, "MMM"),
-        base: Math.round(base / 100000),
-        scenario: Math.round(scen / 100000),
-        diff: Math.round((scen - base) / 100000),
+    const out: { month: string; base: number; scenario: number; low: number }[] = [];
+    const pts = base.points;
+    for (let i = 0; i < pts.length; i += 15) {
+      out.push({
+        month: format(new Date(pts[i].date), "d MMM"),
+        base: Math.round(base.points[i].p50 / 100000),
+        scenario: Math.round(scen.points[i].p50 / 100000),
+        low: Math.round(scen.points[i].p10 / 100000),
       });
     }
-    return data;
-  }, [baseBalance, baseBurn, events]);
+    return out;
+  }, [base, scen]);
 
-  const finalBase     = (scenarioData[scenarioData.length - 1]?.base ?? 0) * 100000;
-  const finalScenario = (scenarioData[scenarioData.length - 1]?.scenario ?? 0) * 100000;
+  const finalBase     = base.points[base.points.length - 1]?.p50 ?? 0;
+  const finalScenario = scen.points[scen.points.length - 1]?.p50 ?? 0;
   const scenDiff      = finalScenario - finalBase;
-  const scenRunway    = runwayDays(
-    [Math.max(0, baseBalance + events.reduce((s, ev) => {
-      const total = ev.monthlyImpact * Math.min(ev.durationMonths, 12 - ev.startMonth);
-      return s + (total < 0 ? 0 : total);
-    }, 0))],
-    Math.max(1, baseBurn - events.filter(ev => ev.monthlyImpact > 0).reduce((s, ev) => s + ev.monthlyImpact / ev.durationMonths, 0))
-  );
 
-  const breakeven = scenarioData.find(d => d.scenario <= 0);
+  const breakeven = scen.points.find(p => p.p50 <= 0);
   const scenarioHealthy = finalScenario > 0 && !breakeven;
 
   return (
@@ -137,7 +141,7 @@ export default function ScenariosPage() {
           Scenario Planner
         </h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Model "what if" situations — hiring, new deals, loans, lost clients — and see the cash impact over 12 months.
+          Model "what if" situations — hiring, new deals, loans, lost clients — and see the cash impact over the next 6 months, run through the same Monte-Carlo engine as your forecast.
         </p>
       </div>
 
@@ -241,8 +245,8 @@ export default function ScenariosPage() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold">12-month cash projection</h2>
-            <p className="text-xs text-[var(--color-muted)]">Base vs scenario · ₹ Lakhs</p>
+            <h2 className="text-sm font-semibold">6-month cash projection</h2>
+            <p className="text-xs text-[var(--color-muted)]">Base vs scenario (median path) · scenario downside dashed · ₹ Lakhs</p>
           </div>
           {events.length > 0 && (
             <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
@@ -279,6 +283,9 @@ export default function ScenariosPage() {
             {events.length > 0 && (
               <Area type="monotone" dataKey="scenario" stroke="#1A6B55" strokeWidth={2}   fill="url(#gradScen)" name="scenario" />
             )}
+            {events.length > 0 && (
+              <Line type="monotone" dataKey="low" stroke="#ef4444" strokeWidth={1} strokeDasharray="2 2" dot={false} name="scenario downside (P10)" />
+            )}
           </AreaChart>
         </ResponsiveContainer>
 
@@ -293,22 +300,22 @@ export default function ScenariosPage() {
           {[
             {
               label: "Base runway",
-              value: `${baseRunway}d`,
-              sub: "current trajectory",
+              value: baseRunway >= HORIZON ? `${HORIZON}+d` : `${baseRunway}d`,
+              sub: "median (P50)",
               icon: TrendingUp,
               color: "text-[var(--color-muted)]",
             },
             {
               label: "Scenario runway",
-              value: `${Math.max(0, scenRunway)}d`,
-              sub: "with scenario events",
+              value: scenRunway >= HORIZON ? `${HORIZON}+d` : `${Math.max(0, scenRunway)}d`,
+              sub: "median, with events",
               icon: Sliders,
-              color: scenRunway > baseRunway ? "text-green-400" : "text-red-400",
+              color: scenRunway >= baseRunway ? "text-green-400" : "text-red-400",
             },
             {
-              label: "12-month base",
+              label: "6-month base",
               value: formatCurrency(Math.max(0, finalBase)),
-              sub: "ending cash",
+              sub: "ending cash (P50)",
               icon: TrendingDown,
               color: "text-[var(--color-muted)]",
             },
@@ -340,7 +347,7 @@ export default function ScenariosPage() {
             <p className="text-sm font-semibold text-red-300">This scenario creates a cash crunch</p>
             <p className="text-xs text-red-400/70 mt-0.5">
               {breakeven
-                ? `Cash runs out around ${breakeven.month}. Consider a working capital line to bridge the gap.`
+                ? `Cash (median path) runs out around ${format(new Date(breakeven.date), "d MMM")}. Consider a working capital line to bridge the gap.`
                 : "Your ending cash goes negative. Reduce expenses or secure credit before committing to this plan."}
             </p>
             <button

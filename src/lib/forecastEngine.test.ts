@@ -103,4 +103,17 @@ describe("forecastEngine", () => {
     const ms = performance.now() - t0;
     expect(ms).toBeLessThan(80);
   });
+
+  it("a custom recurring-expense scenario lowers the projected balance (Scenario Planner)", () => {
+    const base = runForecast(store, { horizonDays: 120, numSims: 500, seed: 7 }, TODAY);
+    const drain: Scenario = {
+      id: "s1", name: "Big recurring cost", type: "custom", active: true, createdAt: iso(TODAY),
+      params: { monthlyAmount: -300000, startDate: iso(TODAY), durationDays: 120 },
+    };
+    const withScenario = runForecast(store, { horizonDays: 120, numSims: 500, seed: 7, scenarios: [drain] }, TODAY);
+    const baseEnd = base.points[base.points.length - 1].p50;
+    const scenEnd = withScenario.points[withScenario.points.length - 1].p50;
+    expect(scenEnd).toBeLessThan(baseEnd);
+    expect(allFinite(withScenario.points.map(p => p.p50))).toBe(true);
+  });
 });
