@@ -79,6 +79,8 @@ const AutomationPage     = lazy(() => import("@/features/automation/AutomationPa
 const CopilotPage        = lazy(() => import("@/features/copilot/CopilotPage"));
 const SecurityPage       = lazy(() => import("@/features/security/SecurityPage"));
 const PrivacyPage        = lazy(() => import("@/features/privacy/PrivacyPage"));
+const BankingPage        = lazy(() => import("@/features/banking/BankingPage"));
+const PredictPage        = lazy(() => import("@/features/predict/PredictPage"));
 
 function PageLoader() {
   return (
@@ -109,6 +111,7 @@ const GUARDED_TABS = new Set([
   "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
   "sales", "payments", "insurance", "treasury", "esg", "global",
   "marketplace", "network", "automation", "copilot", "security", "privacy",
+  "banking", "predict",
 ]);
 
 function landingFor(role: string): string {
@@ -251,6 +254,8 @@ function AppShell() {
                 <Route path="/copilot"       element={<CopilotPage />} />
                 <Route path="/security"      element={<SecurityPage />} />
                 <Route path="/privacy"       element={<PrivacyPage />} />
+                <Route path="/banking"       element={<BankingPage />} />
+                <Route path="/predict"       element={<PredictPage />} />
                 <Route path="/data"          element={<DataPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />

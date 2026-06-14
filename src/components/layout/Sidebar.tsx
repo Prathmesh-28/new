@@ -12,7 +12,7 @@ import {
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
-  ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound,
+  ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -76,6 +76,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
       { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
       { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
+      { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
+      { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
     ]},
   ],
   owner: [
@@ -133,6 +135,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
       { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
       { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
+      { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
+      { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
     ]},
   ],
   finance_manager: [
