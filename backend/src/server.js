@@ -78,6 +78,7 @@ app.use("/api/connectors",         require("./routes/connectors"));
 app.use("/api/advisor",            require("./routes/advisor"));
 app.use("/api/operations",         require("./routes/operations"));
 app.use("/api/whatsapp",           require("./routes/whatsapp"));
+app.use("/api/push",               require("./routes/push"));
 app.use("/webhook/whatsapp",       require("./routes/whatsapp")); // Twilio inbound
 
 // Phase 1+2 modules

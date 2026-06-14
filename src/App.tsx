@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { Toaster } from "sonner";
@@ -11,6 +11,9 @@ import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import AppLockGate from "@/components/AppLockGate";
 import { onAppResume } from "@/lib/mobile";
+import { registerPush } from "@/lib/nativeFeatures";
+import { api } from "@/lib/api";
+import { Capacitor } from "@capacitor/core";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
@@ -134,6 +137,16 @@ function AppShell() {
   const openPalette  = useCallback(() => setPaletteOpen(true),  []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
   const { refreshUser } = useAuth();
+  const navigate = useNavigate();
+
+  // Register for push notifications (native only) — store the token server-side
+  // and route taps to the right screen.
+  useEffect(() => {
+    registerPush({
+      onToken: (token) => { api.post("/api/push/register", { token, platform: Capacitor.getPlatform() }).catch(() => {}); },
+      onOpen: (path) => { if (path) navigate(path); },
+    });
+  }, [navigate]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

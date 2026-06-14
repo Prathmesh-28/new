@@ -76,6 +76,47 @@ router.post("/ask", authenticate, async (req, res) => {
   }
 });
 
+// POST /api/ai/scan-receipt — extract fields from a receipt/invoice photo (Claude vision)
+// body: { image: "data:image/...;base64,...." }  → { amount, date, vendor, category, description }
+router.post("/scan-receipt", authenticate, async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "AI not configured" });
+  const { image } = req.body || {};
+  const m = typeof image === "string" && image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/s);
+  if (!m) return res.status(400).json({ error: "image (base64 data URL) required" });
+  const [, mediaType, b64] = m;
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic.default();
+    const resp = await client.messages.create({
+      model: "claude-haiku-4-5-20251001", max_tokens: 400,
+      system: `Extract the key fields from this receipt/invoice/bill image for an Indian SMB's books. Return ONLY a JSON object, no prose:
+{"vendor": string, "amount": number (total, in rupees, no symbols/commas), "date": "YYYY-MM-DD" or null, "category": one of revenue|expense|payroll|loan|tax|transfer, "description": short string}
+If a field is unreadable use null. amount is the grand total.`,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } },
+          { type: "text", text: "Extract the fields as JSON." },
+        ],
+      }],
+    });
+    const raw = resp.content[0]?.text ?? "{}";
+    const json = raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}";
+    const parsed = JSON.parse(json);
+    const category = VALID_CATEGORIES.includes(parsed.category) ? parsed.category : "expense";
+    res.json({
+      vendor: typeof parsed.vendor === "string" ? parsed.vendor.slice(0, 80) : "",
+      amount: Number.isFinite(Number(parsed.amount)) ? Math.abs(Number(parsed.amount)) : 0,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
+      category,
+      description: typeof parsed.description === "string" ? parsed.description.slice(0, 120) : "",
+    });
+  } catch (err) {
+    console.error("[ai] scan-receipt", err.message);
+    res.status(500).json({ error: "Couldn't read the receipt. Try a clearer photo." });
+  }
+});
+
 // POST /api/ai/categorize — single transaction
 router.post("/categorize", authenticate, async (req, res) => {
   const { merchant, description = "" } = req.body;

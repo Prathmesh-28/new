@@ -464,6 +464,16 @@ async function initDb() {
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS provider TEXT;
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 
+    -- ── Push notification device tokens ──────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token      TEXT PRIMARY KEY,
+      tenant_id  TEXT NOT NULL,
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      platform   TEXT NOT NULL DEFAULT 'unknown',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS push_tenant ON push_tokens(tenant_id);
+
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 

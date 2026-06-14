@@ -1,9 +1,11 @@
 import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
-import { formatCurrency } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X } from "lucide-react";
+import { formatCurrency, generateId } from "@/lib/utils";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction } from "@/data/types";
+import { capturePhoto } from "@/lib/nativeFeatures";
+import { api } from "@/lib/api";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
 const PAGE_SIZE  = 50;
@@ -67,8 +69,31 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
 }
 
 export default function TransactionsPage() {
-  const { store, updateTransaction, canExport } = useApp();
+  const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
+
+  const [scanning, setScanning] = useState(false);
+  // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
+  // drop a prefilled transaction in for review.
+  const handleScanReceipt = useCallback(async () => {
+    setScanning(true);
+    try {
+      const image = await capturePhoto();
+      if (!image) { setScanning(false); return; }
+      const r = await api.post<{ vendor: string; amount: number; date: string | null; category: Transaction["category"]; description: string }>("/api/ai/scan-receipt", { image });
+      if (!r.amount) { toast.error("Couldn't read an amount — try a clearer photo."); setScanning(false); return; }
+      const sign = r.category === "revenue" ? 1 : -1;
+      addTransaction({
+        id: generateId(), date: r.date || new Date().toISOString().slice(0, 10),
+        amount: sign * Math.abs(r.amount), description: r.description || r.vendor || "Scanned receipt",
+        category: r.category, counterparty: r.vendor || "Scanned", isRecurring: false,
+        bankAccountId: bankAccounts[0]?.id ?? "",
+      });
+      toast.success(`Scanned: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} — review below`);
+    } catch {
+      toast.error("Receipt scan failed. Check your connection and try again.");
+    } finally { setScanning(false); }
+  }, [addTransaction, bankAccounts]);
 
   const [search,      setSearch]      = useState("");
   const [filterCat,   setFilterCat]   = useState<string>("all");
@@ -205,6 +230,12 @@ export default function TransactionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {canEdit() && (
+            <button onClick={handleScanReceipt} disabled={scanning}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 transition-colors">
+              <ScanLine size={12} /> {scanning ? "Scanning…" : "Scan receipt"}
+            </button>
+          )}
           {canExport() && (
             <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">

@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Headroom uses the camera to scan receipts and invoices so it can extract the amount and create transactions for you.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Headroom lets you pick a receipt or invoice photo to scan and turn into a transaction.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Headroom can save exported statements and reports to your photo library.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

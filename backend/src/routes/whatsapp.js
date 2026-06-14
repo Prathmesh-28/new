@@ -3,6 +3,7 @@ const crypto   = require("crypto");
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/whatsapp");
+const { sendPush } = require("../lib/push");
 
 const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 
@@ -277,6 +278,7 @@ router.post("/send-digest", async (req, res) => {
   };
 
   let sent = 0, failed = 0;
+  const pushedTenants = new Set();
   for (const { phone, tenant_id } of bindings) {
     try {
       const data    = await getTenantData(tenant_id);
@@ -341,6 +343,21 @@ router.post("/send-digest", async (req, res) => {
 
       await sendWhatsApp(phone, msg);
       sent++;
+
+      // Mirror the brief to a native push (once per tenant) if devices are registered.
+      if (!pushedTenants.has(tenant_id)) {
+        pushedTenants.add(tenant_id);
+        try {
+          const { rows: toks } = await pool.query("SELECT token FROM push_tokens WHERE tenant_id=$1", [tenant_id]);
+          if (toks.length) {
+            await sendPush(toks.map(t => t.token), {
+              title: `Cash ${fmt(total)} · ${runway}d runway`,
+              body: critical.length ? `⚠️ ${critical.length} alert${critical.length > 1 ? "s" : ""} need attention` : "You're on track today.",
+              data: { path: "/dashboard" },
+            });
+          }
+        } catch (e) { console.error("[push digest]", e.message); }
+      }
     } catch (e) {
       console.error("[wa digest] failed for", phone, e.message);
       failed++;
