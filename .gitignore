@@ -18,3 +18,10 @@ backend/.env
 *-adminsdk-*.json
 *service-account*.json
 firebase-debug.log
+
+# Android signing
+android/keystore.properties
+*.jks
+*.keystore
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist

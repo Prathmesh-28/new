@@ -10,6 +10,7 @@ import UpsellGate from "@/components/UpsellGate";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import AppLockGate from "@/components/AppLockGate";
+import InstallPrompt from "@/components/InstallPrompt";
 import { onAppResume } from "@/lib/mobile";
 import { registerPush } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
@@ -230,6 +231,7 @@ export default function App() {
       <AppProvider>
         <BrowserRouter>
           <Toaster position="top-right" theme="dark" richColors />
+          <InstallPrompt />
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
