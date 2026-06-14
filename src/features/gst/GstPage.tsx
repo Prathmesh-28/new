@@ -3,8 +3,10 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
 
 interface Liability { month: number; year: number; output_tax: number; input_tax_credit: number; net_liability: number; breakdown: Record<string, number>; }
 interface GstReturn  { id: string; return_type: string; period_month: number; period_year: number; output_tax: number; input_tax_credit: number; net_liability: number; status: string; filed_at?: string; gstn_arn?: string; }
@@ -15,7 +17,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -25,6 +27,55 @@ export default function GstPage() {
   const [calendar, setCalendar]   = useState<CalDate[]>([]);
   const [loading, setLoading]     = useState(false);
   const [selMonth, setSelMonth]   = useState(() => { const n = new Date(); return { m: n.getMonth() + 1, y: n.getFullYear() }; });
+
+  // ── GSTR-2B reconciliation state ──
+  const [twoBCount, setTwoBCount]   = useState<number | null>(null);
+  const [regCount, setRegCount]     = useState<number | null>(null);
+  const [twoBLines, setTwoBLines]   = useState<ReturnType<typeof parse2BJson>>([]);
+  const [regLines, setRegLines]     = useState<ReturnType<typeof parseRegisterRows>>([]);
+  const [recon, setRecon]           = useState<{ summary: ReconSummary; lines: ReconResult[] } | null>(null);
+  const [reconErr, setReconErr]     = useState("");
+
+  const onUpload2B = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const lines = parse2BJson(String(reader.result || ""));
+        setTwoBLines(lines); setTwoBCount(lines.length); setReconErr("");
+      } catch (e) { setReconErr(e instanceof Error ? e.message : "Failed to read 2B JSON"); setTwoBCount(null); }
+    };
+    reader.readAsText(file);
+  };
+
+  const onUploadRegister = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const wb = XLSX.read(reader.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+        const lines = parseRegisterRows(rows);
+        if (!lines.length) { setReconErr("No rows with a GSTIN + invoice number found. Check the column headers."); setRegCount(null); return; }
+        setRegLines(lines); setRegCount(lines.length); setReconErr("");
+      } catch { setReconErr("Couldn't parse the register — upload an .xlsx or .csv export."); setRegCount(null); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const runReconcile = () => {
+    if (!twoBLines.length || !regLines.length) { toast.error("Upload both the GSTR-2B and your purchase register first"); return; }
+    setRecon(reconcile(regLines, twoBLines));
+    setTab("match");
+  };
+
+  const downloadReconReport = () => {
+    if (!recon) return;
+    const header = ["Status", "Supplier GSTIN", "Party", "Invoice No", "Register Tax", "2B Tax", "Delta"];
+    const rows = recon.lines.map(l => [l.status, l.gstin, l.party ?? "", l.invoiceNo, l.registerTax, l.twoBTax, l.delta]);
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "gstr2b-reconciliation.csv"; a.click();
+  };
 
   const ledger = useMemo(() => gstLedger(store, firm.gstRate ?? 18, 12), [store, firm.gstRate]);
   const ledgerTotals = useMemo(() => ({
@@ -81,7 +132,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["returns", `Returns (${returns.length})`, FileText], ["calendar", "Calendar", Calendar], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -279,6 +330,107 @@ export default function GstPage() {
           })}
         </div>
       )}
+      {/* ── GSTR-2B ITC RECONCILIATION ── */}
+      {tab === "match" && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-bold mb-1">GSTR-2B Reconciliation</h2>
+            <p className="text-sm text-[var(--color-muted)]">
+              Match your purchase register against the GSTN-auto-drafted 2B to catch ITC that's blocked (supplier hasn't filed) or unclaimed — before you file GSTR-3B.
+            </p>
+          </div>
+
+          {/* Uploaders */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-4 cursor-pointer hover:border-[var(--color-primary)]/50 transition-colors block">
+              <div className="flex items-center gap-2 mb-1"><Upload size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">GSTR-2B (JSON)</span></div>
+              <p className="text-xs text-[var(--color-muted)]">Download from gst.gov.in → Returns → GSTR-2B → Download (JSON).</p>
+              {twoBCount != null && <p className="text-xs text-green-400 mt-1">✓ {twoBCount} invoices loaded</p>}
+              <input type="file" accept=".json,application/json" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload2B(f); }} />
+            </label>
+            <label className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-4 cursor-pointer hover:border-[var(--color-primary)]/50 transition-colors block">
+              <div className="flex items-center gap-2 mb-1"><Upload size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Purchase register (Excel/CSV)</span></div>
+              <p className="text-xs text-[var(--color-muted)]">Columns: Supplier GSTIN, Invoice No, Taxable Value, IGST/CGST/SGST (or Total Tax).</p>
+              {regCount != null && <p className="text-xs text-green-400 mt-1">✓ {regCount} rows loaded</p>}
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUploadRegister(f); }} />
+            </label>
+          </div>
+
+          {reconErr && (
+            <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-4 py-3">{reconErr}</div>
+          )}
+
+          <button onClick={runReconcile} disabled={!twoBCount || !regCount}
+            className="text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 flex items-center gap-1.5">
+            <GitCompare size={14} /> Reconcile
+          </button>
+
+          {recon && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "ITC at risk", value: formatCurrency(recon.summary.itcAtRisk), sub: `${recon.summary.counts.missing_in_2b} not in 2B`, color: "text-red-400" },
+                  { label: "Mismatched tax", value: formatCurrency(Math.abs(recon.summary.mismatchDelta)), sub: `${recon.summary.counts.mismatch} invoices`, color: "text-orange-400" },
+                  { label: "Available, unclaimed", value: formatCurrency(recon.summary.itcAvailableUnclaimed), sub: `${recon.summary.counts.missing_in_books} only in 2B`, color: "text-yellow-400" },
+                  { label: "Matched ITC", value: formatCurrency(recon.summary.matchedTax), sub: `${recon.summary.counts.matched} invoices`, color: "text-green-400" },
+                ].map(s => (
+                  <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end">
+                <button onClick={downloadReconReport} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+                  <Download size={12} /> Download report (CSV)
+                </button>
+              </div>
+
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Status</th>
+                        <th className="text-left px-3 py-2 font-medium">Supplier</th>
+                        <th className="text-left px-3 py-2 font-medium">Invoice</th>
+                        <th className="text-right px-3 py-2 font-medium">Register tax</th>
+                        <th className="text-right px-3 py-2 font-medium">2B tax</th>
+                        <th className="text-right px-3 py-2 font-medium">Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recon.lines.slice(0, 200).map(l => {
+                        const meta: Record<string, { label: string; cls: string }> = {
+                          missing_in_2b:    { label: "Not in 2B",    cls: "bg-red-950/40 text-red-400 border-red-800/30" },
+                          mismatch:         { label: "Mismatch",     cls: "bg-orange-950/40 text-orange-400 border-orange-800/30" },
+                          missing_in_books: { label: "Only in 2B",   cls: "bg-yellow-950/40 text-yellow-400 border-yellow-800/30" },
+                          matched:          { label: "Matched",      cls: "bg-green-950/40 text-green-400 border-green-800/30" },
+                        };
+                        const m = meta[l.status];
+                        return (
+                          <tr key={l.key} className="border-t border-[var(--color-border)]">
+                            <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${m.cls}`}>{m.label}</span></td>
+                            <td className="px-3 py-2"><span className="text-[var(--color-text)]">{l.party || "—"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{l.gstin}</span></td>
+                            <td className="px-3 py-2 font-mono">{l.invoiceNo}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.registerTax ? formatCurrency(l.registerTax) : "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.twoBTax ? formatCurrency(l.twoBTax) : "—"}</td>
+                            <td className={`px-3 py-2 text-right tabular-nums ${Math.abs(l.delta) > 1 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{l.delta ? formatCurrency(l.delta) : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {recon.lines.length > 200 && <p className="text-[10px] text-[var(--color-muted)] px-3 py-2">Showing first 200 of {recon.lines.length} — download the CSV for the full report.</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── VERIFY GSTIN ── */}
       {tab === "verify" && (
         <div className="space-y-4 max-w-xl">
