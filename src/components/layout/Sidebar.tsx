@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
+import Logo from "@/components/Logo";
 import {
   Eye, ChevronLeft, ChevronRight, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
@@ -296,16 +297,19 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
         "transition-[width] duration-200",
         collapsed ? "w-14" : "w-56"
       )}>
-        {/* Logo row */}
-        <div className={cn(
-          "h-14 flex items-center border-b border-[var(--color-border)] shrink-0 select-none",
-          collapsed ? "justify-center" : "px-4"
-        )}>
+        {/* Logo row — click returns to the dashboard (home) */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          aria-label="Go to dashboard"
+          className={cn(
+            "h-14 flex items-center border-b border-[var(--color-border)] shrink-0 select-none w-full hover:opacity-80 transition-opacity cursor-pointer",
+            collapsed ? "justify-center" : "px-4"
+          )}>
           {collapsed
-            ? <span className="text-base font-bold text-[var(--color-primary)]">H</span>
-            : <span className="text-base font-bold tracking-tight">Head<span className="text-[var(--color-primary)]">room</span></span>
+            ? <Logo variant="mark" size={26} className="text-[var(--color-text)]" />
+            : <Logo variant="horizontal" size={22} className="text-[var(--color-text)]" />
           }
-        </div>
+        </button>
 
         {/* Client-view banner */}
         {selectedClientTenantId && !collapsed && (
@@ -405,9 +409,9 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
       {/* ── Mobile top bar ───────────────────────────────────────────── */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4">
-        <span className="text-base font-bold tracking-tight select-none">
-          Head<span className="text-[var(--color-primary)]">room</span>
-        </span>
+        <button onClick={() => navigate("/dashboard")} aria-label="Go to dashboard" className="hover:opacity-80 transition-opacity">
+          <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
+        </button>
         <button
           onClick={() => setMobileOpen(v => !v)}
           className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
@@ -422,9 +426,9 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className="absolute top-0 left-0 h-full w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col">
             <div className="h-12 flex items-center justify-between px-4 border-b border-[var(--color-border)] shrink-0">
-              <span className="text-base font-bold tracking-tight select-none">
-                Head<span className="text-[var(--color-primary)]">room</span>
-              </span>
+              <button onClick={() => { setMobileOpen(false); navigate("/dashboard"); }} aria-label="Go to dashboard" className="hover:opacity-80 transition-opacity">
+                <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
+              </button>
               <button onClick={() => setMobileOpen(false)} className="p-1 text-[var(--color-muted)]">
                 <X size={16} />
               </button>

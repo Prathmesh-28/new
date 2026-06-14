@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { toast } from "sonner";
+import Logo from "@/components/Logo";
 
 export default function SetPasswordPage() {
   const { user } = useAuth();
@@ -37,7 +38,7 @@ export default function SetPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8">
           <div className="mb-8">
-            <span className="text-xl font-bold">Head<span className="text-[var(--color-primary)]">room</span></span>
+            <Logo variant="horizontal" size={22} className="text-[var(--color-text)]" />
             <h1 className="text-2xl font-bold mt-6 mb-1">Set your password</h1>
             <p className="text-sm text-[var(--color-muted)]">
               Welcome, <span className="text-[var(--color-text)]">{user?.email}</span>. Choose a password to continue.

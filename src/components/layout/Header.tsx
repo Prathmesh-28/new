@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Eye } from "lucide-react";
+import Logo from "@/components/Logo";
 import {
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   LogOut, Menu, X, Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
@@ -61,10 +62,10 @@ export default function Header() {
   return (
     <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-14">
-        {/* Logo */}
-        <span className="text-lg font-bold tracking-tight shrink-0">
-          Head<span className="text-[var(--color-primary)]">room</span>
-        </span>
+        {/* Logo — click returns to dashboard */}
+        <button onClick={() => navigate("/dashboard")} aria-label="Go to dashboard" className="shrink-0 hover:opacity-80 transition-opacity">
+          <Logo variant="horizontal" size={20} className="text-[var(--color-text)]" />
+        </button>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-0.5">

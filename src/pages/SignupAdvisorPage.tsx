@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
+import Logo from "@/components/Logo";
 
 export default function SignupAdvisorPage() {
   const { serverReady } = useAuth();
@@ -49,10 +50,10 @@ export default function SignupAdvisorPage() {
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-[var(--color-primary)]/8 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[var(--color-primary)]/5 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
 
-        <div className="relative">
-          <span className="text-xl font-bold">
-            Head<span className="text-[var(--color-primary)]">room</span>
-          </span>
+        <div className="relative flex items-center">
+          <Link to="/" aria-label="Headroom home" className="hover:opacity-80 transition-opacity">
+            <Logo variant="horizontal" size={22} className="text-[var(--color-text)]" />
+          </Link>
           <span className="ml-2 text-xs text-[var(--color-muted)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 px-2 py-0.5 rounded-full">
             Advisor
           </span>

@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
+import Logo from "@/components/Logo";
 
 const ROLE_OPTIONS = [
   {
@@ -65,9 +66,9 @@ export default function SignupPage() {
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-[var(--color-primary)]/8 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[var(--color-primary)]/5 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
 
-        <span className="relative text-xl font-bold">
-          Head<span className="text-[var(--color-primary)]">room</span>
-        </span>
+        <Link to="/" aria-label="Headroom home" className="relative hover:opacity-80 transition-opacity">
+          <Logo variant="horizontal" size={24} className="text-[var(--color-text)]" />
+        </Link>
 
         <div className="relative space-y-6">
           {[

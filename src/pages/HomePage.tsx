@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
+import Logo from "@/components/Logo";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -197,8 +198,8 @@ export default function HomePage() {
 
       {/* ═══ NAV ══════════════════════════════════════════════════════════════ */}
       <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(196,217,122,0.1)` : "none" }}>
-        <div style={{ fontFamily: serif, fontSize: 22, color: C.pale, letterSpacing: -0.5, cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-          Head<span style={{ color: C.gold }}>room</span>
+        <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, cursor: "pointer", display: "flex", alignItems: "center" }} aria-label="Headroom home">
+          <Logo variant="horizontal" size={22} />
         </div>
         <ul style={{ display: "flex", gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden md:flex">
           {[["Features","#features"],["Credit","#credit"],["Capital","#capital"],["Advisors","#advisors"],["Pricing","#pricing"]].map(([l,h]) => (
@@ -737,7 +738,9 @@ export default function HomePage() {
       <footer style={{ background: C.deepest, borderTop: "1px solid rgba(196,217,122,0.08)" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 48px 0", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, paddingBottom: 48 }}>
           <div>
-            <div style={{ fontFamily: serif, fontSize: 20, color: C.pale, marginBottom: 10 }}>Head<span style={{ color: C.gold }}>room</span></div>
+            <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, marginBottom: 10, cursor: "pointer", display: "inline-flex" }} aria-label="Headroom home">
+              <Logo variant="horizontal" size={20} />
+            </div>
             <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.35)", lineHeight: 1.6, maxWidth: 200 }}>A 10-layer cash flow intelligence platform for modern SMB operators.</p>
           </div>
           {[
