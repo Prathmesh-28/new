@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
+import { runForecast, generateForecast } from "@/lib/forecastEngine";
 import { Plus, Trash2, Eye, EyeOff, TrendingUp, RefreshCw, Sparkles, X } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -35,46 +36,21 @@ export default function ForecastPage() {
   const activeScenario = scenarios.find(s => s.active);
   const { hidden, toggle } = useSeriesToggle();
 
-  const pressureDay = forecast.slice(0, 45).findIndex(f => f.p10 < 0);
-  const slowFactor  = slowPct / 100;
+  // Live probabilistic forecast — scenarios + slow-month baked into BOTH bands
+  // (honest), via the Monte-Carlo engine. Risk metrics come from the same paths.
+  const result = useMemo(
+    () => runForecast(store, { scenarios: scenarios.filter(s => s.active), revenueFactor: slowPct / 100 }),
+    [store, scenarios, slowPct],
+  );
+  const risk = result.risk;
+  const pressureDay = risk.expectedTimeToBreachDays;
 
-  const chartData = forecast.slice(0, 90).map((f, i) => {
-    let adj = 0;
-    if (activeScenario) {
-      const p   = activeScenario.params as Record<string, unknown>;
-      const amt = Number(p.amount ?? 0);
-      switch (activeScenario.type) {
-        case "contract_won":
-          adj = i > 10 ? amt : 0;
-          break;
-        case "new_hire":
-          adj = i > 15 ? -Number(p.salary ?? amt) * (i / 30) : 0;
-          break;
-        case "loan_draw": {
-          const r   = 0.018;
-          const n   = Number(p.termMonths ?? 12);
-          const emi = n > 0 ? amt * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) : 0;
-          adj = amt - Math.min(Math.floor(i / 30), n) * emi;
-          break;
-        }
-        case "custom": {
-          const startIdx = p.startDate
-            ? Math.max(0, Math.round((new Date(p.startDate as string).getTime() - Date.now()) / 86400000))
-            : 0;
-          adj = i >= startIdx ? amt : 0;
-          break;
-        }
-      }
-    }
-    const p50 = Math.round(f.p50 * slowFactor / 100000);
-    const p10 = Math.round(f.p10 * slowFactor / 100000);
-    const p90 = Math.round(f.p90 / 100000);
-    return {
-      date:     format(new Date(f.date), "MMM d"),
-      p50, p10, p90,
-      scenario: activeScenario ? Math.round((f.p50 * slowFactor + adj) / 100000) : undefined,
-    };
-  });
+  const chartData = result.points.map(f => ({
+    date: format(new Date(f.date), "MMM d"),
+    p50: Math.round(f.p50 / 100000),
+    p10: Math.round(f.p10 / 100000),
+    p90: Math.round(f.p90 / 100000),
+  }));
 
   // Map obligations to x-axis values that exist in chartData
   const chartDates  = new Set(chartData.map(d => d.date));
@@ -111,33 +87,16 @@ export default function ForecastPage() {
     }
     setGenerating(true);
     try {
-      const data = await api.post<{ forecast: typeof forecast }>("/api/forecast/trigger", {});
-      if (data?.forecast?.length) {
-        setStore(s => ({ ...s, forecast: data.forecast }));
-        toast.success("90-day forecast generated");
-      } else {
-        localForecast();
-      }
-    } catch {
-      localForecast();
+      // The deterministic client engine owns forecasting (Monte-Carlo P10/P50/P90).
+      // We store the BASE forecast (no scenarios) for the dashboard; the page chart
+      // recomputes live with active scenarios + slow-month baked in.
+      const base = generateForecast(store);
+      setStore(s => ({ ...s, forecast: base }));
+      toast.success("90-day probabilistic forecast generated");
     } finally {
       autoAddGSTObligation();
       setGenerating(false);
     }
-  };
-
-  const localForecast = () => {
-    const startBalance = bankAccounts.reduce((a, b) => a + b.balance, 0);
-    const net          = transactions.reduce((a, t) => a + t.amount, 0);
-    const dailyNet     = net / Math.max(transactions.length, 1);
-    const today        = new Date();
-    const generated    = Array.from({ length: 90 }, (_, i) => {
-      const d = new Date(today); d.setDate(d.getDate() + i);
-      const p50 = startBalance + dailyNet * i;
-      return { date: d.toISOString().split("T")[0], p10: p50 * 0.82, p50, p90: p50 * 1.18 };
-    });
-    setStore(s => ({ ...s, forecast: generated }));
-    toast.success("Forecast generated from your transactions");
   };
 
   const handleAddScenario = () => {
@@ -160,7 +119,7 @@ export default function ForecastPage() {
     setAiText("");
     try {
       const balance = bankAccounts.reduce((a, b) => a + b.balance, 0);
-      const runway  = pressureDay !== -1 ? `${pressureDay + 1} days` : "90+ days";
+      const runway  = pressureDay != null ? `${pressureDay} days` : "90+ days";
       const burn    = transactions.filter(t => t.amount < 0).reduce((a, t) => a + t.amount, 0) / Math.max(1, transactions.length / 30);
       const context = `Balance: ₹${(balance / 100000).toFixed(1)}L. Monthly burn: ₹${(Math.abs(burn) / 100000).toFixed(1)}L. P10 runway: ${runway}. Active scenario: ${activeScenario?.name ?? "none"}.`;
       const res = await api.post<{ content: string }>("/api/ai/ask", {
@@ -231,12 +190,31 @@ export default function ForecastPage() {
         </div>
       ) : (
         <>
-          {/* Pressure alert */}
-          {pressureDay !== -1 && (
+          {/* Risk strip — calibrated probabilities from the Monte-Carlo paths */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Breach probability", value: `${Math.round(risk.probBreach * 100)}%`, sub: `of dipping below your ${firm.safetyThresholdDays}-day buffer`, danger: risk.probBreach >= 0.3 },
+              { label: "Expected time to pressure", value: pressureDay != null ? `${pressureDay}d` : "90+d", sub: risk.p10TimeToBreachDays != null ? `as early as ${risk.p10TimeToBreachDays}d (worst 10%)` : "no breach in 90d", danger: pressureDay != null && pressureDay <= 45 },
+              { label: "Cash-Flow-at-Risk (95%)", value: `₹${(risk.cfar95 / 100000).toFixed(1)}L`, sub: "worst-case drawdown to the trough", danger: false },
+              { label: "Likely runway", value: risk.runwayDist.p50 >= 90 ? "90+ days" : `${risk.runwayDist.p50} days`, sub: `worst-case ${risk.runwayDist.p10 >= 90 ? "90+" : risk.runwayDist.p10}d`, danger: risk.runwayDist.p10 < 30 },
+            ].map(m => (
+              <div key={m.label} className={`rounded-lg border p-3 ${m.danger ? "border-red-800/40 bg-red-950/20" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+                <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{m.label}</p>
+                <p className={`text-xl font-bold tabular-nums mt-0.5 ${m.danger ? "text-red-400" : "text-[var(--color-text)]"}`}>{m.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5 leading-tight">{m.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Pressure alert — fires 45-day-early when the hazard says so */}
+          {risk.probBreachByDay[Math.min(44, risk.probBreachByDay.length - 1)] >= 0.5 && (
             <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <TrendingUp size={16} className="text-red-400 shrink-0" />
-                <p className="text-sm">P10 scenario goes below zero in <strong className="text-red-400">{pressureDay + 1} days</strong> — downside risk is high.</p>
+                <p className="text-sm">
+                  <strong className="text-red-400">{Math.round(risk.probBreach * 100)}% chance</strong> you breach your safety buffer{pressureDay != null ? <> in ~<strong className="text-red-400">{pressureDay} days</strong></> : ""}.
+                  {risk.expectedShortfall < risk.thresholdCash ? <> A <strong>₹{Math.round((risk.thresholdCash - risk.expectedShortfall) / 100000)}L</strong> buffer covers the likely shortfall — {result.capital.recommendedTrack.replace(/_/g, " ")} fits.</> : null}
+                </p>
               </div>
               <button onClick={() => navigate("/credit")}
                 className="text-xs bg-red-900/40 text-red-300 border border-red-800/40 px-3 py-1.5 rounded-lg hover:bg-red-900/60 shrink-0 whitespace-nowrap">
@@ -254,7 +232,6 @@ export default function ForecastPage() {
                   { key: "p90", label: "Best (P90)",  color: "#1A6B55" },
                   { key: "p50", label: "Expected (P50)", color: "#1A6B55" },
                   { key: "p10", label: "Worst (P10)", color: "#d97706" },
-                  ...(activeScenario ? [{ key: "scenario", label: "Scenario", color: "#2EA882" }] : []),
                 ]}
                 hidden={hidden}
                 onToggle={toggle}
@@ -269,7 +246,6 @@ export default function ForecastPage() {
                 {!hidden.has("p90") && <Area type="monotone" dataKey="p90" name="p90" stroke="#1A6B55" strokeWidth={1} strokeDasharray="4 2" fill="#1A6B5510" animationDuration={400} />}
                 {!hidden.has("p50") && <Area type="monotone" dataKey="p50" name="p50" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5508" animationDuration={400} />}
                 {!hidden.has("p10") && <Area type="monotone" dataKey="p10" name="p10" stroke="#d97706" strokeWidth={1} strokeDasharray="4 2" fill="transparent" animationDuration={400} />}
-                {activeScenario && !hidden.has("scenario") && <Line type="monotone" dataKey="scenario" name="scenario" stroke="#2EA882" strokeWidth={2} strokeDasharray="6 3" dot={false} animationDuration={400} />}
                 {oblMarkers.map(o => (
                   <ReferenceLine key={o.id} x={o.chartDate} stroke="#ef4444" strokeDasharray="3 2" strokeWidth={1.5}
                     label={{ value: o.name, position: "insideTopRight", fontSize: 8, fill: "#ef4444" }} />

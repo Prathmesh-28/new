@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
+import { runForecast } from "@/lib/forecastEngine";
 import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { format, addMonths, setDate, isBefore, addDays } from "date-fns";
@@ -536,6 +537,10 @@ export default function DashboardPage() {
 
   const isEmpty = bankAccounts.length === 0 && transactions.length === 0;
 
+  // Probabilistic early-warning from the Monte-Carlo engine (memoised on the store).
+  const fcRisk = useMemo(() => (transactions.length ? runForecast(store).risk : null), [store, transactions.length]);
+  const showBreachWarning = !!fcRisk && fcRisk.probBreachByDay[Math.min(44, fcRisk.probBreachByDay.length - 1)] >= 0.5;
+
   // Onboarding steps (computed from store)
   const onboardingSteps = [
     { label: "Add a bank account",          done: bankAccounts.length > 0,         action: () => setShowAddAccount(true) },
@@ -587,6 +592,20 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {showBreachWarning && fcRisk && (
+        <button onClick={() => navigate("/forecast")}
+          className="w-full text-left bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4 hover:bg-red-950/30 transition-colors">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={16} className="text-red-400 shrink-0" />
+            <p className="text-sm">
+              <strong className="text-red-400">{Math.round(fcRisk.probBreach * 100)}% chance</strong> of dipping below your safety buffer
+              {fcRisk.expectedTimeToBreachDays != null ? <> in ~<strong className="text-red-400">{fcRisk.expectedTimeToBreachDays} days</strong></> : ""} ·
+              worst-case runway <strong>{fcRisk.runwayDist.p10 >= 90 ? "90+" : fcRisk.runwayDist.p10}d</strong>
+            </p>
+          </div>
+          <span className="text-xs text-red-300 shrink-0 whitespace-nowrap">View forecast →</span>
+        </button>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Dashboard</h1>
         <div className="flex items-center gap-2">
