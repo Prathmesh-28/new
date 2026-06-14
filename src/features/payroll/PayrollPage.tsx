@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -119,7 +119,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -222,7 +222,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -955,6 +955,7 @@ export default function PayrollPage() {
       {tab === "flexi" && <FlexiBenefitTab employees={employees} />}
       {tab === "lwf" && <LwfCalculatorTab employees={employees} />}
       {tab === "offer" && <OfferLetterTab employees={employees} firmName={store.firm?.name ?? "Your Company"} />}
+      {tab === "esop" && <EsopTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1677,6 +1678,218 @@ Signature: _______________________   Date: ___________`;
       {employees.length > 0 && (
         <p className="text-[10px] text-[var(--color-muted)]">Tip: Select an existing employee to pre-fill — or type a new candidate's details above.</p>
       )}
+    </div>
+  );
+}
+
+function EsopTab({ employees }: { employees: { id: string; name: string; gross_salary: number }[] }) {
+  type Grant = { id: string; name: string; options: number; grantDate: string; vestingYears: number; cliffMonths: number };
+
+  const [poolSize, setPoolSize] = useState(100000);
+  const [fmv,      setFmv]      = useState(150);   // current FMV / share price (₹)
+  const [strike,   setStrike]   = useState(10);    // exercise / strike price (₹)
+
+  const today = new Date().toISOString().split("T")[0];
+  const [grants, setGrants] = useState<Grant[]>([]);
+  const [form, setForm] = useState<{ name: string; options: string; grantDate: string; vestingYears: string; cliffMonths: string }>({
+    name: employees[0]?.name ?? "",
+    options: "",
+    grantDate: today,
+    vestingYears: "4",
+    cliffMonths: "12",
+  });
+
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const monthsBetween = (fromIso: string, to: Date) => {
+    const from = new Date(fromIso);
+    if (isNaN(from.getTime())) return 0;
+    let m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+    if (to.getDate() < from.getDate()) m -= 1;
+    return Math.max(0, m);
+  };
+
+  const computed = useMemo(() => {
+    const now = new Date();
+    return (grants ?? []).map(g => {
+      const granted      = g.options || 0;
+      const vestingMonths = (g.vestingYears || 0) * 12;
+      const monthsElapsed = monthsBetween(g.grantDate, now);
+      let vested = 0;
+      if (vestingMonths > 0 && monthsElapsed >= (g.cliffMonths || 0)) {
+        vested = Math.floor(granted * Math.min(monthsElapsed, vestingMonths) / vestingMonths);
+      }
+      const unvested  = Math.max(0, granted - vested);
+      const vestedPct = granted > 0 ? (vested / granted) * 100 : 0;
+      const notional  = vested * Math.max(0, fmv - strike);
+      return { ...g, granted, vested, unvested, vestedPct, notional, monthsElapsed };
+    });
+  }, [grants, today, fmv, strike]);
+
+  const totalGranted = computed.reduce((s, g) => s + g.granted, 0);
+  const totalVested  = computed.reduce((s, g) => s + g.vested, 0);
+  const totalNotional = computed.reduce((s, g) => s + g.notional, 0);
+  const utilisation  = (poolSize || 0) > 0 ? (totalGranted / (poolSize || 1)) * 100 : 0;
+  const remainingPool = (poolSize || 0) - totalGranted;
+  const overAllocated = utilisation > 100;
+
+  const addGrant = () => {
+    const opts = parseInt(form.options) || 0;
+    if (!form.name.trim() || opts <= 0) { toast.error("Employee name and options granted (> 0) required"); return; }
+    setGrants(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: form.name.trim(),
+      options: opts,
+      grantDate: form.grantDate || today,
+      vestingYears: parseFloat(form.vestingYears) || 4,
+      cliffMonths: parseInt(form.cliffMonths) || 12,
+    }]);
+    setForm(f => ({ ...f, options: "" }));
+    toast.success(`Grant added for ${form.name.trim()}`);
+  };
+
+  const removeGrant = (id: string) => setGrants(prev => prev.filter(g => g.id !== id));
+
+  const kpis = [
+    { label: "Pool Size",        value: `${(poolSize || 0).toLocaleString("en-IN")} opts`, color: "text-[var(--color-text)]" },
+    { label: "Granted",          value: `${totalGranted.toLocaleString("en-IN")} opts`,    color: "text-blue-400" },
+    { label: "Pool Utilisation", value: `${utilisation.toFixed(1)}%`,                       color: overAllocated ? "text-red-400" : "text-[var(--color-primary)]" },
+    { label: "Total Vested",     value: `${totalVested.toLocaleString("en-IN")} opts`,      color: "text-green-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Pool inputs */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">ESOP Pool Configuration</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total Pool Size (options reserved)</label>
+            <input type="number" min={0} value={poolSize} onChange={e => setPoolSize(Number(e.target.value))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current FMV / Share Price (₹)</label>
+            <input type="number" min={0} value={fmv} onChange={e => setFmv(Number(e.target.value))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Exercise / Strike Price (₹)</label>
+            <input type="number" min={0} value={strike} onChange={e => setStrike(Number(e.target.value))} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {overAllocated && (
+        <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <span>Pool over-allocated — {totalGranted.toLocaleString("en-IN")} options granted exceed the pool size of {(poolSize || 0).toLocaleString("en-IN")}. Expand the pool or claw back unallocated grants.</span>
+        </div>
+      )}
+
+      {!overAllocated && (
+        <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+          Remaining pool: <span className="font-semibold text-[var(--color-text)]">{remainingPool.toLocaleString("en-IN")} options</span> · Total notional gain at exercise: <span className="font-semibold text-green-400">{fc(totalNotional)}</span>
+        </div>
+      )}
+
+      {/* Add grant */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add Grant</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+            {employees.length > 0 ? (
+              <select value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp}>
+                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+              </select>
+            ) : (
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Employee name" className={inp} />
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Options Granted</label>
+            <input type="number" min={0} value={form.options} onChange={e => setForm(f => ({ ...f, options: e.target.value }))} placeholder="5000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Grant Date</label>
+            <input type="date" value={form.grantDate} onChange={e => setForm(f => ({ ...f, grantDate: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Vesting (years)</label>
+            <input type="number" min={1} value={form.vestingYears} onChange={e => setForm(f => ({ ...f, vestingYears: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cliff (months)</label>
+            <input type="number" min={0} value={form.cliffMonths} onChange={e => setForm(f => ({ ...f, cliffMonths: e.target.value }))} className={inp} />
+          </div>
+        </div>
+        <button onClick={addGrant}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Add Grant
+        </button>
+      </div>
+
+      {/* Grants table */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <TrendingUp size={13} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Grants &amp; Vesting (as of {new Date(today).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})</span>
+        </div>
+        {computed.length === 0 ? (
+          <div className="p-8 text-center">
+            <TrendingUp size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No grants yet. Add a grant above to track vesting and notional value.</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Employee","Granted","Vested","Unvested","Vested %","Notional Value",""].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {computed.map(g => (
+                <tr key={g.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-medium">{g.name}</td>
+                  <td className="px-4 py-3 tabular-nums">{g.granted.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{g.vested.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{g.unvested.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-3 tabular-nums text-blue-400 font-semibold">{g.vestedPct.toFixed(1)}%</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{fc(g.notional)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => removeGrant(g.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+              <tr>
+                <td className="px-4 py-3 font-bold text-xs">Total</td>
+                <td className="px-4 py-3 tabular-nums font-bold">{totalGranted.toLocaleString("en-IN")}</td>
+                <td className="px-4 py-3 tabular-nums font-bold text-green-400">{totalVested.toLocaleString("en-IN")}</td>
+                <td className="px-4 py-3 tabular-nums font-bold text-[var(--color-muted)]">{Math.max(0, totalGranted - totalVested).toLocaleString("en-IN")}</td>
+                <td className="px-4 py-3 tabular-nums font-bold text-blue-400">{totalGranted > 0 ? ((totalVested / totalGranted) * 100).toFixed(1) : "0.0"}%</td>
+                <td className="px-4 py-3 tabular-nums font-bold text-[var(--color-primary)]">{fc(totalNotional)}</td>
+                <td className="px-4 py-3" />
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">Vested = floor(granted × min(monthsElapsed, vestingYears×12) ÷ (vestingYears×12)); zero until the cliff is crossed. Notional value = vested × max(0, FMV − strike). ESOP taxation — perquisite tax at exercise on (FMV − strike), capital gains at sale; eligible startups get tax deferral under Sec 80-IAC / 192(1C). Consult a CA.</p>
     </div>
   );
 }

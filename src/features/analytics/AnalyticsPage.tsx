@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen } from "lucide-react";
+import { totalNetBookValue, totalGrossCost, totalAccumulatedDepreciation } from "@/lib/depreciation";
 import { toast } from "sonner";
 import { exportExcel, exportPdf } from "@/lib/exporters";
 import {
@@ -67,7 +68,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -175,6 +176,9 @@ export default function AnalyticsPage() {
     { id: "concentration",  label: "Concentration" },
     { id: "targets",        label: "Sales vs Target" },
     { id: "forecast",       label: "Cash Forecast" },
+    { id: "balancesheet",   label: "Balance Sheet" },
+    { id: "ratios",         label: "Ratio Analysis" },
+    { id: "trialbalance",   label: "Trial Balance" },
   ] as const;
 
   const benchmarks = [
@@ -1046,6 +1050,9 @@ export default function AnalyticsPage() {
 
       {tab === "targets" && <SalesVsTarget monthlyData={monthlyData} />}
       {tab === "forecast" && <CashFlowForecast monthlyData={monthlyData} />}
+      {tab === "balancesheet" && <BalanceSheetTab />}
+      {tab === "ratios" && <RatiosTab />}
+      {tab === "trialbalance" && <TrialBalanceTab />}
     </div>
   );
 }
@@ -1294,6 +1301,440 @@ function CashFlowForecast({ monthlyData }: { monthlyData: { month: string; reven
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Forecast uses trailing 6-month average as baseline. Adjust growth and cost sliders for scenario planning. This is a projection, not a guarantee — review weekly against actuals.</p>
+    </div>
+  );
+}
+
+// ── BALANCE SHEET ──────────────────────────────────────────────────────────────
+function BalanceSheetTab() {
+  const { store } = useApp();
+  const asOf = new Date().toISOString().split("T")[0];
+
+  // Auto-derived figures from the store (all guarded).
+  const cashBank = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+  const receivables = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount || 0), 0);
+  const inventoryVal = (store.inventory ?? []).reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0);
+  const grossBlock = totalGrossCost(store.fixedAssets ?? [], asOf);
+  const accumDep = totalAccumulatedDepreciation(store.fixedAssets ?? [], asOf);
+  const fixedNetAuto = totalNetBookValue(store.fixedAssets ?? [], asOf);
+  const loanOutstanding = (store.activeLoans ?? []).reduce((s, l) => s + (l.outstanding || 0), 0);
+
+  // Manual / override inputs (sensible defaults of 0).
+  const [otherCurrent, setOtherCurrent]   = useState(0);
+  const [fixedOverride, setFixedOverride] = useState(0); // extra fixed assets not in register
+  const [accountsPayable, setAccountsPayable] = useState(0);
+  const [shortBorrow, setShortBorrow]     = useState(0);
+  const [taxesPayable, setTaxesPayable]   = useState(0);
+  const [otherLongTerm, setOtherLongTerm] = useState(0);
+  const [shareCapital, setShareCapital]   = useState(0);
+
+  const currentAssets = cashBank + receivables + inventoryVal + otherCurrent;
+  const fixedAssetsNet = fixedNetAuto + fixedOverride;
+  const totalAssets = currentAssets + fixedAssetsNet;
+
+  const currentLiabilities = accountsPayable + shortBorrow + taxesPayable;
+  const longTermLiabilities = loanOutstanding + otherLongTerm;
+  const totalLiabilities = currentLiabilities + longTermLiabilities;
+
+  // Retained earnings is the balancing figure.
+  const retainedEarnings = totalAssets - totalLiabilities - shareCapital;
+  const totalEquity = shareCapital + retainedEarnings;
+  const netWorth = totalEquity;
+  const currentRatio = currentLiabilities > 0 ? currentAssets / currentLiabilities : null;
+
+  const balanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 1;
+
+  // Plain render helpers (called inline — NOT nested components — so inputs keep focus across re-renders).
+  const numInput = (value: number, onChange: (n: number) => void): ReactNode => (
+    <input type="number" value={value || ""} onChange={e => onChange(parseFloat(e.target.value) || 0)}
+      placeholder="0"
+      className="w-32 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-right outline-none focus:border-[var(--color-primary)] tabular-nums" />
+  );
+
+  const row = (label: string, value: number, opts: { input?: ReactNode; bold?: boolean; indent?: boolean } = {}): ReactNode => (
+    <div key={label} className={`flex items-center justify-between py-1.5 ${opts.bold ? "border-t border-[var(--color-border)] mt-1 pt-2 font-semibold" : ""}`} style={{ paddingLeft: opts.indent ? 16 : 0 }}>
+      <span className={`text-xs ${opts.bold ? "" : "text-[var(--color-muted)]"}`}>{label}</span>
+      {opts.input ?? <span className="text-xs tabular-nums font-semibold">{formatCurrency(value)}</span>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Balanced banner */}
+      <div className={`border rounded-lg px-4 py-3 flex items-center gap-3 ${balanced ? "border-green-700/40 bg-green-950/15 text-green-300" : "border-orange-700/40 bg-orange-950/15 text-orange-300"}`}>
+        <Scale size={15} className="shrink-0" />
+        <div>
+          <p className="text-sm font-semibold">{balanced ? "Balanced ✓" : "Out of balance"}</p>
+          <p className="text-xs opacity-80 mt-0.5">
+            Total Assets {formatCurrency(totalAssets)} {balanced ? "=" : "≠"} Liabilities + Equity {formatCurrency(totalLiabilities + totalEquity)}
+          </p>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Assets",      value: formatCurrency(totalAssets),                          color: "text-[var(--color-primary)]" },
+          { label: "Total Liabilities", value: formatCurrency(totalLiabilities),                     color: "text-red-400" },
+          { label: "Net Worth (Equity)", value: formatCurrency(netWorth),                            color: netWorth >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Current Ratio",     value: currentRatio !== null ? `${currentRatio.toFixed(2)}x` : "—", color: currentRatio !== null && currentRatio >= 1.5 ? "text-green-400" : currentRatio !== null && currentRatio >= 1 ? "text-yellow-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ASSETS */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-1">Assets</p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">As at {asOf}</p>
+
+          <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider mt-2 mb-1">Current Assets</p>
+          {row("Cash & Bank (from accounts)", cashBank, { indent: true })}
+          {row("Accounts Receivable (unpaid invoices)", receivables, { indent: true })}
+          {row("Inventory (qty × unit cost)", inventoryVal, { indent: true })}
+          {row("Other Current Assets", otherCurrent, { indent: true, input: numInput(otherCurrent, setOtherCurrent) })}
+          {row("Total Current Assets", currentAssets, { bold: true })}
+
+          <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider mt-4 mb-1">Fixed Assets</p>
+          {row("Gross Block (cost)", grossBlock, { indent: true })}
+          {row("Less: Accumulated Depreciation", -accumDep, { indent: true })}
+          {row("Net Block (from register)", fixedNetAuto, { indent: true })}
+          {row("Manual Fixed Asset Override", fixedOverride, { indent: true, input: numInput(fixedOverride, setFixedOverride) })}
+          {row("Total Fixed Assets (net)", fixedAssetsNet, { bold: true })}
+
+          {row("TOTAL ASSETS", totalAssets, { bold: true })}
+        </div>
+
+        {/* LIABILITIES & EQUITY */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-1">Liabilities & Equity</p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">As at {asOf}</p>
+
+          <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider mt-2 mb-1">Current Liabilities</p>
+          {row("Accounts Payable", accountsPayable, { indent: true, input: numInput(accountsPayable, setAccountsPayable) })}
+          {row("Short-term Borrowings", shortBorrow, { indent: true, input: numInput(shortBorrow, setShortBorrow) })}
+          {row("Taxes Payable", taxesPayable, { indent: true, input: numInput(taxesPayable, setTaxesPayable) })}
+          {row("Total Current Liabilities", currentLiabilities, { bold: true })}
+
+          <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider mt-4 mb-1">Long-term Liabilities</p>
+          {row("Loans Outstanding (active loans)", loanOutstanding, { indent: true })}
+          {row("Other Long-term Liabilities", otherLongTerm, { indent: true, input: numInput(otherLongTerm, setOtherLongTerm) })}
+          {row("Total Long-term Liabilities", longTermLiabilities, { bold: true })}
+
+          {row("TOTAL LIABILITIES", totalLiabilities, { bold: true })}
+
+          <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider mt-4 mb-1">Equity</p>
+          {row("Share Capital", shareCapital, { indent: true, input: numInput(shareCapital, setShareCapital) })}
+          <div className="flex items-center justify-between py-1.5" style={{ paddingLeft: 16 }}>
+            <span className="text-xs text-[var(--color-muted)]">Retained Earnings (balancing figure)</span>
+            <span className={`text-xs tabular-nums font-semibold ${retainedEarnings >= 0 ? "text-[var(--color-text)]" : "text-red-400"}`}>{formatCurrency(retainedEarnings)}</span>
+          </div>
+          {row("Total Equity", totalEquity, { bold: true })}
+
+          {row("TOTAL LIABILITIES + EQUITY", totalLiabilities + totalEquity, { bold: true })}
+        </div>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Indicative balance sheet for management use. Fixed assets are net of Straight-Line / WDV depreciation per Schedule II of the Companies Act 2013; retained earnings is shown as the balancing figure. The statutory presentation format is prescribed by Schedule III of the Companies Act 2013 and should be prepared by your CA.
+      </p>
+    </div>
+  );
+}
+
+// ── RATIO ANALYSIS ─────────────────────────────────────────────────────────────
+function RatiosTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  // Auto-derived revenue & net profit from transactions (annualised over trailing window).
+  const now = new Date();
+  const winStart = startOfMonth(subMonths(now, 11)).toISOString().split("T")[0];
+  const win = (transactions ?? []).filter(t => t.date >= winStart);
+  const monthsSpan = 12;
+  const revenuePeriod = win.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const operatingPeriod = win.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const expenseOnlyPeriod = win.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const taxPeriod = win.filter(t => t.category === "tax").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const costsPeriod = operatingPeriod + taxPeriod;
+  const revenue = (revenuePeriod / monthsSpan) * 12;       // annualised
+  const netProfit = ((revenuePeriod - costsPeriod) / monthsSpan) * 12;   // after tax & operating costs
+  const taxAnnual = (taxPeriod / monthsSpan) * 12;
+  const cogsFallback = (expenseOnlyPeriod / monthsSpan) * 12;            // annualised expense-only COGS proxy
+
+  // Manual balance-sheet figures, pre-filled with sensible store-derived defaults.
+  const cashBankDefault = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+  const recvDefault = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount || 0), 0);
+  const invDefault = (store.inventory ?? []).reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0);
+  const debtDefault = (store.activeLoans ?? []).reduce((s, l) => s + (l.outstanding || 0), 0);
+
+  const [currentAssets, setCurrentAssets] = useState(Math.round(cashBankDefault + recvDefault + invDefault));
+  const [currentLiabilities, setCurrentLiabilities] = useState(0);
+  const [inventory, setInventory] = useState(Math.round(invDefault));
+  const [totalDebt, setTotalDebt] = useState(Math.round(debtDefault));
+  const [equity, setEquity] = useState(0);
+  const [totalAssets, setTotalAssets] = useState(Math.round(cashBankDefault + recvDefault + invDefault + totalNetBookValue(store.fixedAssets ?? [], now.toISOString().split("T")[0])));
+  const [cogs, setCogs] = useState(0);
+  const [interestExpense, setInterestExpense] = useState(Math.round((store.activeLoans ?? []).reduce((s, l) => s + (l.outstanding || 0) * ((l.rate || 0) / 100), 0)));
+
+  const ebit = netProfit + interestExpense + taxAnnual; // EBIT = net profit + interest + tax (earnings before interest & taxes)
+  const grossProfit = cogs > 0 ? revenue - cogs : revenue;
+
+  type Status = "good" | "watch" | "poor" | null;
+  type Ratio = { label: string; formula: string; value: number | null; display: string; benchmark: string; status: Status; lowerBetter?: boolean };
+  const pct = (n: number) => `${n.toFixed(1)}%`;
+  // grade: higher-is-better unless lowerBetter — good/watch thresholds bracket the three tiers.
+  const grade = (v: number | null, goodT: number, watchT: number, lowerBetter = false): Status => {
+    if (v === null) return null;
+    if (lowerBetter) return v <= goodT ? "good" : v <= watchT ? "watch" : "poor";
+    return v >= goodT ? "good" : v >= watchT ? "watch" : "poor";
+  };
+
+  const liquidity: Ratio[] = [
+    (() => { const v = currentLiabilities > 0 ? currentAssets / currentLiabilities : null; return { label: "Current Ratio", formula: "Current Assets ÷ Current Liabilities", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≥ 1.5x", value: v, status: grade(v, 1.5, 1.0) }; })(),
+    (() => { const v = currentLiabilities > 0 ? (currentAssets - inventory) / currentLiabilities : null; return { label: "Quick Ratio", formula: "(Current Assets − Inventory) ÷ Current Liabilities", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≥ 1.0x", value: v, status: grade(v, 1.0, 0.7) }; })(),
+  ];
+  const profitability: Ratio[] = [
+    (() => { const v = revenue > 0 ? (netProfit / revenue) * 100 : null; return { label: "Net Profit Margin", formula: "Net Profit ÷ Revenue", display: v !== null ? pct(v) : "—", benchmark: "Good ≥ 8%", value: v, status: grade(v, 8, 3) }; })(),
+    (() => { const v = revenue > 0 ? (grossProfit / revenue) * 100 : null; return { label: "Gross Margin", formula: "(Revenue − COGS) ÷ Revenue", display: v !== null ? pct(v) : "—", benchmark: "Good ≥ 30%", value: v, status: grade(v, 30, 15) }; })(),
+    (() => { const v = equity > 0 ? (netProfit / equity) * 100 : null; return { label: "Return on Equity", formula: "Net Profit ÷ Equity", display: v !== null ? pct(v) : "—", benchmark: "Good ≥ 15%", value: v, status: grade(v, 15, 8) }; })(),
+    (() => { const v = totalAssets > 0 ? (netProfit / totalAssets) * 100 : null; return { label: "Return on Assets", formula: "Net Profit ÷ Total Assets", display: v !== null ? pct(v) : "—", benchmark: "Good ≥ 5%", value: v, status: grade(v, 5, 2) }; })(),
+  ];
+  const leverage: Ratio[] = [
+    (() => { const v = equity > 0 ? totalDebt / equity : null; return { label: "Debt-to-Equity", formula: "Total Debt ÷ Equity", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≤ 2.0x", lowerBetter: true, value: v, status: grade(v, 2.0, 3.0, true) }; })(),
+    (() => { const v = interestExpense > 0 ? ebit / interestExpense : null; return { label: "Interest Coverage", formula: "EBIT ÷ Interest Expense", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≥ 3.0x", value: v, status: grade(v, 3.0, 1.5) }; })(),
+  ];
+  const efficiency: Ratio[] = [
+    (() => { const v = totalAssets > 0 ? revenue / totalAssets : null; return { label: "Asset Turnover", formula: "Revenue ÷ Total Assets", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≥ 1.0x", value: v, status: grade(v, 1.0, 0.5) }; })(),
+    (() => { const cogsForTurnover = cogs > 0 ? cogs : cogsFallback; const v = inventory > 0 && cogsForTurnover > 0 ? cogsForTurnover / inventory : null; return { label: "Inventory Turnover", formula: "COGS ÷ Avg Inventory", display: v !== null ? `${v.toFixed(2)}x` : "—", benchmark: "Good ≥ 4.0x", value: v, status: grade(v, 4.0, 2.0) }; })(),
+  ];
+
+  const groups: { title: string; ratios: Ratio[] }[] = [
+    { title: "Liquidity", ratios: liquidity },
+    { title: "Profitability", ratios: profitability },
+    { title: "Leverage", ratios: leverage },
+    { title: "Efficiency", ratios: efficiency },
+  ];
+
+  const Badge = ({ status }: { status: Status }) => {
+    if (status === null) return <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">No data</span>;
+    if (status === "good") return <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">Good</span>;
+    if (status === "watch") return <span className="text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded-full">Watch</span>;
+    return <span className="text-[10px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">Poor</span>;
+  };
+
+  const inputs: { label: string; value: number; set: (n: number) => void }[] = [
+    { label: "Current Assets", value: currentAssets, set: setCurrentAssets },
+    { label: "Current Liabilities", value: currentLiabilities, set: setCurrentLiabilities },
+    { label: "Inventory", value: inventory, set: setInventory },
+    { label: "Total Debt", value: totalDebt, set: setTotalDebt },
+    { label: "Equity", value: equity, set: setEquity },
+    { label: "Total Assets", value: totalAssets, set: setTotalAssets },
+    { label: "COGS (annual)", value: cogs, set: setCogs },
+    { label: "Interest Expense (annual)", value: interestExpense, set: setInterestExpense },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* Auto-derived KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annualised Revenue", value: formatCurrency(revenue), color: "text-green-400" },
+          { label: "Annualised Net Profit", value: formatCurrency(netProfit), color: netProfit >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Approx EBIT", value: formatCurrency(ebit), color: "text-[var(--color-primary)]" },
+          { label: "Ratios Computed", value: groups.reduce((s, g) => s + g.ratios.filter(r => r.value !== null).length, 0).toString(), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Manual inputs */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Percent size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Balance-Sheet Inputs</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Revenue & net profit are auto-derived from your transactions (annualised). Adjust the figures below — defaults are pre-filled from your bank, invoice, inventory and loan data.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {inputs.map(f => (
+            <div key={f.label}>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-1">{f.label} (₹)</label>
+              <input type="number" value={f.value || ""} onChange={e => f.set(parseFloat(e.target.value) || 0)} placeholder="0"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Ratio groups */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {groups.map(g => (
+          <div key={g.title} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <p className="text-sm font-semibold mb-3">{g.title}</p>
+            <div className="space-y-3">
+              {g.ratios.map(r => (
+                <div key={r.label} className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold">{r.label}</span>
+                    <Badge status={r.status} />
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <span className={`text-lg font-bold tabular-nums ${r.status === null ? "text-[var(--color-muted)]" : r.status === "good" ? "text-green-400" : r.status === "watch" ? "text-amber-400" : "text-red-400"}`}>{r.display}</span>
+                    <span className="text-[10px] text-[var(--color-muted)]">{r.benchmark}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-1">{r.formula}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Benchmarks are indicative Indian SME averages and vary materially by sector, age and capital structure — treat them as a starting point, not a verdict. Lower is better for Debt-to-Equity. Revenue and net profit are annualised from the trailing 12 months of tagged transactions.
+      </p>
+    </div>
+  );
+}
+
+// ── TRIAL BALANCE ──────────────────────────────────────────────────────────────
+function TrialBalanceTab() {
+  const { store } = useApp();
+  const { transactions, firm } = store;
+
+  type Line = { account: string; debit: number; credit: number };
+
+  const lines = useMemo<Line[]>(() => {
+    const txns = transactions ?? [];
+    // Category → ledger account, with double-entry side conventions (cash-basis).
+    const sales      = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const opex       = txns.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const salaries   = txns.filter(t => t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const taxes      = txns.filter(t => t.category === "tax").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
+    // Loans: inflow (amount > 0) is a credit (liability raised); repayment (amount < 0) is a debit.
+    const loanCredit = txns.filter(t => t.category === "loan" && (t.amount || 0) > 0).reduce((s, t) => s + (t.amount || 0), 0);
+    const loanDebit  = txns.filter(t => t.category === "loan" && (t.amount || 0) < 0).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
+    // Transfers net to zero in a single entity but we surface the gross movement.
+    const transferIn  = txns.filter(t => t.category === "transfer" && (t.amount || 0) > 0).reduce((s, t) => s + (t.amount || 0), 0);
+    const transferOut = txns.filter(t => t.category === "transfer" && (t.amount || 0) < 0).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
+    const rows: Line[] = [
+      { account: "Sales", debit: 0, credit: sales },
+      { account: "Operating Expenses", debit: opex, credit: 0 },
+      { account: "Salaries & Wages", debit: salaries, credit: 0 },
+      { account: "Taxes", debit: taxes, credit: 0 },
+      { account: "Loan Account", debit: loanDebit, credit: loanCredit },
+      { account: "Inter-account Transfer", debit: transferOut, credit: transferIn },
+    ];
+
+    // Cash & Bank is the contra/balancing account, derived from the category rows so
+    // the two columns always tie out regardless of per-transaction sign conventions:
+    //   Cash debit  = sum of all category credits (cash received)
+    //   Cash credit = sum of all category debits  (cash paid)
+    const categoryDebits  = rows.reduce((s, r) => s + r.debit, 0);
+    const categoryCredits = rows.reduce((s, r) => s + r.credit, 0);
+    rows.unshift({ account: "Cash & Bank", debit: categoryCredits, credit: categoryDebits });
+
+    return rows.filter(r => r.debit !== 0 || r.credit !== 0);
+  }, [transactions]);
+
+  const totalDebit  = lines.reduce((s, l) => s + l.debit, 0);
+  const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
+  const diff = totalDebit - totalCredit;
+  const balanced = Math.abs(diff) < 1;
+
+  const exportTbCsv = () => {
+    const header = "Ledger Account,Debit,Credit\n";
+    const rows = lines.map(l => `${l.account.replace(/,/g, "")},${l.debit.toFixed(2)},${l.credit.toFixed(2)}`).join("\n");
+    const footer = `\nTOTAL,${totalDebit.toFixed(2)},${totalCredit.toFixed(2)}`;
+    const blob = new Blob([header + rows + footer], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `trial_balance_${(firm?.name ?? "firm").replace(/\s+/g, "-").toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Trial balance CSV downloaded");
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* KPI cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Debits",  value: formatCurrency(totalDebit),  color: "text-[var(--color-text)]" },
+          { label: "Total Credits", value: formatCurrency(totalCredit), color: "text-[var(--color-text)]" },
+          { label: "Ledger Accounts", value: lines.length.toString(),   color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <BookOpen size={14} className="text-[var(--color-primary)]" />
+            <p className="text-sm font-semibold">Trial Balance · Cash Basis</p>
+          </div>
+          <button onClick={exportTbCsv}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+            <FileDown size={13} /> Export CSV
+          </button>
+        </div>
+        {lines.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transactions to aggregate. Add or import transactions to build the trial balance.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>
+                  {(["Ledger Account", "Debit (₹)", "Credit (₹)"] as string[]).map(h => (
+                    <th key={h} className={`px-5 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${h === "Ledger Account" ? "text-left" : "text-right"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {lines.map(l => (
+                  <tr key={l.account} className="hover:bg-white/2 text-xs">
+                    <td className="px-5 py-2.5 font-medium">{l.account}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "—"}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr className="text-xs font-bold">
+                  <td className="px-5 py-2.5 text-[var(--color-primary)]">Total</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{formatCurrency(totalDebit)}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{formatCurrency(totalCredit)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Balance indicator */}
+      <div className={`border rounded-lg px-4 py-3 flex items-center gap-3 ${balanced ? "border-green-700/40 bg-green-950/15 text-green-300" : "border-red-700/40 bg-red-950/15 text-red-300"}`}>
+        <BookOpen size={15} className="shrink-0" />
+        <p className="text-sm font-semibold">{balanced ? "Balanced ✓" : `Difference ${formatCurrency(Math.abs(diff))}`}</p>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Simplified cash-basis trial balance built from tagged transactions, with Cash &amp; Bank as the contra account so debits equal credits. A statutory trial balance requires full double-entry ledgers (accruals, opening balances, asset/liability accounts) maintained in your books of account.
+      </p>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
-import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X } from "lucide-react";
+import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -189,6 +189,8 @@ export default function CreditPage() {
           ["cc",       "CC Utilization"],
           ["fd",       "FD / RD"],
           ["wcscore",  "WC Health Score"],
+          ["captable", "Cap Table"],
+          ["valuation","Valuation"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -709,6 +711,8 @@ export default function CreditPage() {
       {tab === "cc" && <CcUtilizationTab />}
       {tab === "fd" && <FdRdTab />}
       {tab === "wcscore" && <WcHealthScore />}
+      {tab === "captable" && <CapTableTab />}
+      {tab === "valuation" && <ValuationTab />}
     </div>
   );
 }
@@ -1385,6 +1389,434 @@ function WcHealthScore() {
         ))}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Lower CCC = faster cash cycle. Score uses weighted average of 5 ratios. Enter balance sheet figures for accurate scoring — revenue auto-estimated from transactions.</p>
+    </div>
+  );
+}
+
+type ShareClass = "Founder" | "Equity" | "Preference" | "ESOP Pool" | "Angel" | "VC";
+type Shareholder = { id: string; name: string; shareClass: ShareClass; sharesHeld: number; amountInvested: number };
+
+const SHARE_CLASSES: ShareClass[] = ["Founder", "Equity", "Preference", "ESOP Pool", "Angel", "VC"];
+const SHARE_CLASS_BADGE: Record<ShareClass, string> = {
+  "Founder":    "bg-blue-900/30 text-blue-400 border-blue-800/40",
+  "Equity":     "bg-green-900/30 text-green-400 border-green-800/40",
+  "Preference": "bg-purple-900/30 text-purple-400 border-purple-800/40",
+  "ESOP Pool":  "bg-orange-900/30 text-orange-400 border-orange-800/40",
+  "Angel":      "bg-pink-900/30 text-pink-400 border-pink-800/40",
+  "VC":         "bg-cyan-900/30 text-cyan-400 border-cyan-800/40",
+};
+
+function CapTableTab() {
+  const { store } = useApp();
+  const [holders, setHolders] = useState<Shareholder[]>(() => {
+    const founder = store.firm?.name ? `${store.firm.name} (Founders)` : "Founders";
+    return [
+      { id: generateId(), name: founder,      shareClass: "Founder",   sharesHeld: 8000000, amountInvested: 1000000 },
+      { id: generateId(), name: "ESOP Pool",   shareClass: "ESOP Pool", sharesHeld: 1000000, amountInvested: 0 },
+      { id: generateId(), name: "Angel Round", shareClass: "Angel",     sharesHeld: 1000000, amountInvested: 5000000 },
+    ];
+  });
+
+  const [name,       setName]       = useState("");
+  const [shareClass, setShareClass] = useState<ShareClass>("Equity");
+  const [shares,     setShares]     = useState("");
+  const [invested,   setInvested]   = useState("");
+
+  // Dilution simulator inputs
+  const [roundInvestStr, setRoundInvestStr] = useState("");
+  const [preMoneyStr,    setPreMoneyStr]    = useState("");
+
+  const addHolder = () => {
+    const s = parseFloat(shares) || 0;
+    if (!name.trim() || s <= 0) { toast.error("Enter a name and shares held"); return; }
+    setHolders(prev => [...prev, {
+      id: generateId(), name: name.trim(), shareClass,
+      sharesHeld: s, amountInvested: parseFloat(invested) || 0,
+    }]);
+    setName(""); setShares(""); setInvested("");
+  };
+
+  const totalShares  = useMemo(() => holders.reduce((s, h) => s + (h.sharesHeld || 0), 0), [holders]);
+  const totalCapital = useMemo(() => holders.reduce((s, h) => s + (h.amountInvested || 0), 0), [holders]);
+  const founderPct   = useMemo(() => {
+    if (totalShares <= 0) return 0;
+    const fs = holders.filter(h => h.shareClass === "Founder").reduce((s, h) => s + (h.sharesHeld || 0), 0);
+    return (fs / totalShares) * 100;
+  }, [holders, totalShares]);
+
+  const sorted = useMemo(
+    () => holders.slice().sort((a, b) => (b.sharesHeld || 0) - (a.sharesHeld || 0)),
+    [holders]
+  );
+
+  // Dilution math
+  const roundInvest = parseFloat(roundInvestStr) || 0;
+  const preMoney    = parseFloat(preMoneyStr)    || 0;
+  const postMoney   = preMoney + roundInvest;
+  const newInvPct   = postMoney > 0 ? (roundInvest / postMoney) * 100 : 0;
+  const pricePerShare = preMoney > 0 && totalShares > 0 ? preMoney / totalShares : 0;
+  const newShares   = pricePerShare > 0 ? roundInvest / pricePerShare : 0;
+  const dilutedTotal = totalShares + newShares;
+  const simActive   = roundInvest > 0 && preMoney > 0 && totalShares > 0;
+
+  const kpis = [
+    { label: "Total Shares Issued",  value: totalShares.toLocaleString("en-IN"), color: "text-[var(--color-text)]" },
+    { label: "Total Capital Raised", value: formatCurrency(totalCapital),         color: "text-[var(--color-primary)]" },
+    { label: "# Shareholders",       value: holders.length.toString(),            color: "text-[var(--color-text)]" },
+    { label: "Founder Ownership",    value: `${founderPct.toFixed(1)}%`,          color: founderPct >= 50 ? "text-green-400" : founderPct >= 25 ? "text-yellow-400" : "text-red-400" },
+  ];
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Add shareholder */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Add Shareholder</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Holder name *" className={inp} />
+          <select value={shareClass} onChange={e => setShareClass(e.target.value as ShareClass)} className={inp}>
+            {SHARE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input type="number" min={0} value={shares} onChange={e => setShares(e.target.value)} placeholder="Shares held *" className={inp} />
+          <input type="number" min={0} value={invested} onChange={e => setInvested(e.target.value)} placeholder="Amount invested (₹)" className={inp} />
+        </div>
+        <button onClick={addHolder} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          + Add Shareholder
+        </button>
+      </div>
+
+      {/* Cap table */}
+      {holders.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Users size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No shareholders yet. Add founders, investors and the ESOP pool above.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Cap Table</span></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {sorted.map(h => {
+              const pct = totalShares > 0 ? ((h.sharesHeld || 0) / totalShares) * 100 : 0;
+              return (
+                <div key={h.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-semibold truncate">{h.name}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold shrink-0 ${SHARE_CLASS_BADGE[h.shareClass]}`}>{h.shareClass}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(h.amountInvested || 0)}</span>
+                      <span className="text-sm font-bold tabular-nums text-[var(--color-primary)] w-16 text-right">{pct.toFixed(1)}%</span>
+                      <button onClick={() => setHolders(prev => prev.filter(x => x.id !== h.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                      <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${Math.min(100, pct)}%` }} />
+                    </div>
+                    <span className="text-[10px] text-[var(--color-muted)] tabular-nums w-28 text-right">{(h.sharesHeld || 0).toLocaleString("en-IN")} sh</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Dilution simulator */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Dilution Simulator</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Model a priced equity round and see how existing holders are diluted.</p>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">New investment (₹)</label>
+            <input type="number" min={0} value={roundInvestStr} onChange={e => setRoundInvestStr(e.target.value)} placeholder="e.g. 50000000" className={`w-full ${inp}`} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-money valuation (₹)</label>
+            <input type="number" min={0} value={preMoneyStr} onChange={e => setPreMoneyStr(e.target.value)} placeholder="e.g. 200000000" className={`w-full ${inp}`} />
+          </div>
+        </div>
+
+        {simActive ? (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: "Post-money",        value: formatCurrency(postMoney),            color: "text-[var(--color-text)]" },
+                { label: "New investor %",     value: `${newInvPct.toFixed(1)}%`,           color: "text-[var(--color-primary)]" },
+                { label: "Price / share",      value: formatCurrency(pricePerShare),        color: "text-[var(--color-text)]" },
+                { label: "New shares issued",  value: Math.round(newShares).toLocaleString("en-IN"), color: "text-[var(--color-text)]" },
+              ].map(k => (
+                <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                  <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="overflow-hidden border border-[var(--color-border)] rounded-lg">
+              <div className="grid grid-cols-4 gap-2 px-3 py-2 bg-[var(--color-bg)] text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">
+                <span>Holder</span>
+                <span className="text-right">Shares</span>
+                <span className="text-right">Before %</span>
+                <span className="text-right">After %</span>
+              </div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {sorted.map(h => {
+                  const before = totalShares > 0 ? ((h.sharesHeld || 0) / totalShares) * 100 : 0;
+                  const after  = dilutedTotal > 0 ? ((h.sharesHeld || 0) / dilutedTotal) * 100 : 0;
+                  return (
+                    <div key={h.id} className="grid grid-cols-4 gap-2 px-3 py-2 text-xs items-center">
+                      <span className="truncate font-medium">{h.name}</span>
+                      <span className="text-right tabular-nums text-[var(--color-muted)]">{(h.sharesHeld || 0).toLocaleString("en-IN")}</span>
+                      <span className="text-right tabular-nums">{before.toFixed(1)}%</span>
+                      <span className="text-right tabular-nums text-orange-400">{after.toFixed(1)}%</span>
+                    </div>
+                  );
+                })}
+                <div className="grid grid-cols-4 gap-2 px-3 py-2 text-xs items-center bg-[var(--color-primary)]/5">
+                  <span className="truncate font-semibold text-[var(--color-primary)]">New Investor</span>
+                  <span className="text-right tabular-nums text-[var(--color-muted)]">{Math.round(newShares).toLocaleString("en-IN")}</span>
+                  <span className="text-right tabular-nums text-[var(--color-muted)]">—</span>
+                  <span className="text-right tabular-nums font-bold text-[var(--color-primary)]">{newInvPct.toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-[var(--color-muted)]">Enter a new investment amount and pre-money valuation (with at least one shareholder above) to see the dilution table.</p>
+        )}
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Simplified model — ignores option pool top-ups, liquidation preferences and anti-dilution provisions. Ownership % = shares held ÷ total shares. Post-money = pre-money + investment; new investor % = investment ÷ post-money; price/share = pre-money ÷ existing shares. Consult a CS/lawyer for the definitive cap table.
+      </p>
+    </div>
+  );
+}
+
+function ValuationTab() {
+  const { store } = useApp();
+
+  // Auto-estimate annualised revenue from store revenue transactions.
+  const autoAnnualRev = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const revTxns = txns.filter(t => t.category === "revenue");
+    const totalRev = revTxns.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    if (totalRev <= 0) return 0;
+    // Annualise based on the span of revenue transaction dates.
+    const dates = revTxns.map(t => t.date).filter(Boolean).sort();
+    if (dates.length < 2) return Math.round(totalRev * 12);
+    const spanDays = Math.max(1, (new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000);
+    return Math.round(totalRev * (365 / spanDays));
+  }, [store.transactions]);
+
+  // DCF inputs
+  const [fcfStr,        setFcfStr]        = useState("");
+  const [growthStr,     setGrowthStr]     = useState("15");
+  const [waccStr,       setWaccStr]       = useState("15");
+  const [termGrowthStr, setTermGrowthStr] = useState("4");
+  const [projYearsStr,  setProjYearsStr]  = useState("5");
+
+  // Revenue multiple inputs
+  const [revStr,     setRevStr]     = useState(autoAnnualRev > 0 ? String(autoAnnualRev) : "");
+  const [revMultStr, setRevMultStr] = useState("2.0");
+
+  // EBITDA multiple inputs
+  const [ebitdaStr,     setEbitdaStr]     = useState("");
+  const [ebitdaMultStr, setEbitdaMultStr] = useState("6.0");
+
+  const fcf        = parseFloat(fcfStr)        || 0;
+  const growth     = (parseFloat(growthStr)     || 0) / 100;
+  const wacc       = (parseFloat(waccStr)       || 0) / 100;
+  const termGrowth = (parseFloat(termGrowthStr) || 0) / 100;
+  const projYears  = Math.max(1, Math.min(15, Math.round(parseFloat(projYearsStr) || 5)));
+
+  const dcfValid = wacc > termGrowth && fcf > 0;
+
+  // Year-by-year DCF projection
+  const dcfRows = useMemo(() => {
+    if (!dcfValid) return [];
+    const rows: { year: number; projectedFcf: number; discountFactor: number; pv: number }[] = [];
+    for (let t = 1; t <= projYears; t++) {
+      const projectedFcf   = fcf * Math.pow(1 + growth, t);
+      const discountFactor = 1 / Math.pow(1 + wacc, t);
+      rows.push({ year: t, projectedFcf, discountFactor, pv: projectedFcf * discountFactor });
+    }
+    return rows;
+  }, [dcfValid, fcf, growth, wacc, projYears]);
+
+  const dcfEv = useMemo(() => {
+    if (!dcfValid) return 0;
+    const sumPv = dcfRows.reduce((s, r) => s + r.pv, 0);
+    const lastFcf = fcf * Math.pow(1 + growth, projYears);
+    const terminalValue = (lastFcf * (1 + termGrowth)) / (wacc - termGrowth);
+    const discTerminal = terminalValue / Math.pow(1 + wacc, projYears);
+    return sumPv + discTerminal;
+  }, [dcfValid, dcfRows, fcf, growth, projYears, termGrowth, wacc]);
+
+  const annualRev = parseFloat(revStr)    || 0;
+  const revMult   = parseFloat(revMultStr) || 0;
+  const revEv     = annualRev * revMult;
+
+  const ebitda    = parseFloat(ebitdaStr)     || 0;
+  const ebitdaMult= parseFloat(ebitdaMultStr) || 0;
+  const ebitdaEv  = ebitda * ebitdaMult;
+
+  // Blended = equal-weight average of methods that have a value.
+  const methodEvs = [dcfEv, revEv, ebitdaEv].filter(v => v > 0);
+  const blendedEv = methodEvs.length > 0 ? methodEvs.reduce((s, v) => s + v, 0) / methodEvs.length : 0;
+
+  const kpis = [
+    { label: "DCF EV",            value: dcfValid ? formatCurrency(dcfEv) : "—", color: "text-blue-400" },
+    { label: "Revenue-multiple EV", value: revEv > 0 ? formatCurrency(revEv) : "—", color: "text-green-400" },
+    { label: "EBITDA-multiple EV",  value: ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "—", color: "text-purple-400" },
+    { label: "Blended EV",          value: blendedEv > 0 ? formatCurrency(blendedEv) : "—", color: "text-[var(--color-primary)]" },
+  ];
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* DCF */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 md:col-span-3">
+          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-blue-400" /> 1. Discounted Cash Flow (DCF)</h3>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Project free cash flow, discount to present value, add a terminal value.</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Annual FCF (₹)</label>
+              <input type="number" min={0} value={fcfStr} onChange={e => setFcfStr(e.target.value)} placeholder="e.g. 5000000" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Growth rate (%)</label>
+              <input type="number" value={growthStr} onChange={e => setGrowthStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">WACC / discount (%)</label>
+              <input type="number" value={waccStr} onChange={e => setWaccStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Terminal growth (%)</label>
+              <input type="number" value={termGrowthStr} onChange={e => setTermGrowthStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Projection years</label>
+              <input type="number" min={1} max={15} value={projYearsStr} onChange={e => setProjYearsStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+
+          {fcf > 0 && wacc <= termGrowth ? (
+            <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+              <AlertTriangle size={14} className="text-red-400 shrink-0" />
+              <span>WACC ({(wacc * 100).toFixed(1)}%) must be greater than terminal growth ({(termGrowth * 100).toFixed(1)}%) for a valid terminal value. Increase WACC or lower terminal growth.</span>
+            </div>
+          ) : dcfValid ? (
+            <>
+              <div className="flex items-center justify-between bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-4 py-3 mb-4">
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">Enterprise Value (DCF)</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Σ discounted FCF + discounted terminal value</p>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-blue-400">{formatCurrency(dcfEv)}</p>
+              </div>
+              <div className="overflow-hidden border border-[var(--color-border)] rounded-lg">
+                <div className="grid grid-cols-4 gap-2 px-3 py-2 bg-[var(--color-bg)] text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">
+                  <span>Year</span>
+                  <span className="text-right">Projected FCF</span>
+                  <span className="text-right">Discount Factor</span>
+                  <span className="text-right">Present Value</span>
+                </div>
+                <div className="divide-y divide-[var(--color-border)]">
+                  {dcfRows.map(r => (
+                    <div key={r.year} className="grid grid-cols-4 gap-2 px-3 py-2 text-xs items-center">
+                      <span className="font-medium">Year {r.year}</span>
+                      <span className="text-right tabular-nums">{formatCurrency(r.projectedFcf)}</span>
+                      <span className="text-right tabular-nums text-[var(--color-muted)]">{r.discountFactor.toFixed(3)}</span>
+                      <span className="text-right tabular-nums text-blue-400">{formatCurrency(r.pv)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-[var(--color-muted)]">Enter an annual FCF above to compute the DCF enterprise value.</p>
+          )}
+        </div>
+
+        {/* Revenue multiple */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><TrendingUp size={14} className="text-green-400" /> 2. Revenue Multiple</h3>
+          <p className="text-xs text-[var(--color-muted)] mb-4">EV = annual revenue × multiple.</p>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Annual revenue (₹){autoAnnualRev > 0 ? <span className="text-[10px] ml-1">auto: {formatCurrency(autoAnnualRev)}</span> : null}</label>
+              <input type="number" min={0} value={revStr} onChange={e => setRevStr(e.target.value)} placeholder={autoAnnualRev > 0 ? String(autoAnnualRev) : "e.g. 25000000"} className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Revenue multiple (x)</label>
+              <input type="number" step="0.1" min={0} value={revMultStr} onChange={e => setRevMultStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+            <span className="text-xs text-[var(--color-muted)]">Enterprise Value</span>
+            <span className="text-base font-bold tabular-nums text-green-400">{revEv > 0 ? formatCurrency(revEv) : "—"}</span>
+          </div>
+        </div>
+
+        {/* EBITDA multiple */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-purple-400" /> 3. EBITDA Multiple</h3>
+          <p className="text-xs text-[var(--color-muted)] mb-4">EV = annual EBITDA × multiple.</p>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Annual EBITDA (₹)</label>
+              <input type="number" min={0} value={ebitdaStr} onChange={e => setEbitdaStr(e.target.value)} placeholder="e.g. 6000000" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">EBITDA multiple (x)</label>
+              <input type="number" step="0.1" min={0} value={ebitdaMultStr} onChange={e => setEbitdaMultStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+            <span className="text-xs text-[var(--color-muted)]">Enterprise Value</span>
+            <span className="text-base font-bold tabular-nums text-purple-400">{ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "—"}</span>
+          </div>
+        </div>
+
+        {/* Blended */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-1">Blended Valuation</h3>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Equal-weight average of the methods with a value ({methodEvs.length} of 3).</p>
+          <div className="flex items-center justify-between bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-4 py-3">
+            <span className="text-xs text-[var(--color-muted)]">Indicative Enterprise Value</span>
+            <span className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{blendedEv > 0 ? formatCurrency(blendedEv) : "—"}</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Valuation is indicative only. Indian SMEs typically trade at 0.5–3x revenue or 4–8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions — WACC must exceed terminal growth.
+      </p>
     </div>
   );
 }
