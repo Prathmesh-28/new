@@ -8,6 +8,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import UpsellGate from "@/components/UpsellGate";
 import OfflineBanner from "@/components/OfflineBanner";
+import TenantSwitcher from "@/components/TenantSwitcher";
 import { onAppResume } from "@/lib/mobile";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
@@ -150,6 +151,7 @@ function AppShell() {
       <Sidebar onOpenSearch={openPalette} />
       <div className="flex-1 flex flex-col min-w-0">
         <OfflineBanner />
+        <TenantSwitcher />
         <PreviewBanner />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
         <main className="flex-1 p-4 md:p-6 pt-16 md:pt-6 overflow-auto">
