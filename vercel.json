@@ -1,4 +1,14 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/auth/:path*",
@@ -11,6 +21,10 @@
     {
       "source": "/webhook/:path*",
       "destination": "https://headroom-backend.onrender.com/webhook/:path*"
+    },
+    {
+      "source": "/.well-known/:file*",
+      "destination": "/.well-known/:file*"
     },
     {
       "source": "/(.*)",

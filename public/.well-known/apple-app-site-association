@@ -1,0 +1,29 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "REPLACE_WITH_TEAM_ID.in.headroom.app",
+        "paths": [
+          "/forecast",
+          "/dashboard",
+          "/invoices",
+          "/credit",
+          "/gst",
+          "/operations",
+          "/collections",
+          "/payroll",
+          "/vendors",
+          "/analytics",
+          "/scenarios",
+          "/documents",
+          "/settings",
+          "/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["REPLACE_WITH_TEAM_ID.in.headroom.app"]
+  }
+}

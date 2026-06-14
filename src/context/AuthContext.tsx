@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { AuthUser } from "@/data/types";
 import { API_BASE } from "@/lib/apiBase";
+import { secureGet, secureSet, secureRemove } from "@/lib/secureStorage";
 
 export const BASE = API_BASE;
 
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const tryRefresh = useCallback(async (): Promise<string | null> => {
-    const rt = localStorage.getItem("hr_refresh");
+    const rt = await secureGet("hr_refresh");
     if (!rt) return null;
     try {
       const res = await fetchWithTimeout(`${BASE}/auth/refresh`, {
@@ -67,15 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (!res.ok) return null;
       const { access, refresh } = await res.json();
-      localStorage.setItem("hr_access", access);
-      localStorage.setItem("hr_refresh", refresh);
+      await secureSet("hr_access", access);
+      await secureSet("hr_refresh", refresh);
       return access;
     } catch { return null; }
   }, []);
 
   useEffect(() => {
     (async () => {
-      let token = localStorage.getItem("hr_access");
+      let token = await secureGet("hr_access");
       if (token) {
         const u = await fetchMe(token);
         if (u) { setUser(u); setLoading(false); return; }
@@ -104,8 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.error ?? "Login failed");
     }
     const { access, refresh, user: u } = await res.json();
-    localStorage.setItem("hr_access", access);
-    localStorage.setItem("hr_refresh", refresh);
+    await secureSet("hr_access", access);
+    await secureSet("hr_refresh", refresh);
     setReady(true);
     setUser(u);
     return u as AuthUser;
@@ -114,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Re-fetch the current user (e.g. after a plan upgrade) so entitlements update
   // in-session without a full page reload.
   const refreshUser = useCallback(async () => {
-    let token = localStorage.getItem("hr_access");
+    let token = await secureGet("hr_access");
     if (!token) return;
     let u = await fetchMe(token);
     if (!u) { token = await tryRefresh(); if (token) u = await fetchMe(token); }
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe, tryRefresh]);
 
   const logout = useCallback(async () => {
-    const rt = localStorage.getItem("hr_refresh");
+    const rt = await secureGet("hr_refresh");
     if (rt) {
       fetch(`${BASE}/auth/logout`, {
         method: "POST",
@@ -130,8 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ refresh: rt }),
       }).catch(() => {});
     }
-    localStorage.removeItem("hr_access");
-    localStorage.removeItem("hr_refresh");
+    await secureRemove("hr_access");
+    await secureRemove("hr_refresh");
     setUser(null);
   }, []);
 
