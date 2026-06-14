@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
@@ -73,6 +73,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
+  const [view, setView] = useState<"transactions" | "pdc">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -248,11 +249,18 @@ export default function TransactionsPage() {
               <Download size={12} /> Export CSV
             </button>
           )}
+          <button onClick={() => setView(v => v === "pdc" ? "transactions" : "pdc")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "pdc" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <FileText size={12} /> PDC Register
+          </button>
         </div>
       </div>
 
       {showReconcile && <ReconcileModal onClose={() => setShowReconcile(false)} />}
 
+      {view === "pdc" && <PDCRegister />}
+
+      {view === "transactions" && <>
       {/* Financial Intelligence Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {([
@@ -506,6 +514,151 @@ export default function TransactionsPage() {
           <button onClick={() => setSelected(new Set())} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
             <X size={14} />
           </button>
+        </div>
+      )}
+      </>}
+    </div>
+  );
+}
+
+function PDCRegister() {
+  type PDC = { id: string; party: string; amount: number; chequeNo: string; bank: string; dueDate: string; type: "receive" | "issue"; status: "pending" | "cleared" | "bounced" };
+  const [cheques, setCheques] = useState<PDC[]>([]);
+  const [party,     setParty]     = useState("");
+  const [amount,    setAmount]    = useState("");
+  const [chequeNo,  setChequeNo]  = useState("");
+  const [bank,      setBank]      = useState("");
+  const [dueDate,   setDueDate]   = useState(() => new Date().toISOString().split("T")[0]);
+  const [type,      setType]      = useState<"receive" | "issue">("receive");
+  const [filter,    setFilter]    = useState<"all" | "receive" | "issue">("all");
+
+  const addCheque = () => {
+    if (!party || !amount || !chequeNo || !dueDate) return;
+    setCheques(prev => [...prev, { id: Math.random().toString(36).slice(2), party, amount: parseFloat(amount), chequeNo, bank, dueDate, type, status: "pending" }]);
+    setParty(""); setAmount(""); setChequeNo(""); setBank("");
+  };
+
+  const updateStatus = (id: string, status: PDC["status"]) => setCheques(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+
+  const visible = cheques.filter(c => filter === "all" || c.type === filter);
+  const totalReceivable = cheques.filter(c => c.type === "receive" && c.status === "pending").reduce((s, c) => s + c.amount, 0);
+  const totalPayable    = cheques.filter(c => c.type === "issue"  && c.status === "pending").reduce((s, c) => s + c.amount, 0);
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const downloadCsv = () => {
+    const rows = [["Party","Cheque No","Bank","Amount","Type","Due Date","Status"], ...visible.map(c => [c.party, c.chequeNo, c.bank, c.amount, c.type, c.dueDate, c.status])];
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")], { type: "text/csv" }));
+    a.download = "pdc-register.csv"; a.click();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "PDC Receivable (pending)", value: formatCurrency(totalReceivable), color: "text-green-400" },
+          { label: "PDC Payable (pending)",    value: formatCurrency(totalPayable),    color: "text-red-400" },
+          { label: "Total cheques",            value: cheques.length.toString(),       color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Add Post-Dated Cheque</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={party} onChange={e=>setParty(e.target.value)} placeholder="Party / counterparty"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={chequeNo} onChange={e=>setChequeNo(e.target.value)} placeholder="Cheque number"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={bank} onChange={e=>setBank(e.target.value)} placeholder="Bank name"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Amount (₹)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <div className="flex items-center gap-2">
+            {(["receive","issue"] as const).map(t => (
+              <button key={t} onClick={()=>setType(t)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${type===t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {t === "receive" ? "Receive" : "Issue"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={addCheque} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          + Add Cheque
+        </button>
+      </div>
+
+      {cheques.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1">
+              {(["all","receive","issue"] as const).map(f => (
+                <button key={f} onClick={()=>setFilter(f)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${filter===f ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {f === "all" ? "All" : f === "receive" ? "Receivable" : "Payable"}
+                </button>
+              ))}
+            </div>
+            <button onClick={downloadCsv} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+              <Download size={10} /> CSV
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Party","Cheque No","Bank","Amount","Due Date","Type","Status",""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {visible.map(c => {
+                  const overdue = c.status === "pending" && c.dueDate < today;
+                  return (
+                    <tr key={c.id} className={`hover:bg-white/2 ${overdue ? "bg-red-950/20" : ""}`}>
+                      <td className="px-4 py-3 font-medium">{c.party}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{c.chequeNo}</td>
+                      <td className="px-4 py-3 text-[var(--color-muted)]">{c.bank || "—"}</td>
+                      <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(c.amount)}</td>
+                      <td className={`px-4 py-3 tabular-nums text-xs ${overdue ? "text-red-400 font-semibold" : ""}`}>{c.dueDate}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${c.type === "receive" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>
+                          {c.type === "receive" ? "Receivable" : "Payable"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${c.status === "cleared" ? "bg-green-900/30 text-green-400 border-green-800/40" : c.status === "bounced" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {c.status === "pending" && <>
+                            <button onClick={()=>updateStatus(c.id,"cleared")} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded hover:bg-green-900/20">Clear</button>
+                            <button onClick={()=>updateStatus(c.id,"bounced")} className="text-[9px] text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded hover:bg-red-900/20">Bounce</button>
+                          </>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {cheques.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No post-dated cheques recorded yet. Add your first PDC above.</p>
         </div>
       )}
     </div>

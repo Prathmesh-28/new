@@ -117,7 +117,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -220,7 +220,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -947,7 +947,142 @@ export default function PayrollPage() {
         );
       })()}
 
+      {tab === "fnf" && <FnFTab employees={employees} />}
+
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
+    </div>
+  );
+}
+
+function FnFTab({ employees }: { employees: { id: string; name: string; gross_salary: number; tds_monthly: number; status: string; joining_date?: string }[] }) {
+  const [empId,         setEmpId]         = useState(employees[0]?.id ?? "");
+  const [lastWorkDay,   setLastWorkDay]   = useState(() => new Date().toISOString().split("T")[0]);
+  const [noticePeriod,  setNoticePeriod]  = useState(30);   // days
+  const [noticePaid,    setNoticePaid]    = useState(false); // employer waiving notice
+  const [leaveDays,     setLeaveDays]     = useState(0);    // earned leave balance
+  const [advanceOwed,   setAdvanceOwed]   = useState("");   // salary advance outstanding
+
+  const emp = employees.find(e => e.id === empId);
+  const gross  = emp ? parseFloat(String(emp.gross_salary)) : 0;
+  const perDay = gross / 26; // 26 working days standard
+
+  const joiningDate     = emp?.joining_date ? new Date(emp.joining_date) : null;
+  const lastDay         = new Date(lastWorkDay);
+  const yearsOfService  = joiningDate ? Math.max(0, (lastDay.getTime() - joiningDate.getTime()) / (365.25 * 24 * 3600 * 1000)) : 0;
+
+  // Components
+  const noticePay       = noticePaid ? 0 : Math.round(perDay * noticePeriod); // if notice not served
+  const leaveEncash     = Math.round(perDay * leaveDays);
+  const gratuity        = yearsOfService >= 5 ? Math.round((15 / 26) * gross * Math.floor(yearsOfService)) : 0;
+  const daysInLastMonth = lastDay.getDate();
+  const salaryDue       = Math.round(perDay * daysInLastMonth);
+  const advance         = parseFloat(advanceOwed) || 0;
+  const grossSettlement = noticePay + leaveEncash + gratuity + salaryDue;
+  const netSettlement   = Math.max(0, grossSettlement - advance);
+
+  const downloadFnF = () => {
+    const rows = [
+      ["Full & Final Settlement", emp?.name ?? ""],
+      ["Last Working Day", lastWorkDay],
+      ["Years of Service", yearsOfService.toFixed(1)],
+      [],
+      ["Component","Amount (₹)"],
+      ["Salary for last month (proportionate)", salaryDue],
+      ["Notice pay (if applicable)", noticePay],
+      ["Leave encashment", leaveEncash],
+      ["Gratuity", gratuity],
+      ["Total Gross Settlement", grossSettlement],
+      ["Less: Outstanding advance", advance],
+      ["Net Payable", netSettlement],
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `FnF_${(emp?.name ?? "employee").replace(/\s+/g, "_")}.csv`;
+    a.click();
+  };
+
+  if (employees.length === 0) return (
+    <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+      <Users size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+      <p className="text-sm text-[var(--color-muted)]">Add employees first to compute F&F settlements.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1">Full & Final Settlement Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Computes all dues payable on separation: proportionate salary, notice pay, earned leave encashment, and gratuity.</p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Employee</label>
+              <select value={empId} onChange={e => setEmpId(e.target.value)}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Last working day</label>
+              <input type="date" value={lastWorkDay} onChange={e => setLastWorkDay(e.target.value)}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Notice period (days)</label>
+              <input type="number" min={0} value={noticePeriod} onChange={e => setNoticePeriod(Number(e.target.value))}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Earned leave balance (days)</label>
+              <input type="number" min={0} value={leaveDays} onChange={e => setLeaveDays(Number(e.target.value))}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Outstanding advance / loan (₹)</label>
+            <input type="number" min={0} value={advanceOwed} onChange={e => setAdvanceOwed(e.target.value)}
+              placeholder="0"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={noticePaid} onChange={e => setNoticePaid(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <span>Notice period waived by employer (no notice pay deducted)</span>
+          </label>
+        </div>
+      </div>
+
+      {gross > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold">Settlement Computation — {emp?.name}</h3>
+            <button onClick={downloadFnF} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline">
+              <Download size={11} /> Download CSV
+            </button>
+          </div>
+          {joiningDate && (
+            <p className="text-xs text-[var(--color-muted)] mb-3">Joining: {joiningDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {yearsOfService.toFixed(1)} years of service</p>
+          )}
+          <div className="space-y-2">
+            {[
+              { label: `Salary (${daysInLastMonth} days @ ${formatCurrency(Math.round(perDay))}/day)`, value: salaryDue, color: "text-[var(--color-text)]" },
+              { label: `Notice pay (${noticePeriod}d${noticePaid ? " — waived" : ""})`, value: noticePay, color: noticePaid ? "text-[var(--color-muted)]" : "text-blue-400" },
+              { label: `Leave encashment (${leaveDays} days)`, value: leaveEncash, color: "text-green-400" },
+              { label: `Gratuity${yearsOfService < 5 ? " (min 5 yrs req.)" : ` (${Math.floor(yearsOfService)} yrs)`}`, value: gratuity, color: yearsOfService >= 5 ? "text-purple-400" : "text-[var(--color-muted)]" },
+              { label: "Gross Settlement", value: grossSettlement, color: "text-[var(--color-text)] font-bold" },
+              { label: "Less: Outstanding advance", value: advance > 0 ? -advance : 0, color: "text-red-400" },
+              { label: "Net Payable", value: netSettlement, color: "text-[var(--color-primary)] font-bold text-base" },
+            ].map(r => (
+              <div key={r.label} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0 ${r.label === "Net Payable" ? "pt-1" : ""}`}>
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value < 0 ? `(${formatCurrency(Math.abs(r.value))})` : formatCurrency(r.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -173,6 +173,7 @@ export default function AnalyticsPage() {
     { id: "pl",             label: "P&L Deep Dive" },
     { id: "cashflow",       label: "Cash Flow" },
     { id: "concentration",  label: "Concentration" },
+    { id: "targets",        label: "Sales vs Target" },
   ] as const;
 
   const benchmarks = [
@@ -1041,6 +1042,124 @@ export default function AnalyticsPage() {
           </div>
         );
       })()}
+
+      {tab === "targets" && <SalesVsTarget monthlyData={monthlyData} />}
+    </div>
+  );
+}
+
+function SalesVsTarget({ monthlyData }: { monthlyData: { month: string; revenue: number; expense: number; net: number; margin: number }[] }) {
+  type TargetRow = { month: string; target: number };
+  const [targets, setTargets] = useState<TargetRow[]>(() =>
+    monthlyData.map(m => ({ month: m.month, target: 0 }))
+  );
+  const [globalTarget, setGlobalTarget] = useState("");
+
+  const applyGlobal = () => {
+    const t = parseFloat(globalTarget);
+    if (!t) return;
+    setTargets(prev => prev.map(r => ({ ...r, target: t })));
+  };
+
+  const setRowTarget = (month: string, val: string) =>
+    setTargets(prev => prev.map(r => r.month === month ? { ...r, target: parseFloat(val) || 0 } : r));
+
+  const rows = monthlyData.map(m => {
+    const tgt = targets.find(t => t.month === m.month)?.target ?? 0;
+    const gap = m.revenue - tgt;
+    const pct = tgt > 0 ? Math.round((m.revenue / tgt) * 100) : null;
+    return { ...m, target: tgt, gap, pct };
+  });
+
+  const totalRev = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalTgt = rows.reduce((s, r) => s + r.target, 0);
+  const totalGap = totalRev - totalTgt;
+  const avgAch   = totalTgt > 0 ? Math.round((totalRev / totalTgt) * 100) : null;
+
+  const fc = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1">Sales vs Target</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set monthly revenue targets and track actuals. Revenue data is pulled from your tagged transactions.</p>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Apply one target to all months (₹)</label>
+            <input type="number" value={globalTarget} onChange={e => setGlobalTarget(e.target.value)} placeholder="e.g. 500000"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <button onClick={applyGlobal} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2.5 rounded-lg hover:opacity-90 whitespace-nowrap">
+            Apply to all
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Revenue",   value: fc(totalRev), color: "text-green-400" },
+          { label: "Total Target",    value: totalTgt > 0 ? fc(totalTgt) : "—", color: "text-[var(--color-muted)]" },
+          { label: "Variance",        value: totalTgt > 0 ? `${totalGap >= 0 ? "+" : ""}${fc(totalGap)}` : "—", color: totalGap >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Avg Achievement", value: avgAch !== null ? `${avgAch}%` : "—", color: avgAch !== null && avgAch >= 100 ? "text-green-400" : avgAch !== null && avgAch >= 80 ? "text-yellow-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Monthly Breakdown</p>
+        </div>
+        {rows.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transaction data yet. Import or add transactions to see revenue.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Month", "Target (₹)", "Actual Revenue", "Variance", "Achievement", ""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.month} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium whitespace-nowrap">{r.month}</td>
+                    <td className="px-4 py-3">
+                      <input type="number" value={r.target || ""} onChange={e => setRowTarget(r.month, e.target.value)}
+                        placeholder="Set target"
+                        className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{fc(r.revenue)}</td>
+                    <td className={`px-4 py-3 tabular-nums font-semibold ${r.target > 0 ? (r.gap >= 0 ? "text-green-400" : "text-red-400") : "text-[var(--color-muted)]"}`}>
+                      {r.target > 0 ? `${r.gap >= 0 ? "+" : ""}${fc(r.gap)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.pct !== null ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(r.pct, 100)}%`, background: r.pct >= 100 ? "#22c55e" : r.pct >= 80 ? "#f97316" : "#ef4444" }} />
+                          </div>
+                          <span className={`text-xs font-semibold tabular-nums ${r.pct >= 100 ? "text-green-400" : r.pct >= 80 ? "text-orange-400" : "text-red-400"}`}>{r.pct}%</span>
+                        </div>
+                      ) : <span className="text-xs text-[var(--color-muted)]">No target</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.pct !== null && r.pct >= 100 && <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">On track</span>}
+                      {r.pct !== null && r.pct < 100 && r.pct >= 80 && <span className="text-[10px] bg-orange-900/30 text-orange-400 border border-orange-800/40 px-1.5 py-0.5 rounded-full">Near miss</span>}
+                      {r.pct !== null && r.pct < 80 && <span className="text-[10px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">Below target</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

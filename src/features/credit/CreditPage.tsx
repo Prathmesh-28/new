@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -185,6 +185,7 @@ export default function CreditPage() {
           ["loans",    `Active Loans${activeLoans.length > 0 ? ` (${activeLoans.length})` : ""}`],
           ["notyet",   "Not yet"],
           ["wc",       "WC Sizing"],
+          ["equip",    "Finance vs Lease"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -701,6 +702,7 @@ export default function CreditPage() {
 
       {/* ── WC LOAN SIZING ── */}
       {tab === "wc" && <WCSizingTab />}
+      {tab === "equip" && <EquipmentFinanceLease />}
     </div>
   );
 }
@@ -784,6 +786,164 @@ function WCSizingTab() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         MPBF is a guideline; banks apply their own credit policies. Operating cycle = debtor days + inventory days − creditor days. Shorter cycle = lower WC need = better terms.
+      </div>
+    </div>
+  );
+}
+
+function EquipmentFinanceLease() {
+  const [assetCost,      setAssetCost]      = useState("");
+  const [downPayment,    setDownPayment]     = useState("20");   // % of cost
+  const [loanRate,       setLoanRate]        = useState("12");   // % p.a.
+  const [loanTenure,     setLoanTenure]      = useState("36");   // months
+  const [leaseMonthly,   setLeaseMonthly]    = useState("");     // monthly lease rent
+  const [leaseTenure,    setLeaseTenure]     = useState("36");   // months
+  const [residualPct,    setResidualPct]     = useState("20");   // buyout % at lease end
+  const [taxRate,        setTaxRate]         = useState("25");   // corporate tax %
+
+  const cost      = parseFloat(assetCost)    || 0;
+  const dp        = (parseFloat(downPayment) / 100) * cost;
+  const principal = cost - dp;
+  const r         = parseFloat(loanRate)     / 100 / 12;
+  const n         = parseInt(loanTenure)     || 36;
+  const emi       = r > 0 && principal > 0 ? Math.round(principal * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1)) : 0;
+  const totalFinanceCost  = dp + emi * n;
+  const totalInterest     = emi * n - principal;
+
+  const lr          = parseFloat(leaseMonthly) || 0;
+  const leaseMons   = parseInt(leaseTenure)    || 36;
+  const residual    = (parseFloat(residualPct) / 100) * cost;
+  const totalLeaseCost = lr * leaseMons + residual;
+
+  const taxPct = parseFloat(taxRate) / 100;
+  // Finance: depreciation 15% WDV is deductible; Lease: full rent deductible
+  const annualDeprDeduction  = cost * 0.15;
+  const annualLeaseDeduction = lr * 12;
+  const taxSavingFinance     = Math.round(annualDeprDeduction * taxPct * (n / 12));
+  const taxSavingLease       = Math.round(annualLeaseDeduction * taxPct * (leaseMons / 12));
+
+  const netFinance = Math.round(totalFinanceCost - taxSavingFinance);
+  const netLease   = Math.round(totalLeaseCost   - taxSavingLease);
+  const winner     = cost > 0 ? (netFinance <= netLease ? "finance" : "lease") : null;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CreditCard size={14} className="text-[var(--color-primary)]" /> Equipment Finance vs Lease</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Compare the total cost of ownership (after tax) of taking a term loan against a lease for the same asset.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Asset & Common</p>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Asset cost (₹)</label>
+              <input type="number" value={assetCost} onChange={e => setAssetCost(e.target.value)} placeholder="e.g. 1500000"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Down payment</span><span className="font-semibold text-[var(--color-text)]">{downPayment}%</span></label>
+              <input type="range" min={0} max={50} value={downPayment} onChange={e => setDownPayment(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Corporate tax rate</span><span className="font-semibold text-[var(--color-text)]">{taxRate}%</span></label>
+              <input type="range" min={0} max={40} value={taxRate} onChange={e => setTaxRate(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Finance Terms</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Interest rate (% p.a.)</label>
+                <input type="number" value={loanRate} onChange={e => setLoanRate(e.target.value)} placeholder="12"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label>
+                <input type="number" value={loanTenure} onChange={e => setLoanTenure(e.target.value)} placeholder="36"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] pt-1">Lease Terms</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Monthly rent (₹)</label>
+                <input type="number" value={leaseMonthly} onChange={e => setLeaseMonthly(e.target.value)} placeholder="Lease EMI"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label>
+                <input type="number" value={leaseTenure} onChange={e => setLeaseTenure(e.target.value)} placeholder="36"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            </div>
+            <div>
+              <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Residual buyout at lease end</span><span className="font-semibold text-[var(--color-text)]">{residualPct}% = {cost > 0 ? formatCurrency(Math.round(residual)) : "—"}</span></label>
+              <input type="range" min={0} max={50} value={residualPct} onChange={e => setResidualPct(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {cost > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Finance card */}
+          <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${winner === "finance" ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">Term Finance</p>
+              {winner === "finance" && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Cheaper option</span>}
+            </div>
+            <div className="space-y-2">
+              {[
+                { label: `Down payment (${downPayment}%)`, value: formatCurrency(Math.round(dp)) },
+                { label: `EMI × ${n} months`, value: formatCurrency(emi) + " /mo" },
+                { label: "Total interest paid", value: formatCurrency(totalInterest), color: "text-red-400" },
+                { label: "Gross cost (dp + total EMI)", value: formatCurrency(Math.round(totalFinanceCost)), isBold: true },
+                { label: `Tax saving (15% WDV depr @ ${taxRate}% tax)`, value: `(${formatCurrency(taxSavingFinance)})`, color: "text-green-400" },
+                { label: "Net cost after tax", value: formatCurrency(netFinance), isBold: true, color: winner === "finance" ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
+              ].map(r => (
+                <div key={r.label} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0 ${r.label.startsWith("Net") ? "pt-1" : ""}`}>
+                  <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                  <span className={`tabular-nums ${r.isBold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Lease card */}
+          <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${winner === "lease" ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">Operating Lease</p>
+              {winner === "lease" && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Cheaper option</span>}
+            </div>
+            <div className="space-y-2">
+              {[
+                { label: `Monthly rent × ${leaseMons} months`, value: `${formatCurrency(lr)} × ${leaseMons}` },
+                { label: "Total lease payments", value: formatCurrency(Math.round(lr * leaseMons)) },
+                { label: `Residual buyout (${residualPct}%)`, value: formatCurrency(Math.round(residual)), color: "text-red-400" },
+                { label: "Gross cost (payments + buyout)", value: formatCurrency(Math.round(totalLeaseCost)), isBold: true },
+                { label: `Tax saving (full rent deductible @ ${taxRate}%)`, value: `(${formatCurrency(taxSavingLease)})`, color: "text-green-400" },
+                { label: "Net cost after tax", value: formatCurrency(netLease), isBold: true, color: winner === "lease" ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
+              ].map(r => (
+                <div key={r.label} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0 ${r.label.startsWith("Net") ? "pt-1" : ""}`}>
+                  <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                  <span className={`tabular-nums ${r.isBold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cost > 0 && winner && (
+        <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "finance" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
+          <span className="font-semibold">{winner === "finance" ? "Finance" : "Lease"} is cheaper</span> by {formatCurrency(Math.abs(netFinance - netLease))} on a net-of-tax basis over the term.
+          {winner === "finance" ? " You own the asset outright at end of tenure — consider long-term residual value." : " Lease keeps balance sheet light and preserves working capital, but you don't own the asset until buyout."}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Finance tax saving assumes 15% WDV depreciation (Plant & Machinery, IT equipment). Lease tax saving assumes full rent deductible as operating expense. Consult your CA for actual deductibility based on asset class and lease structure.
       </div>
     </div>
   );
