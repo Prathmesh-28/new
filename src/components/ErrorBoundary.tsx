@@ -1,4 +1,5 @@
-import { Component, type ReactNode } from "react";
+import { Component, type ReactNode, type ErrorInfo } from "react";
+import { reportError } from "@/lib/reportError";
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -8,6 +9,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    reportError(error.message, error.stack ?? info.componentStack ?? undefined);
   }
 
   render() {

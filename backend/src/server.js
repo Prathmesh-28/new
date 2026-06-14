@@ -16,6 +16,7 @@ const cron      = require("node-cron");
 const { initDb, pool } = require("./db");
 const { sendDailyDigest, sendMondayBrief } = require("./lib/digest");
 const { securityHeaders } = require("./middleware/security");
+const logger = require("./lib/logger");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
@@ -79,6 +80,8 @@ app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOStrin
 
 // Capability map — which integrations are live vs. preview (public, no secrets)
 app.use("/api/capabilities", require("./routes/capabilities"));
+// Client error sink (structured logging / observability)
+app.use("/api/telemetry", require("./routes/telemetry"));
 
 // Auth (rate limited)
 app.use("/auth",                   authLimiter, require("./routes/auth"));
@@ -221,8 +224,14 @@ app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
 // Error handler
-app.use((err, _req, res, _next) => {
-  console.error("[error]", err.message);
+app.use((err, req, res, _next) => {
+  logger.error("unhandled_error", {
+    msg: err.message,
+    stack: (err.stack || "").split("\n").slice(0, 4).join(" | "),
+    method: req.method,
+    path: req.path,
+    tenant: req.user?.tenant_id,
+  });
   res.status(500).json({ error: "Internal server error" });
 });
 

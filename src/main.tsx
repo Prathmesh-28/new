@@ -4,6 +4,10 @@ import { Capacitor } from "@capacitor/core";
 import "./index.css";
 import App from "./App";
 import { initNative } from "@/lib/native";
+import { installGlobalErrorReporting } from "@/lib/reportError";
+
+// Capture uncaught errors + unhandled promise rejections → backend telemetry.
+installGlobalErrorReporting();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

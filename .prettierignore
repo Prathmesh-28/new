@@ -1,0 +1,9 @@
+dist
+build
+node_modules
+ios
+android
+*.min.js
+package-lock.json
+public/sw.js
+src/lib/forecastEngine.ts
