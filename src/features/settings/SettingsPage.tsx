@@ -9,6 +9,7 @@ import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUP
 import type { UserRole } from "@/data/types";
 import BillingCard from "./BillingCard";
 import AppLockCard from "./AppLockCard";
+import NotificationsCard from "./NotificationsCard";
 
 type TeamUser = {
   id: string;
@@ -201,6 +202,9 @@ export default function SettingsPage() {
 
       {/* App lock */}
       <AppLockCard />
+
+      {/* Push notifications */}
+      <NotificationsCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
