@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { API_BASE } from "@/lib/apiBase";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
 type DocStatus = "valid" | "expiring" | "expired" | "uploaded";
@@ -18,6 +19,18 @@ type Doc = {
   type: "pdf" | "image" | "excel" | "other";
 };
 
+// Raw row from GET /api/files
+type FileRow = {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  category: string | null;
+  tags: string[] | null;
+  expires_at: string | null;
+};
+
 const CATEGORIES: { id: DocCategory; label: string; color: string; bg: string }[] = [
   { id: "gst",     label: "GST",        color: "text-orange-400", bg: "bg-orange-950/30 border-orange-800/30" },
   { id: "banking", label: "Banking",    color: "text-blue-400",   bg: "bg-blue-950/30 border-blue-800/30"   },
@@ -26,11 +39,6 @@ const CATEGORIES: { id: DocCategory; label: string; color: string; bg: string }[
   { id: "payroll", label: "Payroll",    color: "text-green-400",  bg: "bg-green-950/30 border-green-800/30"  },
   { id: "other",   label: "Other",      color: "text-[var(--color-muted)]", bg: "bg-[var(--color-accent)]"  },
 ];
-
-// Honest: start empty. Documents the owner uploads live here (no fabricated files).
-const INITIAL_DOCS: Doc[] = [];
-
-function genId() { return Math.random().toString(36).slice(2, 9); }
 
 const FILE_ICON = {
   pdf:   { Icon: FileText,  color: "text-red-400"  },
@@ -46,7 +54,54 @@ const STATUS_BADGE: Record<DocStatus, { label: string; style: string }> = {
   uploaded: { label: "Uploaded",  style: "bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)]" },
 };
 
-function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (doc: Doc) => void }) {
+const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.heic,.xls,.xlsx,.doc,.docx,.csv,.txt";
+
+function token() { return localStorage.getItem("hr_access"); }
+
+function fileType(mime: string): Doc["type"] {
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.includes("spreadsheet") || mime.includes("excel") || mime === "text/csv") return "excel";
+  return "other";
+}
+
+function humanSize(bytes: number): string {
+  if (!bytes) return "—";
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function statusFor(expires?: Date): DocStatus {
+  if (!expires) return "uploaded";
+  const days = (expires.getTime() - Date.now()) / 86400000;
+  if (days < 0) return "expired";
+  if (days <= 30) return "expiring";
+  return "valid";
+}
+
+function rowToDoc(r: FileRow): Doc {
+  const expiresAt = r.expires_at ? new Date(r.expires_at) : undefined;
+  return {
+    id: r.id,
+    name: r.name,
+    category: (CATEGORIES.some(c => c.id === r.category) ? r.category : "other") as DocCategory,
+    size: humanSize(r.size),
+    uploadedAt: new Date(r.created_at),
+    expiresAt,
+    status: statusFor(expiresAt),
+    tags: r.tags ?? [],
+    type: fileType(r.mime_type),
+  };
+}
+
+// Fetch a file's bytes with the bearer token (the download route is auth-gated,
+// so a plain <a href> can't carry the token — we fetch a blob instead).
+async function fetchBlob(id: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/files/${id}`, { headers: { Authorization: `Bearer ${token()}` } });
+  if (!res.ok) throw new Error(String(res.status));
+  return res.blob();
+}
+
+function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded: (r: FileRow) => void }) {
   const [name, setName]         = useState("");
   const [category, setCategory] = useState<DocCategory>("other");
   const [tags, setTags]         = useState("");
@@ -54,35 +109,45 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (do
   const [expiry, setExpiry]     = useState("");
   const [dragging, setDragging] = useState(false);
   const [file, setFile]         = useState<File | null>(null);
+  const [busy, setBusy]         = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (f: File) => {
-    setFile(f);
-    if (!name) setName(f.name);
-  };
-
+  const handleFile = (f: File) => { setFile(f); if (!name) setName(f.name); };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFile(f);
   };
 
-  const handleSubmit = () => {
-    if (!name) { toast.error("Enter a document name"); return; }
-    const doc: Doc = {
-      id: genId(),
-      name: name.endsWith(".pdf") || name.includes(".") ? name : name + ".pdf",
-      category,
-      size: file ? `${(file.size / 1024).toFixed(0)} KB` : "—",
-      uploadedAt: new Date(),
-      expiresAt: hasExpiry && expiry ? new Date(expiry) : undefined,
-      status: hasExpiry && expiry ? "valid" : "uploaded",
-      tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-      type: "pdf",
-    };
-    onUpload(doc);
-    toast.success("Document uploaded");
-    onClose();
+  const handleSubmit = async () => {
+    if (!file) { toast.error("Choose a file to upload"); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("name", name || file.name);
+      fd.append("category", category);
+      fd.append("tags", JSON.stringify(tags.split(",").map(t => t.trim()).filter(Boolean)));
+      if (hasExpiry && expiry) fd.append("expires_at", expiry);
+      // No Content-Type header — the browser sets the multipart boundary.
+      const res = await fetch(`${API_BASE}/api/files`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token()}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const msg = res.status === 415 ? "Unsupported file type" : res.status === 413 ? "File too large (max 10 MB)" : "Upload failed";
+        toast.error(msg);
+        return;
+      }
+      onUploaded(await res.json());
+      toast.success("Document uploaded");
+      onClose();
+    } catch {
+      toast.error("Couldn't reach the server. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -93,7 +158,6 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (do
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
         </div>
 
-        {/* Drop zone */}
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -108,10 +172,10 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (do
             ? <p className="text-sm font-medium text-[var(--color-primary)]">{file.name}</p>
             : <>
                 <p className="text-sm text-[var(--color-muted)]">Drop file here or click to browse</p>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">PDF, image, Excel, Word — max 20 MB</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">PDF, image, Excel, Word, CSV — max 10 MB</p>
               </>
           }
-          <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         </div>
 
         <div className="space-y-3">
@@ -153,9 +217,10 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (do
         <div className="flex gap-2 mt-4">
           <button
             onClick={handleSubmit}
-            className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 flex items-center justify-center gap-1.5"
+            disabled={busy}
+            className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
-            <Upload size={13} /> Upload
+            <Upload size={13} /> {busy ? "Uploading…" : "Upload"}
           </button>
           <button onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
         </div>
@@ -165,15 +230,63 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (do
 }
 
 export default function DocumentsPage() {
-  const [docs, setDocs]           = useState<Doc[]>(INITIAL_DOCS);
+  const [docs, setDocs]           = useState<Doc[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [query, setQuery]         = useState("");
   const [catFilter, setCatFilter] = useState<DocCategory | "all">("all");
   const [showUpload, setShowUpload] = useState(false);
 
-  const addDoc = (doc: Doc) => setDocs(d => [doc, ...d]);
-  const deleteDoc = (id: string) => {
-    setDocs(d => d.filter(doc => doc.id !== id));
-    toast.success("Document removed");
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/files`, { headers: { Authorization: `Bearer ${token()}` } });
+      if (!res.ok) throw new Error(String(res.status));
+      const rows: FileRow[] = await res.json();
+      setDocs(rows.map(rowToDoc));
+    } catch {
+      toast.error("Couldn't load documents.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onUploaded = (r: FileRow) => setDocs(d => [rowToDoc(r), ...d]);
+
+  const handleDownload = async (doc: Doc) => {
+    try {
+      const blob = await fetchBlob(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = doc.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error("Download failed.");
+    }
+  };
+
+  const handlePreview = async (doc: Doc) => {
+    try {
+      const blob = await fetchBlob(doc.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error("Preview failed.");
+    }
+  };
+
+  const handleDelete = async (doc: Doc) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/files/${doc.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token()}` } });
+      if (!res.ok) throw new Error(String(res.status));
+      setDocs(d => d.filter(x => x.id !== doc.id));
+      toast.success("Document removed");
+    } catch {
+      toast.error("Couldn't delete the document.");
+    }
   };
 
   const filtered = docs.filter(d => {
@@ -184,7 +297,6 @@ export default function DocumentsPage() {
   });
 
   const expiring  = docs.filter(d => d.status === "expiring").length;
-  const expired   = docs.filter(d => d.status === "expired").length;
   const totalDocs = docs.length;
 
   const catCounts = CATEGORIES.reduce<Record<string, number>>((acc, c) => {
@@ -201,7 +313,7 @@ export default function DocumentsPage() {
             Document Vault
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
-            GST certificates, bank statements, legal docs — all in one secure place your CA can access.
+            GST certificates, bank statements, legal docs — stored securely on your account.
           </p>
         </div>
         <button
@@ -231,8 +343,8 @@ export default function DocumentsPage() {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
           <Lock size={18} className="text-[var(--color-primary)] shrink-0" />
           <div>
-            <p className="text-xs font-semibold">CA access</p>
-            <p className="text-xs text-[var(--color-muted)]">shared with advisor</p>
+            <p className="text-xs font-semibold">Encrypted in transit</p>
+            <p className="text-xs text-[var(--color-muted)]">scoped to your tenant</p>
           </div>
         </div>
       </div>
@@ -291,7 +403,9 @@ export default function DocumentsPage() {
             />
           </div>
 
-          {filtered.length === 0 && (
+          {loading ? (
+            <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading documents…</div>
+          ) : filtered.length === 0 && (
             <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
               <File size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
               <p className="text-sm text-[var(--color-muted)]">
@@ -305,7 +419,7 @@ export default function DocumentsPage() {
             </div>
           )}
 
-          {filtered.map(doc => {
+          {!loading && filtered.map(doc => {
             const { Icon, color } = FILE_ICON[doc.type];
             const cat = CATEGORIES.find(c => c.id === doc.category)!;
             const statusB = STATUS_BADGE[doc.status];
@@ -338,21 +452,21 @@ export default function DocumentsPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => toast("Preview not available in demo")}
+                      onClick={() => handlePreview(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors rounded"
                       title="Preview"
                     >
                       <Eye size={14} />
                     </button>
                     <button
-                      onClick={() => toast("Download not available in demo")}
+                      onClick={() => handleDownload(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors rounded"
                       title="Download"
                     >
                       <Download size={14} />
                     </button>
                     <button
-                      onClick={() => deleteDoc(doc.id)}
+                      onClick={() => handleDelete(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-red-400 transition-colors rounded"
                       title="Delete"
                     >
@@ -366,7 +480,7 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUpload={addDoc} />}
+      {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUploaded={onUploaded} />}
     </div>
   );
 }

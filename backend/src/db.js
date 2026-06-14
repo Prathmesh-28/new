@@ -51,6 +51,10 @@ async function initDb() {
       data        BYTEA NOT NULL,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Document-vault metadata (category / tags / expiry) on uploaded files.
+    ALTER TABLE files ADD COLUMN IF NOT EXISTS category   TEXT;
+    ALTER TABLE files ADD COLUMN IF NOT EXISTS tags       TEXT[];
+    ALTER TABLE files ADD COLUMN IF NOT EXISTS expires_at DATE;
 
     CREATE TABLE IF NOT EXISTS notes (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

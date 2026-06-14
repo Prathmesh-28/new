@@ -5,12 +5,38 @@ const { authenticate } = require("../middleware/auth");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// Allowlist of business-document MIME types. Anything else is rejected so the
+// vault can't be used to store/serve executables or scripts (stored-XSS / malware).
+const ALLOWED_MIME = new Set([
+  "application/pdf",
+  "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv", "text/plain",
+]);
+
 // POST /api/files
 router.post("/", authenticate, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
+  if (!ALLOWED_MIME.has(req.file.mimetype)) {
+    return res.status(415).json({ error: "Unsupported file type. Allowed: PDF, image, Excel, Word, CSV." });
+  }
+  const { category, expires_at, name } = req.body || {};
+  const fileName = (name && String(name).trim()) || req.file.originalname;
+  // tags may arrive as a comma-separated string or a JSON array.
+  let tags = req.body?.tags;
+  if (typeof tags === "string") {
+    try { tags = JSON.parse(tags); } catch { tags = tags.split(",").map(t => t.trim()).filter(Boolean); }
+  }
+  if (!Array.isArray(tags)) tags = [];
   const { rows } = await pool.query(
-    "INSERT INTO files(tenant_id,uploader_id,name,mime_type,size,data) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,mime_type,size,created_at",
-    [req.user.tenant_id, req.user.id, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer]
+    `INSERT INTO files(tenant_id,uploader_id,name,mime_type,size,data,category,tags,expires_at)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id,name,mime_type,size,created_at,category,tags,expires_at`,
+    [req.user.tenant_id, req.user.id, fileName, req.file.mimetype, req.file.size, req.file.buffer,
+     category || null, tags.slice(0, 20), expires_at || null]
   );
   res.status(201).json(rows[0]);
 });
@@ -18,7 +44,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
 // GET /api/files — list
 router.get("/", authenticate, async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT id,name,mime_type,size,created_at FROM files WHERE tenant_id=$1 ORDER BY created_at DESC",
+    "SELECT id,name,mime_type,size,created_at,category,tags,expires_at FROM files WHERE tenant_id=$1 ORDER BY created_at DESC",
     [req.user.tenant_id]
   );
   res.json(rows);

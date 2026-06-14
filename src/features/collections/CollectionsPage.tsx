@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
@@ -35,16 +36,24 @@ const REMINDER_TEMPLATES = [
 ];
 
 function ReminderModal({
-  name, amount, days, onClose,
-}: { name: string; amount: number; days: number; onClose: () => void }) {
+  name, amount, days, onClose, onSent,
+}: { name: string; amount: number; days: number; onClose: () => void; onSent: () => void }) {
   const [selected, setSelected] = useState("soft");
   const [channel, setChannel]   = useState<"whatsapp" | "email" | "sms">("whatsapp");
 
   const template = REMINDER_TEMPLATES.find(t => t.id === selected)!;
   const text = template.text(name, formatCurrency(amount), days);
 
+  // Open the message in the user's own WhatsApp / email / SMS, prefilled. This
+  // genuinely sends (the user picks the recipient + hits send) without claiming
+  // the server delivered it — honest and works on web + mobile.
   const send = () => {
-    toast.success(`Reminder sent to ${name} via ${channel}`);
+    const msg = encodeURIComponent(text);
+    if (channel === "whatsapp")  window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank", "noopener");
+    else if (channel === "email") window.location.href = `mailto:?subject=${encodeURIComponent(`Payment reminder — ${formatCurrency(amount)} overdue`)}&body=${msg}`;
+    else                          window.location.href = `sms:?&body=${msg}`;
+    toast.success(`Reminder for ${name} opened in ${channel === "whatsapp" ? "WhatsApp" : channel}`);
+    onSent();
     onClose();
   };
 
@@ -115,7 +124,7 @@ export default function CollectionsPage() {
   const { store } = useApp();
 
   const [filter, setFilter]       = useState<Aging | "all">("all");
-  const [reminder, setReminder]   = useState<{ name: string; amount: number; days: number } | null>(null);
+  const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
 
   const today = new Date().toISOString().split("T")[0];
@@ -175,9 +184,9 @@ export default function CollectionsPage() {
             Active AR chase — send reminders, track follow-ups, close overdue faster.
           </p>
         </div>
-        <button className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
-          <RefreshCw size={12} /> Sync invoices
-        </button>
+        <Link to="/invoices" className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
+          <RefreshCw size={12} /> Manage invoices
+        </Link>
       </div>
 
       {/* KPI row */}
@@ -293,7 +302,7 @@ export default function CollectionsPage() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => setReminder({ name: row.clientName, amount: row.amount, days: row.daysOverdue })}
+                      onClick={() => setReminder({ id: row.id, name: row.clientName, amount: row.amount, days: row.daysOverdue })}
                       className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40 transition-colors font-medium"
                     >
                       <MessageSquare size={11} /> Remind
@@ -335,6 +344,7 @@ export default function CollectionsPage() {
           amount={reminder.amount}
           days={reminder.days}
           onClose={() => setReminder(null)}
+          onSent={() => markContacted(reminder.id)}
         />
       )}
     </div>

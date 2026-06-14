@@ -36,6 +36,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => void }) {
+  const { addObligation } = useApp();
   const [amount, setAmount] = useState(vendor.avgPayment.toFixed(0));
   const [date,   setDate]   = useState(() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split("T")[0]; });
   const [note,   setNote]   = useState("");
@@ -44,7 +45,19 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success(`Payment of ${formatCurrency(parseFloat(amount))} to ${vendor.name} scheduled for ${new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`);
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid amount"); return; }
+    // Record a real upcoming cash obligation so the scheduled payment flows into
+    // the forecast / cash-runway math (no fake disbursement — actual payout needs
+    // a payout rail, which is gated).
+    addObligation({
+      id: crypto.randomUUID(),
+      name: `Pay ${vendor.name}${note ? ` — ${note}` : ""}`,
+      amount: amt,
+      dueDate: date,
+      type: "other",
+    });
+    toast.success(`₹${amt.toLocaleString("en-IN")} to ${vendor.name} scheduled for ${new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} — added to your cash forecast`);
     onClose();
   };
 
