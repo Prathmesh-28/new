@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -174,6 +174,7 @@ export default function AnalyticsPage() {
     { id: "cashflow",       label: "Cash Flow" },
     { id: "concentration",  label: "Concentration" },
     { id: "targets",        label: "Sales vs Target" },
+    { id: "forecast",       label: "Cash Forecast" },
   ] as const;
 
   const benchmarks = [
@@ -1044,6 +1045,7 @@ export default function AnalyticsPage() {
       })()}
 
       {tab === "targets" && <SalesVsTarget monthlyData={monthlyData} />}
+      {tab === "forecast" && <CashFlowForecast monthlyData={monthlyData} />}
     </div>
   );
 }
@@ -1160,6 +1162,138 @@ function SalesVsTarget({ monthlyData }: { monthlyData: { month: string; revenue:
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function CashFlowForecast({ monthlyData }: { monthlyData: { month: string; revenue: number; expense: number; net: number; margin: number }[] }) {
+  const [forecastMonths, setForecastMonths] = useState(3);
+  const [growthRate, setGrowthRate]         = useState(5);   // % monthly revenue growth
+  const [costRate, setCostRate]             = useState(0);   // % monthly cost change
+  const [openingCash, setOpeningCash]       = useState("");
+
+  const history = monthlyData.slice(-6);
+  const avgRevenue = history.length > 0 ? history.reduce((s, m) => s + m.revenue, 0) / history.length : 0;
+  const avgExpense = history.length > 0 ? history.reduce((s, m) => s + m.expense, 0) / history.length : 0;
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const now = new Date();
+
+  const forecast = Array.from({ length: forecastMonths }, (_, i) => {
+    const monthIdx = (now.getMonth() + 1 + i) % 12;
+    const label = `${MONTHS[monthIdx]} ${now.getMonth() + 1 + i >= 12 ? now.getFullYear() + 1 : now.getFullYear()}`;
+    const rev  = avgRevenue  * Math.pow(1 + growthRate / 100, i + 1);
+    const exp  = avgExpense  * Math.pow(1 + costRate  / 100, i + 1);
+    const net  = rev - exp;
+    return { label, rev, exp, net };
+  });
+
+  const opening = parseFloat(openingCash) || 0;
+  let running = opening;
+  const withCumulative = forecast.map(f => { running += f.net; return { ...f, cumulative: running }; });
+
+  const fc = formatCurrency;
+  const minNet = Math.min(...forecast.map(f => f.net), 0);
+  const maxNet = Math.max(...forecast.map(f => Math.abs(f.net)), 1);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Cash Flow Forecast Settings</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Forecast Months</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={1} max={12} value={forecastMonths} onChange={e => setForecastMonths(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-4">{forecastMonths}</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly Revenue Growth %</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={-20} max={30} value={growthRate} onChange={e => setGrowthRate(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className={`text-sm font-bold w-8 ${growthRate < 0 ? "text-red-400" : "text-green-400"}`}>{growthRate}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly Cost Change %</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={-10} max={20} value={costRate} onChange={e => setCostRate(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className={`text-sm font-bold w-8 ${costRate > 5 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{costRate}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Opening Cash Balance (₹)</label>
+            <input type="number" value={openingCash} onChange={e => setOpeningCash(e.target.value)}
+              placeholder="e.g. 500000"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mt-2">Based on last {history.length} months avg — Revenue: {fc(avgRevenue)}/mo · Expenses: {fc(avgExpense)}/mo</p>
+      </div>
+
+      {history.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Activity size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No transaction history found. Add transactions to generate a cash flow forecast.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Forecast Period",      value: `${forecastMonths} months`,             color: "text-[var(--color-primary)]" },
+              { label: "Total Projected Net",  value: fc(forecast.reduce((s,f)=>s+f.net,0)), color: forecast.reduce((s,f)=>s+f.net,0)>=0?"text-green-400":"text-red-400" },
+              { label: "Ending Cash Balance",  value: fc(withCumulative[withCumulative.length-1]?.cumulative??opening), color: (withCumulative[withCumulative.length-1]?.cumulative??opening)>=0?"text-green-400":"text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <div className="px-4 py-3 border-b border-[var(--color-border)]">
+              <span className="text-sm font-semibold">Monthly Forecast</span>
+            </div>
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Month","Projected Revenue","Projected Expenses","Net Cash Flow","Cumulative Cash"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {withCumulative.map(f => (
+                  <tr key={f.label} className={`border-b border-[var(--color-border)] last:border-0 ${f.net < 0 ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                    <td className="px-4 py-3 font-semibold">{f.label}</td>
+                    <td className="px-4 py-3 tabular-nums text-green-400">{fc(f.rev)}</td>
+                    <td className="px-4 py-3 tabular-nums text-orange-400">{fc(f.exp)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${f.net >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                            style={{ width: `${Math.min(100, (Math.abs(f.net) / maxNet) * 100)}%` }} />
+                        </div>
+                        <span className={`tabular-nums text-xs font-semibold ${f.net >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(f.net)}</span>
+                      </div>
+                    </td>
+                    <td className={`px-4 py-3 tabular-nums font-bold ${f.cumulative >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(f.cumulative)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {minNet < 0 && (
+            <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 text-xs text-red-400">
+              ⚠ Cash shortfall projected in {forecast.filter(f=>f.net<0).length} month(s). Consider negotiating longer payment terms, accelerating collections, or drawing on working capital credit.
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Forecast uses trailing 6-month average as baseline. Adjust growth and cost sliders for scenario planning. This is a projection, not a guarantee — review weekly against actuals.</p>
     </div>
   );
 }

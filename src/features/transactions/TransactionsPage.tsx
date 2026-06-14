@@ -73,7 +73,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -257,6 +257,14 @@ export default function TransactionsPage() {
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "bounce" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
             <X size={12} /> Bounce Tracker
           </button>
+          <button onClick={() => setView(v => v === "upi" ? "transactions" : "upi")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "upi" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <ScanLine size={12} /> UPI Dashboard
+          </button>
+          <button onClick={() => setView(v => v === "recon" ? "transactions" : "recon")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "recon" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <CheckCheck size={12} /> Bank Recon
+          </button>
         </div>
       </div>
 
@@ -264,6 +272,8 @@ export default function TransactionsPage() {
 
       {view === "pdc" && <PDCRegister />}
       {view === "bounce" && <BounceTracker />}
+      {view === "upi" && <UpiDashboard />}
+      {view === "recon" && <BankReconStatement />}
 
       {view === "transactions" && <>
       {/* Financial Intelligence Bar */}
@@ -806,6 +816,260 @@ function BounceTracker() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Under Sec 138 of the Negotiable Instruments Act, a bounced cheque is a criminal offence. File a complaint within 30 days of receiving the bank memo — after a 15-day notice to the drawer. Keep the original cheque, bank memo, and courier receipts.
       </div>
+    </div>
+  );
+}
+
+function UpiDashboard() {
+  const { store } = useApp();
+  type UpiEntry = { id: string; vpa: string; name: string; amount: number; type: "received" | "paid"; ref: string; date: string; note: string };
+  const [entries, setEntries] = useState<UpiEntry[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [fVpa,    setFVpa]    = useState("");
+  const [fName,   setFName]   = useState("");
+  const [fAmount, setFAmount] = useState("");
+  const [fType,   setFType]   = useState<"received" | "paid">("received");
+  const [fRef,    setFRef]    = useState("");
+  const [fDate,   setFDate]   = useState("");
+  const [fNote,   setFNote]   = useState("");
+
+  const addEntry = () => {
+    if (!fVpa || !fAmount) return;
+    setEntries(prev => [...prev, { id: generateId(), vpa: fVpa, name: fName, amount: parseFloat(fAmount)||0, type: fType, ref: fRef, date: fDate, note: fNote }]);
+    setFVpa(""); setFName(""); setFAmount(""); setFRef(""); setFDate(""); setFNote(""); setShowForm(false);
+  };
+
+  const txnUpi = useMemo(() => {
+    return (store.transactions ?? []).filter(t => t.notes?.toLowerCase().includes("upi") || t.description?.toLowerCase().includes("upi"));
+  }, [store.transactions]);
+
+  const allEntries = [...entries, ...txnUpi.map(t => ({
+    id: t.id, vpa: "—", name: t.counterparty ?? t.description, amount: Math.abs(t.amount),
+    type: (t.category === "revenue" ? "received" : "paid") as "received" | "paid",
+    ref: t.id.slice(0, 12), date: t.date, note: t.notes ?? "",
+  }))];
+
+  const totalReceived = allEntries.filter(e => e.type === "received").reduce((s, e) => s + e.amount, 0);
+  const totalPaid     = allEntries.filter(e => e.type === "paid").reduce((s, e) => s + e.amount, 0);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const topVpas = useMemo(() => {
+    const m: Record<string, number> = {};
+    allEntries.forEach(e => { m[e.name] = (m[e.name] ?? 0) + e.amount; });
+    return Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0, 5);
+  }, [allEntries]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Transactions", value: allEntries.length.toString(),   color: "text-[var(--color-primary)]" },
+          { label: "Received via UPI",   value: fc(totalReceived),              color: "text-green-400" },
+          { label: "Paid via UPI",       value: fc(totalPaid),                  color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {topVpas.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold text-[var(--color-muted)] mb-3">Top Counterparties</p>
+          <div className="space-y-2">
+            {topVpas.map(([name, amt]) => {
+              const max = topVpas[0][1];
+              return (
+                <div key={name} className="flex items-center gap-3">
+                  <span className="text-xs w-32 truncate">{name}</span>
+                  <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${(amt/max)*100}%` }} />
+                  </div>
+                  <span className="text-xs tabular-nums font-semibold w-24 text-right">{fc(amt)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <ScanLine size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">UPI Transactions</span>
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <X size={11} className={showForm ? "" : "rotate-45"} /> {showForm ? "Cancel" : "Add entry"}
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <input value={fVpa}    onChange={e => setFVpa(e.target.value)}    placeholder="VPA / UPI ID *" className={inp} />
+              <input value={fName}   onChange={e => setFName(e.target.value)}   placeholder="Name / merchant" className={inp} />
+              <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
+              <select value={fType} onChange={e => setFType(e.target.value as "received"|"paid")} className={inp}>
+                <option value="received">Received</option>
+                <option value="paid">Paid</option>
+              </select>
+              <input value={fRef}  onChange={e => setFRef(e.target.value)}   placeholder="UPI ref / UTR" className={inp} />
+              <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} />
+              <input value={fNote} onChange={e => setFNote(e.target.value)}  placeholder="Note" className={`${inp} md:col-span-2`} />
+            </div>
+            <button onClick={addEntry} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+          </div>
+        )}
+
+        {allEntries.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No UPI transactions found. Transactions tagged "UPI" in notes auto-appear here, or add manually.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["VPA / Party","Amount","Type","UTR / Ref","Date","Note"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allEntries.slice().reverse().map(e => (
+                  <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3"><div className="font-semibold">{e.name || e.vpa}</div><div className="text-xs text-[var(--color-muted)]">{e.vpa !== "—" ? e.vpa : ""}</div></td>
+                    <td className={`px-4 py-3 tabular-nums font-semibold ${e.type === "received" ? "text-green-400" : "text-orange-400"}`}>{e.type === "received" ? "+" : "−"}{fc(e.amount)}</td>
+                    <td className="px-4 py-3"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${e.type === "received" ? "bg-green-950/30 text-green-400" : "bg-orange-950/30 text-orange-400"}`}>{e.type}</span></td>
+                    <td className="px-4 py-3 text-xs font-mono text-[var(--color-muted)]">{e.ref || "—"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.date || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.note || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BankReconStatement() {
+  const { store } = useApp();
+  type StatementRow = { id: string; date: string; description: string; debit: number; credit: number; matched: boolean };
+  const [stmtRows, setStmtRows]   = useState<StatementRow[]>([]);
+  const [showForm, setShowForm]   = useState(false);
+  const [fDate,    setFDate]      = useState("");
+  const [fDesc,    setFDesc]      = useState("");
+  const [fDebit,   setFDebit]     = useState("");
+  const [fCredit,  setFCredit]    = useState("");
+  const [openingBal, setOpeningBal] = useState("");
+
+  const addRow = () => {
+    if (!fDate || (!fDebit && !fCredit)) return;
+    setStmtRows(prev => [...prev, { id: generateId(), date: fDate, description: fDesc, debit: parseFloat(fDebit)||0, credit: parseFloat(fCredit)||0, matched: false }]);
+    setFDate(""); setFDesc(""); setFDebit(""); setFCredit(""); setShowForm(false);
+  };
+
+  const toggleMatch = (id: string) => setStmtRows(prev => prev.map(r => r.id === id ? { ...r, matched: !r.matched } : r));
+
+  const bookTxns = useMemo(() => store.transactions ?? [], [store.transactions]);
+
+  const opening = parseFloat(openingBal) || 0;
+  const stmtClosing = stmtRows.reduce((s, r) => s + r.credit - r.debit, opening);
+  const bookBalance = bookTxns.reduce((s, t) => s + t.amount, opening);
+  const unmatchedStmt = stmtRows.filter(r => !r.matched).length;
+  const difference = stmtClosing - bookBalance;
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Bank Reconciliation Statement</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Opening Balance as per Bank Statement (₹)</label>
+            <input type="number" value={openingBal} onChange={e => setOpeningBal(e.target.value)} placeholder="e.g. 500000" className={inp} />
+          </div>
+          <div className={`rounded-lg p-3 border text-xs ${Math.abs(difference) < 1 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+            <div className="flex justify-between mb-1"><span className="text-[var(--color-muted)]">Bank Statement Balance</span><span className="font-bold">{fc(stmtClosing)}</span></div>
+            <div className="flex justify-between mb-1"><span className="text-[var(--color-muted)]">Book Balance (Headroom)</span><span className="font-bold">{fc(bookBalance)}</span></div>
+            <div className={`flex justify-between font-bold ${Math.abs(difference) < 1 ? "text-green-400" : "text-orange-400"}`}>
+              <span>Difference</span><span>{fc(Math.abs(difference))} {Math.abs(difference) < 1 ? "✓ Reconciled" : unmatchedStmt > 0 ? `(${unmatchedStmt} unmatched)` : ""}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <CheckCheck size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Bank Statement Entries</span>
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <X size={11} className={showForm ? "" : "rotate-45"} /> {showForm ? "Cancel" : "Add row"}
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <input type="date" value={fDate}   onChange={e => setFDate(e.target.value)}   className={inp} />
+              <input value={fDesc}  onChange={e => setFDesc(e.target.value)}  placeholder="Description *" className={inp} />
+              <input type="number" value={fDebit}  onChange={e => setFDebit(e.target.value)}  placeholder="Debit (₹)" className={inp} />
+              <input type="number" value={fCredit} onChange={e => setFCredit(e.target.value)} placeholder="Credit (₹)" className={inp} />
+            </div>
+            <button onClick={addRow} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Add</button>
+          </div>
+        )}
+
+        {stmtRows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Enter your bank statement rows to reconcile against Headroom book entries. Mark matched items to identify timing differences.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Date","Description","Debit","Credit","Matched",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {stmtRows.map(r => (
+                  <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${r.matched ? "opacity-50" : "hover:bg-[var(--color-accent)]"}`}>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{r.date}</td>
+                    <td className="px-4 py-3">{r.description}</td>
+                    <td className="px-4 py-3 tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "—"}</td>
+                    <td className="px-4 py-3 tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleMatch(r.id)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.matched ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)]"}`}>
+                        {r.matched ? "✓ Matched" : "Unmatched"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setStmtRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+                  <td colSpan={2} className="px-4 py-2.5 text-xs font-bold">Closing Balance</td>
+                  <td className="px-4 py-2.5 tabular-nums font-bold text-red-400">{fc(stmtRows.reduce((s,r)=>s+r.debit,0))}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-bold text-green-400">{fc(stmtRows.reduce((s,r)=>s+r.credit,0))}</td>
+                  <td colSpan={2} className="px-4 py-2.5 tabular-nums font-bold">{fc(stmtClosing)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Mark items as matched once verified in both bank statement and books. Unmatched items = timing differences (outstanding cheques, deposits in transit) or errors requiring investigation.</p>
     </div>
   );
 }

@@ -321,6 +321,9 @@ export default function CompliancePage() {
       {/* Labour Law Checklist */}
       <LabourLawChecklist employeeCount={store.transactions.filter(t=>t.category==="payroll").length > 0 ? 15 : 0} />
 
+      {/* ROC Filing Calendar */}
+      <RocFilingCalendar />
+
       {/* Insurance Calendar */}
       <InsuranceCalendar />
     </div>
@@ -532,6 +535,78 @@ function LabourLawChecklist({ employeeCount }: { employeeCount: number }) {
           <ShieldCheck size={14} /> All {applicable.length} applicable acts checked — review periodically as employee count grows.
         </div>
       )}
+    </div>
+  );
+}
+
+function RocFilingCalendar() {
+  const now = new Date();
+  const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+
+  type RocEvent = { title: string; form: string; due: string; entity: string; note: string };
+  const EVENTS: RocEvent[] = [
+    { title: "Annual Return",             form: "MGT-7 / MGT-7A",  due: `60 days from AGM (by ${fy+1}-11-29)`, entity: "Company",  note: "Within 60 days of AGM. MGT-7A for small companies." },
+    { title: "Financial Statements",      form: "AOC-4",           due: `30 days from AGM (by ${fy+1}-10-29)`, entity: "Company",  note: "Balance Sheet, P&L, Cash Flow, Directors' Report." },
+    { title: "ADT-1 (Auditor Appoint.)",  form: "ADT-1",           due: `15 days of AGM (by ${fy+1}-10-14)`,  entity: "Company",  note: "File within 15 days of AGM for auditor appointment." },
+    { title: "DIR-3 KYC",                 form: "DIR-3 KYC",       due: `30-Sep-${fy+1}`,                      entity: "Director", note: "Annual KYC of all directors having DIN. Penalty ₹5,000 if late." },
+    { title: "LLP Annual Return",         form: "Form 11",         due: `30-May-${fy+1}`,                      entity: "LLP",      note: "Within 60 days of end of FY (i.e. by 30-May)." },
+    { title: "LLP Financial Statements",  form: "Form 8",          due: `30-Oct-${fy+1}`,                      entity: "LLP",      note: "Statement of Accounts & Solvency — within 30 days of 6 months of FY close." },
+    { title: "INC-20A (Business Commencement)", form: "INC-20A",   due: "180 days of incorporation",           entity: "New Co",   note: "Declaration of commencement of business. One-time." },
+    { title: "MSME Half-Yearly Return",   form: "MSME-1",          due: `Apr & Oct`,                           entity: "Company",  note: "If ₹45L+ outstanding to MSME suppliers > 45 days." },
+  ];
+
+  const getUrgency = (dueStr: string) => {
+    const match = dueStr.match(/\d{4}-\d{2}-\d{2}/);
+    if (!match) return "info";
+    const d = new Date(match[0]);
+    const days = Math.round((d.getTime() - now.getTime()) / 86400000);
+    if (days < 0) return "overdue";
+    if (days <= 30) return "urgent";
+    if (days <= 90) return "soon";
+    return "ok";
+  };
+
+  const urgencyStyle: Record<string, string> = {
+    overdue: "bg-red-950/30 text-red-400", urgent: "bg-yellow-950/30 text-yellow-400",
+    soon: "bg-blue-950/30 text-blue-400", ok: "bg-green-950/30 text-green-400", info: "bg-[var(--color-accent)] text-[var(--color-muted)]",
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-[var(--color-border)]">
+        <CalendarCheck size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">ROC / MCA Filing Calendar — FY {fy}–{(fy+1).toString().slice(2)}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Filing","Form","Due Date","Entity","Status","Notes"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {EVENTS.map(e => {
+              const urg = getUrgency(e.due);
+              return (
+                <tr key={e.form} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-semibold">{e.title}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-[var(--color-primary)]">{e.form}</td>
+                  <td className="px-4 py-3 text-xs">{e.due}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.entity}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${urgencyStyle[urg]}`}>
+                      {urg === "overdue" ? "Overdue" : urg === "urgent" ? "Due Soon" : urg === "soon" ? "Upcoming" : "Scheduled"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.note}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

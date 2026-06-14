@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -188,6 +188,7 @@ export default function CreditPage() {
           ["equip",    "Finance vs Lease"],
           ["cc",       "CC Utilization"],
           ["fd",       "FD / RD"],
+          ["wcscore",  "WC Health Score"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -707,6 +708,7 @@ export default function CreditPage() {
       {tab === "equip" && <EquipmentFinanceLease />}
       {tab === "cc" && <CcUtilizationTab />}
       {tab === "fd" && <FdRdTab />}
+      {tab === "wcscore" && <WcHealthScore />}
     </div>
   );
 }
@@ -1251,6 +1253,138 @@ function CcUtilizationTab() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Keep utilization below 30% per card for healthy credit scoring. Always pay the full balance to avoid 36–42% p.a. revolving interest on business credit cards.
       </div>
+    </div>
+  );
+}
+
+function WcHealthScore() {
+  const { store } = useApp();
+
+  const [currentAssets,   setCurrentAssets]   = useState("");
+  const [currentLiab,     setCurrentLiab]     = useState("");
+  const [inventory,       setInventory]       = useState("");
+  const [receivables,     setReceivables]     = useState("");
+  const [payables,        setPayables]        = useState("");
+  const [annualRevenue,   setAnnualRevenue]   = useState("");
+  const [annualCogs,      setAnnualCogs]      = useState("");
+
+  const storeRevenue = (store.transactions ?? []).filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const ca  = parseFloat(currentAssets)  || 0;
+  const cl  = parseFloat(currentLiab)    || 0;
+  const inv = parseFloat(inventory)      || 0;
+  const ar  = parseFloat(receivables)    || 0;
+  const ap  = parseFloat(payables)       || 0;
+  const rev = parseFloat(annualRevenue)  || storeRevenue * 12 / Math.max((store.transactions ?? []).length / 30, 1);
+  const cogs= parseFloat(annualCogs)     || rev * 0.6;
+
+  const currentRatio   = cl > 0 ? ca / cl : 0;
+  const quickRatio     = cl > 0 ? (ca - inv) / cl : 0;
+  const dso            = rev > 0 ? Math.round((ar / (rev / 365))) : 0;
+  const dpo            = cogs > 0 ? Math.round((ap / (cogs / 365))) : 0;
+  const dio            = cogs > 0 ? Math.round((inv / (cogs / 365))) : 0;
+  const ccc            = dso + dio - dpo; // Cash Conversion Cycle
+  const workingCapital = ca - cl;
+
+  const scoreComponents = [
+    { label: "Current Ratio",  value: currentRatio,  good: 1.5, bad: 1.0, unit: "x",   weight: 25 },
+    { label: "Quick Ratio",    value: quickRatio,    good: 1.0, bad: 0.7, unit: "x",   weight: 20 },
+    { label: "DSO (days)",     value: dso,           good: 30,  bad: 60,  unit: "d",   weight: 20, invert: true },
+    { label: "DPO (days)",     value: dpo,           good: 45,  bad: 20,  unit: "d",   weight: 15 },
+    { label: "DIO (days)",     value: dio,           good: 30,  bad: 60,  unit: "d",   weight: 20, invert: true },
+  ];
+
+  const totalScore = scoreComponents.reduce((sum, c) => {
+    let raw: number;
+    if (c.invert) {
+      raw = c.value <= 0 ? 1 : c.value <= c.good ? 1 : c.value >= c.bad ? 0 : (c.bad - c.value) / (c.bad - c.good);
+    } else {
+      raw = c.value <= 0 ? 0 : c.value >= c.good ? 1 : c.value <= c.bad ? 0 : (c.value - c.bad) / (c.good - c.bad);
+    }
+    return sum + raw * c.weight;
+  }, 0);
+
+  const grade = totalScore >= 80 ? { label: "Excellent", cls: "text-green-400" } : totalScore >= 60 ? { label: "Good", cls: "text-blue-400" } : totalScore >= 40 ? { label: "Fair", cls: "text-yellow-400" } : { label: "Poor", cls: "text-red-400" };
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Working Capital Health Score</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Current Assets (₹)", val: currentAssets, set: setCurrentAssets },
+            { label: "Current Liabilities (₹)", val: currentLiab, set: setCurrentLiab },
+            { label: "Inventory (₹)", val: inventory, set: setInventory },
+            { label: "Accounts Receivable (₹)", val: receivables, set: setReceivables },
+            { label: "Accounts Payable (₹)", val: payables, set: setPayables },
+            { label: "Annual Revenue (₹)", val: annualRevenue, set: setAnnualRevenue, placeholder: `Auto: ${fc(rev)}` },
+            { label: "Annual COGS (₹)", val: annualCogs, set: setAnnualCogs, placeholder: `Auto: ${fc(cogs)}` },
+          ].map(f => (
+            <div key={f.label}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.label}</label>
+              <input type="number" value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.placeholder ?? "0"} className={inp} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "WC Score",         value: `${Math.round(totalScore)}/100`, color: grade.cls },
+          { label: "Grade",            value: grade.label,                     color: grade.cls },
+          { label: "Working Capital",  value: fc(workingCapital),              color: workingCapital >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Cash Conv. Cycle", value: `${ccc}d`,                       color: ccc <= 30 ? "text-green-400" : ccc <= 60 ? "text-yellow-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Component Scores</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {scoreComponents.map(c => {
+            const raw = c.invert
+              ? (c.value <= 0 ? 1 : c.value <= c.good ? 1 : c.value >= c.bad ? 0 : (c.bad - c.value) / (c.bad - c.good))
+              : (c.value <= 0 ? 0 : c.value >= c.good ? 1 : c.value <= c.bad ? 0 : (c.value - c.bad) / (c.good - c.bad));
+            const pct = Math.round(raw * 100);
+            return (
+              <div key={c.label} className="flex items-center gap-4 px-4 py-3">
+                <span className="text-xs font-semibold w-28">{c.label}</span>
+                <span className="tabular-nums text-xs w-16">{c.value > 0 ? `${c.value.toFixed(1)}${c.unit}` : "—"}</span>
+                <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${pct >= 70 ? "bg-green-500" : pct >= 40 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-xs tabular-nums w-12 text-right font-semibold">{pct}%</span>
+                <span className="text-[10px] text-[var(--color-muted)] w-12">wt {c.weight}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 text-xs">
+        {[
+          { label: "DSO",  value: `${dso}d`,  note: "Days Sales Outstanding — lower is better",  good: dso <= 30 },
+          { label: "DPO",  value: `${dpo}d`,  note: "Days Payable Outstanding — higher is better (pay later)", good: dpo >= 45 },
+          { label: "DIO",  value: `${dio}d`,  note: "Days Inventory Outstanding — lower is better",  good: dio <= 30 },
+        ].map(m => (
+          <div key={m.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold">{m.label}</span>
+              <span className={`font-bold ${m.good ? "text-green-400" : "text-orange-400"}`}>{m.value}</span>
+            </div>
+            <p className="text-[var(--color-muted)]">{m.note}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Lower CCC = faster cash cycle. Score uses weighted average of 5 ratios. Enter balance sheet figures for accurate scoring — revenue auto-estimated from transactions.</p>
     </div>
   );
 }

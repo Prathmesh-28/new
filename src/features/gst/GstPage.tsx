@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -240,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1428,6 +1428,10 @@ export default function GstPage() {
       {tab === "einvoice" && (() => {
         return <EInvoiceReadiness />;
       })()}
+
+      {tab === "notice" && (() => {
+        return <GstNoticeTemplates />;
+      })()}
     </div>
   );
 }
@@ -1996,6 +2000,75 @@ function EInvoiceReadiness() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">e-Invoice mandatory for B2B + export + SEZ supplies. Not for B2C, nil-rated, exempt, or RCM inward. IRN valid for 30 days from generation. Failure: invalid invoice = ITC blocked for buyer.</p>
+    </div>
+  );
+}
+
+function GstNoticeTemplates() {
+  const [selected, setSelected] = useState(0);
+  const [gstin,    setGstin]    = useState("");
+  const [period,   setPeriod]   = useState("");
+  const [amount,   setAmount]   = useState("");
+  const [copied,   setCopied]   = useState(false);
+
+  const TEMPLATES = [
+    {
+      title: "SCN — GSTR-1 vs GSTR-3B Mismatch",
+      section: "Sec 61 / Rule 99",
+      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to SCN for discrepancy of ₹${a||"[Amount]"} between GSTR-1 and GSTR-3B\n\nDear Sir/Madam,\n\nThe discrepancy arose due to [reason — clerical error / amendment pending / debit note not captured].\n\nRelevant invoices are enclosed. We propose to rectify via [amendment / payment of differential tax with interest].\n\nWe request closure of this matter.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+    },
+    {
+      title: "Reply — Non-filing of GSTR-3B",
+      section: "Sec 46 / Sec 122",
+      body: (g: string, p: string, _: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to notice for non-filing of GSTR-3B for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nWe acknowledge the notice. The delay was caused due to [reason — portal issues / illness / delayed data].\n\nThe return has now been filed on [Date], ARN: [ARN]. Late fee and interest have been paid. Proof of filing enclosed.\n\nWe assure compliance going forward.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+    },
+    {
+      title: "Reply — Demand (Sec 73 Short Payment)",
+      section: "Sec 73 CGST Act",
+      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to demand for short payment of ₹${a||"[Amount]"} u/s 73 for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nThe demand is disputed on the following grounds:\n1. [Ground 1 — supply is exempt / zero-rated / classified differently]\n2. Supporting invoices and contracts enclosed as Annexure A.\n\nWithout prejudice, we are willing to pay ₹[Undisputed Amount] as undisputed liability.\n\nWe request a personal hearing before the final order u/s 73(9).\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+    },
+    {
+      title: "Reply — Excess ITC / Blocked Credit",
+      section: "Sec 16(2) / Rule 36",
+      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to notice for excess ITC of ₹${a||"[Amount]"} for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nThe ITC of ₹${a||"[Amount]"} was claimed on valid tax invoices from registered suppliers. Payment was made within 180 days (Rule 37). The credit does not fall under Sec 17(5) blocked list.\n\nSupporting invoices, GSTR-2B reconciliation, and payment proofs are enclosed.\n\nWe request withdrawal of the notice.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+    },
+  ];
+
+  const tmpl = TEMPLATES[selected];
+  const text = tmpl.body(gstin, period, amount);
+  const copy = () => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">GST Notice Reply Templates</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {TEMPLATES.map((t, i) => (
+            <button key={i} onClick={() => setSelected(i)}
+              className={`text-left p-3 rounded-lg border text-xs transition-colors ${selected === i ? "border-[var(--color-primary)]/60 bg-[var(--color-primary)]/10" : "border-[var(--color-border)] hover:border-[var(--color-primary)]/40"}`}>
+              <div className="font-semibold mb-0.5">{t.title}</div>
+              <div className="text-[var(--color-muted)]">{t.section}</div>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Your GSTIN</label><input value={gstin} onChange={e=>setGstin(e.target.value)} placeholder="22AAAAA0000A1Z5" className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Tax Period</label><input value={period} onChange={e=>setPeriod(e.target.value)} placeholder="Apr 2024" className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="50000" className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">{tmpl.title}</span>
+          <button onClick={copy} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+            <FileText size={11} /> {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <pre className="p-4 text-xs font-mono text-[var(--color-muted)] whitespace-pre-wrap leading-relaxed">{text}</pre>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Templates are starting points — always review with your CA before submitting. Replace all [bracketed] fields. Attach supporting documents as annexures.</p>
     </div>
   );
 }
