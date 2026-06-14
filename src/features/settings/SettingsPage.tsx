@@ -10,6 +10,7 @@ import type { UserRole } from "@/data/types";
 import BillingCard from "./BillingCard";
 import AppLockCard from "./AppLockCard";
 import NotificationsCard from "./NotificationsCard";
+import PrivacyCard from "./PrivacyCard";
 
 type TeamUser = {
   id: string;
@@ -205,6 +206,9 @@ export default function SettingsPage() {
 
       {/* Push notifications */}
       <NotificationsCard />
+
+      {/* Privacy & data rights (DPDP) */}
+      <PrivacyCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

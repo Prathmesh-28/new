@@ -474,6 +474,29 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS push_tenant ON push_tokens(tenant_id);
 
+    -- ── DPDP / privacy: consent ledger + erasure requests ─────────────────────
+    CREATE TABLE IF NOT EXISTS consents (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id  TEXT NOT NULL,
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      purpose    TEXT NOT NULL,
+      granted    BOOLEAN NOT NULL DEFAULT true,
+      version    TEXT NOT NULL DEFAULT '1',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (user_id, purpose)
+    );
+    CREATE TABLE IF NOT EXISTS deletion_requests (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      user_id      UUID REFERENCES users(id) ON DELETE CASCADE,
+      requested_by TEXT,
+      reason       TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS consents_user      ON consents(user_id);
+    CREATE INDEX IF NOT EXISTS deletion_req_tenant ON deletion_requests(tenant_id, status);
+
     -- ── Idempotent column additions ───────────────────────────────────────────
     ALTER TABLE merchant_categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 

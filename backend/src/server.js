@@ -89,6 +89,7 @@ app.use("/auth",                   authLimiter, require("./routes/auth"));
 // Core API
 app.use("/api/kv",                 require("./routes/kv"));
 app.use("/api/users",              require("./routes/users"));
+app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));
 app.use("/api/ai",                 require("./routes/ai"));
