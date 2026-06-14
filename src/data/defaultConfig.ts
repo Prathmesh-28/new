@@ -17,7 +17,7 @@ export const defaultConfig: AppStore = {
     {
       id: "super_admin",
       label: "Super Admin",
-      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings", "admin", "advisor"],
+      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings", "admin", "advisor", "sales", "payments", "insurance", "treasury", "esg", "global"],
       visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings", "admin"],
       canExport: true,
       canAddNotes: true,
@@ -26,8 +26,8 @@ export const defaultConfig: AppStore = {
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings"],
-      visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings"],
+      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings", "sales", "payments", "insurance", "treasury", "esg", "global"],
+      visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "settings", "sales", "payments", "insurance", "treasury", "esg", "global"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital", "operations"],

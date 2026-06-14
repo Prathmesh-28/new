@@ -11,6 +11,7 @@ import {
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
+  Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -61,6 +62,14 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
     ]},
+    { label: "Growth & Treasury", items: [
+      { to: "/sales",        label: "Sales & CRM",  icon: Handshake,       tab: "sales"        },
+      { to: "/payments",     label: "Payments",     icon: IndianRupee,     tab: "payments"     },
+      { to: "/treasury",     label: "Treasury",     icon: Coins,           tab: "treasury"     },
+      { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
+      { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
+      { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
+    ]},
   ],
   owner: [
     { label: "Core", items: [
@@ -103,6 +112,14 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
       { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
+    ]},
+    { label: "Growth & Treasury", items: [
+      { to: "/sales",        label: "Sales & CRM",  icon: Handshake,       tab: "sales"        },
+      { to: "/payments",     label: "Payments",     icon: IndianRupee,     tab: "payments"     },
+      { to: "/treasury",     label: "Treasury",     icon: Coins,           tab: "treasury"     },
+      { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
+      { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
+      { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
     ]},
   ],
   finance_manager: [
