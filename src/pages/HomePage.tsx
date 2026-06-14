@@ -182,7 +182,10 @@ export default function HomePage() {
         .hr-stat:hover::after { opacity:1; transform:scaleX(1); }
         @media (prefers-reduced-motion: reduce) { .hr-ticker { animation:none; } }
 
-        @media (max-width: 820px) {
+        /* In the native shell the nav links always collapse so the Sign in /
+           Try-14-days buttons are never crowded off-screen. */
+        html.capacitor-native .hr-landing nav ul { display: none !important; }
+        @media (max-width: 1024px) {
           .hr-landing [style*="grid-template-columns"] { grid-template-columns: 1fr !important; gap: 16px !important; }
           .hr-landing [style*="px 48px"] { padding-left: 20px !important; padding-right: 20px !important; }
           .hr-landing [style*="padding-left: 48px"] { padding-left: 20px !important; }
@@ -201,15 +204,15 @@ export default function HomePage() {
         <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, cursor: "pointer", display: "flex", alignItems: "center" }} aria-label="Headroom home">
           <Logo variant="horizontal" size={22} />
         </div>
-        <ul style={{ display: "flex", gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden md:flex">
+        <ul style={{ display: "flex", gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden lg:flex">
           {[["Features","#features"],["Credit","#credit"],["Capital","#capital"],["Advisors","#advisors"],["Pricing","#pricing"]].map(([l,h]) => (
             <li key={l}><a href={h} style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.7)", textDecoration: "none" }}
               onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(196,217,122,0.7)")}>{l}</a></li>
           ))}
         </ul>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => navigate("/login")} style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.6)", background: "none", border: "none", cursor: "pointer" }}>Sign in</button>
-          <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 20px", borderRadius: 6, border: "none", cursor: "pointer" }}>Start free trial</button>
+          <button onClick={() => navigate("/login")} style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Sign in</button>
+          <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 18px", borderRadius: 6, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Try 14 days free</button>
         </div>
       </nav>
 

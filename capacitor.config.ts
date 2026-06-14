@@ -22,6 +22,9 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "always",
     backgroundColor: "#0D1117",
+    // Force the phone (device-width) layout — otherwise WKWebView can lay the
+    // page out at a desktop width, breaking responsive breakpoints / overflowing.
+    preferredContentMode: "mobile",
   },
   android: {
     backgroundColor: "#0D1117",
