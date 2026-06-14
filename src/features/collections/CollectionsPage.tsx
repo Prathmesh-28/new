@@ -221,7 +221,7 @@ export default function CollectionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
             {([
               { id: "collections",   label: "Collections",   icon: <PhoneCall size={10} /> },
               { id: "profitability", label: "Profitability",  icon: <BarChart2 size={10} /> },

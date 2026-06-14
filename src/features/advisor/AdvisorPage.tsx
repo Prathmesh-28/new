@@ -476,7 +476,7 @@ function PracticeTab({ clients }: { clients: ClientSummary[] }) {
     <div className="space-y-4">
       {/* View toggle */}
       <div className="flex items-center gap-2 justify-between">
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {(["calendar", "tasks"] as const).map(v => (
             <button key={v} onClick={() => setActiveView(v)}
               className={`px-3 py-1.5 text-xs rounded font-medium capitalize transition-colors ${activeView === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>

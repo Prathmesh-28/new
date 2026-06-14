@@ -249,7 +249,7 @@ export default function VendorsPage() {
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
             </div>
-            <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+            <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
               {categories.slice(0, 5).map(cat => (
                 <button key={cat} onClick={() => setCatFilter(cat)}
                   className={`px-2.5 py-1 text-xs rounded capitalize font-medium transition-colors ${catFilter === cat ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>

@@ -141,7 +141,7 @@ export default function TaxPage() {
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}

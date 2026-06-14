@@ -317,7 +317,7 @@ function DealFlowTab({ publicRaises, loading, user, onCommit, capitalInvestments
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search raises…"
             className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {["all", "rev_share", "reg_cf", "reg_a_plus"].map(t => (
             <button key={t} onClick={() => setTrackFilter(t)}
               className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${trackFilter === t ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -603,7 +603,7 @@ export default function InvestorPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+      <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
         {TABS.map(({ id, label, badge }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-xs rounded font-medium transition-colors flex items-center gap-1.5 ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
