@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Send, Calendar, X } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -97,9 +97,26 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
   );
 }
 
+type AgingBucket = "current" | "1_30" | "31_60" | "61_plus";
+
+const AGING_META: Record<AgingBucket, { label: string; color: string; chipCls: string }> = {
+  current:  { label: "Current (not yet due)",    color: "text-green-400",  chipCls: "bg-green-950/30 text-green-400 border-green-800/30" },
+  "1_30":   { label: "1–30 days overdue",        color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  "31_60":  { label: "31–60 days overdue",       color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  "61_plus":{ label: "60+ days overdue",         color: "text-red-400",    chipCls: "bg-red-950/30 text-red-400 border-red-800/30" },
+};
+
+function apAgingBucket(daysOverdue: number): AgingBucket {
+  if (daysOverdue <= 0) return "current";
+  if (daysOverdue <= 30) return "1_30";
+  if (daysOverdue <= 60) return "31_60";
+  return "61_plus";
+}
+
 export default function VendorsPage() {
   const { store } = useApp();
-  const { transactions, firm } = store;
+  const { transactions } = store;
+  const [view, setView] = useState<"directory" | "aging">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -153,6 +170,27 @@ export default function VendorsPage() {
   const thisMSpend   = vendors.reduce((s, v) => s + v.thisMonth, 0);
   const recurringN   = vendors.filter(v => v.txnCount >= 2).length;
 
+  // AP Aging: obligations that represent vendor payables (type="other")
+  const apAging = useMemo(() => {
+    const today = new Date();
+    return store.obligations
+      .filter(o => o.type === "other" || o.type === "payroll" || o.type === "tax")
+      .map(o => {
+        const due = new Date(o.dueDate);
+        const daysOverdue = Math.floor((today.getTime() - due.getTime()) / 86400000);
+        return { ...o, due, daysOverdue, bucket: apAgingBucket(daysOverdue) };
+      })
+      .sort((a, b) => b.daysOverdue - a.daysOverdue);
+  }, [store.obligations]);
+
+  const agingBucketTotals = useMemo(() =>
+    (["current", "1_30", "31_60", "61_plus"] as AgingBucket[]).map(b => ({
+      bucket: b,
+      amount: apAging.filter(o => o.bucket === b).reduce((s, o) => s + o.amount, 0),
+      count: apAging.filter(o => o.bucket === b).length,
+    })),
+  [apAging]);
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a);
     else { setSortKey(key); setSortAsc(false); }
@@ -164,104 +202,195 @@ export default function VendorsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">Vendors</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">All vendors derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Total Vendors",      value: vendors.length.toString(),         color: "text-[var(--color-primary)]" },
-          { label: "Total Spend",        value: formatAmount(totalSpend),           color: "text-red-400" },
-          { label: "This Month Spend",   value: formatAmount(thisMSpend),           color: "text-orange-400" },
-        ].map(s => (
-          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
-            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
-            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">Vendors</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">All vendors derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {categories.slice(0, 5).map(cat => (
-            <button key={cat} onClick={() => setCatFilter(cat)}
-              className={`px-2.5 py-1 text-xs rounded capitalize font-medium transition-colors ${catFilter === cat ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              {CATEGORY_LABEL[cat] ?? cat}
+          {(["directory", "aging"] as const).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {v === "directory" ? "Directory" : "AP Aging"}
             </button>
           ))}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No vendors found. Import transactions to populate the vendor directory.</p>
-        </div>
-      ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
-            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-              <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Vendor</th>
-                <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden md:table-cell">Category</th>
-                <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)]" onClick={() => toggleSort("totalSpend")}>
-                  Total Spend <SortIcon k="totalSpend" />
-                </th>
-                <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)] hidden lg:table-cell" onClick={() => toggleSort("thisMonth")}>
-                  This Month <SortIcon k="thisMonth" />
-                </th>
-                <th className="px-4 py-3 text-center text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden lg:table-cell">Trend</th>
-                <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)] hidden md:table-cell" onClick={() => toggleSort("lastPayment")}>
-                  Last Paid <SortIcon k="lastPayment" />
-                </th>
-                <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {filtered.map((v, i) => (
-                <tr key={i} className="hover:bg-white/2 transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-sm">{v.name}</p>
-                    <p className="text-[10px] text-[var(--color-muted)]">{v.txnCount} transaction{v.txnCount !== 1 ? "s" : ""} · avg {formatAmount(v.avgPayment)}</p>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category]}`}>
-                      {CATEGORY_LABEL[v.category] ?? v.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(v.totalSpend)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)] hidden lg:table-cell">
-                    {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center hidden lg:table-cell">
-                    {v.trend === "up" ? <span title="Spend up vs last month"><TrendingUp size={13} className="text-red-400 mx-auto" /></span>
-                      : v.trend === "down" ? <span title="Spend down vs last month"><TrendingDown size={13} className="text-green-400 mx-auto" /></span>
-                      : <span className="text-[var(--color-muted)] text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">
-                    {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => setSchedVendor(v)}
-                      className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg ml-auto transition-colors">
-                      <Calendar size={11} /> Schedule
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)] flex items-center justify-between">
-            <p className="text-xs text-[var(--color-muted)]">{filtered.length} vendors · {recurringN} recurring</p>
-            <p className="text-xs text-[var(--color-muted)]">Total: <span className="font-semibold text-red-400">{formatAmount(filtered.reduce((s,v)=>s+v.totalSpend,0))}</span></p>
+      {view === "directory" && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total Vendors",      value: vendors.length.toString(),         color: "text-[var(--color-primary)]" },
+              { label: "Total Spend",        value: formatAmount(totalSpend),           color: "text-red-400" },
+              { label: "This Month Spend",   value: formatAmount(thisMSpend),           color: "text-orange-400" },
+            ].map(s => (
+              <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
           </div>
+
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+              {categories.slice(0, 5).map(cat => (
+                <button key={cat} onClick={() => setCatFilter(cat)}
+                  className={`px-2.5 py-1 text-xs rounded capitalize font-medium transition-colors ${catFilter === cat ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {CATEGORY_LABEL[cat] ?? cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+              <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+              <p className="text-sm text-[var(--color-muted)]">No vendors found. Import transactions to populate the vendor directory.</p>
+            </div>
+          ) : (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+              <table className="w-full text-sm min-w-[620px]">
+                <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Vendor</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden md:table-cell">Category</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)]" onClick={() => toggleSort("totalSpend")}>
+                      Total Spend <SortIcon k="totalSpend" />
+                    </th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)] hidden lg:table-cell" onClick={() => toggleSort("thisMonth")}>
+                      This Month <SortIcon k="thisMonth" />
+                    </th>
+                    <th className="px-4 py-3 text-center text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden lg:table-cell">Trend</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)] hidden md:table-cell" onClick={() => toggleSort("lastPayment")}>
+                      Last Paid <SortIcon k="lastPayment" />
+                    </th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {filtered.map((v, i) => (
+                    <tr key={i} className="hover:bg-white/2 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-sm">{v.name}</p>
+                        <p className="text-[10px] text-[var(--color-muted)]">{v.txnCount} transaction{v.txnCount !== 1 ? "s" : ""} · avg {formatAmount(v.avgPayment)}</p>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category]}`}>
+                          {CATEGORY_LABEL[v.category] ?? v.category}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(v.totalSpend)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)] hidden lg:table-cell">
+                        {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center hidden lg:table-cell">
+                        {v.trend === "up" ? <span title="Spend up vs last month"><TrendingUp size={13} className="text-red-400 mx-auto" /></span>
+                          : v.trend === "down" ? <span title="Spend down vs last month"><TrendingDown size={13} className="text-green-400 mx-auto" /></span>
+                          : <span className="text-[var(--color-muted)] text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">
+                        {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => setSchedVendor(v)}
+                          className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg ml-auto transition-colors">
+                          <Calendar size={11} /> Schedule
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)] flex items-center justify-between">
+                <p className="text-xs text-[var(--color-muted)]">{filtered.length} vendors · {recurringN} recurring</p>
+                <p className="text-xs text-[var(--color-muted)]">Total: <span className="font-semibold text-red-400">{formatAmount(filtered.reduce((s,v)=>s+v.totalSpend,0))}</span></p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {view === "aging" && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm text-[var(--color-muted)]">Outstanding payables from your scheduled obligations, bucketed by age. Schedule payments in the Directory tab to populate this view.</p>
+          </div>
+
+          {/* Bucket summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {agingBucketTotals.map(b => {
+              const meta = AGING_META[b.bucket];
+              const Icon = b.bucket === "current" ? CheckCircle2 : b.bucket === "61_plus" ? AlertTriangle : Clock;
+              return (
+                <div key={b.bucket} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon size={12} className={meta.color} />
+                    <p className="text-[10px] text-[var(--color-muted)]">{meta.label}</p>
+                  </div>
+                  <p className={`text-lg font-bold tabular-nums ${meta.color}`}>{formatAmount(b.amount)}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{b.count} obligation{b.count !== 1 ? "s" : ""}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {apAging.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+              <Clock size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+              <p className="text-sm text-[var(--color-muted)]">No payables scheduled yet. Use the Directory tab to schedule vendor payments.</p>
+            </div>
+          ) : (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                  <tr>
+                    {["Payable", "Type", "Due Date", "Age", "Amount", "Status"].map((h, i) => (
+                      <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i <= 2 ? "text-left" : "text-right"}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {apAging.map(o => {
+                    const meta = AGING_META[o.bucket];
+                    return (
+                      <tr key={o.id} className="hover:bg-white/2">
+                        <td className="px-4 py-3 font-medium max-w-[180px] truncate">{o.name}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[o.type] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                            {CATEGORY_LABEL[o.type] ?? o.type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[var(--color-muted)]">
+                          {o.due.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {o.daysOverdue <= 0
+                            ? <span className="text-green-400">Due in {Math.abs(o.daysOverdue)}d</span>
+                            : <span className={meta.color}>{o.daysOverdue}d overdue</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${meta.chipCls}`}>
+                            {o.bucket === "current" ? "Current" : o.bucket === "1_30" ? "1–30d" : o.bucket === "31_60" ? "31–60d" : "60d+"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+                <p className="text-xs text-[var(--color-muted)]">Total outstanding: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(apAging.reduce((s,o) => s + o.amount, 0))}</span></p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

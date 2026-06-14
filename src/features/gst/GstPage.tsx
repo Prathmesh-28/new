@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -17,7 +17,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -77,6 +77,37 @@ export default function GstPage() {
     a.download = "gstr2b-reconciliation.csv"; a.click();
   };
 
+  // ── GSTR-1 outward supplies ──
+  const gstr1Data = useMemo(() => {
+    const gstRate = firm.gstRate ?? 18;
+    const halfRate = gstRate / 2;
+    const monthInvoices = store.invoices.filter(inv => {
+      if (!inv.invoiceDate) return false;
+      const d = new Date(inv.invoiceDate);
+      return d.getMonth() + 1 === selMonth.m && d.getFullYear() === selMonth.y;
+    });
+    let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0;
+    const lines = monthInvoices.map(inv => {
+      const taxable = inv.amount;
+      const cgst = Math.round(taxable * halfRate) / 100;
+      const sgst = cgst;
+      taxableTotal += taxable; cgstTotal += cgst; sgstTotal += sgst;
+      return { ...inv, taxable, cgst, sgst, total: taxable + cgst + sgst };
+    });
+    return { lines, taxableTotal, cgstTotal, sgstTotal, totalTax: cgstTotal + sgstTotal, totalWithTax: taxableTotal + cgstTotal + sgstTotal };
+  }, [store.invoices, selMonth, firm.gstRate]);
+
+  const downloadGstr1Csv = () => {
+    const header = ["Invoice No", "Date", "Customer", "Description", "Taxable Value", "CGST", "SGST", "Invoice Total", "Status"];
+    const rows = gstr1Data.lines.map(l => [
+      l.invoiceNumber ?? "", l.invoiceDate, l.customer, l.description,
+      l.taxable.toFixed(2), l.cgst.toFixed(2), l.sgst.toFixed(2), l.total.toFixed(2), l.status,
+    ]);
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `GSTR1-${MONTH_NAMES[selMonth.m - 1]}-${selMonth.y}.csv`; a.click();
+  };
+
   const ledger = useMemo(() => gstLedger(store, firm.gstRate ?? 18, 12), [store, firm.gstRate]);
   const ledgerTotals = useMemo(() => ({
     output: ledger.reduce((s, r) => s + r.outputTax, 0),
@@ -132,7 +163,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -428,6 +459,103 @@ export default function GstPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── GSTR-1 OUTWARD SUPPLIES ── */}
+      {tab === "gstr1" && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div>
+              <h2 className="text-base font-bold">GSTR-1 — Outward Supplies</h2>
+              <p className="text-sm text-[var(--color-muted)]">
+                B2C/B2B outward supply summary from your invoice register. Select a month, verify figures, then export CSV for portal upload.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <select value={selMonth.m} onChange={e => setSelMonth(s => ({ ...s, m: parseInt(e.target.value) }))}
+                className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                {MONTH_NAMES.map((n, i) => <option key={i+1} value={i+1}>{n}</option>)}
+              </select>
+              <select value={selMonth.y} onChange={e => setSelMonth(s => ({ ...s, y: parseInt(e.target.value) }))}
+                className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <button onClick={downloadGstr1Csv} disabled={!gstr1Data.lines.length}
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-2 rounded-lg disabled:opacity-40">
+                <Download size={12} /> CSV
+              </button>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Invoices", value: String(gstr1Data.lines.length), color: "text-[var(--color-primary)]", sub: `${MONTH_NAMES[selMonth.m - 1]} ${selMonth.y}` },
+              { label: "Taxable turnover", value: formatCurrency(gstr1Data.taxableTotal), color: "text-[var(--color-text)]", sub: "excl. GST" },
+              { label: "Output CGST + SGST", value: formatCurrency(gstr1Data.totalTax), color: "text-red-400", sub: `@ ${(firm.gstRate ?? 18) / 2}% each` },
+              { label: "Total with GST", value: formatCurrency(gstr1Data.totalWithTax), color: "text-[var(--color-text)]", sub: "gross invoice value" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {gstr1Data.lines.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center text-sm text-[var(--color-muted)]">
+              No invoices found for {MONTH_NAMES[selMonth.m - 1]} {selMonth.y}. Add invoices in the Receivables page first.
+            </div>
+          ) : (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-[var(--color-bg)] border-b border-[var(--color-border)]">
+                    <tr>
+                      {["Invoice #", "Date", "Customer", "Taxable", "CGST", "SGST", "Total", "Status"].map((h, i) => (
+                        <th key={h} className={`px-3 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i <= 2 ? "text-left" : "text-right"}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gstr1Data.lines.map(l => (
+                      <tr key={l.id} className="border-t border-[var(--color-border)] hover:bg-white/2">
+                        <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{l.invoiceNumber ?? "—"}</td>
+                        <td className="px-3 py-2">{new Date(l.invoiceDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                        <td className="px-3 py-2 max-w-[140px] truncate">{l.customer}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatAmount(l.taxable)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-orange-400">{formatAmount(l.cgst)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-orange-400">{formatAmount(l.sgst)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatAmount(l.total)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${l.status === "paid" ? "bg-green-950/40 text-green-400 border-green-800/30" : l.status === "overdue" ? "bg-red-950/40 text-red-400 border-red-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                            {l.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2.5 text-xs font-bold">Total</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold">{formatAmount(gstr1Data.taxableTotal)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-orange-400">{formatAmount(gstr1Data.cgstTotal)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-orange-400">{formatAmount(gstr1Data.sgstTotal)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold">{formatAmount(gstr1Data.totalWithTax)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+            <AlertTriangle size={12} className="text-[var(--color-muted)] shrink-0 mt-px" />
+            Amounts derive from your invoice register (taxable value × rate ÷ 2 for CGST/SGST). Review and correct GST rates per line on the portal before filing. Inter-state supplies (IGST) and HSN-wise B2B/B2C splits require GSP integration.
+          </div>
         </div>
       )}
 
