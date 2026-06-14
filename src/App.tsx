@@ -9,6 +9,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import UpsellGate from "@/components/UpsellGate";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
+import AppLockGate from "@/components/AppLockGate";
 import { onAppResume } from "@/lib/mobile";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
@@ -224,7 +225,7 @@ export default function App() {
                 <Route path="/signup"          element={<SignupPage />} />
                 <Route path="/signup-advisor" element={<SignupAdvisorPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/*"               element={<RequireAuth><AppShell /></RequireAuth>} />
+                <Route path="/*"               element={<RequireAuth><AppLockGate><AppShell /></AppLockGate></RequireAuth>} />
               </Routes>
             </Suspense>
           </ErrorBoundary>

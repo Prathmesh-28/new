@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUPS, roleLabel, roleBadge } from "@/data/roles";
 import type { UserRole } from "@/data/types";
 import BillingCard from "./BillingCard";
+import AppLockCard from "./AppLockCard";
 
 type TeamUser = {
   id: string;
@@ -197,6 +198,9 @@ export default function SettingsPage() {
 
       {/* Plan & Billing */}
       <BillingCard />
+
+      {/* App lock */}
+      <AppLockCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
