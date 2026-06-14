@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2 } from "lucide-react";
 import { totalNetBookValue, totalGrossCost, totalAccumulatedDepreciation } from "@/lib/depreciation";
 import { toast } from "sonner";
 import { exportExcel, exportPdf } from "@/lib/exporters";
@@ -68,7 +68,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -179,6 +179,7 @@ export default function AnalyticsPage() {
     { id: "balancesheet",   label: "Balance Sheet" },
     { id: "ratios",         label: "Ratio Analysis" },
     { id: "trialbalance",   label: "Trial Balance" },
+    { id: "commission",     label: "Sales Commission" },
   ] as const;
 
   const benchmarks = [
@@ -1053,6 +1054,7 @@ export default function AnalyticsPage() {
       {tab === "balancesheet" && <BalanceSheetTab />}
       {tab === "ratios" && <RatiosTab />}
       {tab === "trialbalance" && <TrialBalanceTab />}
+      {tab === "commission" && <CommissionTab />}
     </div>
   );
 }
@@ -1735,6 +1737,153 @@ function TrialBalanceTab() {
       <p className="text-[10px] text-[var(--color-muted)]">
         Simplified cash-basis trial balance built from tagged transactions, with Cash &amp; Bank as the contra account so debits equal credits. A statutory trial balance requires full double-entry ledgers (accruals, opening balances, asset/liability accounts) maintained in your books of account.
       </p>
+    </div>
+  );
+}
+
+// ── SALES COMMISSION CALCULATOR ─────────────────────────────────────────────────
+function CommissionTab() {
+  type Tier = { id: string; upTo: number; rate: number };
+  type Person = { id: string; name: string; sales: number };
+  const [mode, setMode] = useState<"tiered" | "flat">("tiered");
+  const [flatRate, setFlatRate] = useState(3);
+  const [tiers, setTiers] = useState<Tier[]>([
+    { id: "t1", upTo: 500000, rate: 2 },
+    { id: "t2", upTo: 1000000, rate: 3 },
+    { id: "t3", upTo: Infinity, rate: 5 },
+  ]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [pName, setPName] = useState("");
+  const [pSales, setPSales] = useState("");
+
+  const sortedTiers = [...tiers].sort((a, b) => a.upTo - b.upTo);
+  const marginalCommission = (sales: number) => {
+    let commission = 0, prev = 0;
+    for (const t of sortedTiers) {
+      if (sales <= prev) break;
+      const portion = Math.min(sales, t.upTo) - prev;
+      if (portion > 0) commission += portion * (t.rate / 100);
+      prev = t.upTo;
+    }
+    return commission;
+  };
+  const commissionFor = (sales: number) => mode === "flat" ? sales * (flatRate / 100) : marginalCommission(sales);
+
+  const addPerson = () => {
+    if (!pName) return;
+    setPeople(prev => [...prev, { id: Math.random().toString(36).slice(2), name: pName, sales: parseFloat(pSales) || 0 }]);
+    setPName(""); setPSales("");
+  };
+
+  const totalSales = people.reduce((s, p) => s + p.sales, 0);
+  const totalPayout = people.reduce((s, p) => s + commissionFor(p.sales), 0);
+  const avgRate = totalSales > 0 ? (totalPayout / totalSales) * 100 : 0;
+  const fc = formatCurrency;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]";
+
+  const updateTier = (id: string, field: "upTo" | "rate", val: string) =>
+    setTiers(prev => prev.map(t => t.id === id ? { ...t, [field]: field === "upTo" ? (val === "" ? Infinity : parseFloat(val) || 0) : parseFloat(val) || 0 } : t));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Sales", value: fc(totalSales), color: "text-[var(--color-primary)]" },
+          { label: "Total Commission", value: fc(totalPayout), color: "text-orange-400" },
+          { label: "Avg Commission Rate", value: `${avgRate.toFixed(2)}%`, color: "text-yellow-400" },
+          { label: "Salespeople", value: people.length.toString(), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Percent size={14} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Commission Structure</p>
+          <div className="ml-auto flex gap-1">
+            {(["tiered", "flat"] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${mode === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                {m === "tiered" ? "Tiered (marginal)" : "Flat %"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {mode === "flat" ? (
+          <div className="max-w-xs">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Flat Commission Rate (%)</label>
+            <input type="number" value={flatRate} onChange={e => setFlatRate(parseFloat(e.target.value) || 0)} className={`${inp} w-full`} />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sortedTiers.map((t, i) => {
+              const prev = i === 0 ? 0 : sortedTiers[i - 1].upTo;
+              return (
+                <div key={t.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-[var(--color-muted)] w-40">{fc(prev)} → {t.upTo === Infinity ? "and above" : fc(t.upTo)}</span>
+                  <input type="number" value={t.upTo === Infinity ? "" : t.upTo} onChange={e => updateTier(t.id, "upTo", e.target.value)} placeholder="upper limit (blank = ∞)" className={`${inp} w-40`} />
+                  <input type="number" value={t.rate} onChange={e => updateTier(t.id, "rate", e.target.value)} className={`${inp} w-20`} />
+                  <span className="text-[var(--color-muted)]">%</span>
+                  <button onClick={() => setTiers(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </div>
+              );
+            })}
+            <button onClick={() => setTiers(prev => [...prev, { id: Math.random().toString(36).slice(2), upTo: Infinity, rate: 5 }])}
+              className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Plus size={11} /> Add tier</button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <Users size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Salespeople</span>
+          </div>
+          <div className="flex gap-2">
+            <input value={pName} onChange={e => setPName(e.target.value)} placeholder="Name" className={inp} />
+            <input type="number" value={pSales} onChange={e => setPSales(e.target.value)} placeholder="Sales (₹)" className={inp} />
+            <button onClick={addPerson} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90"><Plus size={11} /> Add</button>
+          </div>
+        </div>
+        {people.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add salespeople and their sales to compute commission payouts.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Salesperson", "Sales", "Commission", "Effective %", ""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {people.map(p => {
+                  const comm = commissionFor(p.sales);
+                  const eff = p.sales > 0 ? (comm / p.sales) * 100 : 0;
+                  return (
+                    <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{fc(p.sales)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{fc(Math.round(comm))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{eff.toFixed(2)}%</td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => setPeople(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Tiered mode applies each tier's rate only to the sales within that band (marginal, like income-tax slabs). Commission to non-employee agents may attract TDS u/s 194H (5%) and GST (18%). Indicative only.</p>
     </div>
   );
 }

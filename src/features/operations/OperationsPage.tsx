@@ -5,14 +5,15 @@ import { formatCurrency, generateId } from "@/lib/utils";
 import {
   Package, ShoppingCart, Truck, BarChart2, Plus, X, MessageCircle,
   Mail, FileSpreadsheet, Phone, CheckCircle2, Clock, AlertTriangle,
-  Radar, Copy, TrendingUp, ArrowUpRight, UserPlus,
+  Radar, Copy, TrendingUp, ArrowUpRight, UserPlus, Banknote, Download,
 } from "lucide-react";
+import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
 import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data/types";
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder";
+type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -157,6 +158,7 @@ export default function OperationsPage() {
           ["bom",           "BOM Costing",   null],
           ["leadtime",      "Lead Time",     null],
           ["reorder",       "Reorder Alert", null],
+          ["payables",      "Aged Payables", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -707,6 +709,7 @@ export default function OperationsPage() {
       {tab === "bom" && <BomCostingTab />}
       {tab === "leadtime" && <LeadTimeScorecardTab />}
       {tab === "reorder" && <ReorderAlertTab />}
+      {tab === "payables" && <AgedPayablesTab />}
     </div>
   );
 }
@@ -1360,6 +1363,163 @@ function ReorderAlertTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">ROP = Reorder Point. Items auto-populated from inventory at 30% of current stock. Edit inline to set precise safety stock levels. Critical = stock &lt;50% of ROP.</p>
+    </div>
+  );
+}
+
+function AgedPayablesTab() {
+  type Bill = { id: string; vendor: string; billNo: string; amount: number; billDate: string; dueDate: string; isMsme: boolean; status: "unpaid" | "paid" };
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [fVendor, setFVendor] = useState("");
+  const [fBillNo, setFBillNo] = useState("");
+  const [fAmount, setFAmount] = useState("");
+  const [fBillDate, setFBillDate] = useState("");
+  const [fDueDate, setFDueDate] = useState("");
+  const [fMsme, setFMsme] = useState(false);
+
+  const today = new Date();
+  const addBill = () => {
+    if (!fVendor || !fAmount || !fDueDate) return;
+    setBills(prev => [...prev, { id: generateId(), vendor: fVendor, billNo: fBillNo, amount: parseFloat(fAmount) || 0, billDate: fBillDate, dueDate: fDueDate, isMsme: fMsme, status: "unpaid" }]);
+    setFVendor(""); setFBillNo(""); setFAmount(""); setFBillDate(""); setFDueDate(""); setFMsme(false); setShowForm(false);
+  };
+  const toggle = (id: string) => setBills(prev => prev.map(b => b.id === id ? { ...b, status: b.status === "paid" ? "unpaid" : "paid" } : b));
+
+  const daysOverdue = (b: Bill) => b.dueDate ? differenceInDays(today, parseISO(b.dueDate)) : 0;
+  const unpaid = bills.filter(b => b.status === "unpaid");
+  const buckets = [
+    { key: "Current", test: (d: number) => d <= 0 },
+    { key: "1–30",    test: (d: number) => d >= 1 && d <= 30 },
+    { key: "31–60",   test: (d: number) => d >= 31 && d <= 60 },
+    { key: "61–90",   test: (d: number) => d >= 61 && d <= 90 },
+    { key: "90+",     test: (d: number) => d > 90 },
+  ].map(bk => {
+    const list = unpaid.filter(b => bk.test(daysOverdue(b)));
+    return { key: bk.key, count: list.length, amount: list.reduce((s, b) => s + b.amount, 0) };
+  });
+
+  const totalPayable = unpaid.reduce((s, b) => s + b.amount, 0);
+  const overduePayable = unpaid.filter(b => daysOverdue(b) > 0).reduce((s, b) => s + b.amount, 0);
+  const dueThisWeek = unpaid.filter(b => { const d = daysOverdue(b); return d <= 0 && d >= -7; }).reduce((s, b) => s + b.amount, 0);
+  const msmeAtRisk = unpaid.filter(b => b.isMsme && daysOverdue(b) > 45).reduce((s, b) => s + b.amount, 0);
+
+  const exportCsv = () => {
+    const header = ["Vendor", "Bill No", "Amount", "Bill Date", "Due Date", "Days Overdue", "MSME", "Status"];
+    const lines = bills.map(b => [b.vendor, b.billNo, b.amount, b.billDate, b.dueDate, daysOverdue(b), b.isMsme ? "Yes" : "No", b.status].join(","));
+    const csv = [header.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "aged-payables.csv"; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const fc = formatCurrency;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Payable",   value: fc(totalPayable),  color: "text-[var(--color-primary)]" },
+          { label: "Overdue Payable", value: fc(overduePayable), color: overduePayable > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Due This Week",   value: fc(dueThisWeek),   color: "text-yellow-400" },
+          { label: "MSME At-Risk (>45d)", value: fc(msmeAtRisk), color: msmeAtRisk > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-3">Payables Aging</p>
+        <div className="grid grid-cols-5 gap-2">
+          {buckets.map(b => (
+            <div key={b.key} className="bg-[var(--color-bg)] rounded-lg p-3 text-center border border-[var(--color-border)]">
+              <p className="text-[10px] text-[var(--color-muted)]">{b.key}</p>
+              <p className={`text-sm font-bold tabular-nums ${b.key === "90+" && b.amount > 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{fc(b.amount)}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{b.count} bill(s)</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Vendor Bills</span>
+          </div>
+          <div className="flex gap-2">
+            {bills.length > 0 && (
+              <button onClick={exportCsv} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+                <Download size={11} /> CSV
+              </button>
+            )}
+            <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+              <Plus size={11} /> Add bill
+            </button>
+          </div>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <input value={fVendor} onChange={e => setFVendor(e.target.value)} placeholder="Vendor *" className={inp} />
+              <input value={fBillNo} onChange={e => setFBillNo(e.target.value)} placeholder="Bill no." className={inp} />
+              <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Bill date</label><input type="date" value={fBillDate} onChange={e => setFBillDate(e.target.value)} className={inp} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Due date *</label><input type="date" value={fDueDate} onChange={e => setFDueDate(e.target.value)} className={inp} /></div>
+              <label className="flex items-center gap-2 text-xs cursor-pointer mt-4"><input type="checkbox" checked={fMsme} onChange={e => setFMsme(e.target.checked)} className="accent-[var(--color-primary)]" /> MSME vendor</label>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button onClick={addBill} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+              <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {bills.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No vendor bills tracked. Add bills to monitor payables aging and MSME 45-day exposure.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Vendor", "Bill No", "Amount", "Due Date", "Days", "MSME", "Status", ""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...bills].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(b => {
+                  const d = daysOverdue(b);
+                  const overdue = b.status === "unpaid" && d > 0;
+                  return (
+                    <tr key={b.id} className={`border-b border-[var(--color-border)] last:border-0 ${overdue ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                      <td className="px-4 py-2.5 font-medium">{b.vendor}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{b.billNo || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{fc(b.amount)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.dueDate || "—"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>{b.status === "unpaid" && d > 0 ? `${d}d` : "—"}</td>
+                      <td className="px-4 py-2.5">{b.isMsme ? <span className="text-[10px] bg-blue-950/30 text-blue-400 px-1.5 py-0.5 rounded-full">MSME</span> : "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => toggle(b.id)} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${b.status === "paid" ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{b.status === "paid" ? "Paid" : "Unpaid"}</button>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => setBills(prev => prev.filter(x => x.id !== b.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">MSME vendors must be paid within 45 days (15 if no agreement) under the MSMED Act. Amounts unpaid to MSMEs beyond the limit are disallowed as expense under Sec 43B(h) until actually paid. Consult a CA.</p>
     </div>
   );
 }

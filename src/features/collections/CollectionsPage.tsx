@@ -6,7 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import { differenceInDays, format, parseISO } from "date-fns";
 import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
-  Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star,
+  Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star, FileText, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,7 +123,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -225,6 +225,7 @@ export default function CollectionsPage() {
               { id: "profitability", label: "Profitability",  icon: <BarChart2 size={10} /> },
               { id: "clv",           label: "CLV",            icon: <Star size={10} /> },
               { id: "score",         label: "Risk Score",     icon: <AlertTriangle size={10} /> },
+              { id: "statement",     label: "Statement",      icon: <FileText size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -469,6 +470,7 @@ export default function CollectionsPage() {
 
       {view === "clv" && <ClvCalculator />}
       {view === "score" && <LatePaymentScorer />}
+      {view === "statement" && <CustomerStatement />}
     </div>
   );
 }
@@ -705,6 +707,127 @@ function LatePaymentScorer() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Score = 40% overdue frequency + 35% avg days late + 25% recency penalty · High ≥65 · Medium ≥35 · Low &lt;35 · Use to prioritise follow-up</p>
+    </div>
+  );
+}
+
+function CustomerStatement() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const customers = Array.from(new Set(invoices.map(i => i.customer).filter(Boolean)));
+  const [selected, setSelected] = useState(customers[0] ?? "");
+  const [copied, setCopied] = useState(false);
+
+  const custInvoices = invoices.filter(i => i.customer === selected);
+
+  type Entry = { date: string; particulars: string; debit: number; credit: number };
+  const entries: Entry[] = [];
+  for (const inv of custInvoices) {
+    entries.push({ date: inv.invoiceDate, particulars: `Invoice ${inv.invoiceNumber || inv.id.slice(0, 6)}`, debit: inv.amount, credit: 0 });
+    if (inv.status === "paid") {
+      entries.push({ date: inv.dueDate || inv.invoiceDate, particulars: `Payment received — ${inv.invoiceNumber || inv.id.slice(0, 6)}`, debit: 0, credit: inv.amount });
+    }
+  }
+  entries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  let running = 0;
+  const ledger = entries.map(e => { running += e.debit - e.credit; return { ...e, balance: running }; });
+
+  const totalInvoiced = custInvoices.reduce((s, i) => s + i.amount, 0);
+  const totalReceived = custInvoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+  const outstanding = custInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const overdue = custInvoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+
+  const firmName = store.firm?.name ?? "Your Company";
+  const fc = formatCurrency;
+  const stmtDate = format(new Date(), "dd MMM yyyy");
+
+  const copyStatement = () => {
+    const lines = [
+      `STATEMENT OF ACCOUNT`,
+      `${firmName}`,
+      `Customer: ${selected}`,
+      `As on: ${stmtDate}`,
+      ``,
+      `Date        Particulars                         Debit        Credit       Balance`,
+      ...ledger.map(e => `${(e.date || "").padEnd(11)} ${e.particulars.slice(0, 35).padEnd(35)} ${String(e.debit || "").padStart(11)} ${String(e.credit || "").padStart(11)} ${String(e.balance).padStart(11)}`),
+      ``,
+      `Outstanding Balance: ${fc(outstanding)}`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n")).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  if (customers.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+        <p className="text-sm text-[var(--color-muted)]">Add invoices to generate customer account statements.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+          <select value={selected} onChange={e => setSelected(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] min-w-[200px]">
+            {customers.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="ml-auto text-right">
+          <p className="text-sm font-bold">{firmName}</p>
+          <p className="text-xs text-[var(--color-muted)]">Statement as on {stmtDate}</p>
+        </div>
+        <button onClick={copyStatement} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Copy size={11} /> {copied ? "Copied!" : "Copy statement"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Invoiced", value: fc(totalInvoiced), color: "text-[var(--color-primary)]" },
+          { label: "Total Received", value: fc(totalReceived), color: "text-green-400" },
+          { label: "Outstanding",    value: fc(outstanding),   color: outstanding > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Overdue",        value: fc(overdue),       color: overdue > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Account Statement — {selected}</span>
+        </div>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Date", "Particulars", "Debit", "Credit", "Balance"].map(h => (
+                <th key={h} className={`text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5 ${h === "Particulars" || h === "Date" ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ledger.map((e, i) => (
+              <tr key={i} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.date || "—"}</td>
+                <td className="px-4 py-2.5">{e.particulars}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{e.debit ? fc(e.debit) : "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{e.credit ? fc(e.credit) : "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(e.balance)}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)] font-bold">
+              <td className="px-4 py-2.5" colSpan={4}>Closing Balance (Outstanding)</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{fc(outstanding)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Simplified statement derived from invoice records (invoice = debit, payment = credit). For a GST-compliant statement of account, include actual payment dates, TDS adjustments and credit/debit notes.</p>
     </div>
   );
 }

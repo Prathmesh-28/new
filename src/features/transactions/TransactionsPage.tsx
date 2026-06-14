@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import type { Transaction } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
@@ -73,7 +74,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -265,6 +266,10 @@ export default function TransactionsPage() {
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "recon" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
             <CheckCheck size={12} /> Bank Recon
           </button>
+          <button onClick={() => setView(v => v === "recurring" ? "transactions" : "recurring")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "recurring" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <Repeat size={12} /> Recurring
+          </button>
         </div>
       </div>
 
@@ -274,6 +279,7 @@ export default function TransactionsPage() {
       {view === "bounce" && <BounceTracker />}
       {view === "upi" && <UpiDashboard />}
       {view === "recon" && <BankReconStatement />}
+      {view === "recurring" && <RecurringTemplates />}
 
       {view === "transactions" && <>
       {/* Financial Intelligence Bar */}
@@ -1070,6 +1076,163 @@ function BankReconStatement() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Mark items as matched once verified in both bank statement and books. Unmatched items = timing differences (outstanding cheques, deposits in transit) or errors requiring investigation.</p>
+    </div>
+  );
+}
+
+function RecurringTemplates() {
+  type Freq = "monthly" | "quarterly" | "annual";
+  type Template = { id: string; description: string; amount: number; direction: "income" | "expense"; category: string; frequency: Freq; nextDate: string; counterparty: string; active: boolean };
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [fDesc, setFDesc] = useState("");
+  const [fAmount, setFAmount] = useState("");
+  const [fDir, setFDir] = useState<"income" | "expense">("expense");
+  const [fCat, setFCat] = useState("expense");
+  const [fFreq, setFFreq] = useState<Freq>("monthly");
+  const [fNext, setFNext] = useState("");
+  const [fParty, setFParty] = useState("");
+
+  const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax"];
+  const monthsOf = (f: Freq) => f === "monthly" ? 1 : f === "quarterly" ? 3 : 12;
+  const monthlyEquiv = (t: Template) => t.amount / monthsOf(t.frequency);
+
+  const addTemplate = () => {
+    if (!fDesc || !fAmount) return;
+    setTemplates(prev => [...prev, { id: generateId(), description: fDesc, amount: parseFloat(fAmount) || 0, direction: fDir, category: fCat, frequency: fFreq, nextDate: fNext || new Date().toISOString().slice(0, 10), counterparty: fParty, active: true }]);
+    setFDesc(""); setFAmount(""); setFParty(""); setFNext(""); setShowForm(false);
+  };
+  const toggle = (id: string) => setTemplates(prev => prev.map(t => t.id === id ? { ...t, active: !t.active } : t));
+
+  const active = templates.filter(t => t.active);
+  const monthlyIncome = active.filter(t => t.direction === "income").reduce((s, t) => s + monthlyEquiv(t), 0);
+  const monthlyExpense = active.filter(t => t.direction === "expense").reduce((s, t) => s + monthlyEquiv(t), 0);
+  const netMonthly = monthlyIncome - monthlyExpense;
+
+  // Upcoming occurrences in next 90 days
+  const today = new Date();
+  const horizon = new Date(today.getTime() + 90 * 86400000);
+  const upcoming: { date: Date; description: string; signed: number }[] = [];
+  for (const t of active) {
+    let d = new Date(t.nextDate);
+    if (isNaN(d.getTime())) continue;
+    let guard = 0;
+    while (d <= horizon && guard < 12) {
+      if (d >= today) upcoming.push({ date: new Date(d), description: t.description, signed: t.direction === "income" ? t.amount : -t.amount });
+      d = new Date(d.getFullYear(), d.getMonth() + monthsOf(t.frequency), d.getDate());
+      guard++;
+    }
+  }
+  upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const fc = formatCurrency;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Monthly Recurring Income", value: fc(monthlyIncome), color: "text-green-400" },
+          { label: "Monthly Recurring Expense", value: fc(monthlyExpense), color: "text-red-400" },
+          { label: "Net Monthly Recurring", value: fc(netMonthly), color: netMonthly >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Active Templates", value: active.length.toString(), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <Repeat size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Recurring Templates</span>
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <Repeat size={11} /> Add template
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <input value={fDesc} onChange={e => setFDesc(e.target.value)} placeholder="Description *" className={inp} />
+              <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
+              <select value={fDir} onChange={e => setFDir(e.target.value as "income" | "expense")} className={inp}>
+                <option value="expense">Expense</option><option value="income">Income</option>
+              </select>
+              <select value={fCat} onChange={e => setFCat(e.target.value)} className={inp}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={fFreq} onChange={e => setFFreq(e.target.value as Freq)} className={inp}>
+                <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option>
+              </select>
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Next date</label><input type="date" value={fNext} onChange={e => setFNext(e.target.value)} className={inp} /></div>
+              <input value={fParty} onChange={e => setFParty(e.target.value)} placeholder="Counterparty" className={`${inp} md:col-span-2`} />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button onClick={addTemplate} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+              <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {templates.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No recurring templates. Add recurring rent, salaries, subscriptions, or retainer income to plan your cash flow.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Description", "Counterparty", "Category", "Amount", "Frequency", "Next", "Monthly Equiv", "Active", ""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map(t => (
+                  <tr key={t.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface)] ${!t.active ? "opacity-50" : ""}`}>
+                    <td className="px-3 py-2.5 font-medium">
+                      {t.description}
+                      <span className={`ml-2 text-[9px] px-1 py-0.5 rounded ${t.direction === "income" ? "text-green-400 bg-green-950/30" : "text-red-400 bg-red-950/30"}`}>{t.direction}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.counterparty || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.category}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{fc(t.amount)}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)] capitalize">{t.frequency}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{t.nextDate}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{fc(monthlyEquiv(t))}</td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => toggle(t.id)} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.active ? "bg-green-950/30 text-green-400" : "bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)]"}`}>{t.active ? "Active" : "Paused"}</button>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => setTemplates(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {upcoming.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-sm font-semibold mb-3">Upcoming (next 90 days)</p>
+          <div className="space-y-1.5">
+            {upcoming.slice(0, 20).map((u, i) => (
+              <div key={i} className="flex items-center justify-between text-xs border-b border-[var(--color-border)] last:border-0 pb-1.5">
+                <span className="text-[var(--color-muted)] w-24">{format(u.date, "dd MMM yyyy")}</span>
+                <span className="flex-1">{u.description}</span>
+                <span className={`tabular-nums font-semibold ${u.signed >= 0 ? "text-green-400" : "text-red-400"}`}>{u.signed >= 0 ? "+" : "−"}{fc(Math.abs(u.signed))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Templates are for cash-flow planning only and are not booked to the ledger automatically. Monthly equivalent: monthly = amount, quarterly = amount/3, annual = amount/12.</p>
     </div>
   );
 }

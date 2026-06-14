@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import {
   ShieldCheck, AlertTriangle, Calendar, CheckCircle2, ChevronRight,
-  TrendingUp, FileText, Plus, ArrowRight, Calculator,
+  TrendingUp, FileText, Plus, ArrowRight, Calculator, Scale, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -63,7 +63,7 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel">("overview");
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -137,7 +137,7 @@ export default function TaxPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -754,6 +754,14 @@ export default function TaxPage() {
       {taxTab === "angel" && (() => {
         return <AngelTaxChecker />;
       })()}
+
+      {taxTab === "regime" && (() => {
+        return <RegimeOptimizer />;
+      })()}
+
+      {taxTab === "advtax" && (() => {
+        return <AdvanceTaxEstimator />;
+      })()}
     </div>
   );
 }
@@ -964,6 +972,265 @@ function AngelTaxChecker() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Sec 56(2)(viib): if a closely-held company issues shares at a premium exceeding FMV, the excess is taxed as IFOS in the company. FMV via DCF or NAV method (Rule 11UA). DPIIT notification S.O. 1131(E) provides full exemption.</p>
+    </div>
+  );
+}
+
+// ── REGIME OPTIMIZER (Old vs New, FY 2024-25 / AY 2025-26) ──────────────────────
+type SlabBand = { upTo: number; rate: number };
+function slabTax(income: number, bands: SlabBand[]): number {
+  let tax = 0, prev = 0;
+  for (const b of bands) {
+    if (income <= prev) break;
+    const portion = Math.min(income, b.upTo) - prev;
+    if (portion > 0) tax += portion * (b.rate / 100);
+    prev = b.upTo;
+  }
+  return tax;
+}
+
+const NEW_BANDS: SlabBand[] = [
+  { upTo: 300000, rate: 0 }, { upTo: 700000, rate: 5 }, { upTo: 1000000, rate: 10 },
+  { upTo: 1200000, rate: 15 }, { upTo: 1500000, rate: 20 }, { upTo: Infinity, rate: 30 },
+];
+const OLD_BANDS: SlabBand[] = [
+  { upTo: 250000, rate: 0 }, { upTo: 500000, rate: 5 }, { upTo: 1000000, rate: 20 }, { upTo: Infinity, rate: 30 },
+];
+
+function RegimeOptimizer() {
+  const [gross,    setGross]    = useState("");
+  const [d80c,     setD80c]     = useState("");
+  const [d80d,     setD80d]     = useState("");
+  const [d80ccd,   setD80ccd]   = useState("");
+  const [homeLoan, setHomeLoan] = useState("");
+  const [hra,      setHra]      = useState("");
+  const [senior,   setSenior]   = useState(false);
+
+  const g = parseFloat(gross) || 0;
+  const ded80c   = Math.min(parseFloat(d80c)   || 0, 150000);
+  const ded80d   = Math.min(parseFloat(d80d)   || 0, senior ? 50000 : 25000);
+  const ded80ccd = Math.min(parseFloat(d80ccd) || 0, 50000);
+  const dedHome  = Math.min(parseFloat(homeLoan) || 0, 200000);
+  const dedHra   = parseFloat(hra) || 0;
+  const oldDeductions = ded80c + ded80d + ded80ccd + dedHome + dedHra;
+
+  // New regime
+  const newTaxable = Math.max(0, g - 75000);
+  const newSlab    = slabTax(newTaxable, NEW_BANDS);
+  const newRebate  = newTaxable <= 700000 ? newSlab : 0;
+  const newAfter   = newSlab - newRebate;
+  const newCess    = newAfter * 0.04;
+  const newTotal   = Math.round(newAfter + newCess);
+
+  // Old regime
+  const oldTaxable = Math.max(0, g - 50000 - oldDeductions);
+  const oldSlab    = slabTax(oldTaxable, OLD_BANDS);
+  const oldRebate  = oldTaxable <= 500000 ? Math.min(oldSlab, 12500) : 0;
+  const oldAfter   = oldSlab - oldRebate;
+  const oldCess    = oldAfter * 0.04;
+  const oldTotal   = Math.round(oldAfter + oldCess);
+
+  const cheaper = newTotal <= oldTotal ? "New" : "Old";
+  const savings = Math.abs(newTotal - oldTotal);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const breakdown = [
+    { label: "Gross Income",        nw: g,            od: g },
+    { label: "Standard Deduction",  nw: -75000,       od: -50000 },
+    { label: "Chapter VI-A & 24(b)", nw: 0,           od: -oldDeductions },
+    { label: "Taxable Income",      nw: newTaxable,   od: oldTaxable, bold: true },
+    { label: "Slab Tax",            nw: Math.round(newSlab), od: Math.round(oldSlab) },
+    { label: "Less: 87A Rebate",    nw: -Math.round(newRebate), od: -Math.round(oldRebate) },
+    { label: "Health & Edu Cess 4%", nw: Math.round(newCess), od: Math.round(oldCess) },
+    { label: "Total Tax",           nw: newTotal,     od: oldTotal, bold: true },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">Old vs New Regime Optimizer (FY 2024-25)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross Annual Income (₹)</label>
+            <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="e.g. 1200000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80C (max ₹1.5L)</label>
+            <input type="number" value={d80c} onChange={e => setD80c(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80D Health (max ₹{senior ? "50k" : "25k"})</label>
+            <input type="number" value={d80d} onChange={e => setD80d(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80CCD(1B) NPS (max ₹50k)</label>
+            <input type="number" value={d80ccd} onChange={e => setD80ccd(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Home Loan Int. 24(b) (max ₹2L)</label>
+            <input type="number" value={homeLoan} onChange={e => setHomeLoan(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">HRA Exemption</label>
+            <input type="number" value={hra} onChange={e => setHra(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input type="checkbox" checked={senior} onChange={e => setSenior(e.target.checked)} className="accent-[var(--color-primary)]" />
+              Senior citizen (80D ₹50k)
+            </label>
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Deductions apply only in the Old Regime. New Regime allows only the ₹75,000 standard deduction (and 80CCD(2) employer NPS, not modelled here).</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Tax — New Regime", value: fc(newTotal), color: cheaper === "New" ? "text-green-400" : "text-[var(--color-text)]" },
+          { label: "Tax — Old Regime", value: fc(oldTotal), color: cheaper === "Old" ? "text-green-400" : "text-[var(--color-text)]" },
+          { label: "You Save",         value: fc(savings),  color: "text-[var(--color-primary)]" },
+          { label: "Recommended",      value: `${cheaper} Regime`, color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[420px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Particulars", "New Regime", "Old Regime"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {breakdown.map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.nw < 0 ? `(${fc(Math.abs(r.nw))})` : fc(r.nw)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.od < 0 ? `(${fc(Math.abs(r.od))})` : fc(r.od)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+        <p className="text-sm font-bold text-green-400">✓ {cheaper} Regime is cheaper by {fc(savings)}/year for this income & deduction profile.</p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">FY 2024-25 (AY 2025-26) slabs. Surcharge for income &gt; ₹50L is not modelled. 87A rebate: NIL tax if taxable ≤ ₹7L (new) / ≤ ₹5L (old). Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── ADVANCE TAX ESTIMATOR (Sec 208/211, interest 234B/234C) ─────────────────────
+function AdvanceTaxEstimator() {
+  const { store } = useApp();
+  const defaultLiability = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const months = Math.max(txns.length / 30, 1);
+    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const cost = txns.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const annualProfit = ((rev - cost) / months) * 12;
+    return Math.max(0, Math.round(annualProfit * 0.25));
+  }, [store.transactions]);
+
+  const [liabilityInput, setLiabilityInput] = useState("");
+  const liability = parseFloat(liabilityInput) || defaultLiability;
+  const [paid, setPaid] = useState<number[]>([0, 0, 0, 0]);
+
+  const SCHEDULE = [
+    { label: "1st — 15 Jun", pct: 15, months: 3 },
+    { label: "2nd — 15 Sep", pct: 45, months: 3 },
+    { label: "3rd — 15 Dec", pct: 75, months: 3 },
+    { label: "4th — 15 Mar", pct: 100, months: 1 },
+  ];
+
+  const rows = SCHEDULE.map((s, i) => {
+    const cumulativeDue  = Math.round(liability * s.pct / 100);
+    const cumulativePaid = paid.slice(0, i + 1).reduce((a, b) => a + (b || 0), 0);
+    const shortfall      = Math.max(0, cumulativeDue - cumulativePaid);
+    const interest234C   = Math.round(shortfall * 0.01 * s.months);
+    return { ...s, cumulativeDue, cumulativePaid, shortfall, interest234C };
+  });
+
+  const totalPaid     = paid.reduce((a, b) => a + (b || 0), 0);
+  const total234C     = rows.reduce((s, r) => s + r.interest234C, 0);
+  const below90       = totalPaid < liability * 0.9;
+  const interest234B  = below90 ? Math.round((liability - totalPaid) * 0.01 * 1) : 0; // indicative 1 month
+  const totalInterest = total234C + interest234B;
+  const applicable    = liability > 10000;
+  const fc = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Advance Tax Estimator (Sec 208 / 211)</h3>
+        <div className="max-w-sm">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated Annual Tax Liability (₹)</label>
+          <input type="number" value={liabilityInput} onChange={e => setLiabilityInput(e.target.value)}
+            placeholder={`Auto: ${fc(defaultLiability)}`}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        {!applicable && <p className="text-xs text-green-400">Liability ≤ ₹10,000 — advance tax is not mandatory (Sec 208).</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Liability", value: fc(liability),      color: "text-[var(--color-primary)]" },
+          { label: "Total Paid",      value: fc(totalPaid),      color: "text-blue-400" },
+          { label: "Shortfall",       value: fc(Math.max(0, liability - totalPaid)), color: totalPaid < liability ? "text-red-400" : "text-green-400" },
+          { label: "Est. Interest 234B+C", value: fc(totalInterest), color: totalInterest > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <Clock size={13} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Installment Schedule</span>
+        </div>
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Installment", "Cum. %", "Cum. Due", "Paid (editable)", "Shortfall", "234C Interest"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.pct}%</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.cumulativeDue)}</td>
+                <td className="px-4 py-2.5">
+                  <input type="number" value={paid[i] || ""} onChange={e => { const next = [...paid]; next[i] = parseFloat(e.target.value) || 0; setPaid(next); }}
+                    placeholder="0" className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
+                </td>
+                <td className="px-4 py-2.5 tabular-nums text-red-400">{r.shortfall > 0 ? fc(r.shortfall) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.interest234C > 0 ? fc(r.interest234C) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {below90 && applicable && (
+        <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+          <p className="text-sm font-bold text-orange-400">⚠ Less than 90% paid — Sec 234B interest of ~{fc(interest234B)} applies (1%/month on shortfall from 1 April, indicative).</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative — consult a CA.</p>
     </div>
   );
 }
