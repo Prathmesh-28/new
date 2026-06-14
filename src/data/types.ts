@@ -291,6 +291,10 @@ export interface Invoice {
   dueDate: string;
   description: string;
   status: "pending" | "overdue" | "paid";
+  // Where the invoice originated. "backend" invoices are mirrored from the
+  // /api/invoices table (the InvoicesPage source) into the shared store so the
+  // analytics engine, Collections and Dashboard all see one unified AR list.
+  source?: "backend" | "import" | "manual";
 }
 
 // ── Budget entity ───────────────────────────────────────────────────────────

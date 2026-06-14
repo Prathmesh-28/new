@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { useApp } from "@/context/AppContext";
+import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -271,19 +273,48 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
 }
 
 export default function InvoicesPage() {
+  const { setStore } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showNew, setShowNew]   = useState(false);
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
   const [tab, setTab]           = useState<"all" | "pending" | "paid" | "collection">("all");
 
+  // Mirror the backend invoices into the shared store so the analytics engine,
+  // Collections, Working Capital and Dashboard all read ONE unified AR list.
+  // Reconcile deterministically: drop any prior backend-sourced mirrors and
+  // re-add the current set (handles backend updates/deletes), while leaving
+  // CSV-imported / manual store invoices untouched.
+  const syncToStore = useCallback((data: Invoice[]) => {
+    const mirrored: StoreInvoice[] = data
+      .filter(d => d.status !== "cancelled")
+      .map(d => ({
+        id: d.id,
+        customer: d.customer_name,
+        amount: Number(d.total_amount) || 0,
+        invoiceNumber: d.invoice_number,
+        invoiceDate: (d.created_at || "").split("T")[0],
+        dueDate: (d.due_date || d.created_at || "").split("T")[0],
+        description: d.invoice_number || "",
+        status: d.status === "paid"
+          ? "paid"
+          : (d.due_date && new Date(d.due_date) < new Date() ? "overdue" : "pending"),
+        source: "backend",
+      }));
+    setStore(s => ({
+      ...s,
+      invoices: [...(s.invoices ?? []).filter(si => si.source !== "backend"), ...mirrored],
+    }));
+  }, [setStore]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get<Invoice[]>("/api/invoices");
       setInvoices(data);
+      syncToStore(data);
     } catch { /* ok */ } finally { setLoading(false); }
-  }, []);
+  }, [syncToStore]);
 
   useEffect(() => { load(); }, [load]);
 
