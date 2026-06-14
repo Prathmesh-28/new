@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -240,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1303,6 +1303,107 @@ export default function GstPage() {
 
             <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
               GSTR-9 is due by Dec 31 for the preceding FY. These are estimated figures — actual figures must match your filed GSTR-1 and GSTR-3B returns. A CA must sign the audit report (GSTR-9C) if turnover exceeds ₹5 crore.
+            </div>
+          </div>
+        );
+      })()}
+
+      {tab === "lut" && (() => {
+        type Lut = { id: string; refNo: string; fy: string; filedDate: string; exportType: "goods" | "services" | "both"; status: "active" | "expired" | "pending" };
+
+        const currentFy = (() => { const y = new Date().getFullYear(); return new Date().getMonth() >= 3 ? `${y}-${y+1}` : `${y-1}-${y}`; })();
+        const [luts, setLuts]       = useState<Lut[]>([]);
+        const [refNo, setRefNo]     = useState("");
+        const [fy,    setFy]        = useState(currentFy);
+        const [filed, setFiled]     = useState(() => new Date().toISOString().split("T")[0]);
+        const [expType, setExpType] = useState<"goods"|"services"|"both">("goods");
+
+        const addLut = () => {
+          if (!refNo) return;
+          const fyEnd = `${fy.split("-")[1]}-03-31`;
+          const status: Lut["status"] = new Date(fyEnd) < new Date() ? "expired" : "active";
+          setLuts(prev => [...prev, { id: Math.random().toString(36).slice(2), refNo, fy, filedDate: filed, exportType: expType, status }]);
+          setRefNo("");
+        };
+
+        const activeLut   = luts.find(l => l.fy === currentFy && l.status === "active");
+        const today       = new Date();
+        const fyEndDate   = new Date(`${currentFy.split("-")[1]}-03-31`);
+        const daysToExpiry = Math.ceil((fyEndDate.getTime() - today.getTime()) / 86400000);
+
+        return (
+          <div className="space-y-4 max-w-xl">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1">LUT Tracker — Letter of Undertaking</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Exporters must file LUT (Form GST RFD-11) on GST portal every financial year to export without paying IGST. LUT is valid for the FY it is filed in.</p>
+
+              <div className={`rounded-lg border p-4 mb-4 ${activeLut ? "bg-green-950/20 border-green-800/40" : "bg-red-950/20 border-red-800/40"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck size={14} className={activeLut ? "text-green-400" : "text-red-400"} />
+                  <p className="text-sm font-semibold">{activeLut ? `LUT Active — FY ${currentFy}` : `No LUT for FY ${currentFy}`}</p>
+                </div>
+                {activeLut ? (
+                  <p className="text-xs text-[var(--color-muted)]">Ref: {activeLut.refNo} · Expires Mar 31 · {daysToExpiry > 0 ? `${daysToExpiry} days remaining` : "Expired"}</p>
+                ) : (
+                  <p className="text-xs text-[var(--color-muted)]">File LUT on GST portal (RFD-11) before making any zero-rated export without IGST payment.</p>
+                )}
+                {activeLut && daysToExpiry <= 45 && daysToExpiry > 0 && (
+                  <p className="text-xs text-orange-400 mt-1 font-semibold">⚠ Renew LUT for next FY before April 1 to avoid disruption to exports.</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <input value={refNo} onChange={e=>setRefNo(e.target.value)} placeholder="LUT reference number *"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input value={fy} onChange={e=>setFy(e.target.value)} placeholder="Financial year (e.g. 2025-2026)"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input type="date" value={filed} onChange={e=>setFiled(e.target.value)}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <div className="flex gap-2">
+                  {(["goods","services","both"] as const).map(t => (
+                    <button key={t} onClick={()=>setExpType(t)}
+                      className={`flex-1 py-2 text-xs rounded-lg border font-medium transition-colors capitalize ${expType===t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={addLut} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add LUT</button>
+            </div>
+
+            {luts.length > 0 && (
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">LUT History</p></div>
+                <div className="divide-y divide-[var(--color-border)]">
+                  {luts.slice().reverse().map(l => (
+                    <div key={l.id} className="flex items-center gap-4 px-4 py-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium font-mono">{l.refNo}</p>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${l.status === "active" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{l.status}</span>
+                          <span className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full capitalize">{l.exportType}</span>
+                        </div>
+                        <p className="text-[10px] text-[var(--color-muted)] mt-0.5">FY {l.fy} · Filed {l.filedDate}</p>
+                      </div>
+                      <button onClick={()=>setLuts(prev=>prev.filter(x=>x.id!==l.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-xs space-y-2">
+              <p className="font-semibold">LUT vs Bond — When to use what?</p>
+              {[
+                { label: "LUT (RFD-11)", desc: "For exporters with no GST prosecution in preceding 5 years. No financial security needed. File online on GST portal." },
+                { label: "Bond (RFD-11)", desc: "For new exporters or those with prior prosecution. Requires bank guarantee or surety. More compliance burden." },
+                { label: "IGST Payment", desc: "Pay IGST on export invoice and claim refund later. Ties up working capital — avoid if LUT is available." },
+              ].map(r => (
+                <div key={r.label} className="flex gap-2">
+                  <span className="font-semibold shrink-0 text-[var(--color-primary)]">{r.label}:</span>
+                  <span className="text-[var(--color-muted)]">{r.desc}</span>
+                </div>
+              ))}
             </div>
           </div>
         );

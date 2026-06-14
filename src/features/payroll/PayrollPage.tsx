@@ -118,7 +118,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -221,7 +221,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -951,6 +951,7 @@ export default function PayrollPage() {
       {tab === "fnf" && <FnFTab employees={employees} />}
       {tab === "variance" && <PayrollVarianceTab />}
       {tab === "pt" && <PtCalculatorTab employees={employees} />}
+      {tab === "flexi" && <FlexiBenefitTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1315,6 +1316,136 @@ function PtCalculatorTab({ employees }: { employees: { id: string; name: string;
           <p className="text-sm text-[var(--color-muted)]">Add employees to compute PT deductions.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function FlexiBenefitTab({ employees }: { employees: { id: string; name: string; gross_salary: number }[] }) {
+  const [empId, setEmpId] = useState(employees[0]?.id ?? "");
+  const [hra,   setHra]   = useState(40); // % of basic
+  const [lta,   setLta]   = useState(12000); // annual
+  const [food,  setFood]  = useState(2400); // annual ₹200/mo
+  const [nps,   setNps]   = useState(10);  // % of basic (employer 80CCD(2))
+  const [basicPct, setBasicPct] = useState(50); // % of gross
+
+  const emp   = employees.find(e => e.id === empId);
+  const gross = emp ? Number(emp.gross_salary) * 12 : 0; // annual
+  const basic = Math.round(gross * basicPct / 100);
+  const hraAmt    = Math.round(basic * hra / 100);
+  const ltaAmt    = Math.min(lta, basic);
+  const foodAmt   = Math.min(food, 26400); // capped ₹2200/mo
+  const npsAmt    = Math.round(basic * nps / 100);
+  const specialAllowance = Math.max(0, gross - basic - hraAmt - ltaAmt - foodAmt - npsAmt);
+
+  // Tax saving estimate (30% slab)
+  const hraTaxFree   = Math.round(hraAmt * 0.8); // 80% of HRA exempt for metro simplification
+  const ltaTaxFree   = ltaAmt;
+  const foodTaxFree  = foodAmt;
+  const npsTaxFree   = npsAmt; // 80CCD(2) fully exempt
+  const totalTaxFree = hraTaxFree + ltaTaxFree + foodTaxFree + npsTaxFree;
+  const taxSaving    = Math.round(totalTaxFree * 0.30);
+
+  const fc = formatCurrency;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  const rows = [
+    { label: "Basic Salary",         amount: basic,            taxable: basic,            exemptBasis: "Fully taxable" },
+    { label: "HRA",                  amount: hraAmt,           taxable: hraAmt - hraTaxFree, exemptBasis: "Sec 10(13A) — metro 50% of basic" },
+    { label: "LTA",                  amount: ltaAmt,           taxable: 0,                exemptBasis: "Sec 10(5) — 2 trips in 4yr block" },
+    { label: "Food Coupons",         amount: foodAmt,          taxable: 0,                exemptBasis: "₹2,200/mo perquisite exemption" },
+    { label: "NPS (Employer 80CCD(2))", amount: npsAmt,        taxable: 0,                exemptBasis: "Up to 10% of basic — over-and-above 80C" },
+    { label: "Special Allowance",    amount: specialAllowance, taxable: specialAllowance, exemptBasis: "Fully taxable" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">Salary Structure Inputs</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={inp}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name} — {fc(e.gross_salary)}/mo</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Basic as % of Gross</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={30} max={70} value={basicPct} onChange={e => setBasicPct(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-8 tabular-nums">{basicPct}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">HRA % of Basic</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={20} max={60} step={5} value={hra} onChange={e => setHra(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-8 tabular-nums">{hra}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">LTA (Annual ₹)</label>
+            <input type="number" value={lta} onChange={e => setLta(Number(e.target.value))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Food Coupons (Annual ₹)</label>
+            <input type="number" value={food} onChange={e => setFood(Number(e.target.value))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">NPS Employer Contrib % of Basic</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={0} max={14} value={nps} onChange={e => setNps(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-8 tabular-nums">{nps}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual CTC",       value: fc(gross + npsAmt), color: "text-[var(--color-primary)]" },
+          { label: "Tax-Free Amount",  value: fc(totalTaxFree),    color: "text-green-400" },
+          { label: "Est. Tax Saving",  value: fc(taxSaving),       color: "text-yellow-400" },
+          { label: "Taxable Salary",   value: fc(gross - totalTaxFree + basic), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <Banknote size={13} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Optimised Salary Breakup (Annual)</span>
+        </div>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Component","Amount","Taxable Portion","Exemption Basis"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-3 font-medium">{r.label}</td>
+                <td className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
+                <td className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
+                <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.exemptBasis}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+              <td className="px-4 py-3 font-bold">Total</td>
+              <td className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
+              <td className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
+              <td className="px-4 py-3 text-xs text-green-400 font-semibold">Est. ₹{Math.round(taxSaving / 1000)}k/yr saved (30% slab)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">HRA exemption simplified as 80% (metro). LTA exempt for 2 journeys/block. Food coupons capped ₹2,200/mo. NPS via Sec 80CCD(2) — above ₹1.5L 80C limit. Always verify with your CA.</p>
     </div>
   );
 }

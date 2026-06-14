@@ -317,6 +317,9 @@ export default function CompliancePage() {
 
       {/* Labour Law Checklist */}
       <LabourLawChecklist employeeCount={store.transactions.filter(t=>t.category==="payroll").length > 0 ? 15 : 0} />
+
+      {/* Insurance Calendar */}
+      <InsuranceCalendar />
     </div>
   );
 }
@@ -398,6 +401,140 @@ function LabourLawChecklist({ employeeCount }: { employeeCount: number }) {
         <div className="px-5 py-3 bg-green-950/30 border-t border-green-800/40 text-sm text-green-400 flex items-center gap-2">
           <ShieldCheck size={14} /> All {applicable.length} applicable acts checked — review periodically as employee count grows.
         </div>
+      )}
+    </div>
+  );
+}
+
+type InsurancePolicy = {
+  id: string; name: string; type: string; insurer: string;
+  premium: number; renewalDate: string; sumInsured: number; notes: string;
+};
+
+function InsuranceCalendar() {
+  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [showForm, setShowForm]  = useState(false);
+  const [iName,  setIName]  = useState("");
+  const [iType,  setIType]  = useState("Fire & Burglary");
+  const [iInsurer, setIInsurer] = useState("");
+  const [iPremium, setIPremium] = useState("");
+  const [iRenewal, setIRenewal] = useState("");
+  const [iSum,   setISum]   = useState("");
+  const [iNotes, setINotes] = useState("");
+
+  const TYPES = ["Fire & Burglary","Shopkeeper","Marine Cargo","Group Health","Group Personal Accident","Directors & Officers","Professional Indemnity","Vehicle Fleet","Workmen Compensation","Cyber Liability","Key Man","Other"];
+
+  const addPolicy = () => {
+    if (!iName || !iRenewal) return;
+    setPolicies(prev => [...prev, { id: Math.random().toString(36).slice(2), name: iName, type: iType, insurer: iInsurer, premium: parseFloat(iPremium) || 0, renewalDate: iRenewal, sumInsured: parseFloat(iSum) || 0, notes: iNotes }]);
+    setIName(""); setIInsurer(""); setIPremium(""); setIRenewal(""); setISum(""); setINotes("");
+    setShowForm(false);
+  };
+
+  const today = new Date();
+  const sorted = [...policies].sort((a, b) => new Date(a.renewalDate).getTime() - new Date(b.renewalDate).getTime());
+  const totalPremium = policies.reduce((s, p) => s + p.premium, 0);
+  const expiring30 = policies.filter(p => {
+    const d = differenceInDays(new Date(p.renewalDate), today);
+    return d >= 0 && d <= 30;
+  });
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc  = formatCurrency;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={14} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Insurance Calendar</p>
+          {expiring30.length > 0 && (
+            <span className="text-xs bg-red-950/40 text-red-400 font-semibold px-2 py-0.5 rounded-full">
+              {expiring30.length} renewing soon
+            </span>
+          )}
+        </div>
+        <button onClick={() => setShowForm(f => !f)}
+          className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Add policy
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <input value={iName}    onChange={e => setIName(e.target.value)}    placeholder="Policy name *" className={inp} />
+            <select value={iType}   onChange={e => setIType(e.target.value)}    className={inp}>
+              {TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+            <input value={iInsurer} onChange={e => setIInsurer(e.target.value)} placeholder="Insurer / broker" className={inp} />
+            <input type="number" value={iPremium} onChange={e => setIPremium(e.target.value)} placeholder="Annual premium (₹)" className={inp} />
+            <input type="number" value={iSum}    onChange={e => setISum(e.target.value)}    placeholder="Sum insured (₹)" className={inp} />
+            <input type="date"   value={iRenewal} onChange={e => setIRenewal(e.target.value)} className={inp} />
+            <input value={iNotes}  onChange={e => setINotes(e.target.value)}   placeholder="Notes (optional)" className={`${inp} md:col-span-3`} />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={addPolicy} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-4 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {policies.length === 0 ? (
+        <p className="p-6 text-sm text-[var(--color-muted)] text-center">No insurance policies tracked. Add fire, health, marine, vehicle or liability policies to get renewal alerts.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 p-4 border-b border-[var(--color-border)]">
+            {[
+              { label: "Policies",      value: policies.length.toString(),  color: "text-[var(--color-primary)]" },
+              { label: "Annual Premium",value: fc(totalPremium),            color: "text-blue-400" },
+              { label: "Renewing ≤30d", value: expiring30.length.toString(), color: expiring30.length > 0 ? "text-red-400" : "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="text-center">
+                <p className="text-xs text-[var(--color-muted)]">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Policy","Type","Insurer","Premium","Sum Insured","Renewal","Status",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(p => {
+                  const daysLeft = differenceInDays(new Date(p.renewalDate), today);
+                  const expired  = daysLeft < 0;
+                  const urgent   = !expired && daysLeft <= 30;
+                  const statusCls = expired ? "bg-red-950/30 text-red-400" : urgent ? "bg-yellow-950/30 text-yellow-400" : "bg-green-950/30 text-green-400";
+                  const statusLabel = expired ? "Expired" : urgent ? `${daysLeft}d left` : "Active";
+                  return (
+                    <tr key={p.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${expired ? "opacity-60" : ""}`}>
+                      <td className="px-4 py-3 font-semibold">{p.name}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{p.type}</td>
+                      <td className="px-4 py-3 text-[var(--color-muted)]">{p.insurer || "—"}</td>
+                      <td className="px-4 py-3 tabular-nums">{p.premium > 0 ? fc(p.premium) : "—"}</td>
+                      <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{p.sumInsured > 0 ? fc(p.sumInsured) : "—"}</td>
+                      <td className="px-4 py-3 tabular-nums">{p.renewalDate}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => setPolicies(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400">
+                          <X size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

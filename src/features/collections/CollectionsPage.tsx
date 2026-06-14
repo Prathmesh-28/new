@@ -123,7 +123,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -220,10 +220,14 @@ export default function CollectionsPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-            {(["collections", "profitability"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-                {v === "collections" ? <><PhoneCall size={10} /> Collections</> : <><BarChart2 size={10} /> Profitability</>}
+            {([
+              { id: "collections",   label: "Collections",   icon: <PhoneCall size={10} /> },
+              { id: "profitability", label: "Profitability",  icon: <BarChart2 size={10} /> },
+              { id: "clv",           label: "CLV",            icon: <Star size={10} /> },
+            ] as const).map(v => (
+              <button key={v.id} onClick={() => setView(v.id)}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {v.icon} {v.label}
               </button>
             ))}
           </div>
@@ -461,6 +465,133 @@ export default function CollectionsPage() {
         />
       )}
       </>}
+
+      {view === "clv" && <ClvCalculator />}
+    </div>
+  );
+}
+
+function ClvCalculator() {
+  const { store } = useApp();
+  const [marginPct, setMarginPct] = useState(25);
+  const [lifespanYrs, setLifespanYrs] = useState(3);
+
+  const customerData = useMemo(() => {
+    const inv = store.invoices ?? [];
+    const map: Record<string, { total: number; count: number; dates: number[] }> = {};
+    for (const i of inv) {
+      const name = i.customer ?? "Unknown";
+      if (!map[name]) map[name] = { total: 0, count: 0, dates: [] };
+      map[name].total += Number(i.amount ?? 0);
+      map[name].count += 1;
+      if (i.invoiceDate) map[name].dates.push(new Date(i.invoiceDate).getTime());
+    }
+    return Object.entries(map).map(([customer, d]) => {
+      const aov = d.count > 0 ? d.total / d.count : 0;
+      const dates = d.dates.sort((a, b) => a - b);
+      let avgFreqDays = 30;
+      if (dates.length >= 2) {
+        const gaps: number[] = [];
+        for (let i = 1; i < dates.length; i++) gaps.push((dates[i] - dates[i - 1]) / 86400000);
+        avgFreqDays = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      }
+      const ordersPerYear = avgFreqDays > 0 ? 365 / avgFreqDays : 12;
+      const clv = aov * ordersPerYear * lifespanYrs * (marginPct / 100);
+      return { customer, aov, ordersPerYear: Math.round(ordersPerYear * 10) / 10, total: d.total, count: d.count, clv };
+    }).sort((a, b) => b.clv - a.clv);
+  }, [store.invoices, marginPct, lifespanYrs]);
+
+  const topClv = customerData.reduce((s, c) => s + c.clv, 0);
+  const top20Clv = customerData.slice(0, Math.max(1, Math.ceil(customerData.length * 0.2))).reduce((s, c) => s + c.clv, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex flex-wrap items-center gap-6">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross Margin %</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={5} max={80} value={marginPct} onChange={e => setMarginPct(Number(e.target.value))}
+                className="w-28 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-8 tabular-nums">{marginPct}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer Lifespan (years)</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={1} max={10} value={lifespanYrs} onChange={e => setLifespanYrs(Number(e.target.value))}
+                className="w-28 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-4 tabular-nums">{lifespanYrs}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total Customers", value: customerData.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Total Projected CLV", value: formatCurrency(topClv), color: "text-green-400" },
+          { label: "Top 20% CLV Share", value: topClv > 0 ? `${Math.round((top20Clv / topClv) * 100)}%` : "—", color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {customerData.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Star size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add invoices to calculate customer lifetime value.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <Star size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Customer Lifetime Value</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">CLV = AOV × Orders/yr × Lifespan × Margin</span>
+          </div>
+          <table className="w-full text-sm min-w-[600px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer","Invoices","Avg Order Value","Orders/Year","Projected CLV","Tier"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {customerData.map((c, i) => {
+                const maxClv = customerData[0]?.clv ?? 1;
+                const pct = maxClv > 0 ? (c.clv / maxClv) * 100 : 0;
+                const tier = i < Math.ceil(customerData.length * 0.2) ? { label: "Platinum", cls: "bg-purple-950/30 text-purple-400" }
+                           : i < Math.ceil(customerData.length * 0.5) ? { label: "Gold",     cls: "bg-yellow-950/30 text-yellow-400" }
+                           : { label: "Standard", cls: "bg-[var(--color-accent)] text-[var(--color-muted)]" };
+                return (
+                  <tr key={c.customer} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-semibold">{c.customer}</td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{c.count}</td>
+                    <td className="px-4 py-3 tabular-nums">{formatCurrency(c.aov)}</td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{c.ordersPerYear}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden w-20">
+                          <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="tabular-nums text-xs font-semibold">{formatCurrency(c.clv)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tier.cls}`}>{tier.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Platinum = top 20% by CLV · CLV formula: AOV × purchase frequency × lifespan × margin · Adjust sliders to model scenarios</p>
     </div>
   );
 }
