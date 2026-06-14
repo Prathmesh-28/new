@@ -3,11 +3,13 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
+import { useFeatureState } from "@/hooks/useFeatureState";
+import { format, differenceInCalendarDays } from "date-fns";
 
-type Tab = "overview" | "companies" | "users";
+type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
 type Company = {
@@ -99,9 +101,12 @@ export default function AdminPage() {
   };
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "overview",  label: "Platform Overview", icon: ShieldCheck },
-    { id: "companies", label: "Companies",          icon: Building2 },
-    { id: "users",     label: "Users",              icon: Users },
+    { id: "overview",     label: "Platform Overview", icon: ShieldCheck },
+    { id: "companies",    label: "Companies",          icon: Building2 },
+    { id: "users",        label: "Users",              icon: Users },
+    { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
+    { id: "usage",        label: "Usage Analytics",    icon: Activity },
+    { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
   ];
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -185,7 +190,7 @@ export default function AdminPage() {
       )}
 
       {/* search bar for companies/users */}
-      {tab !== "overview" && (
+      {(tab === "companies" || tab === "users") && (
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex-1 relative min-w-[220px]">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
@@ -314,6 +319,376 @@ export default function AdminPage() {
           </div>
         )
       )}
+
+      {tab === "ca-workspace" && <CaWorkspace companies={companies} loadCompanies={loadCompanies} />}
+      {tab === "usage" && <UsageAnalytics />}
+      {tab === "retention" && <RetentionSettings />}
+    </div>
+  );
+}
+
+// ── #174 CA / Advisor Invite & Workspace ───────────────────────────────────
+type CaAdvisor = {
+  id: string;
+  name: string;
+  email: string;
+  firm: string;
+  role: "ca" | "advisor" | "bookkeeper";
+  clientTenants: string[];
+  invitedAt: string;
+  status: "invited" | "active";
+};
+
+function CaWorkspace({ companies, loadCompanies }: { companies: Company[]; loadCompanies: () => void }) {
+  const [advisors, setAdvisors] = useFeatureState<CaAdvisor[]>("admin-ca-advisors", []);
+  const [name, setName]   = useState("");
+  const [email, setEmail] = useState("");
+  const [firm, setFirm]   = useState("");
+  const [role, setRole]   = useState<CaAdvisor["role"]>("ca");
+
+  useEffect(() => { if (companies.length === 0) loadCompanies(); }, [companies.length, loadCompanies]);
+
+  const ROLE_LABEL: Record<CaAdvisor["role"], string> = { ca: "Chartered Accountant", advisor: "Financial Advisor", bookkeeper: "Bookkeeper" };
+
+  const invite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) { toast.error("Name and email required"); return; }
+    if (advisors.some(a => a.email.toLowerCase() === email.trim().toLowerCase())) { toast.error("Advisor already invited"); return; }
+    const adv: CaAdvisor = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      firm: firm.trim(),
+      role,
+      clientTenants: [],
+      invitedAt: new Date().toISOString(),
+      status: "invited",
+    };
+    setAdvisors(prev => [adv, ...prev]);
+    setName(""); setEmail(""); setFirm("");
+    toast.success(`Invite ready for ${adv.name} — share the workspace link to onboard them`);
+  };
+
+  const toggleClient = (advId: string, tenant: string) => {
+    setAdvisors(prev => prev.map(a => a.id === advId
+      ? { ...a, clientTenants: a.clientTenants.includes(tenant) ? a.clientTenants.filter(t => t !== tenant) : [...a.clientTenants, tenant] }
+      : a));
+  };
+  const activate = (advId: string) => {
+    setAdvisors(prev => prev.map(a => a.id === advId ? { ...a, status: "active" } : a));
+    toast.success("Advisor marked active");
+  };
+  const remove = (advId: string) => {
+    if (!window.confirm("Remove this advisor and revoke their client access?")) return;
+    setAdvisors(prev => prev.filter(a => a.id !== advId));
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const totalMappings = advisors.reduce((s, a) => s + a.clientTenants.length, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Advisors", value: advisors.length.toString(), sub: "CAs & bookkeepers" },
+          { label: "Active", value: advisors.filter(a => a.status === "active").length.toString(), sub: "onboarded" },
+          { label: "Pending Invites", value: advisors.filter(a => a.status === "invited").length.toString(), sub: "awaiting login" },
+          { label: "Client Mappings", value: totalMappings.toString(), sub: "advisor↔company links" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={invite} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Briefcase size={14} className="text-[var(--color-primary)]" /> Invite a CA / Advisor</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Give your accountant collaborative access to selected client companies — the core of multi-client distribution.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="CA Anita Sharma" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Email *</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="anita@firm.in" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Firm (optional)</label>
+            <input value={firm} onChange={e => setFirm(e.target.value)} placeholder="Sharma & Associates" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Role</label>
+            <select value={role} onChange={e => setRole(e.target.value as CaAdvisor["role"])} className={inp}>
+              {(Object.keys(ROLE_LABEL) as CaAdvisor["role"][]).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+            </select>
+          </div>
+        </div>
+        <button type="submit" className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={13} /> Add advisor
+        </button>
+      </form>
+
+      {advisors.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <Briefcase size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No advisors yet. Invite your CA to collaborate across clients.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {advisors.map(a => (
+            <div key={a.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--color-accent)] border border-[var(--color-border)] flex items-center justify-center shrink-0">
+                    <Briefcase size={15} className="text-[var(--color-primary)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{a.name} <span className="text-[10px] text-[var(--color-muted)] font-normal ml-1">{ROLE_LABEL[a.role]}</span></p>
+                    <p className="text-xs text-[var(--color-muted)] flex items-center gap-1"><Mail size={11} /> {a.email}{a.firm && ` · ${a.firm}`}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${a.status === "active" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                    {a.status === "active" ? "Active" : "Invited"}
+                  </span>
+                  {a.status === "invited" && <button onClick={() => activate(a.id)} className="text-xs text-[var(--color-primary)] hover:underline">Mark active</button>}
+                  <button onClick={() => remove(a.id)} title="Remove advisor" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wide mb-2">Client access ({a.clientTenants.length} of {companies.length})</p>
+                {companies.length === 0 ? (
+                  <p className="text-xs text-[var(--color-muted)]">Loading companies…</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {companies.map(c => {
+                      const on = a.clientTenants.includes(c.tenant_id);
+                      return (
+                        <button key={c.tenant_id} onClick={() => toggleClient(a.id, c.tenant_id)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${on ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                          {c.company_name || c.tenant_id.slice(0, 8)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #175 Usage & Activity Analytics ────────────────────────────────────────
+function UsageAnalytics() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const authHeaders = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+
+  useEffect(() => {
+    fetch(`${BASE}/api/admin/stats`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null).then(setStats).catch(() => {});
+    fetch(`${BASE}/api/admin/companies`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(setCompanies).catch(() => {});
+  }, [authHeaders]);
+
+  const now = new Date();
+  const active7  = companies.filter(c => c.last_activity && differenceInCalendarDays(now, new Date(c.last_activity)) <= 7).length;
+  const active30 = companies.filter(c => c.last_activity && differenceInCalendarDays(now, new Date(c.last_activity)) <= 30).length;
+  const dormant  = companies.filter(c => !c.last_activity || differenceInCalendarDays(now, new Date(c.last_activity)) > 30).length;
+  const totalTxns = companies.reduce((s, c) => s + (c.transactions || 0), 0);
+
+  const ranked = [...companies]
+    .map(c => ({ ...c, score: (c.transactions || 0) + (c.user_count || 0) * 5 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+  const maxScore = ranked.length ? Math.max(...ranked.map(c => c.score), 1) : 1;
+
+  const adoption = stats ? [
+    { feature: "Transactions logged", n: stats.totalTransactions },
+    { feature: "Receivables tracked", n: Math.round(stats.totalReceivables / 1000) },
+    { feature: "Companies with data", n: stats.activeCompanies },
+    { feature: "Users provisioned", n: stats.users },
+  ] : [];
+  const maxAdopt = adoption.length ? Math.max(...adoption.map(a => a.n), 1) : 1;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Active (7d)", value: active7.toString(), sub: "companies with recent activity" },
+          { label: "Active (30d)", value: active30.toString(), sub: "monthly active" },
+          { label: "Dormant", value: dormant.toString(), sub: "no activity 30d+" },
+          { label: "Total Transactions", value: totalTxns.toLocaleString("en-IN"), sub: "across companies" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Most Engaged Companies</h2>
+        {ranked.length === 0 ? (
+          <p className="text-sm text-[var(--color-muted)]">Loading engagement data…</p>
+        ) : (
+          <div className="space-y-2.5">
+            {ranked.map(c => (
+              <div key={c.tenant_id}>
+                <div className="flex items-center justify-between text-xs mb-0.5">
+                  <span className="font-medium truncate max-w-[60%]">{c.company_name || c.tenant_id.slice(0, 8)}</span>
+                  <span className="tabular-nums text-[var(--color-muted)]">{c.transactions} txns · {c.user_count} users{c.last_activity ? ` · ${differenceInCalendarDays(now, new Date(c.last_activity))}d ago` : ""}</span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-700" style={{ width: `${Math.round((c.score / maxScore) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-3">Platform Adoption Signals</h2>
+        {adoption.length === 0 ? (
+          <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        ) : (
+          <div className="space-y-2.5">
+            {adoption.map(a => (
+              <div key={a.feature}>
+                <div className="flex items-center justify-between text-xs mb-0.5">
+                  <span className="font-medium">{a.feature}</span>
+                  <span className="tabular-nums text-[var(--color-muted)]">{a.n.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.round((a.n / maxAdopt) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #176 Data-Retention & Compliance Settings ──────────────────────────────
+type RetentionPolicy = {
+  transactionsYears: number;
+  invoicesYears: number;
+  auditLogsDays: number;
+  inactiveUserDays: number;
+  autoPurge: boolean;
+  encryptAtRest: boolean;
+  consentTracking: boolean;
+  dataLocalisation: boolean;
+  dpoEmail: string;
+  lastReviewed: string;
+};
+
+const DEFAULT_RETENTION: RetentionPolicy = {
+  transactionsYears: 8,
+  invoicesYears: 8,
+  auditLogsDays: 365,
+  inactiveUserDays: 180,
+  autoPurge: false,
+  encryptAtRest: true,
+  consentTracking: false,
+  dataLocalisation: true,
+  dpoEmail: "",
+  lastReviewed: "",
+};
+
+function RetentionSettings() {
+  const [policy, setPolicy] = useFeatureState<RetentionPolicy>("admin-retention-policy", DEFAULT_RETENTION);
+  const set = <K extends keyof RetentionPolicy>(k: K, v: RetentionPolicy[K]) => setPolicy(prev => ({ ...prev, [k]: v }));
+
+  const save = () => {
+    set("lastReviewed", new Date().toISOString());
+    toast.success("Retention policy reviewed & saved");
+  };
+
+  // Income Tax Act mandates 8-yr books retention; GST 6 yrs. Flag risky settings.
+  const warnings: string[] = [];
+  if (policy.transactionsYears < 8) warnings.push("Income Tax Act §44AA expects books retained for 8 years.");
+  if (policy.invoicesYears < 6) warnings.push("GST law requires invoices retained for at least 6 years.");
+  if (!policy.encryptAtRest) warnings.push("DPDP Act: reasonable security safeguards (encryption) expected.");
+  if (policy.autoPurge && policy.transactionsYears < 8) warnings.push("Auto-purge below 8 years may delete records still legally required.");
+
+  const numbers: { key: keyof RetentionPolicy; label: string; unit: string; hint: string }[] = [
+    { key: "transactionsYears", label: "Transaction / books retention", unit: "years", hint: "Statutory: 8 years (IT Act)" },
+    { key: "invoicesYears", label: "Invoice retention", unit: "years", hint: "Statutory: 6 years (GST)" },
+    { key: "auditLogsDays", label: "Audit log retention", unit: "days", hint: "Security review window" },
+    { key: "inactiveUserDays", label: "Inactive user auto-offboard", unit: "days", hint: "Revoke access after inactivity" },
+  ];
+  const toggles: { key: keyof RetentionPolicy; label: string; desc: string }[] = [
+    { key: "autoPurge", label: "Auto-purge expired data", desc: "Permanently delete records past their retention window" },
+    { key: "encryptAtRest", label: "Encryption at rest", desc: "Encrypt stored financial data (DPDP safeguard)" },
+    { key: "consentTracking", label: "Consent tracking", desc: "Record DPDP consent for personal data processing" },
+    { key: "dataLocalisation", label: "Data localisation (India)", desc: "Keep data within Indian jurisdiction" },
+  ];
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums";
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Shield size={14} className="text-[var(--color-primary)]" /> Data-Retention & Compliance</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">DPDP-aligned retention controls. Defaults respect Indian statutory minimums (8-yr books, 6-yr GST invoices).</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {numbers.map(n => (
+            <div key={n.key}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{n.label} <span className="text-[10px]">({n.unit})</span></label>
+              <input type="number" min={0} value={policy[n.key] as number}
+                onChange={e => set(n.key, (parseInt(e.target.value) || 0) as RetentionPolicy[typeof n.key])} className={inp} />
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{n.hint}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Compliance Controls</h3>
+        <div className="space-y-2">
+          {toggles.map(t => (
+            <label key={t.key} className="flex items-start gap-3 cursor-pointer py-2 border-b border-[var(--color-border)] last:border-0">
+              <input type="checkbox" checked={policy[t.key] as boolean}
+                onChange={e => set(t.key, e.target.checked as RetentionPolicy[typeof t.key])} className="accent-[var(--color-primary)] mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{t.label}</p>
+                <p className="text-xs text-[var(--color-muted)]">{t.desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Data Protection Officer (DPO) email</label>
+          <input type="email" value={policy.dpoEmail} onChange={e => set("dpoEmail", e.target.value)}
+            placeholder="dpo@company.com" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20 space-y-1">
+          <p className="text-sm font-semibold text-yellow-400">Compliance warnings</p>
+          {warnings.map(w => <p key={w} className="text-xs text-yellow-300">• {w}</p>)}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[11px] text-[var(--color-muted)] flex items-center gap-1.5">
+          <Clock size={12} />
+          {policy.lastReviewed ? `Last reviewed ${format(new Date(policy.lastReviewed), "d MMM yyyy, HH:mm")}` : "Not yet reviewed"}
+        </p>
+        <button onClick={save} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Shield size={13} /> Save & mark reviewed
+        </button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative controls aligned with the DPDP Act 2023 and Indian tax/GST record-keeping rules. Confirm statutory retention periods with your CA / legal counsel before enabling auto-purge.</p>
     </div>
   );
 }

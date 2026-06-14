@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -120,7 +120,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -223,7 +223,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -957,6 +957,19 @@ export default function PayrollPage() {
       {tab === "lwf" && <LwfCalculatorTab employees={employees} />}
       {tab === "offer" && <OfferLetterTab employees={employees} firmName={store.firm?.name ?? "Your Company"} />}
       {tab === "esop" && <EsopTab employees={employees} />}
+      {tab === "ctc" && <CtcOptimizerTab employees={employees} />}
+      {tab === "attendance" && <AttendanceRegisterTab employees={employees} />}
+      {tab === "gratuity" && <GratuityProvisionTab employees={employees} />}
+      {tab === "reimburse" && <ReimbursementTab employees={employees} />}
+      {tab === "tds192" && <Tds192ProjectionTab employees={employees} />}
+      {tab === "bonus" && <BonusAccrualTab employees={employees} />}
+      {tab === "contractor" && <ContractorPayoutTab />}
+      {tab === "benchmark" && <SalaryBenchmarkTab employees={employees} />}
+      {tab === "appraisal" && <AppraisalPlannerTab employees={employees} />}
+      {tab === "journal" && <PayrollJournalTab employees={employees} />}
+      {tab === "headcount" && <HeadcountForecastTab employees={employees} />}
+      {tab === "liability" && <StatutoryLiabilityTab employees={employees} />}
+      {tab === "portal" && <PayslipPortalTab employees={employees} firmName={store.firm?.name ?? "Your Company"} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1891,6 +1904,1508 @@ function EsopTab({ employees }: { employees: { id: string; name: string; gross_s
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">Vested = floor(granted × min(monthsElapsed, vestingYears×12) ÷ (vestingYears×12)); zero until the cliff is crossed. Notional value = vested × max(0, FMV − strike). ESOP taxation — perquisite tax at exercise on (FMV − strike), capital gains at sale; eligible startups get tax deferral under Sec 80-IAC / 192(1C). Consult a CA.</p>
+    </div>
+  );
+}
+
+// ── Shared helpers for new Payroll & HR tools ──────────────────────────────────
+type EmpLite = { id: string; name: string; gross_salary: number; tds_monthly?: number; status?: string; joining_date?: string; pan?: string; email?: string };
+
+const NEW_SLAB_BANDS: [number, number][] = [
+  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
+];
+const OLD_SLAB_BANDS: [number, number][] = [
+  [250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30],
+];
+function computeSlabTax(taxable: number, bands: [number, number][]): number {
+  let tax = 0, prev = 0;
+  for (const [upTo, rate] of bands) {
+    if (taxable <= prev) break;
+    tax += (Math.min(taxable, upTo) - prev) * rate;
+    prev = upTo;
+  }
+  return tax;
+}
+function downloadCsvRows(rows: (string | number)[][], filename: string) {
+  const csv = rows.map(r => r.map(c => (typeof c === "string" && c.includes(",") ? `"${c}"` : c)).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+const EMPTY_HINT = "Add employees first to use this tool.";
+function EmptyState({ icon: Icon, msg }: { icon: typeof Users; msg: string }) {
+  return (
+    <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+      <Icon size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+      <p className="text-sm text-[var(--color-muted)]">{msg}</p>
+    </div>
+  );
+}
+
+// ── 26. CTC Structuring Optimizer ──────────────────────────────────────────────
+function CtcOptimizerTab({ employees }: { employees: EmpLite[] }) {
+  const [empId,    setEmpId]    = useState(employees[0]?.id ?? "");
+  const [ctcInput, setCtcInput] = useState("");
+  const [basicPct, setBasicPct] = useState(40);
+  const [metro,    setMetro]    = useState(true);
+  const [rentPaid, setRentPaid] = useState("");
+  const [nps,      setNps]      = useState(10);
+
+  const emp = employees.find(e => e.id === empId);
+  const annualCtc = (parseFloat(ctcInput) || (emp ? Number(emp.gross_salary) * 12 : 0));
+  const basic   = Math.round(annualCtc * basicPct / 100);
+  const hra     = Math.round(basic * (metro ? 0.50 : 0.40));
+  const npsEr   = Math.round(basic * Math.min(nps, 14) / 100); // 80CCD(2)
+  // EPF employer 12% on basic (capped at ₹15k/mo ⇒ ₹1.8L/yr basic ceiling)
+  const pfEr    = Math.round(Math.min(basic, 180000) * 0.12);
+  const lta     = Math.min(Math.round(basic * 0.10), 60000);
+  const food    = 26400; // ₹2,200/mo
+  const special = Math.max(0, annualCtc - basic - hra - npsEr - pfEr - lta - food);
+
+  // HRA exemption u/s 10(13A) = min(actual HRA, rent − 10% basic, 40/50% basic)
+  const rent = parseFloat(rentPaid) || 0;
+  const hraExempt = rent > 0 ? Math.max(0, Math.min(hra, rent - 0.10 * basic, basic * (metro ? 0.50 : 0.40))) : 0;
+  const taxFree   = hraExempt + lta + food + npsEr;
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  if (employees.length === 0 && !ctcInput) return <EmptyState icon={Wallet} msg="Add an employee or enter a CTC below to structure compensation." />;
+
+  const rows = [
+    { label: "Basic Salary",              amount: basic,   taxable: basic,    note: "Fully taxable · PF base" },
+    { label: "HRA",                       amount: hra,     taxable: hra - hraExempt, note: "Sec 10(13A) — enter rent for exemption" },
+    { label: "LTA",                       amount: lta,     taxable: 0,        note: "Sec 10(5) — 2 trips per 4-yr block" },
+    { label: "Food Coupons",              amount: food,    taxable: 0,        note: "₹2,200/mo perquisite exemption" },
+    { label: "NPS Employer 80CCD(2)",     amount: npsEr,   taxable: 0,        note: "Up to 14% basic (govt) / 10% (others)" },
+    { label: "EPF Employer",              amount: pfEr,    taxable: 0,        note: "12% of basic (capped ₹15k/mo wage)" },
+    { label: "Special Allowance",         amount: special, taxable: special,  note: "Balancing — fully taxable" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">CTC Structuring Optimizer (Old Regime tax-efficient split)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {employees.length > 0 && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+              <select value={empId} onChange={e => { setEmpId(e.target.value); setCtcInput(""); }} className={inp}>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual CTC (₹)</label>
+            <input type="number" min={0} value={ctcInput} onChange={e => setCtcInput(e.target.value)} placeholder={emp ? String(Number(emp.gross_salary) * 12) : "1200000"} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Basic as % of CTC</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={30} max={60} value={basicPct} onChange={e => setBasicPct(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-10 tabular-nums">{basicPct}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">NPS Employer % of Basic</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={0} max={14} value={nps} onChange={e => setNps(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+              <span className="text-sm font-bold w-10 tabular-nums">{nps}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Rent Paid (₹)</label>
+            <input type="number" min={0} value={rentPaid} onChange={e => setRentPaid(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input type="checkbox" checked={metro} onChange={e => setMetro(e.target.checked)} className="accent-[var(--color-primary)]" />
+              Metro city (HRA 50% of basic)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual CTC",      value: fc(annualCtc),               color: "text-[var(--color-primary)]" },
+          { label: "Tax-Free Amount", value: fc(taxFree),                 color: "text-green-400" },
+          { label: "Taxable Base",    value: fc(annualCtc - taxFree),     color: "text-orange-400" },
+          { label: "Tax-Free of CTC",  value: `${annualCtc > 0 ? Math.round((taxFree / annualCtc) * 100) : 0}%`, color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <Wallet size={13} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Optimised Annual Salary Structure</span>
+        </div>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Component", "Amount", "Taxable", "Basis"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-3 font-medium">{r.label}</td>
+                <td className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
+                <td className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
+                <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.note}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+              <td className="px-4 py-3 font-bold">Total</td>
+              <td className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
+              <td className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
+              <td className="px-4 py-3 text-xs text-green-400 font-semibold">{fc(taxFree)} kept tax-free</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">HRA exemption = min(HRA, rent − 10% basic, 50%/40% of basic). Employer NPS u/s 80CCD(2) and EPF are over-and-above the ₹1.5L 80C limit. New regime allows only ₹75k standard deduction + 80CCD(2). Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── 27. Attendance & Leave Register ────────────────────────────────────────────
+function AttendanceRegisterTab({ employees }: { employees: EmpLite[] }) {
+  type Att = { id: string; empId: string; month: string; payableDays: number; present: number; lop: number; compOff: number; leaveEncash: number };
+  const [rows, setRows] = useFeatureState<Att[]>("payroll-attendance", []);
+  const monthDefault = new Date().toISOString().slice(0, 7);
+  const [form, setForm] = useState({ empId: employees[0]?.id ?? "", month: monthDefault, payableDays: "26", present: "26", lop: "0", compOff: "0", leaveEncash: "0" });
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+
+  const empById = (id: string) => employees.find(e => e.id === id);
+
+  const addRow = () => {
+    if (!form.empId) { toast.error("Select an employee"); return; }
+    setRows(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      empId: form.empId, month: form.month,
+      payableDays: Number(form.payableDays) || 26,
+      present: Number(form.present) || 0,
+      lop: Number(form.lop) || 0,
+      compOff: Number(form.compOff) || 0,
+      leaveEncash: Number(form.leaveEncash) || 0,
+    }]);
+    toast.success("Attendance recorded");
+  };
+  const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
+
+  const computed = rows.map(r => {
+    const emp = empById(r.empId);
+    const gross = emp ? Number(emp.gross_salary) : 0;
+    const perDay = r.payableDays > 0 ? gross / r.payableDays : 0;
+    const lopDeduction = Math.round(perDay * r.lop);
+    const encashAmt    = Math.round(perDay * r.leaveEncash);
+    const netPay        = Math.max(0, Math.round(gross - lopDeduction + encashAmt));
+    return { ...r, name: emp?.name ?? "—", gross, perDay, lopDeduction, encashAmt, netPay };
+  });
+
+  if (employees.length === 0) return <EmptyState icon={CalendarDays} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Attendance & Leave Register</h3>
+        <p className="text-xs text-[var(--color-muted)]">Loss-of-pay (LOP) days reduce salary pro-rata; leave-encashment days add back at the same per-day rate. Feeds the net payable.</p>
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+            <select value={form.empId} onChange={e => setForm(f => ({ ...f, empId: e.target.value }))} className={inp}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
+            <input type="month" value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payable Days</label>
+            <input type="number" min={1} value={form.payableDays} onChange={e => setForm(f => ({ ...f, payableDays: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Present</label>
+            <input type="number" min={0} value={form.present} onChange={e => setForm(f => ({ ...f, present: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">LOP Days</label>
+            <input type="number" min={0} value={form.lop} onChange={e => setForm(f => ({ ...f, lop: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Comp-Off</label>
+            <input type="number" min={0} value={form.compOff} onChange={e => setForm(f => ({ ...f, compOff: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Leave Encash (days)</label>
+            <input type="number" min={0} value={form.leaveEncash} onChange={e => setForm(f => ({ ...f, leaveEncash: e.target.value }))} className={inp} />
+          </div>
+        </div>
+        <button onClick={addRow} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Record Attendance
+        </button>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Register ({computed.length})</span>
+          {computed.length > 0 && (
+            <button onClick={() => downloadCsvRows([["Employee", "Month", "Payable", "Present", "LOP", "Comp-Off", "Encash Days", "LOP Deduction", "Encash Amt", "Net Pay"], ...computed.map(r => [r.name, r.month, r.payableDays, r.present, r.lop, r.compOff, r.leaveEncash, r.lopDeduction, r.encashAmt, r.netPay])], "attendance-register.csv")}
+              className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+          )}
+        </div>
+        {computed.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)]">No attendance recorded yet.</p>
+        ) : (
+          <table className="w-full text-xs min-w-[720px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                {["Employee", "Month", "Payable", "Present", "LOP", "Encash Days", "LOP Deduction", "Encash Amt", "Net Pay", ""].map(h => (
+                  <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {computed.map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{r.name}</td>
+                  <td className="px-3 py-2.5">{r.month}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{r.payableDays}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{r.present}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-red-400">{r.lop}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-green-400">{r.leaveEncash}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-red-400">{r.lopDeduction > 0 ? `(${fc(r.lopDeduction)})` : "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-green-400">{r.encashAmt > 0 ? fc(r.encashAmt) : "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.netPay)}</td>
+                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Per-day rate = monthly gross ÷ payable days. LOP reduces and leave-encashment adds at this rate. Records persist and sync across devices.</p>
+    </div>
+  );
+}
+
+// ── 28. Gratuity Provision Calculator ──────────────────────────────────────────
+function GratuityProvisionTab({ employees }: { employees: EmpLite[] }) {
+  const [rate, setRate] = useState(0.07); // annual salary growth assumption
+  const fc = formatCurrency;
+  const GRATUITY_CAP = 2000000; // ₹20 lakh statutory ceiling
+
+  const today = new Date();
+  const rows = employees.map(e => {
+    const monthly = Number(e.gross_salary);
+    const basic = Math.round(monthly * 0.50); // basic+DA ≈ 50% of gross as proxy
+    const join = e.joining_date ? new Date(e.joining_date) : null;
+    const yearsRaw = join ? Math.max(0, (today.getTime() - join.getTime()) / (365.25 * 24 * 3600 * 1000)) : 0;
+    // rounding rule: >6 months counts as a full year
+    const completedYears = Math.floor(yearsRaw);
+    const extraMonths = (yearsRaw - completedYears) * 12;
+    const eligibleYears = completedYears + (extraMonths > 6 ? 1 : 0);
+    const accrued = Math.min(GRATUITY_CAP, Math.round((15 / 26) * basic * eligibleYears));
+    const perYear = Math.round((15 / 26) * basic);
+    const isEligible = yearsRaw >= 5;
+    return { id: e.id, name: e.name, monthly, basic, yearsRaw, eligibleYears, accrued, perYear, isEligible };
+  });
+
+  const totalAccrued = rows.reduce((s, r) => s + r.accrued, 0);
+  const totalEligible = rows.filter(r => r.isEligible).reduce((s, r) => s + r.accrued, 0);
+  const totalAnnualCost = rows.reduce((s, r) => s + r.perYear, 0);
+
+  if (employees.length === 0) return <EmptyState icon={PiggyBank} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-1">Gratuity Provision Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Payment of Gratuity Act, 1972 — 15/26 × last drawn (basic + DA) × years of service. Vests after 5 continuous years; capped at ₹20 lakh. &gt;6 months counts as a full year.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-[var(--color-muted)]">Salary growth assumption (for accrual)</label>
+          <div className="flex items-center gap-2">
+            <input type="range" min={0} max={0.15} step={0.01} value={rate} onChange={e => setRate(Number(e.target.value))} className="accent-[var(--color-primary)] w-40" />
+            <span className="text-sm font-bold tabular-nums">{(rate * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Accrued Liability", value: fc(totalAccrued),  color: "text-orange-400" },
+          { label: "Vested (≥5 yrs)",          value: fc(totalEligible), color: "text-red-400" },
+          { label: "Annual Accrual Cost",      value: fc(totalAnnualCost), color: "text-[var(--color-primary)]" },
+          { label: "Eligible Employees",       value: rows.filter(r => r.isEligible).length.toString(), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Per-Employee Gratuity</span>
+          <button onClick={() => downloadCsvRows([["Employee", "Basic (proxy)", "Years", "Eligible Years", "Accrued", "Vested"], ...rows.map(r => [r.name, r.basic, r.yearsRaw.toFixed(1), r.eligibleYears, r.accrued, r.isEligible ? "Yes" : "No"])], "gratuity-provision.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-xs min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Basic+DA (proxy)", "Service (yrs)", "Eligible Years", "Accrued Liability", "Status"].map(h => (
+                <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.basic)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.yearsRaw.toFixed(1)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.eligibleYears}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{fc(r.accrued)}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${r.isEligible ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                    {r.isEligible ? "Vested" : "Not vested (<5 yr)"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-4 py-3 font-bold" colSpan={4}>Total accrued actuarial liability</td>
+              <td className="px-4 py-3 font-bold tabular-nums text-orange-400" colSpan={2}>{fc(totalAccrued)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Basic+DA taken as 50% of gross as a proxy where not separately defined. Book the accrued amount as a provision (AS-15 / Ind AS 19) — an actuarial valuation is required for audited financials. Capped at ₹20 lakh per employee.</p>
+    </div>
+  );
+}
+
+// ── 29. Reimbursement & Expense Claims ─────────────────────────────────────────
+function ReimbursementTab({ employees }: { employees: EmpLite[] }) {
+  type Claim = { id: string; empId: string; date: string; category: string; amount: number; description: string; status: "pending" | "approved" | "rejected" };
+  const [claims, setClaims] = useFeatureState<Claim[]>("payroll-reimbursements", []);
+  const CATEGORIES = ["Travel", "Food", "Telecom", "Internet", "Fuel", "Medical", "Office Supplies", "Other"];
+  const [form, setForm] = useState({ empId: employees[0]?.id ?? "", date: new Date().toISOString().slice(0, 10), category: CATEGORIES[0], amount: "", description: "" });
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+  const empName = (id: string) => employees.find(e => e.id === id)?.name ?? "—";
+
+  const addClaim = () => {
+    const amt = parseFloat(form.amount) || 0;
+    if (!form.empId || amt <= 0) { toast.error("Employee and a positive amount required"); return; }
+    setClaims(prev => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, empId: form.empId, date: form.date, category: form.category, amount: amt, description: form.description.trim(), status: "pending" }, ...prev]);
+    setForm(f => ({ ...f, amount: "", description: "" }));
+    toast.success("Claim submitted");
+  };
+  const setStatus = (id: string, status: Claim["status"]) => setClaims(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+  const removeClaim = (id: string) => setClaims(prev => prev.filter(c => c.id !== id));
+
+  const pending  = claims.filter(c => c.status === "pending").reduce((s, c) => s + c.amount, 0);
+  const approved = claims.filter(c => c.status === "approved").reduce((s, c) => s + c.amount, 0);
+
+  if (employees.length === 0) return <EmptyState icon={Receipt} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Reimbursement & Expense Claims</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+            <select value={form.empId} onChange={e => setForm(f => ({ ...f, empId: e.target.value }))} className={inp}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+            <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inp}>
+              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" min={0} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Description</label>
+            <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Client visit cab" className={inp} />
+          </div>
+        </div>
+        <button onClick={addClaim} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Submit Claim
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Claims",     value: claims.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Pending Approval", value: fc(pending),  color: "text-yellow-400" },
+          { label: "Approved (to pay)", value: fc(approved), color: "text-green-400" },
+          { label: "Merge to Payroll",  value: fc(approved), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Claims</span></div>
+        {claims.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)]">No claims yet.</p>
+        ) : (
+          <table className="w-full text-xs min-w-[680px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                {["Employee", "Date", "Category", "Description", "Amount", "Status", ""].map(h => (
+                  <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {claims.map(c => (
+                <tr key={c.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{empName(c.empId)}</td>
+                  <td className="px-3 py-2.5">{c.date}</td>
+                  <td className="px-3 py-2.5">{c.category}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.description || "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold">{fc(c.amount)}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.status === "approved" ? "bg-green-900/20 text-green-400 border-green-800/30" : c.status === "rejected" ? "bg-red-900/20 text-red-400 border-red-800/30" : "bg-yellow-900/20 text-yellow-400 border-yellow-800/30"}`}>{c.status}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    {c.status === "pending" && (
+                      <>
+                        <button onClick={() => setStatus(c.id, "approved")} className="text-green-400 hover:underline mr-2">Approve</button>
+                        <button onClick={() => setStatus(c.id, "rejected")} className="text-red-400 hover:underline mr-2">Reject</button>
+                      </>
+                    )}
+                    <button onClick={() => removeClaim(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} className="inline" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Approved claims are tax-free reimbursements when supported by bills (not perquisites). Merge the approved total into the month's payroll disbursement. Claims persist and sync.</p>
+    </div>
+  );
+}
+
+// ── 30. TDS-on-Salary Projection (per employee, Sec 192) ───────────────────────
+function Tds192ProjectionTab({ employees }: { employees: EmpLite[] }) {
+  const [empId,    setEmpId]    = useState(employees[0]?.id ?? "");
+  const [regime,   setRegime]   = useState<"new" | "old">("new");
+  const [d80c,     setD80c]     = useState("");
+  const [d80d,     setD80d]     = useState("");
+  const [d80ccd,   setD80ccd]   = useState("");
+  const [homeLoan, setHomeLoan] = useState("");
+  const [hraEx,    setHraEx]    = useState("");
+  const [monthsDeducted, setMonthsDeducted] = useState(0);
+
+  const emp = employees.find(e => e.id === empId);
+  const annualGross = emp ? Number(emp.gross_salary) * 12 : 0;
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const deductions = regime === "old"
+    ? Math.min(parseFloat(d80c) || 0, 150000) + Math.min(parseFloat(d80d) || 0, 50000) + Math.min(parseFloat(d80ccd) || 0, 50000) + Math.min(parseFloat(homeLoan) || 0, 200000) + (parseFloat(hraEx) || 0)
+    : 0;
+  const stdDeduction = regime === "new" ? 75000 : 50000;
+  const taxable = Math.max(0, annualGross - stdDeduction - deductions);
+  const bands = regime === "new" ? NEW_SLAB_BANDS : OLD_SLAB_BANDS;
+  const slab = computeSlabTax(taxable, bands);
+  const rebateLimit = regime === "new" ? 700000 : 500000;
+  const rebateCap   = regime === "new" ? Infinity : 12500;
+  const rebate = taxable <= rebateLimit ? Math.min(slab, rebateCap) : 0;
+  const afterRebate = slab - rebate;
+  const cess = afterRebate * 0.04;
+  const annualTds = Math.round(afterRebate + cess);
+  const remainingMonths = Math.max(1, 12 - monthsDeducted);
+  const monthlyTds = Math.round(annualTds / 12);
+  const balanceMonthly = Math.round(annualTds / remainingMonths); // remaining liability over remaining months
+
+  if (employees.length === 0) return <EmptyState icon={Percent} msg={EMPTY_HINT} />;
+
+  const breakdown = [
+    { label: "Annual Gross Salary", value: annualGross },
+    { label: `Standard Deduction`, value: -stdDeduction },
+    { label: "Chapter VI-A & 24(b)", value: -deductions },
+    { label: "Net Taxable Income", value: taxable, bold: true },
+    { label: "Slab Tax", value: Math.round(slab) },
+    { label: "Less: 87A Rebate", value: -Math.round(rebate) },
+    { label: "Health & Edu Cess 4%", value: Math.round(cess) },
+    { label: "Annual TDS Payable", value: annualTds, bold: true },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">TDS-on-Salary Projection (Sec 192)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={inp}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Regime</label>
+            <select value={regime} onChange={e => setRegime(e.target.value as "new" | "old")} className={inp}>
+              <option value="new">New (default)</option>
+              <option value="old">Old (with declarations)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">TDS already deducted (months)</label>
+            <input type="number" min={0} max={11} value={monthsDeducted} onChange={e => setMonthsDeducted(Number(e.target.value))} className={inp} />
+          </div>
+          {regime === "old" && (
+            <>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">80C (max ₹1.5L)</label>
+                <input type="number" min={0} value={d80c} onChange={e => setD80c(e.target.value)} placeholder="0" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">80D (max ₹50k)</label>
+                <input type="number" min={0} value={d80d} onChange={e => setD80d(e.target.value)} placeholder="0" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">80CCD(1B) (max ₹50k)</label>
+                <input type="number" min={0} value={d80ccd} onChange={e => setD80ccd(e.target.value)} placeholder="0" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Home Loan 24(b) (max ₹2L)</label>
+                <input type="number" min={0} value={homeLoan} onChange={e => setHomeLoan(e.target.value)} placeholder="0" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">HRA Exemption</label>
+                <input type="number" min={0} value={hraEx} onChange={e => setHraEx(e.target.value)} placeholder="0" className={inp} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual TDS (192)",       value: fc(annualTds),     color: "text-orange-400" },
+          { label: "Even Monthly TDS",       value: fc(monthlyTds),    color: "text-[var(--color-text)]" },
+          { label: `Balance / mo (${remainingMonths} left)`, value: fc(balanceMonthly), color: "text-[var(--color-primary)]" },
+          { label: "Effective Rate",         value: `${annualGross > 0 ? (annualTds / annualGross * 100).toFixed(1) : "0.0"}%`, color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[420px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]"><th className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">Particulars</th><th className="text-right text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">Amount</th></tr>
+          </thead>
+          <tbody>
+            {breakdown.map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{r.value < 0 ? `(${fc(Math.abs(r.value))})` : fc(r.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Employer must deduct TDS u/s 192 on the average rate basis. If {monthsDeducted} months are already deducted, recover the balance evenly over the remaining {remainingMonths} months. Surcharge above ₹50L not modelled. Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── 31. Bonus Act Eligibility & Accrual ────────────────────────────────────────
+function BonusAccrualTab({ employees }: { employees: EmpLite[] }) {
+  const [pct, setPct] = useState(8.33); // declared bonus %
+  const ELIG_CEILING = 21000;  // eligibility wage ceiling /mo
+  const CALC_CEILING = 7000;   // calculation ceiling /mo (or min wage if higher)
+  const fc = formatCurrency;
+
+  const rows = employees.map(e => {
+    const gross = Number(e.gross_salary);
+    const eligible = gross <= ELIG_CEILING;
+    const calcWage = Math.min(gross, CALC_CEILING);
+    const annualCalcWage = calcWage * 12;
+    const minBonus = Math.round(annualCalcWage * 0.0833);
+    const maxBonus = Math.round(annualCalcWage * 0.20);
+    const declared = Math.round(annualCalcWage * Math.min(Math.max(pct, 8.33), 20) / 100);
+    return { id: e.id, name: e.name, gross, eligible, calcWage, minBonus, maxBonus, declared };
+  });
+  const eligibleRows = rows.filter(r => r.eligible);
+  const totalDeclared = eligibleRows.reduce((s, r) => s + r.declared, 0);
+  const totalMin = eligibleRows.reduce((s, r) => s + r.minBonus, 0);
+  const totalMax = eligibleRows.reduce((s, r) => s + r.maxBonus, 0);
+
+  if (employees.length === 0) return <EmptyState icon={Sparkles} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Payment of Bonus Act, 1965 — Eligibility & Accrual</h3>
+        <p className="text-xs text-[var(--color-muted)]">Eligible: salary ≤ ₹21,000/mo and ≥30 working days. Bonus computed on min(salary, ₹7,000) wage ceiling. Statutory range 8.33%–20% of the allocable surplus.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-[var(--color-muted)]">Declared bonus rate</label>
+          <div className="flex items-center gap-2">
+            <input type="range" min={8.33} max={20} step={0.01} value={pct} onChange={e => setPct(Number(e.target.value))} className="accent-[var(--color-primary)] w-48" />
+            <span className="text-sm font-bold tabular-nums w-14">{pct.toFixed(2)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Eligible Employees",  value: eligibleRows.length.toString(), color: "text-green-400" },
+          { label: "Minimum (8.33%)",     value: fc(totalMin),     color: "text-[var(--color-text)]" },
+          { label: "Declared Accrual",    value: fc(totalDeclared), color: "text-[var(--color-primary)]" },
+          { label: "Maximum (20%)",       value: fc(totalMax),     color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Statutory Bonus Register</span>
+          <button onClick={() => downloadCsvRows([["Employee", "Gross", "Eligible", "Calc Wage", "Min 8.33%", `Declared ${pct.toFixed(2)}%`, "Max 20%"], ...rows.map(r => [r.name, r.gross, r.eligible ? "Yes" : "No", r.calcWage, r.minBonus, r.eligible ? r.declared : 0, r.maxBonus])], "bonus-register.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-xs min-w-[680px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Gross", "Eligible", "Calc. Wage", "Min (8.33%)", `Declared (${pct.toFixed(2)}%)`, "Max (20%)"].map(h => (
+                <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${r.eligible ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{r.eligible ? "Yes" : "No"}</span>
+                </td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(r.calcWage)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.eligible ? fc(r.minBonus) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{r.eligible ? fc(r.declared) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.eligible ? fc(r.maxBonus) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-4 py-3 font-bold" colSpan={4}>Total accrual (eligible only)</td>
+              <td className="px-4 py-3 tabular-nums font-bold">{fc(totalMin)}</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-[var(--color-primary)]">{fc(totalDeclared)}</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-orange-400">{fc(totalMax)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Bonus is payable within 8 months of the close of the accounting year. Where minimum wage &gt; ₹7,000, use the minimum wage as the calculation ceiling. Maintain Form A/B/C registers. Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── 32. Contractor / Gig Payout Register ───────────────────────────────────────
+function ContractorPayoutTab() {
+  type Payout = { id: string; name: string; pan: string; section: "194C" | "194J"; date: string; gross: number; hasPan: boolean };
+  const [rows, setRows] = useFeatureState<Payout[]>("payroll-contractor-payouts", []);
+  const [form, setForm] = useState({ name: "", pan: "", section: "194C" as "194C" | "194J", date: new Date().toISOString().slice(0, 10), gross: "" });
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+
+  // 194C: 1% individual/HUF, 2% others ⇒ use 1% default; 194J: 10% (2% for technical). No PAN ⇒ 20%.
+  const rateFor = (section: Payout["section"], hasPan: boolean) => {
+    if (!hasPan) return 20;
+    return section === "194C" ? 1 : 10;
+  };
+  const thresholdFor = (section: Payout["section"]) => section === "194C" ? 30000 : 30000; // per transaction
+
+  const addRow = () => {
+    const gross = parseFloat(form.gross) || 0;
+    if (!form.name.trim() || gross <= 0) { toast.error("Contractor name and gross amount required"); return; }
+    const hasPan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(form.pan.trim().toUpperCase());
+    setRows(prev => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: form.name.trim(), pan: form.pan.trim().toUpperCase(), section: form.section, date: form.date, gross, hasPan }, ...prev]);
+    setForm(f => ({ ...f, name: "", pan: "", gross: "" }));
+    toast.success("Payout recorded");
+  };
+  const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
+
+  const computed = rows.map(r => {
+    const rate = rateFor(r.section, r.hasPan);
+    const tds = r.gross >= thresholdFor(r.section) ? Math.round(r.gross * rate / 100) : 0;
+    return { ...r, rate, tds, net: r.gross - tds };
+  });
+  const totalGross = computed.reduce((s, r) => s + r.gross, 0);
+  const totalTds   = computed.reduce((s, r) => s + r.tds, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Contractor / Gig Payout Register (TDS 194C / 194J)</h3>
+        <p className="text-xs text-[var(--color-muted)]">Separate from salary. 194C contracts: 1% (individual/HUF). 194J professional/technical: 10%. No valid PAN ⇒ 20%. Threshold ₹30,000 per payment (or ₹1L aggregate/yr).</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Contractor Name</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Acme Services" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">PAN</label>
+            <input value={form.pan} onChange={e => setForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))} maxLength={10} placeholder="ABCDE1234F" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Section</label>
+            <select value={form.section} onChange={e => setForm(f => ({ ...f, section: e.target.value as "194C" | "194J" }))} className={inp}>
+              <option value="194C">194C — Contract</option>
+              <option value="194J">194J — Professional</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross (₹)</label>
+            <input type="number" min={0} value={form.gross} onChange={e => setForm(f => ({ ...f, gross: e.target.value }))} placeholder="50000" className={inp} />
+          </div>
+        </div>
+        <button onClick={addRow} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Record Payout
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Payouts",        value: computed.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Total Gross",    value: fc(totalGross), color: "text-[var(--color-primary)]" },
+          { label: "Total TDS",      value: fc(totalTds),   color: "text-orange-400" },
+          { label: "Net Disbursed",  value: fc(totalGross - totalTds), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Payout Register</span>
+          {computed.length > 0 && (
+            <button onClick={() => downloadCsvRows([["Name", "PAN", "Section", "Date", "Gross", "Rate %", "TDS", "Net"], ...computed.map(r => [r.name, r.pan || "NO PAN", r.section, r.date, r.gross, r.rate, r.tds, r.net])], "contractor-payouts.csv")}
+              className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV (26Q feed)</button>
+          )}
+        </div>
+        {computed.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)]">No payouts recorded yet.</p>
+        ) : (
+          <table className="w-full text-xs min-w-[720px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                {["Name", "PAN", "Section", "Date", "Gross", "Rate", "TDS", "Net", ""].map(h => (
+                  <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {computed.map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{r.name}</td>
+                  <td className="px-3 py-2.5 font-mono">{r.hasPan ? r.pan : <span className="text-red-400">NO PAN</span>}</td>
+                  <td className="px-3 py-2.5">{r.section}</td>
+                  <td className="px-3 py-2.5">{r.date}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td className="px-3 py-2.5 tabular-nums text-orange-400">{fc(r.tds)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(r.net)}</td>
+                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">194C contractors who are companies/firms attract 2% — adjust manually if needed. Deposit TDS by the 7th of the next month; file Form 26Q quarterly. Records persist and sync.</p>
+    </div>
+  );
+}
+
+// ── 33. Salary Benchmark by Role/City ──────────────────────────────────────────
+function SalaryBenchmarkTab({ employees }: { employees: EmpLite[] }) {
+  type Band = { p25: number; p50: number; p75: number };
+  // Annual CTC benchmarks (₹), illustrative market medians
+  const ROLES: Record<string, Band> = {
+    "Accountant":          { p25: 300000, p50: 450000, p75: 650000 },
+    "Senior Accountant":   { p25: 500000, p50: 750000, p75: 1100000 },
+    "Finance Manager":     { p25: 900000, p50: 1400000, p75: 2200000 },
+    "Sales Executive":     { p25: 300000, p50: 450000, p75: 700000 },
+    "Sales Manager":       { p25: 800000, p50: 1300000, p75: 2000000 },
+    "Operations Executive":{ p25: 280000, p50: 400000, p75: 600000 },
+    "Software Engineer":   { p25: 600000, p50: 1200000, p75: 2400000 },
+    "HR Executive":        { p25: 300000, p50: 480000, p75: 750000 },
+    "Office Admin":        { p25: 220000, p50: 320000, p75: 480000 },
+  };
+  const CITY_FACTOR: Record<string, number> = {
+    "Bengaluru": 1.15, "Mumbai": 1.20, "Delhi NCR": 1.12, "Hyderabad": 1.05,
+    "Pune": 1.05, "Chennai": 1.00, "Kolkata": 0.92, "Ahmedabad": 0.90, "Tier-2/3": 0.80,
+  };
+  const [role, setRole] = useState(Object.keys(ROLES)[0]);
+  const [city, setCity] = useState("Bengaluru");
+  const [empId, setEmpId] = useState(employees[0]?.id ?? "");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const factor = CITY_FACTOR[city] ?? 1;
+  const band = ROLES[role];
+  const adj = { p25: Math.round(band.p25 * factor), p50: Math.round(band.p50 * factor), p75: Math.round(band.p75 * factor) };
+  const emp = employees.find(e => e.id === empId);
+  const empCtc = emp ? Number(emp.gross_salary) * 12 : 0;
+
+  let position = "—", posColor = "text-[var(--color-muted)]";
+  if (empCtc > 0) {
+    if (empCtc < adj.p25) { position = "Below 25th percentile — under-paid"; posColor = "text-red-400"; }
+    else if (empCtc < adj.p50) { position = "25th–50th percentile"; posColor = "text-yellow-400"; }
+    else if (empCtc < adj.p75) { position = "50th–75th percentile — competitive"; posColor = "text-green-400"; }
+    else { position = "Above 75th percentile — premium"; posColor = "text-blue-400"; }
+  }
+  const gapToMedian = empCtc > 0 ? adj.p50 - empCtc : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Salary Benchmark by Role & City</h3>
+        <p className="text-xs text-[var(--color-muted)]">Illustrative market annual-CTC bands adjusted for city cost-of-living. Use as directional pay-band guidance, not a live market feed.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Role</label>
+            <select value={role} onChange={e => setRole(e.target.value)} className={inp}>
+              {Object.keys(ROLES).map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">City</label>
+            <select value={city} onChange={e => setCity(e.target.value)} className={inp}>
+              {Object.keys(CITY_FACTOR).map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          {employees.length > 0 && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Compare an employee</label>
+              <select value={empId} onChange={e => setEmpId(e.target.value)} className={inp}>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name} — {fc(Number(e.gross_salary) * 12)}/yr</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "25th Percentile", value: fc(adj.p25), color: "text-[var(--color-muted)]" },
+          { label: "Median (50th)",   value: fc(adj.p50), color: "text-[var(--color-primary)]" },
+          { label: "75th Percentile", value: fc(adj.p75), color: "text-blue-400" },
+          { label: "City Factor",     value: `${factor.toFixed(2)}×`, color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {emp && empCtc > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-sm font-semibold">{emp.name} · {role} · {city}</p>
+              <p className="text-xs text-[var(--color-muted)]">Current CTC {fc(empCtc)}/yr vs median {fc(adj.p50)}/yr</p>
+            </div>
+            <span className={`text-sm font-bold ${posColor}`}>{position}</span>
+          </div>
+          {gapToMedian > 0
+            ? <p className="text-xs text-orange-400">Below median by {fc(gapToMedian)}/yr — consider a correction of {fc(Math.round(gapToMedian / 12))}/mo to reach market.</p>
+            : <p className="text-xs text-green-400">At or above the market median by {fc(Math.abs(gapToMedian))}/yr.</p>}
+          {/* simple visual bar */}
+          <div className="relative h-2 rounded-full bg-[var(--color-accent)] mt-2">
+            <div className="absolute top-0 h-2 rounded-full bg-[var(--color-primary)]/40" style={{ left: 0, width: `${Math.min(100, Math.max(0, (empCtc / adj.p75) * 100))}%` }} />
+            <div className="absolute -top-1 w-1 h-4 bg-[var(--color-primary)] rounded" style={{ left: `${Math.min(100, (adj.p50 / adj.p75) * 100)}%` }} title="Median" />
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Bar shows current CTC vs the 75th-percentile cap; the tick marks the median.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Benchmarks are static illustrative medians for SMB roles in India and should be refreshed against a live survey before hiring decisions.</p>
+    </div>
+  );
+}
+
+// ── 34. Appraisal & Increment Cycle Planner ────────────────────────────────────
+function AppraisalPlannerTab({ employees }: { employees: EmpLite[] }) {
+  const [budgetPct, setBudgetPct] = useState(10); // total hike budget as % of current payroll
+  const [hikes, setHikes] = useFeatureState<Record<string, number>>("payroll-appraisal-hikes", {});
+  const fc = formatCurrency;
+
+  const currentAnnual = employees.reduce((s, e) => s + Number(e.gross_salary) * 12, 0);
+  const budgetAmount = Math.round(currentAnnual * budgetPct / 100);
+
+  const rows = employees.map(e => {
+    const annual = Number(e.gross_salary) * 12;
+    const hikePct = hikes[e.id] ?? 0;
+    const hikeAmt = Math.round(annual * hikePct / 100);
+    return { id: e.id, name: e.name, annual, hikePct, hikeAmt, newAnnual: annual + hikeAmt };
+  });
+  const allocated = rows.reduce((s, r) => s + r.hikeAmt, 0);
+  const remaining = budgetAmount - allocated;
+  const overBudget = remaining < 0;
+
+  const setHike = (id: string, val: number) => setHikes(prev => ({ ...prev, [id]: Math.max(0, Math.min(100, val)) }));
+  const distributeEvenly = () => {
+    if (currentAnnual === 0) return;
+    const evenPct = budgetPct; // give everyone the same % within budget
+    setHikes(Object.fromEntries(employees.map(e => [e.id, evenPct])));
+    toast.success(`Applied ${evenPct}% to all employees`);
+  };
+
+  if (employees.length === 0) return <EmptyState icon={TrendingUp} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Appraisal & Increment Cycle Planner</h3>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-[var(--color-muted)]">Total hike budget (% of current payroll)</label>
+          <div className="flex items-center gap-2">
+            <input type="range" min={0} max={30} value={budgetPct} onChange={e => setBudgetPct(Number(e.target.value))} className="accent-[var(--color-primary)] w-48" />
+            <span className="text-sm font-bold tabular-nums w-12">{budgetPct}%</span>
+          </div>
+          <button onClick={distributeEvenly} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] font-medium px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">Distribute evenly</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Current Annual Payroll", value: fc(currentAnnual), color: "text-[var(--color-text)]" },
+          { label: "Hike Budget",            value: fc(budgetAmount),  color: "text-[var(--color-primary)]" },
+          { label: "Allocated",              value: fc(allocated),     color: overBudget ? "text-red-400" : "text-yellow-400" },
+          { label: overBudget ? "Over Budget" : "Remaining", value: fc(Math.abs(remaining)), color: overBudget ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {overBudget && (
+        <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <span>Allocated increments exceed the budget by {fc(Math.abs(remaining))}. Reduce individual hikes or raise the budget %.</span>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Per-Employee Increment</span>
+          <button onClick={() => downloadCsvRows([["Employee", "Current Annual", "Hike %", "Hike Amount", "New Annual"], ...rows.map(r => [r.name, r.annual, r.hikePct, r.hikeAmt, r.newAnnual])], "appraisal-plan.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-xs min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Current Annual", "Hike %", "Hike Amount", "New Annual"].map(h => (
+                <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.annual)}</td>
+                <td className="px-4 py-2.5">
+                  <input type="number" min={0} max={100} value={r.hikePct} onChange={e => setHike(r.id, Number(e.target.value))}
+                    className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                </td>
+                <td className="px-4 py-2.5 tabular-nums text-yellow-400">{fc(r.hikeAmt)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{fc(r.newAnnual)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-4 py-3 font-bold">Total</td>
+              <td className="px-4 py-3 tabular-nums font-bold">{fc(currentAnnual)}</td>
+              <td className="px-4 py-3" />
+              <td className="px-4 py-3 tabular-nums font-bold text-yellow-400">{fc(allocated)}</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-[var(--color-primary)]">{fc(currentAnnual + allocated)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Plan persists and syncs across devices. Hikes do not auto-apply to live salaries — edit each employee's gross after the cycle is finalised.</p>
+    </div>
+  );
+}
+
+// ── 35. Payroll Journal / GL Posting ───────────────────────────────────────────
+function PayrollJournalTab({ employees }: { employees: EmpLite[] }) {
+  const active = employees.filter(e => (e.status ?? "active") === "active");
+  const fc = formatCurrency;
+
+  const totals = active.reduce((acc, e) => {
+    const gross = Number(e.gross_salary);
+    const basic = Math.round(gross * 0.50);
+    const pfWage = Math.min(gross, 15000);
+    const pfEmp = Math.round(pfWage * 0.12);
+    const pfEr  = Math.round(pfWage * 0.12);
+    const esiEmp = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+    const esiEr  = gross <= 21000 ? Math.round(gross * 0.0325) : 0;
+    const pt = gross > 15000 ? 200 : (gross > 7500 ? 175 : 0);
+    const tds = Math.round(Number(e.tds_monthly ?? 0));
+    acc.gross += gross; acc.basic += basic;
+    acc.pfEmp += pfEmp; acc.pfEr += pfEr;
+    acc.esiEmp += esiEmp; acc.esiEr += esiEr;
+    acc.pt += pt; acc.tds += tds;
+    return acc;
+  }, { gross: 0, basic: 0, pfEmp: 0, pfEr: 0, esiEmp: 0, esiEr: 0, pt: 0, tds: 0 });
+
+  const salaryExpense = totals.gross + totals.pfEr + totals.esiEr; // employer cost
+  const netPayable = totals.gross - totals.pfEmp - totals.esiEmp - totals.pt - totals.tds;
+  const pfPayable = totals.pfEmp + totals.pfEr;
+  const esiPayable = totals.esiEmp + totals.esiEr;
+
+  const entries = [
+    { account: "Salaries & Wages (incl. employer contrib)", debit: salaryExpense, credit: 0 },
+    { account: "Salaries Payable (net to employees)",       debit: 0, credit: netPayable },
+    { account: "PF Payable (EPFO)",                          debit: 0, credit: pfPayable },
+    { account: "ESI Payable (ESIC)",                         debit: 0, credit: esiPayable },
+    { account: "Professional Tax Payable",                   debit: 0, credit: totals.pt },
+    { account: "TDS Payable (Sec 192)",                      debit: 0, credit: totals.tds },
+  ];
+  const totalDebit  = entries.reduce((s, e) => s + e.debit, 0);
+  const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
+  const balanced = totalDebit === totalCredit;
+
+  if (employees.length === 0) return <EmptyState icon={BookOpen} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-1">Payroll Journal / GL Posting</h3>
+        <p className="text-xs text-[var(--color-muted)]">Auto-builds the month-end salary journal voucher (JV) for {active.length} active employees: salary expense debited, net pay and statutory dues credited as payables.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Salary Expense (Dr)", value: fc(salaryExpense), color: "text-orange-400" },
+          { label: "Net Payable (Cr)",    value: fc(netPayable),    color: "text-green-400" },
+          { label: "Statutory Dues (Cr)", value: fc(pfPayable + esiPayable + totals.pt + totals.tds), color: "text-[var(--color-primary)]" },
+          { label: "JV Balanced",         value: balanced ? "Yes" : "No", color: balanced ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Journal Voucher — {format(new Date(), "MMMM yyyy")}</span>
+          <button onClick={() => downloadCsvRows([["Account", "Debit", "Credit"], ...entries.map(e => [e.account, e.debit, e.credit]), ["TOTAL", totalDebit, totalCredit]], "payroll-journal.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              <th className="text-left text-xs font-semibold px-4 py-2.5">Ledger Account</th>
+              <th className="text-right text-xs font-semibold px-4 py-2.5">Debit</th>
+              <th className="text-right text-xs font-semibold px-4 py-2.5">Credit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(e => (
+              <tr key={e.account} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5">{e.account}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{e.debit > 0 ? fc(e.debit) : "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{e.credit > 0 ? fc(e.credit) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-4 py-3 font-bold">Total</td>
+              <td className="px-4 py-3 text-right tabular-nums font-bold">{fc(totalDebit)}</td>
+              <td className="px-4 py-3 text-right tabular-nums font-bold">{fc(totalCredit)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {!balanced && (
+        <div className="bg-orange-950/30 border border-orange-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <AlertTriangle size={14} className="text-orange-400 shrink-0" />
+          <span>Debit and credit do not tie out by {fc(Math.abs(totalDebit - totalCredit))} — review rounding in PF/ESI/PT computation.</span>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">PF/ESI capped at statutory wage ceilings (₹15k PF, ₹21k ESI eligibility). PT taken as ₹200 (Maharashtra) — adjust per state. Post this JV in your books on the salary disbursal date.</p>
+    </div>
+  );
+}
+
+// ── 36. Headcount Cost Forecast ────────────────────────────────────────────────
+function HeadcountForecastTab({ employees }: { employees: EmpLite[] }) {
+  type Hire = { id: string; role: string; monthlyCtc: number; startMonth: number };
+  const [hires, setHires] = useFeatureState<Hire[]>("payroll-planned-hires", []);
+  const [form, setForm] = useState({ role: "", monthlyCtc: "", startMonth: "1" });
+  const [horizon] = useState(12);
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+
+  // fully-loaded factor: employer PF + ESI + gratuity + bonus accrual ≈ 1.18×
+  const LOAD = 1.18;
+  const baseMonthly = employees.filter(e => (e.status ?? "active") === "active").reduce((s, e) => s + Number(e.gross_salary), 0);
+
+  const addHire = () => {
+    const ctc = parseFloat(form.monthlyCtc) || 0;
+    if (!form.role.trim() || ctc <= 0) { toast.error("Role and monthly CTC required"); return; }
+    setHires(prev => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, role: form.role.trim(), monthlyCtc: ctc, startMonth: Number(form.startMonth) || 1 }]);
+    setForm({ role: "", monthlyCtc: "", startMonth: "1" });
+    toast.success("Planned hire added");
+  };
+  const removeHire = (id: string) => setHires(prev => prev.filter(h => h.id !== id));
+
+  const months = Array.from({ length: horizon }, (_, i) => {
+    const monthIdx = i + 1;
+    const newHireCost = hires.filter(h => h.startMonth <= monthIdx).reduce((s, h) => s + h.monthlyCtc, 0);
+    const loaded = Math.round((baseMonthly + newHireCost) * LOAD);
+    const d = new Date(); d.setMonth(d.getMonth() + i);
+    return { label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }), base: baseMonthly, newHireCost, loaded };
+  });
+  const annualLoaded = months.reduce((s, m) => s + m.loaded, 0);
+  const exitLoaded = months[months.length - 1]?.loaded ?? 0;
+
+  if (employees.length === 0 && hires.length === 0) return <EmptyState icon={UsersRound} msg="Add employees or plan a hire below to forecast fully-loaded headcount cost." />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Headcount Cost Forecast (fully-loaded, {horizon} months)</h3>
+        <p className="text-xs text-[var(--color-muted)]">Fully-loaded = gross × 1.18 (employer PF + ESI + gratuity + bonus accrual). Add planned hires with a start month to project the ramp.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Planned Role</label>
+            <input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder="Sales Executive" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly CTC (₹)</label>
+            <input type="number" min={0} value={form.monthlyCtc} onChange={e => setForm(f => ({ ...f, monthlyCtc: e.target.value }))} placeholder="60000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Start Month (1–{horizon})</label>
+            <input type="number" min={1} max={horizon} value={form.startMonth} onChange={e => setForm(f => ({ ...f, startMonth: e.target.value }))} className={inp} />
+          </div>
+        </div>
+        <button onClick={addHire} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Add Planned Hire
+        </button>
+      </div>
+
+      {hires.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Planned Hires</span></div>
+          <table className="w-full text-xs min-w-[420px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                {["Role", "Monthly CTC", "Starts Month", ""].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {hires.map(h => (
+                <tr key={h.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-2.5 font-medium">{h.role}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(h.monthlyCtc)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">M{h.startMonth}</td>
+                  <td className="px-4 py-2.5 text-right"><button onClick={() => removeHire(h.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Current Monthly (loaded)", value: fc(Math.round(baseMonthly * LOAD)), color: "text-[var(--color-text)]" },
+          { label: "Exit-Month (loaded)",      value: fc(exitLoaded), color: "text-orange-400" },
+          { label: "12-Month Total",           value: fc(annualLoaded), color: "text-[var(--color-primary)]" },
+          { label: "Planned Hires",            value: hires.length.toString(), color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Monthly Projection</span>
+          <button onClick={() => downloadCsvRows([["Month", "Base", "New Hires", "Fully-Loaded"], ...months.map(m => [m.label, m.base, m.newHireCost, m.loaded])], "headcount-forecast.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-xs min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Month", "Base Payroll", "New Hire Cost", "Fully-Loaded"].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {months.map(m => (
+              <tr key={m.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 font-medium">{m.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(m.base)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-blue-400">{m.newHireCost > 0 ? fc(m.newHireCost) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(m.loaded)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Load factor 1.18× is an SMB approximation of employer statutory cost; tune for your basic-split and ESI coverage. Planned hires persist and sync.</p>
+    </div>
+  );
+}
+
+// ── 37. Statutory Bonus & Leave-Encashment Liability ───────────────────────────
+function StatutoryLiabilityTab({ employees }: { employees: EmpLite[] }) {
+  const [leaveDays, setLeaveDays] = useState(15); // avg accrued earned-leave per employee
+  const fc = formatCurrency;
+
+  const rows = employees.map(e => {
+    const gross = Number(e.gross_salary);
+    const eligibleBonus = gross <= 21000;
+    const calcWage = Math.min(gross, 7000);
+    const bonusLiab = eligibleBonus ? Math.round(calcWage * 12 * 0.0833) : 0;
+    const perDay = gross / 26;
+    const leaveLiab = Math.round(perDay * leaveDays);
+    return { id: e.id, name: e.name, gross, bonusLiab, leaveLiab, total: bonusLiab + leaveLiab };
+  });
+  const totalBonus = rows.reduce((s, r) => s + r.bonusLiab, 0);
+  const totalLeave = rows.reduce((s, r) => s + r.leaveLiab, 0);
+  const grandTotal = totalBonus + totalLeave;
+
+  if (employees.length === 0) return <EmptyState icon={ShieldCheck} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Statutory Bonus & Leave-Encashment Liability</h3>
+        <p className="text-xs text-[var(--color-muted)]">Balance-sheet provisions: minimum statutory bonus (8.33% of capped wage) for eligible employees + earned-leave encashment at per-day rate.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-[var(--color-muted)]">Avg accrued earned-leave per employee (days)</label>
+          <div className="flex items-center gap-2">
+            <input type="range" min={0} max={45} value={leaveDays} onChange={e => setLeaveDays(Number(e.target.value))} className="accent-[var(--color-primary)] w-44" />
+            <span className="text-sm font-bold tabular-nums w-10">{leaveDays}d</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Bonus Provision",          value: fc(totalBonus), color: "text-yellow-400" },
+          { label: "Leave-Encashment Provision", value: fc(totalLeave), color: "text-blue-400" },
+          { label: "Total Liability",           value: fc(grandTotal), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Per-Employee Provisions</span>
+          <button onClick={() => downloadCsvRows([["Employee", "Gross", "Bonus Provision", "Leave-Encash Provision", "Total"], ...rows.map(r => [r.name, r.gross, r.bonusLiab, r.leaveLiab, r.total])], "statutory-liability.csv")}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+        </div>
+        <table className="w-full text-xs min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Gross", "Bonus Provision", "Leave-Encash", "Total"].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.bonusLiab > 0 ? fc(r.bonusLiab) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-blue-400">{fc(r.leaveLiab)}</td>
+                <td className="px-4 py-2.5 tabular-nums font-semibold text-orange-400">{fc(r.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-4 py-3 font-bold" colSpan={2}>Total provision</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-yellow-400">{fc(totalBonus)}</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-blue-400">{fc(totalLeave)}</td>
+              <td className="px-4 py-3 tabular-nums font-bold text-orange-400">{fc(grandTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Book these as current provisions (AS-15 / Ind AS 19). Leave-encashment uses gross ÷ 26 per-day; refine with each employee's actual leave balance from the Attendance register. Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── 38. Employee Self-Service Payslip Portal link ──────────────────────────────
+function PayslipPortalTab({ employees, firmName }: { employees: EmpLite[]; firmName: string }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [declarations, setDeclarations] = useFeatureState<Record<string, boolean>>("payroll-it-declarations", {});
+  const [copied, setCopied] = useState<string | null>(null);
+  const fc = formatCurrency;
+
+  const monthLabel = (() => { const [y, m] = month.split("-"); return `${MONTH_NAMES[Number(m) - 1]} ${y}`; })();
+
+  const linkFor = (emp: EmpLite) => {
+    const token = btoa(`${emp.id}:${month}`).replace(/=/g, "");
+    return `https://portal.headroom.in/payslip/${token}`;
+  };
+  const messageFor = (emp: EmpLite) => {
+    const gross = Number(emp.gross_salary);
+    const net = gross - Number(emp.tds_monthly ?? 0);
+    return `Hi ${emp.name}, your payslip for ${monthLabel} from ${firmName} is ready. Net pay: ${fc(net)}. View & download: ${linkFor(emp)}\nPlease submit your IT investment declaration if pending.`;
+  };
+
+  const share = (emp: EmpLite) => {
+    const msg = messageFor(emp);
+    if (channel === "whatsapp") {
+      const phone = ""; // no stored phone; open compose
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+    } else if (emp.email) {
+      window.open(`mailto:${emp.email}?subject=${encodeURIComponent(`Payslip — ${monthLabel}`)}&body=${encodeURIComponent(msg)}`, "_blank");
+    } else {
+      toast.error(`No email on file for ${emp.name}`);
+    }
+  };
+  const copyLink = (emp: EmpLite) => {
+    navigator.clipboard.writeText(linkFor(emp)).then(() => { setCopied(emp.id); setTimeout(() => setCopied(null), 1500); });
+  };
+  const toggleDeclaration = (id: string) => setDeclarations(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const declaredCount = employees.filter(e => declarations[e.id]).length;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  if (employees.length === 0) return <EmptyState icon={Send} msg={EMPTY_HINT} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Employee Self-Service Payslip Portal</h3>
+        <p className="text-xs text-[var(--color-muted)]">Generate a per-employee payslip link and push it via WhatsApp or email. Track IT-declaration submission status here.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as "whatsapp" | "email")} className={inp}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Employees",            value: employees.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "IT Declarations Done", value: `${declaredCount}/${employees.length}`, color: declaredCount === employees.length ? "text-green-400" : "text-yellow-400" },
+          { label: "Payslip Month",        value: monthLabel, color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Distribution & Declarations</span></div>
+        <table className="w-full text-xs min-w-[680px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Net Pay", "Portal Link", "IT Declaration", "Send"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map(e => {
+              const net = Number(e.gross_salary) - Number(e.tds_monthly ?? 0);
+              return (
+                <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(net)}</td>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => copyLink(e)} className="text-[var(--color-primary)] hover:underline">{copied === e.id ? "Copied!" : "Copy link"}</button>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={!!declarations[e.id]} onChange={() => toggleDeclaration(e.id)} className="accent-[var(--color-primary)]" />
+                      <span className={declarations[e.id] ? "text-green-400" : "text-[var(--color-muted)]"}>{declarations[e.id] ? "Submitted" : "Pending"}</span>
+                    </label>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => share(e)} className="flex items-center gap-1 text-[var(--color-primary)] hover:underline">
+                      <Send size={11} /> {channel === "whatsapp" ? "WhatsApp" : "Email"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Portal links are illustrative tokens (portal.headroom.in) — wire to your hosted self-service portal before going live. Declaration status persists and syncs across devices.</p>
     </div>
   );
 }

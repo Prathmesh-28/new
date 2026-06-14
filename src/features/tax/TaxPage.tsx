@@ -6,6 +6,8 @@ import { formatCurrency } from "@/lib/utils";
 import {
   ShieldCheck, AlertTriangle, Calendar, CheckCircle2, ChevronRight,
   TrendingUp, FileText, Plus, ArrowRight, Calculator, Scale, Clock,
+  Receipt, FileSearch, Search, FileCheck, Layers, Repeat,
+  FilePlus2, Globe, PiggyBank, ShoppingCart, CalendarClock, Gavel,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -64,7 +66,9 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax">("overview");
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax"
+    | "tds-return" | "form26as" | "tds-finder" | "ldc-197" | "depreciation" | "loss-setoff"
+    | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -138,7 +142,8 @@ export default function TaxPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
+            ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -763,6 +768,19 @@ export default function TaxPage() {
       {taxTab === "advtax" && (() => {
         return <AdvanceTaxEstimator />;
       })()}
+
+      {taxTab === "tds-return"      && <TdsReturnGenerator />}
+      {taxTab === "form26as"        && <Form26ASRecon />}
+      {taxTab === "tds-finder"      && <TdsSectionFinder />}
+      {taxTab === "ldc-197"         && <LowerDeductionTracker />}
+      {taxTab === "depreciation"    && <DepreciationSchedule />}
+      {taxTab === "loss-setoff"     && <LossSetoffPlanner />}
+      {taxTab === "itr-prefill"     && <ItrPrefillPack />}
+      {taxTab === "form15ca"        && <Form15CAHelper />}
+      {taxTab === "sec80"           && <Sec80Maximiser />}
+      {taxTab === "eq-levy"         && <EqualisationLevyTracker />}
+      {taxTab === "advtax-calendar" && <AdvTaxCashCalendar />}
+      {taxTab === "tax-notice"      && <TaxNoticeResponder />}
     </div>
   );
 }
@@ -1232,6 +1250,1086 @@ function AdvanceTaxEstimator() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative — consult a CA.</p>
+    </div>
+  );
+}
+
+// Shared input class (matches existing `inp` pattern across this file)
+const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+// TDS section master — section / rate / threshold / payee logic (FY 2024-25)
+type TdsSection = {
+  section: string; nature: string; rate: number; rateNonPan: number;
+  threshold: number; form: "24Q" | "26Q" | "27Q"; note?: string;
+};
+const TDS_SECTIONS: TdsSection[] = [
+  { section: "192",   nature: "Salary",                              rate: 0,   rateNonPan: 0,  threshold: 0,        form: "24Q", note: "As per slab — projected via payroll 192" },
+  { section: "194A",  nature: "Interest (other than securities)",    rate: 10,  rateNonPan: 20, threshold: 40000,    form: "26Q" },
+  { section: "194C",  nature: "Contractor — individual/HUF",         rate: 1,   rateNonPan: 20, threshold: 30000,    form: "26Q", note: "₹1L aggregate p.a. limit also applies" },
+  { section: "194C2", nature: "Contractor — company/firm",           rate: 2,   rateNonPan: 20, threshold: 30000,    form: "26Q" },
+  { section: "194H",  nature: "Commission / brokerage",              rate: 5,   rateNonPan: 20, threshold: 15000,    form: "26Q" },
+  { section: "194I-L",nature: "Rent — land/building/furniture",      rate: 10,  rateNonPan: 20, threshold: 240000,   form: "26Q" },
+  { section: "194I-P",nature: "Rent — plant/machinery/equipment",    rate: 2,   rateNonPan: 20, threshold: 240000,   form: "26Q" },
+  { section: "194J-P",nature: "Professional fees / royalty",         rate: 10,  rateNonPan: 20, threshold: 30000,    form: "26Q" },
+  { section: "194J-T",nature: "Technical services / call-centre",    rate: 2,   rateNonPan: 20, threshold: 30000,    form: "26Q" },
+  { section: "194Q",  nature: "Purchase of goods > ₹50L",            rate: 0.1, rateNonPan: 5,  threshold: 5000000,  form: "26Q", note: "Buyer turnover > ₹10 Cr; on value above ₹50L" },
+  { section: "194O",  nature: "E-commerce participant payments",     rate: 1,   rateNonPan: 5,  threshold: 500000,   form: "26Q", note: "Operator deducts on gross sales (₹5L limit for individuals)" },
+  { section: "206C1H",nature: "TCS — sale of goods > ₹50L",          rate: 0.1, rateNonPan: 1,  threshold: 5000000,  form: "27Q", note: "Collected by seller (turnover > ₹10 Cr)" },
+];
+
+// ── #14 TDS Return (24Q/26Q) Generator ──────────────────────────────────────────
+type DeductionRow = { id: string; deductee: string; pan: string; section: string; amount: number; date: string; deposited: boolean };
+function TdsReturnGenerator() {
+  const [rows, setRows] = useFeatureState<DeductionRow[]>("tds-return-rows", []);
+  const [deductee, setDeductee] = useState("");
+  const [pan, setPan] = useState("");
+  const [section, setSection] = useState(TDS_SECTIONS[2].section);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const fc = formatCurrency;
+
+  const quarterOf = (d: string): "Q1" | "Q2" | "Q3" | "Q4" => {
+    const m = new Date(d).getMonth(); // FY quarters: Apr-Jun Q1 ...
+    if (m >= 3 && m <= 5) return "Q1";
+    if (m >= 6 && m <= 8) return "Q2";
+    if (m >= 9 && m <= 11) return "Q3";
+    return "Q4";
+  };
+  const tdsOf = (r: DeductionRow) => {
+    const sec = TDS_SECTIONS.find(s => s.section === r.section);
+    if (!sec) return 0;
+    const rate = r.pan.trim().length === 10 ? sec.rate : sec.rateNonPan;
+    return Math.round(r.amount * rate / 100);
+  };
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!deductee || amt <= 0) { toast.error("Enter deductee name and amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), deductee, pan: pan.toUpperCase(), section, amount: amt, date, deposited: false }]);
+    setDeductee(""); setPan(""); setAmount("");
+    toast.success("Deduction added to challan register");
+  };
+
+  const grouped = useMemo(() => {
+    const map: Record<string, { form: string; quarter: string; tds: number; count: number }> = {};
+    rows.forEach(r => {
+      const sec = TDS_SECTIONS.find(s => s.section === r.section);
+      const form = sec?.form ?? "26Q";
+      const q = quarterOf(r.date);
+      const key = `${form}-${q}`;
+      if (!map[key]) map[key] = { form, quarter: q, tds: 0, count: 0 };
+      map[key].tds += tdsOf(r); map[key].count += 1;
+    });
+    return Object.values(map).sort((a, b) => a.form.localeCompare(b.form) || a.quarter.localeCompare(b.quarter));
+  }, [rows]);
+
+  const totalTds = rows.reduce((s, r) => s + tdsOf(r), 0);
+  const pendingTds = rows.filter(r => !r.deposited).reduce((s, r) => s + tdsOf(r), 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> TDS Return Generator (24Q / 26Q / 27Q)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log each deduction, auto-pick the rate (20% if PAN missing), and group into quarterly e-TDS statements for the FVU. Deposit by 7th of next month; file return by end of next month after the quarter.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={deductee} onChange={e => setDeductee(e.target.value)} placeholder="Deductee name *" className={INP} />
+          <input value={pan} onChange={e => setPan(e.target.value)} placeholder="PAN (blank → 20%)" maxLength={10} className={INP} />
+          <select value={section} onChange={e => setSection(e.target.value)} className={INP}>
+            {TDS_SECTIONS.filter(s => s.section !== "192").map(s => <option key={s.section} value={s.section}>{s.section} — {s.nature}</option>)}
+          </select>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Payment amount (₹) *" className={INP} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add deduction</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total TDS deducted", value: fc(totalTds), color: "text-blue-400" },
+            { label: "Pending deposit", value: fc(pendingTds), color: pendingTds > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Statements to file", value: String(grouped.length), color: "text-orange-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold mb-2">Quarterly Statement Summary</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {grouped.map(g => (
+              <div key={g.form + g.quarter} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)]">{g.form} · {g.quarter}</p>
+                <p className="text-sm font-bold tabular-nums text-[var(--color-primary)]">{fc(g.tds)}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{g.count} deductee{g.count > 1 ? "s" : ""}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Deductee", "PAN", "Section", "Amount", "TDS", "Qtr/Form", "Date", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const sec = TDS_SECTIONS.find(s => s.section === r.section);
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.deductee}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.pan || <span className="text-red-400">No PAN</span>}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-blue-400">{fc(tdsOf(r))}</td>
+                    <td className="px-3 py-2.5 text-xs">{quarterOf(r.date)} · {sec?.form}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.date}</td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => setRows(prev => prev.map(x => x.id === r.id ? { ...x, deposited: !x.deposited } : x))}
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.deposited ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                        {r.deposited ? "Deposited" : "Pending"}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">24Q = salary (192), 26Q = resident non-salary, 27Q = non-resident payments. PAN-less deductees attract higher rate u/s 206AA (min 20%). Late filing fee ₹200/day u/s 234E. Generate the FVU via NSDL RPU before upload.</p>
+    </div>
+  );
+}
+
+// ── #15 Form 26AS / AIS Reconciliation ──────────────────────────────────────────
+type RecRow = { id: string; party: string; section: string; booksTds: number; as26Tds: number };
+function Form26ASRecon() {
+  const [rows, setRows] = useFeatureState<RecRow[]>("form26as-rows", []);
+  const [party, setParty] = useState("");
+  const [section, setSection] = useState("194J-P");
+  const [booksTds, setBooksTds] = useState("");
+  const [as26Tds, setAs26Tds] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    if (!party) { toast.error("Enter party / deductor name"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), party, section, booksTds: parseFloat(booksTds) || 0, as26Tds: parseFloat(as26Tds) || 0 }]);
+    setParty(""); setBooksTds(""); setAs26Tds("");
+  };
+
+  const verdict = (r: RecRow): { label: string; cls: string } => {
+    const diff = r.as26Tds - r.booksTds;
+    if (Math.abs(diff) < 1) return { label: "Matched", cls: "bg-green-900/30 text-green-400 border-green-800/40" };
+    if (diff < 0) return { label: "Short in 26AS — chase deductor", cls: "bg-red-900/30 text-red-400 border-red-800/40" };
+    return { label: "Extra in 26AS — claim it", cls: "bg-blue-900/30 text-blue-400 border-blue-800/40" };
+  };
+
+  const totalBooks = rows.reduce((s, r) => s + r.booksTds, 0);
+  const total26 = rows.reduce((s, r) => s + r.as26Tds, 0);
+  const claimable = Math.min(totalBooks, total26);
+  const atRisk = Math.max(0, totalBooks - total26);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> Form 26AS / AIS Reconciliation</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Match TDS credit per your books against what the deductor reported in 26AS / AIS. Only TDS appearing in 26AS can be claimed in the ITR — chase mismatches before filing.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Deductor / party *" className={INP} />
+          <select value={section} onChange={e => setSection(e.target.value)} className={INP}>
+            {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section}</option>)}
+          </select>
+          <input type="number" value={booksTds} onChange={e => setBooksTds(e.target.value)} placeholder="TDS per books (₹)" className={INP} />
+          <input type="number" value={as26Tds} onChange={e => setAs26Tds(e.target.value)} placeholder="TDS in 26AS (₹)" className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add line</button>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "TDS per books", value: fc(totalBooks), color: "text-[var(--color-text)]" },
+            { label: "Claimable (in 26AS)", value: fc(claimable), color: "text-green-400" },
+            { label: "At risk (chase deductor)", value: fc(atRisk), color: atRisk > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Deductor", "Section", "Books", "26AS", "Diff", "Verdict", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const v = verdict(r); const diff = r.as26Tds - r.booksTds;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.party}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.booksTds)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.as26Tds)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${diff < 0 ? "text-red-400" : diff > 0 ? "text-blue-400" : "text-green-400"}`}>{diff === 0 ? "—" : fc(diff)}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${v.cls}`}>{v.label}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Download 26AS from TRACES and AIS from the e-filing portal. A short credit in 26AS usually means the deductor hasn't filed/deposited — file a grievance or get a revised TDS return from them. Reconcile before the 31 Jul / 31 Oct ITR due date.</p>
+    </div>
+  );
+}
+
+// ── #16 TDS Rate & Section Finder ───────────────────────────────────────────────
+function TdsSectionFinder() {
+  const [secId, setSecId] = useState(TDS_SECTIONS[2].section);
+  const [amount, setAmount] = useState("");
+  const [hasPan, setHasPan] = useState(true);
+  const fc = formatCurrency;
+  const sec = TDS_SECTIONS.find(s => s.section === secId)!;
+  const amt = parseFloat(amount) || 0;
+  const rate = hasPan ? sec.rate : sec.rateNonPan;
+  const applies = amt >= sec.threshold && rate > 0;
+  const tds = applies ? Math.round(amt * rate / 100) : 0;
+  const net = amt - tds;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Search size={14} className="text-[var(--color-primary)]" /> TDS Section &amp; Rate Finder</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick the nature of payment to get the correct section, rate and threshold — including 194Q (0.1%), 194C (1/2%), 194J (10/2%), 194I (10/2%) and 206C.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Nature of payment</label>
+            <select value={secId} onChange={e => setSecId(e.target.value)} className={INP}>
+              {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section} — {s.nature}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payment amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 100000" className={INP} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer mt-3">
+          <input type="checkbox" checked={hasPan} onChange={e => setHasPan(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Deductee has furnished valid PAN (else higher rate u/s 206AA applies)
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Section", value: sec.section, color: "text-[var(--color-primary)]" },
+          { label: "Applicable rate", value: `${rate}%`, color: "text-orange-400" },
+          { label: "Threshold", value: sec.threshold === 0 ? "—" : fc(sec.threshold), color: "text-blue-400" },
+          { label: "TDS to deduct", value: fc(tds), color: tds > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {amt > 0 && (
+        <div className={`rounded-lg p-4 border ${applies ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+          <p className={`text-sm font-bold ${applies ? "text-orange-400" : "text-green-400"}`}>
+            {applies
+              ? `Deduct ${fc(tds)} (${rate}% u/s ${sec.section}) and pay ${fc(net)} net. File in Form ${sec.form}.`
+              : `No TDS — amount ${amt < sec.threshold ? `below the ${fc(sec.threshold)} threshold` : "rate not applicable"} for section ${sec.section}.`}
+          </p>
+          {sec.note && <p className="text-[11px] text-[var(--color-muted)] mt-1">{sec.note}</p>}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-2">Rate Quick Reference (FY 2024-25)</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[520px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Section", "Nature", "Rate", "No-PAN", "Threshold", "Form"].map(h => <th key={h} className="px-2 py-2 text-left text-[var(--color-muted)] font-semibold">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {TDS_SECTIONS.map(s => (
+                <tr key={s.section}>
+                  <td className="px-2 py-1.5 font-medium">{s.section}</td>
+                  <td className="px-2 py-1.5 text-[var(--color-muted)]">{s.nature}</td>
+                  <td className="px-2 py-1.5 tabular-nums">{s.rate}%</td>
+                  <td className="px-2 py-1.5 tabular-nums">{s.rateNonPan}%</td>
+                  <td className="px-2 py-1.5 tabular-nums">{s.threshold === 0 ? "—" : fc(s.threshold)}</td>
+                  <td className="px-2 py-1.5">{s.form}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #17 Lower-Deduction Certificate (197) Tracker ───────────────────────────────
+type LdcRow = { id: string; vendor: string; certNo: string; section: string; certRate: number; validTill: string; payment: number };
+function LowerDeductionTracker() {
+  const [rows, setRows] = useFeatureState<LdcRow[]>("ldc-197-rows", []);
+  const [vendor, setVendor] = useState("");
+  const [certNo, setCertNo] = useState("");
+  const [section, setSection] = useState("194J-P");
+  const [certRate, setCertRate] = useState("");
+  const [validTill, setValidTill] = useState("");
+  const [payment, setPayment] = useState("");
+  const fc = formatCurrency;
+  const today = new Date().toISOString().split("T")[0];
+
+  const add = () => {
+    if (!vendor || !certNo) { toast.error("Enter vendor and certificate number"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), vendor, certNo, section, certRate: parseFloat(certRate) || 0, validTill, payment: parseFloat(payment) || 0 }]);
+    setVendor(""); setCertNo(""); setCertRate(""); setValidTill(""); setPayment("");
+    toast.success("197 certificate recorded");
+  };
+
+  const normalRate = (s: string) => TDS_SECTIONS.find(x => x.section === s)?.rate ?? 10;
+  const totalSaved = rows.reduce((s, r) => {
+    const expired = r.validTill && r.validTill < today;
+    const eff = expired ? normalRate(r.section) : r.certRate;
+    return s + Math.round(r.payment * (normalRate(r.section) - eff) / 100);
+  }, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> Lower-Deduction Certificate (Sec 197) Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Vendors with a Sec 197 certificate get TDS at a reduced rate. Apply the certificate rate only while it is valid — deduct at the normal rate once it expires.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor name *" className={INP} />
+          <input value={certNo} onChange={e => setCertNo(e.target.value)} placeholder="Certificate no. *" className={INP} />
+          <select value={section} onChange={e => setSection(e.target.value)} className={INP}>
+            {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section} (normal {s.rate}%)</option>)}
+          </select>
+          <input type="number" value={certRate} onChange={e => setCertRate(e.target.value)} placeholder="Cert. rate %" className={INP} />
+          <input type="date" value={validTill} onChange={e => setValidTill(e.target.value)} className={INP} />
+          <input type="number" value={payment} onChange={e => setPayment(e.target.value)} placeholder="Payment YTD (₹)" className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add certificate</button>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Total TDS saved via 197 certificates (valid ones)</p>
+          <p className="text-xl font-bold tabular-nums text-green-400">{fc(totalSaved)}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Cert No.", "Section", "Cert %", "Valid till", "Applied TDS", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const expired = !!r.validTill && r.validTill < today;
+                const eff = expired ? normalRate(r.section) : r.certRate;
+                const appliedTds = Math.round(r.payment * eff / 100);
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.certNo}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.certRate}%</td>
+                    <td className="px-3 py-2.5 text-xs">{r.validTill || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-blue-400">{fc(appliedTds)} @ {eff}%</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${expired ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{expired ? "Expired — normal rate" : "Valid"}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 197: the deductee obtains a certificate from the AO for NIL/lower TDS. Validity is for the FY stated on the certificate. Quote the certificate number in your TDS return. Always verify on TRACES before applying.</p>
+    </div>
+  );
+}
+
+// ── #18 Depreciation Schedule (IT Act block-of-assets, WDV) ──────────────────────
+type DepAsset = { id: string; name: string; block: string; openWdv: number; additions: number; halfYear: boolean };
+const DEP_BLOCKS = [
+  { block: "Buildings (residential)", rate: 5 },
+  { block: "Buildings (general)", rate: 10 },
+  { block: "Furniture & fittings", rate: 10 },
+  { block: "Plant & machinery (general)", rate: 15 },
+  { block: "Motor vehicles", rate: 15 },
+  { block: "Computers & software", rate: 40 },
+  { block: "Books (professional)", rate: 40 },
+  { block: "Intangible assets / know-how", rate: 25 },
+];
+function DepreciationSchedule() {
+  const [assets, setAssets] = useFeatureState<DepAsset[]>("depreciation-assets", []);
+  const [name, setName] = useState("");
+  const [block, setBlock] = useState(DEP_BLOCKS[3].block);
+  const [openWdv, setOpenWdv] = useState("");
+  const [additions, setAdditions] = useState("");
+  const [halfYear, setHalfYear] = useState(false);
+  const fc = formatCurrency;
+  const rateOf = (b: string) => DEP_BLOCKS.find(x => x.block === b)?.rate ?? 15;
+
+  const add = () => {
+    if (!name) { toast.error("Enter asset name"); return; }
+    setAssets(prev => [...prev, { id: crypto.randomUUID(), name, block, openWdv: parseFloat(openWdv) || 0, additions: parseFloat(additions) || 0, halfYear }]);
+    setName(""); setOpenWdv(""); setAdditions(""); setHalfYear(false);
+  };
+
+  const computed = assets.map(a => {
+    const rate = rateOf(a.block);
+    // Full rate on opening WDV + additions held ≥180 days; half rate on additions held <180 days
+    const fullBase = a.openWdv + (a.halfYear ? 0 : a.additions);
+    const halfBase = a.halfYear ? a.additions : 0;
+    const dep = Math.round(fullBase * rate / 100 + halfBase * (rate / 2) / 100);
+    const closeWdv = a.openWdv + a.additions - dep;
+    return { ...a, rate, dep, closeWdv };
+  });
+  const totalDep = computed.reduce((s, c) => s + c.dep, 0);
+  const totalClose = computed.reduce((s, c) => s + c.closeWdv, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Depreciation Schedule (IT Act — Block of Assets, WDV)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Written-down-value method by block. Assets put to use for &lt; 180 days in the year get half the normal rate. Companies Act SLM/WDV differs — maintain dual books.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Asset name *" className={INP} />
+          <select value={block} onChange={e => setBlock(e.target.value)} className={INP}>
+            {DEP_BLOCKS.map(b => <option key={b.block} value={b.block}>{b.block} ({b.rate}%)</option>)}
+          </select>
+          <input type="number" value={openWdv} onChange={e => setOpenWdv(e.target.value)} placeholder="Opening WDV (₹)" className={INP} />
+          <input type="number" value={additions} onChange={e => setAdditions(e.target.value)} placeholder="Additions in year (₹)" className={INP} />
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={halfYear} onChange={e => setHalfYear(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Additions used &lt; 180 days (half rate)
+          </label>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add asset</button>
+        </div>
+      </div>
+
+      {computed.length > 0 && <>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Total depreciation (year)", value: fc(totalDep), color: "text-orange-400" },
+            { label: "Closing WDV (carried forward)", value: fc(totalClose), color: "text-blue-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Asset", "Block", "Rate", "Open WDV", "Additions", "Depreciation", "Close WDV", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {computed.map(c => (
+                <tr key={c.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{c.name}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[150px] truncate">{c.block}{c.halfYear ? " ·½" : ""}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{c.rate}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(c.openWdv)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(c.additions)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-orange-400">{fc(c.dep)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-blue-400">{fc(c.closeWdv)}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setAssets(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Rates per Appendix I, Income-tax Rules. Block WDV continues until the block is empty (no asset-wise gain/loss). Additional depreciation (20%) for new plant in manufacturing may apply separately. Companies Act depreciation (Sch II useful-life) is tracked separately.</p>
+    </div>
+  );
+}
+
+// ── #19 Loss Set-off & Carry-Forward Planner ────────────────────────────────────
+type LossHead = "business" | "speculative" | "stcl" | "ltcl" | "house" | "other";
+type LossRow = { id: string; head: LossHead; ay: string; amount: number };
+function LossSetoffPlanner() {
+  const [rows, setRows] = useFeatureState<LossRow[]>("loss-setoff-rows", []);
+  const [head, setHead] = useState<LossHead>("business");
+  const [ay, setAy] = useState("");
+  const [amount, setAmount] = useState("");
+  const fc = formatCurrency;
+
+  const RULES: Record<LossHead, { label: string; cfYears: number; setoff: string }> = {
+    business:    { label: "Business loss (non-spec)", cfYears: 8, setoff: "Any head except salary; c/f set off only vs business income" },
+    speculative: { label: "Speculative business",      cfYears: 4, setoff: "Only against speculative profits" },
+    stcl:        { label: "Short-term capital loss",   cfYears: 8, setoff: "Against STCG or LTCG" },
+    ltcl:        { label: "Long-term capital loss",    cfYears: 8, setoff: "Only against LTCG" },
+    house:       { label: "House property loss",        cfYears: 8, setoff: "Set off ≤₹2L vs other heads; c/f vs HP income" },
+    other:       { label: "Owning & maintaining horses", cfYears: 4, setoff: "Only against same activity" },
+  };
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { toast.error("Enter loss amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), head, ay: ay || "AY 2025-26", amount: amt }]);
+    setAmount(""); setAy("");
+  };
+
+  const expiryAy = (cfYears: number, fromAy: string) => {
+    const m = fromAy.match(/(\d{4})/);
+    if (!m) return "—";
+    const start = parseInt(m[1]);
+    return `AY ${start + cfYears}-${String(start + cfYears + 1).slice(2)}`;
+  };
+  const grouped = useMemo(() => {
+    const map: Record<string, number> = {};
+    rows.forEach(r => { map[r.head] = (map[r.head] || 0) + r.amount; });
+    return map;
+  }, [rows]);
+  const totalLoss = rows.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Loss Set-off &amp; Carry-Forward Planner</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Record losses by head to see how many years they can be carried forward (8 years for business / capital losses, 4 for speculative) and the AY they expire. Carry-forward requires filing the ITR by the due date.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <select value={head} onChange={e => setHead(e.target.value as LossHead)} className={INP}>
+            {(Object.keys(RULES) as LossHead[]).map(h => <option key={h} value={h}>{RULES[h].label}</option>)}
+          </select>
+          <input value={ay} onChange={e => setAy(e.target.value)} placeholder="AY incurred (e.g. AY 2024-25)" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Loss amount (₹)" className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add loss</button>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">Set-off rule: <span className="text-[var(--color-text)]">{RULES[head].setoff}</span> · Carry forward {RULES[head].cfYears} years.</p>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Total carried-forward loss</p>
+            <p className="text-xl font-bold tabular-nums text-red-400">{fc(totalLoss)}</p>
+          </div>
+          {Object.entries(grouped).map(([h, amt]) => (
+            <div key={h} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{RULES[h as LossHead].label}</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{fc(amt)}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Head", "AY incurred", "Amount", "Set-off against", "Expires", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{RULES[r.head].label}</td>
+                  <td className="px-3 py-2.5 text-xs">{r.ay}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{fc(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[200px]">{RULES[r.head].setoff}</td>
+                  <td className="px-3 py-2.5 text-xs text-orange-400">{expiryAy(RULES[r.head].cfYears, r.ay)}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Intra-head set-off first, then inter-head (subject to restrictions — e.g. business loss can't set off salary; LTCL only vs LTCG). Unabsorbed depreciation carries forward indefinitely. House-property loss inter-head set-off capped at ₹2L/year.</p>
+    </div>
+  );
+}
+
+// ── #20 ITR Pre-Fill Pack ────────────────────────────────────────────────────────
+function ItrPrefillPack() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const txns = store.transactions ?? [];
+  const revenue = txns.filter(t => t.category === "revenue" || (t.amount > 0)).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const expenses = txns.filter(t => t.category === "expense" || t.category === "payroll" || (t.amount < 0)).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const netProfit = revenue - expenses;
+
+  const [entity, setEntity] = useState<"individual" | "huf" | "firm" | "company">("firm");
+  const FORM_FOR: Record<string, string> = { individual: "ITR-3 / ITR-4", huf: "ITR-3 / ITR-4", firm: "ITR-5", company: "ITR-6" };
+
+  const lines = [
+    { section: "Sch BP — Business & Profession", items: [
+      { label: "Gross revenue / turnover", value: revenue },
+      { label: "Total expenses debited to P&L", value: -expenses },
+      { label: "Net profit before adjustments", value: netProfit },
+    ]},
+    { section: "Part B-TI — Total Income", items: [
+      { label: "Income from business / profession", value: Math.max(0, netProfit) },
+      { label: "Gross total income (PGBP only)", value: Math.max(0, netProfit) },
+    ]},
+    { section: "Sch BS — Balance Sheet (cross-check)", items: [
+      { label: "Use Balance Sheet module for assets/liabilities", value: 0 },
+    ]},
+  ];
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> ITR Pre-Fill Pack</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Assembles the key ITR line items (Sch BP / Part B-TI) from your live P&amp;L so your CA can transcribe straight into the return. Pick the entity to see the applicable form.</p>
+        <div className="flex flex-wrap gap-2">
+          {(["individual", "huf", "firm", "company"] as const).map(e => (
+            <button key={e} onClick={() => setEntity(e)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border capitalize transition-colors ${entity === e ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {e}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mt-3">Applicable form: <span className="font-semibold text-[var(--color-primary)]">{FORM_FOR[entity]}</span></p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Turnover", value: fc(revenue), color: "text-blue-400" },
+          { label: "Total expenses", value: fc(expenses), color: "text-orange-400" },
+          { label: "Net profit (PGBP)", value: fc(netProfit), color: netProfit >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {lines.map(grp => (
+        <div key={grp.section} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold mb-2">{grp.section}</p>
+          <div className="space-y-2">
+            {grp.items.map(it => (
+              <div key={it.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{it.label}</span>
+                <span className="tabular-nums text-xs">{it.value === 0 ? "—" : it.value < 0 ? `(${fc(Math.abs(it.value))})` : fc(it.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="text-[10px] text-[var(--color-muted)]">Pre-fill is indicative — book-to-tax adjustments (disallowances u/s 40/43B, depreciation per IT Act, MAT) must be applied before filing. Reconcile with 26AS/AIS and the Balance Sheet module. Your CA finalises the return.</p>
+    </div>
+  );
+}
+
+// ── #21 Form 15CA/15CB Helper (foreign remittance TDS) ───────────────────────────
+function Form15CAHelper() {
+  const [amount, setAmount] = useState("");
+  const [purpose, setPurpose] = useState("Import of goods");
+  const [taxable, setTaxable] = useState(true);
+  const [dtaaRate, setDtaaRate] = useState("");
+  const fc = formatCurrency;
+  const amt = parseFloat(amount) || 0;
+  const annualThreshold = 500000; // ₹5 lakh aggregate in FY
+
+  // Part determination per Rule 37BB
+  let part: string; let needs15CB: boolean; let detail: string;
+  if (!taxable) {
+    part = "Part D"; needs15CB = false; detail = "Remittance not chargeable to tax (e.g. certain imports) — no 15CB; Part D only.";
+  } else if (amt <= annualThreshold) {
+    part = "Part A"; needs15CB = false; detail = "Taxable but aggregate ≤ ₹5L in the FY — Part A, no CA certificate needed.";
+  } else {
+    part = "Part C"; needs15CB = true; detail = "Taxable and > ₹5L — Part C requires a CA's Form 15CB certificate.";
+  }
+
+  const rate = parseFloat(dtaaRate) || 0;
+  const tds = taxable ? Math.round(amt * rate / 100) : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> Form 15CA / 15CB Helper</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Determines which part of Form 15CA applies to a foreign remittance and whether a CA's 15CB certificate is needed (Rule 37BB). Apply DTAA-beneficial rate where a TRC is on file.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Remittance amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 800000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+            <select value={purpose} onChange={e => setPurpose(e.target.value)} className={INP}>
+              {["Import of goods", "Royalty / fees for technical services", "Interest", "Dividend", "Software / IT services", "Professional fees", "Other"].map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Withholding / DTAA rate %</label>
+            <input type="number" value={dtaaRate} onChange={e => setDtaaRate(e.target.value)} placeholder="e.g. 10" className={INP} />
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer md:mt-6">
+            <input type="checkbox" checked={taxable} onChange={e => setTaxable(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Remittance is chargeable to tax in India
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Form 15CA part", value: part, color: "text-[var(--color-primary)]" },
+          { label: "15CB (CA cert.)", value: needs15CB ? "Required" : "Not required", color: needs15CB ? "text-orange-400" : "text-green-400" },
+          { label: "TDS / withholding (Sec 195)", value: fc(tds), color: tds > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${needs15CB ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold ${needs15CB ? "text-orange-400" : "text-green-400"}`}>{part} — {detail}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-1">Purpose: {purpose}. File 15CA online before remitting; the bank requires the acknowledgement.</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-2">Form 15CA Parts (Rule 37BB)</p>
+        <ul className="space-y-1.5 text-xs text-[var(--color-muted)]">
+          <li><span className="text-[var(--color-text)] font-medium">Part A</span> — taxable remittance, aggregate ≤ ₹5L in FY. No 15CB.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part B</span> — &gt; ₹5L where AO order/certificate u/s 195(2)/197 obtained.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part C</span> — &gt; ₹5L taxable; CA's Form 15CB mandatory.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part D</span> — not chargeable to tax (per the specified list of 33 items).</li>
+        </ul>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 195 governs TDS on payments to non-residents. Grossing-up may apply if tax is borne by the remitter. Keep the Tax Residency Certificate (TRC) and Form 10F for DTAA benefit. CA to certify 15CB.</p>
+    </div>
+  );
+}
+
+// ── #22 Section 80 Deduction Maximiser (entity) ──────────────────────────────────
+function Sec80Maximiser() {
+  const [d80g, setD80g] = useState("");
+  const [d80gPct, setD80gPct] = useState<50 | 100>(50);
+  const [newEmpWages, setNewEmpWages] = useState("");
+  const [d35ad, setD35ad] = useState("");
+  const fc = formatCurrency;
+
+  const donation = parseFloat(d80g) || 0;
+  const ded80g = Math.round(donation * d80gPct / 100);
+  // 80JJAA — 30% of additional employee cost, for 3 years
+  const addlWages = parseFloat(newEmpWages) || 0;
+  const ded80jjaa = Math.round(addlWages * 0.30);
+  // 35AD — 100% capital expenditure deduction for specified businesses
+  const ded35ad = parseFloat(d35ad) || 0;
+  const totalDed = ded80g + ded80jjaa + ded35ad;
+  const taxSaved = Math.round(totalDed * 0.25); // assumed 25% corporate rate
+
+  const ITEMS = [
+    { key: "80G", title: "80G — Donations", detail: "50% or 100% of eligible donations to notified funds/institutions (subject to 10% of GTI limit for some)." },
+    { key: "80JJAA", title: "80JJAA — New Employment", detail: "30% of additional employee cost (wages ≤ ₹25k/month) deductible for 3 assessment years." },
+    { key: "35AD", title: "35AD — Capital Expenditure", detail: "100% deduction of capex for specified businesses (cold chain, warehousing, hospitals, etc.)." },
+  ];
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Section 80 Deduction Maximiser (Entity)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Beyond personal 80C — entity-level deductions: 80G donations, 80JJAA new-employment incentive (30% of additional wages × 3 yrs) and 35AD capex. Note: not available under the new concessional regimes 115BAA/115BAB.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80G donations (₹)</label>
+            <input type="number" value={d80g} onChange={e => setD80g(e.target.value)} placeholder="e.g. 200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80G eligibility</label>
+            <div className="flex gap-2">
+              {([50, 100] as const).map(p => (
+                <button key={p} onClick={() => setD80gPct(p)}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${d80gPct === p ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                  {p}% deduction
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80JJAA — additional employee wages (₹/yr)</label>
+            <input type="number" value={newEmpWages} onChange={e => setNewEmpWages(e.target.value)} placeholder="e.g. 1200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">35AD — specified-business capex (₹)</label>
+            <input type="number" value={d35ad} onChange={e => setD35ad(e.target.value)} placeholder="e.g. 5000000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "80G deduction", value: fc(ded80g), color: "text-blue-400" },
+          { label: "80JJAA (30%)", value: fc(ded80jjaa), color: "text-blue-400" },
+          { label: "35AD capex", value: fc(ded35ad), color: "text-blue-400" },
+          { label: "Est. tax saved @25%", value: fc(taxSaved), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+        <p className="text-sm font-bold text-green-400">Total entity deductions: {fc(totalDed)} → estimated tax saving {fc(taxSaved)} (at 25% corporate rate).</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          {ITEMS.map(i => (
+            <div key={i.key} className="bg-[var(--color-accent)] rounded-lg p-3">
+              <p className="font-semibold text-[var(--color-primary)] mb-1">{i.title}</p>
+              <p className="text-[var(--color-muted)]">{i.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Chapter VI-A deductions (except 80JJAA) are forfeited if the company opts for 115BAA/115BAB. 80G needs the institution's 80G registration + donation receipt. 80JJAA requires Form 10DA from a CA. Verify eligibility with your CA.</p>
+    </div>
+  );
+}
+
+// ── #23 Equalisation Levy / TDS-194O Tracker ─────────────────────────────────────
+type ElRow = { id: string; party: string; type: "el-ads" | "el-ecom" | "194o"; amount: number; date: string };
+function EqualisationLevyTracker() {
+  const [rows, setRows] = useFeatureState<ElRow[]>("eq-levy-rows", []);
+  const [party, setParty] = useState("");
+  const [type, setType] = useState<ElRow["type"]>("194o");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const fc = formatCurrency;
+
+  const RATES: Record<ElRow["type"], { label: string; rate: number; desc: string }> = {
+    "el-ads":  { label: "Equalisation Levy — online ads (6%)", rate: 6, desc: "On payments > ₹1L/yr to a non-resident for online advertising (Sec 165)." },
+    "el-ecom": { label: "EL — e-commerce supply (2%)",         rate: 2, desc: "On consideration to non-resident e-commerce operators (Sec 165A) — withdrawn w.e.f. 1 Aug 2024." },
+    "194o":    { label: "TDS 194O — e-commerce participant (1%)", rate: 1, desc: "Operator deducts 1% on gross sales of resident participants." },
+  };
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!party || amt <= 0) { toast.error("Enter party and amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), party, type, amount: amt, date }]);
+    setParty(""); setAmount("");
+  };
+
+  const levyOf = (r: ElRow) => Math.round(r.amount * RATES[r.type].rate / 100);
+  const total = rows.reduce((s, r) => s + levyOf(r), 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShoppingCart size={14} className="text-[var(--color-primary)]" /> Equalisation Levy / TDS-194O Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track the 6% EL on online advertising to non-residents and the 1% TDS u/s 194O for e-commerce operators. (The 2% e-commerce EL stands withdrawn from 1 Aug 2024 — retained here for prior-period entries.)</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Payee / participant *" className={INP} />
+          <select value={type} onChange={e => setType(e.target.value as ElRow["type"])} className={INP}>
+            {(Object.keys(RATES) as ElRow["type"][]).map(k => <option key={k} value={k}>{RATES[k].label}</option>)}
+          </select>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹) *" className={INP} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mb-3">{RATES[type].desc}</p>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add entry</button>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Total levy / TDS payable</p>
+          <p className="text-xl font-bold tabular-nums text-orange-400">{fc(total)}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Party", "Type", "Amount", "Rate", "Levy/TDS", "Date", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.party}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{RATES[r.type].label}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{RATES[r.type].rate}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-orange-400">{fc(levyOf(r))}</td>
+                  <td className="px-3 py-2.5 text-xs">{r.date}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">EL on ads (6%): deposit by the 7th of next month, file Form 1 annually by 30 Jun. 194O TDS: deposit by 7th, report in 26Q. Failure to deduct EL disallows the expense u/s 40(a). Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── #24 Advance Tax vs TDS Cash-Flow Calendar ────────────────────────────────────
+function AdvTaxCashCalendar() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const autoLiability = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const months = Math.max(txns.length / 30, 1);
+    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const cost = txns.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    return Math.max(0, Math.round(((rev - cost) / months) * 12 * 0.25));
+  }, [store.transactions]);
+
+  const [liabilityInput, setLiabilityInput] = useState("");
+  const [tdsCreditInput, setTdsCreditInput] = useState("");
+  const liability = parseFloat(liabilityInput) || autoLiability;
+  const tdsCredit = parseFloat(tdsCreditInput) || 0;
+  const netLiability = Math.max(0, liability - tdsCredit); // advance tax payable net of TDS
+
+  const SCHEDULE = [
+    { label: "1st instalment", due: "15 Jun", cumPct: 15 },
+    { label: "2nd instalment", due: "15 Sep", cumPct: 45 },
+    { label: "3rd instalment", due: "15 Dec", cumPct: 75 },
+    { label: "Final instalment", due: "15 Mar", cumPct: 100 },
+  ];
+  const rows = SCHEDULE.map((s, i) => {
+    const cum = Math.round(netLiability * s.cumPct / 100);
+    const prevCum = i === 0 ? 0 : Math.round(netLiability * SCHEDULE[i - 1].cumPct / 100);
+    return { ...s, cum, instalment: cum - prevCum };
+  });
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Advance Tax vs TDS Cash-Flow Calendar</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Nets TDS already deducted on your receipts against the advance-tax liability and lays out the cash outgo by due date — so you can plan runway around 15 Jun / Sep / Dec / Mar.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated annual tax liability (₹)</label>
+            <input type="number" value={liabilityInput} onChange={e => setLiabilityInput(e.target.value)} placeholder={`Auto: ${fc(autoLiability)}`} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">TDS credit expected (₹)</label>
+            <input type="number" value={tdsCreditInput} onChange={e => setTdsCreditInput(e.target.value)} placeholder="e.g. 50000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Gross liability", value: fc(liability), color: "text-[var(--color-text)]" },
+          { label: "Less: TDS credit", value: fc(tdsCredit), color: "text-green-400" },
+          { label: "Advance tax payable", value: fc(netLiability), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Due date", "Instalment", "Cum %", "Pay this date", "Cumulative"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{r.due}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.cumPct}%</td>
+                <td className="px-4 py-2.5 tabular-nums font-semibold text-orange-400">{fc(r.instalment)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.cum)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Advance tax is computed net of TDS (Sec 209). If net liability ≤ ₹10,000, advance tax is not mandatory. Use the Advance Tax tab for 234B/234C interest on shortfalls. Overlay these dates on your Forecast runway.</p>
+    </div>
+  );
+}
+
+// ── #25 Tax Notice / Demand (143(1)) Responder ───────────────────────────────────
+type NoticeRow = { id: string; refNo: string; ay: string; type: string; demand: number; dueDate: string; status: "open" | "responded" | "closed" };
+function TaxNoticeResponder() {
+  const [rows, setRows] = useFeatureState<NoticeRow[]>("tax-notice-rows", []);
+  const [refNo, setRefNo] = useState("");
+  const [ay, setAy] = useState("");
+  const [type, setType] = useState("143(1) Intimation");
+  const [demand, setDemand] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const fc = formatCurrency;
+  const today = new Date().toISOString().split("T")[0];
+
+  const NOTICE_TYPES: Record<string, string> = {
+    "143(1) Intimation": "Adjustment/processing intimation. If you agree, pay; else file rectification u/s 154 or online disagreement within 30 days.",
+    "139(9) Defective": "Return treated as defective. Respond/revise within 15 days or the return becomes invalid.",
+    "143(2) Scrutiny": "Case selected for scrutiny. Submit details/documents online by the date specified.",
+    "148 Reassessment": "Income escaping assessment. File return in response and seek reasons recorded.",
+    "245 Adjustment": "Refund proposed to be adjusted against demand. Respond within 30 days to agree/disagree.",
+    "156 Demand": "Notice of demand. Pay within 30 days or file stay/appeal (CIT-A within 30 days).",
+  };
+
+  const add = () => {
+    if (!refNo) { toast.error("Enter notice reference number"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), refNo, ay: ay || "AY 2024-25", type, demand: parseFloat(demand) || 0, dueDate, status: "open" }]);
+    setRefNo(""); setAy(""); setDemand(""); setDueDate("");
+    toast.success("Notice logged — track the response deadline");
+  };
+
+  const cycle = (s: NoticeRow["status"]): NoticeRow["status"] => s === "open" ? "responded" : s === "responded" ? "closed" : "open";
+  const totalDemand = rows.filter(r => r.status !== "closed").reduce((s, r) => s + r.demand, 0);
+  const overdue = rows.filter(r => r.status === "open" && r.dueDate && r.dueDate < today).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gavel size={14} className="text-[var(--color-primary)]" /> Tax Notice / Demand Responder</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log income-tax notices (143(1), 139(9), 143(2), 148, 156…), track the response deadline and outstanding demand, and see the recommended action for each notice type.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={refNo} onChange={e => setRefNo(e.target.value)} placeholder="Notice / DIN ref no. *" className={INP} />
+          <input value={ay} onChange={e => setAy(e.target.value)} placeholder="AY (e.g. AY 2024-25)" className={INP} />
+          <select value={type} onChange={e => setType(e.target.value)} className={INP}>
+            {Object.keys(NOTICE_TYPES).map(t => <option key={t}>{t}</option>)}
+          </select>
+          <input type="number" value={demand} onChange={e => setDemand(e.target.value)} placeholder="Demand amount (₹)" className={INP} />
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Log notice</button>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)]">Action for {type}: <span className="text-[var(--color-text)]">{NOTICE_TYPES[type]}</span></p>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Open demand", value: fc(totalDemand), color: totalDemand > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Open notices", value: String(rows.filter(r => r.status === "open").length), color: "text-orange-400" },
+            { label: "Overdue responses", value: String(overdue), color: overdue > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Ref no.", "AY", "Type", "Demand", "Due", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const isOverdue = r.status === "open" && !!r.dueDate && r.dueDate < today;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.refNo}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.ay}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[150px] truncate">{r.type}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.demand > 0 ? fc(r.demand) : "—"}</td>
+                    <td className={`px-3 py-2.5 text-xs ${isOverdue ? "text-red-400 font-semibold" : ""}`}>{r.dueDate || "—"}{isOverdue ? " ⚠" : ""}</td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => setRows(prev => prev.map(x => x.id === r.id ? { ...x, status: cycle(x.status) } : x))}
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${r.status === "closed" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "responded" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                        {r.status}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Most notices carry a 15–30 day response window from the date of the notice. Rectification u/s 154 corrects mistakes apparent from record; appeal to CIT(A) within 30 days of a demand. Always respond via the e-filing portal e-Proceedings and keep the DIN. Consult your CA.</p>
     </div>
   );
 }

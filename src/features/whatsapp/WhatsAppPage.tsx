@@ -1,9 +1,21 @@
-import { useState } from "react";
-import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import { useMemo, useState } from "react";
+import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
+import { formatCurrency } from "@/lib/utils";
 import { DEFAULT_WA_PREFS, type WhatsAppPreferences } from "@/data/types";
+
+// Build a wa.me deep link that pre-fills a message (no backend call). If a
+// recipient phone is supplied, it opens that chat; otherwise WhatsApp asks who.
+function waLink(text: string, phone?: string): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  const base = digits ? `https://wa.me/${digits}` : "https://wa.me/";
+  return `${base}?text=${encodeURIComponent(text)}`;
+}
+
+type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals";
 
 // authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
 function apiError(err: unknown): string {
@@ -163,6 +175,8 @@ export default function WhatsAppPage() {
 
   const advanceChat = () => setChatStep(s => Math.min(s + 1, 2));
 
+  const [tab, setTab] = useState<WaTab>("overview");
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -175,6 +189,31 @@ export default function WhatsAppPage() {
         </p>
       </div>
 
+      {/* Tool selector */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          ["overview", "Overview", MessageCircle],
+          ["wa-invoice-pay", "Invoice & Pay", Send],
+          ["wa-reminder-bot", "Reminder Bot", BellRing],
+          ["wa-sales-capture", "Sales Capture", PlusCircle],
+          ["wa-statement", "Statement", FileText],
+          ["wa-approvals", "Approvals", CheckSquare],
+        ] as const).map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Icon size={13} />{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "wa-invoice-pay" && <WaInvoicePay />}
+      {tab === "wa-reminder-bot" && <WaReminderBot />}
+      {tab === "wa-sales-capture" && <WaSalesCapture />}
+      {tab === "wa-statement" && <WaStatementOnDemand />}
+      {tab === "wa-approvals" && <WaApprovalActions />}
+
+      {tab === "overview" && (
+      <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Left: connect + settings */}
@@ -421,6 +460,493 @@ export default function WhatsAppPage() {
           >
             Connect now <ArrowRight size={12} />
           </button>
+        </div>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// Shared styles
+const WA_INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+const WA_CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4";
+
+function WaSendButton({ text, phone, label }: { text: string; phone?: string; label?: string }) {
+  return (
+    <a
+      href={waLink(text, phone)}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => toast.success("Opening WhatsApp…")}
+      className="inline-flex items-center gap-1.5 bg-green-700 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+    >
+      <Send size={14} />{label ?? "Send on WhatsApp"}
+    </a>
+  );
+}
+
+// ── #177 WhatsApp Invoice Send & Pay ────────────────────────────────────────
+function WaInvoicePay() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [selected, setSelected] = useState("");
+  const [phone, setPhone] = useState("");
+  const [payLink, setPayLink] = useState("");
+
+  const inv = invoices.find(i => i.id === selected);
+  const fc = formatCurrency;
+
+  const message = inv
+    ? `Hi ${inv.customer},\n\nHere is your invoice ${inv.invoiceNumber ? `#${inv.invoiceNumber}` : ""} from ${store.firm?.name ?? "us"}.\n\n*Amount:* ${fc(inv.amount)}\n*Due:* ${inv.dueDate}\n${inv.description ? `*For:* ${inv.description}\n` : ""}${payLink ? `\nPay securely here: ${payLink}\n` : ""}\nReply *PAID* once settled and we'll mark it received. Thank you!`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Send size={15} className="text-green-400" />WhatsApp Invoice Send &amp; Pay</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Pick an open invoice, attach an optional UPI/card pay-link, and send it to the customer on WhatsApp.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
+            <select value={selected} onChange={e => setSelected(e.target.value)} className={WA_INP}>
+              <option value="">Select an invoice…</option>
+              {invoices.map(i => (
+                <option key={i.id} value={i.id}>{(i.invoiceNumber ? `#${i.invoiceNumber} · ` : "")}{i.customer} · {fc(i.amount)} · {i.status}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pay-link (UPI / card, optional)</label>
+            <input value={payLink} onChange={e => setPayLink(e.target.value)} placeholder="https://rzp.io/i/…" className={WA_INP} />
+          </div>
+        </div>
+        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — create one in the Invoices page first.</p>}
+      </div>
+
+      {inv && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Amount", value: fc(inv.amount), color: "text-[var(--color-primary)]" },
+              { label: "Status", value: inv.status, color: inv.status === "overdue" ? "text-red-400" : inv.status === "paid" ? "text-green-400" : "text-orange-400" },
+              { label: "Due Date", value: inv.dueDate, color: "text-[var(--color-text)]" },
+              { label: "Pay-link", value: payLink ? "Attached" : "None", color: payLink ? "text-green-400" : "text-[var(--color-muted)]" },
+            ].map(c => (
+              <div key={c.label} className={WA_CARD}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-base font-bold tabular-nums capitalize ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+            <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+            <WaSendButton text={message} phone={phone} label="Send invoice on WhatsApp" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #178 WhatsApp Payment Reminder Bot ──────────────────────────────────────
+type ReminderTier = { id: string; daysOverdue: number; tone: string };
+const REMINDER_TIERS: ReminderTier[] = [
+  { id: "gentle", daysOverdue: 1,  tone: "Gentle nudge" },
+  { id: "firm",   daysOverdue: 7,  tone: "Firm reminder" },
+  { id: "urgent", daysOverdue: 15, tone: "Urgent — final notice" },
+];
+
+function buildReminder(tier: ReminderTier, customer: string, amount: number, days: number, firmName: string): string {
+  const fc = formatCurrency;
+  if (tier.id === "gentle")
+    return `Hi ${customer}, a friendly reminder that ${fc(amount)} is now ${days} day(s) overdue. Could you process it when convenient? Thanks — ${firmName}.`;
+  if (tier.id === "firm")
+    return `Hi ${customer}, our records show ${fc(amount)} is ${days} days overdue. Please arrange payment at the earliest. Let us know if there's an issue. — ${firmName}.`;
+  return `Hi ${customer}, this is a final notice: ${fc(amount)} is ${days} days overdue. Kindly clear it within 48 hours to avoid late fees / further action. — ${firmName}.`;
+}
+
+function WaReminderBot() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const overdue = useMemo(() =>
+    (store.invoices ?? [])
+      .filter(i => i.status === "overdue" || (i.status === "pending" && new Date(i.dueDate) < today))
+      .map(i => {
+        const days = Math.max(1, Math.round((today.getTime() - new Date(i.dueDate).getTime()) / 86_400_000));
+        const tier = days >= 15 ? REMINDER_TIERS[2] : days >= 7 ? REMINDER_TIERS[1] : REMINDER_TIERS[0];
+        return { ...i, days, tier };
+      })
+      .sort((a, b) => b.days - a.days),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [store.invoices]);
+
+  const totalOverdue = overdue.reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-2`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BellRing size={15} className="text-green-400" />WhatsApp Payment Reminder Bot</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Auto-staged dunning ladder (D+1 / D+7 / D+15) built from your overdue invoices. Tap to send each nudge on WhatsApp.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Overdue invoices", value: String(overdue.length), color: "text-orange-400" },
+          { label: "Total overdue", value: fc(totalOverdue), color: "text-red-400" },
+          { label: "Final-notice", value: String(overdue.filter(o => o.tier.id === "urgent").length), color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className={WA_CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {overdue.length === 0 ? (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm font-bold text-green-400">✓ No overdue invoices — nothing to chase.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Amount", "Overdue", "Tier", "Action"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {overdue.map(o => (
+                <tr key={o.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 font-medium">{o.customer}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(o.amount)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{o.days}d</td>
+                  <td className="px-4 py-2.5 text-xs">{o.tier.tone}</td>
+                  <td className="px-4 py-2.5">
+                    <WaSendButton text={buildReminder(o.tier, o.customer, o.amount, o.days, store.firm?.name ?? "us")} label="Remind" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Tier escalates with days overdue: D+1 gentle, D+7 firm, D+15 final notice.</p>
+    </div>
+  );
+}
+
+// ── #179 WhatsApp Daily-Sales Capture ───────────────────────────────────────
+interface CapturedSale {
+  id: string;
+  date: string;
+  customer: string;
+  item: string;
+  amount: number;
+}
+
+function WaSalesCapture() {
+  const [sales, setSales] = useFeatureState<CapturedSale[]>("wa-sales-capture", []);
+  const [customer, setCustomer] = useState("");
+  const [item, setItem] = useState("");
+  const [amount, setAmount] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!item.trim() || !amt || amt <= 0) { toast.error("Enter an item and a positive amount"); return; }
+    const row: CapturedSale = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString().slice(0, 10),
+      customer: customer.trim() || "Walk-in",
+      item: item.trim(),
+      amount: Math.round(amt),
+    };
+    setSales(prev => [row, ...prev]);
+    setCustomer(""); setItem(""); setAmount("");
+    toast.success("Sale booked");
+  };
+
+  const remove = (id: string) => setSales(prev => prev.filter(s => s.id !== id));
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayTotal = sales.filter(s => s.date === today).reduce((s, r) => s + r.amount, 0);
+  const total = sales.reduce((s, r) => s + r.amount, 0);
+
+  const booked = sales.slice(0, 10).map(s => `${s.date} · ${s.customer} · ${s.item} · ${fc(s.amount)}`).join("\n");
+  const ownerMsg = `Sales booked (latest ${Math.min(sales.length, 10)}):\n${booked || "—"}\n\nToday: ${fc(todayTotal)} · All-time: ${fc(total)}`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PlusCircle size={15} className="text-green-400" />WhatsApp Daily-Sales Capture</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Log a sale the way an owner would text it ("Sharma 2 chairs 4500"). Each entry is saved and synced; send a recap to your own WhatsApp any time.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Walk-in" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item / note</label>
+            <input value={item} onChange={e => setItem(e.target.value)} placeholder="2 chairs" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="4500" className={WA_INP} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={add} className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors">Book sale</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Today's sales", value: fc(todayTotal), color: "text-green-400" },
+          { label: "Entries", value: String(sales.length), color: "text-[var(--color-primary)]" },
+          { label: "All-time total", value: fc(total), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className={WA_CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {sales.length > 0 && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Date", "Customer", "Item", "Amount", ""].map((h, i) => (
+                    <th key={i} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sales.map(s => (
+                  <tr key={s.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.date}</td>
+                    <td className="px-4 py-2.5">{s.customer}</td>
+                    <td className="px-4 py-2.5">{s.item}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{fc(s.amount)}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => remove(s.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <WaSendButton text={ownerMsg} label="Send recap to my WhatsApp" />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #180 WhatsApp Statement-on-Demand ───────────────────────────────────────
+function WaStatementOnDemand() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const invoices = store.invoices ?? [];
+  const customers = useMemo(() => Array.from(new Set(invoices.map(i => i.customer))).sort(), [invoices]);
+  const [customer, setCustomer] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const rows = invoices.filter(i => i.customer === customer);
+  const outstanding = rows.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const paid = rows.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+
+  const lines = rows
+    .slice()
+    .sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate))
+    .map(i => `• ${i.invoiceDate} ${i.invoiceNumber ? `#${i.invoiceNumber} ` : ""}${fc(i.amount)} — ${i.status}`)
+    .join("\n");
+
+  const statement = customer
+    ? `*Statement of Account — ${customer}*\nFrom ${store.firm?.name ?? "us"}\n\n${lines || "No invoices on record."}\n\n*Outstanding:* ${fc(outstanding)}\n*Settled:* ${fc(paid)}\n\nReply *PAY* for a pay-link or *QUERY* to raise a dispute.`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={15} className="text-green-400" />WhatsApp Statement-on-Demand</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">When a customer asks "what do I owe?", generate their full ledger statement and send it on WhatsApp in one tap.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <select value={customer} onChange={e => setCustomer(e.target.value)} className={WA_INP}>
+              <option value="">Select a customer…</option>
+              {customers.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — nothing to build a statement from.</p>}
+      </div>
+
+      {customer && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Invoices", value: String(rows.length), color: "text-[var(--color-primary)]" },
+              { label: "Outstanding", value: fc(outstanding), color: outstanding > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Settled", value: fc(paid), color: "text-green-400" },
+              { label: "Total billed", value: fc(outstanding + paid), color: "text-[var(--color-text)]" },
+            ].map(c => (
+              <div key={c.label} className={WA_CARD}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Statement preview</p>
+            <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{statement}</pre>
+            <WaSendButton text={statement} phone={phone} label="Send statement on WhatsApp" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #181 WhatsApp Approval Actions ──────────────────────────────────────────
+interface ApprovalItem {
+  id: string;
+  type: "invoice" | "payment" | "expense";
+  reference: string;
+  amount: number;
+  requestedBy: string;
+  status: "pending" | "approved" | "rejected";
+}
+
+function WaApprovalActions() {
+  const [items, setItems] = useFeatureState<ApprovalItem[]>("wa-approvals", []);
+  const [type, setType] = useState<ApprovalItem["type"]>("payment");
+  const [reference, setReference] = useState("");
+  const [amount, setAmount] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!reference.trim() || !amt || amt <= 0) { toast.error("Enter a reference and a positive amount"); return; }
+    const row: ApprovalItem = {
+      id: crypto.randomUUID(),
+      type,
+      reference: reference.trim(),
+      amount: Math.round(amt),
+      requestedBy: requestedBy.trim() || "Team",
+      status: "pending",
+    };
+    setItems(prev => [row, ...prev]);
+    setReference(""); setAmount(""); setRequestedBy("");
+    toast.success("Approval request queued");
+  };
+
+  const setStatus = (id: string, status: ApprovalItem["status"]) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+    toast.success(status === "approved" ? "Approved" : "Rejected");
+  };
+
+  const pending = items.filter(i => i.status === "pending");
+  const pendingTotal = pending.reduce((s, i) => s + i.amount, 0);
+
+  const requestMsg = (i: ApprovalItem) =>
+    `*Approval needed* — ${i.type}\nRef: ${i.reference}\nAmount: ${fc(i.amount)}\nRequested by: ${i.requestedBy}\n\nReply *YES ${i.reference}* to approve or *NO ${i.reference}* to reject.`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CheckSquare size={15} className="text-green-400" />WhatsApp Approval Actions</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Queue invoices, payments or expenses for sign-off. Send the request to the approver on WhatsApp; record their YES/NO here.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as ApprovalItem["type"])} className={WA_INP}>
+              <option value="payment">Payment</option>
+              <option value="invoice">Invoice</option>
+              <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reference</label>
+            <input value={reference} onChange={e => setReference(e.target.value)} placeholder="PAY-104" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="85000" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Requested by</label>
+            <input value={requestedBy} onChange={e => setRequestedBy(e.target.value)} placeholder="Priya (Ops)" className={WA_INP} />
+          </div>
+        </div>
+        <button onClick={add} className="bg-green-700 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">Queue request</button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Pending", value: String(pending.length), color: "text-orange-400" },
+          { label: "Pending value", value: fc(pendingTotal), color: "text-[var(--color-primary)]" },
+          { label: "Resolved", value: String(items.length - pending.length), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={WA_CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {items.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Type", "Reference", "Amount", "Requested by", "Status", "Actions"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(i => (
+                <tr key={i.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 capitalize">{i.type}</td>
+                  <td className="px-4 py-2.5 font-medium">{i.reference}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(i.amount)}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.requestedBy}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-xs font-medium capitalize ${i.status === "approved" ? "text-green-400" : i.status === "rejected" ? "text-red-400" : "text-orange-400"}`}>{i.status}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <a href={waLink(requestMsg(i))} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline"><Send size={12} />Send</a>
+                      {i.status === "pending" && (
+                        <>
+                          <button onClick={() => setStatus(i.id, "approved")} className="text-xs text-green-400 hover:underline">Approve</button>
+                          <button onClick={() => setStatus(i.id, "rejected")} className="text-xs text-red-400 hover:underline">Reject</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
-import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator } from "lucide-react";
+import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator, Landmark, Target, Gauge, FileText, Scale, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
@@ -46,7 +46,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -192,6 +192,12 @@ export default function CreditPage() {
           ["wcscore",  "WC Health Score"],
           ["captable", "Cap Table"],
           ["valuation","Valuation"],
+          ["aapull",   "AA Underwriting"],
+          ["matcher",  "Eligibility Matcher"],
+          ["comscore", "Commercial Score"],
+          ["discount", "Invoice Discounting"],
+          ["docpack",  "Loan Doc Pack"],
+          ["foir",     "FOIR / Capacity"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -714,6 +720,12 @@ export default function CreditPage() {
       {tab === "wcscore" && <WcHealthScore />}
       {tab === "captable" && <CapTableTab />}
       {tab === "valuation" && <ValuationTab />}
+      {tab === "aapull" && <AaUnderwritingPull />}
+      {tab === "matcher" && <LoanEligibilityMatcher />}
+      {tab === "comscore" && <CommercialScoreTracker />}
+      {tab === "discount" && <InvoiceDiscountingConnector />}
+      {tab === "docpack" && <LoanDocumentPack />}
+      {tab === "foir" && <FoirCalculator />}
     </div>
   );
 }
@@ -1818,6 +1830,773 @@ function ValuationTab() {
       <p className="text-[10px] text-[var(--color-muted)]">
         Valuation is indicative only. Indian SMEs typically trade at 0.5–3x revenue or 4–8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions — WACC must exceed terminal growth.
       </p>
+    </div>
+  );
+}
+
+// ── #99 AA-DATA UNDERWRITING PULL ───────────────────────────────────────────
+// Account Aggregator bank-data → credit profile. Interactive estimator built from
+// manually-entered/derived bank-data inputs (no live AA backend call).
+function AaUnderwritingPull() {
+  const { store } = useApp();
+
+  // Seed monthly inflow/balance from live transactions where available.
+  const seed = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const credits = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const months = Math.max(1, Math.round(txns.length / 30));
+    const avgInflow = credits > 0 ? Math.round(credits / months) : 0;
+    const bal = (store.bankAccounts ?? []).reduce((s, a) => s + a.balance, 0);
+    return { avgInflow, bal };
+  }, [store.transactions, store.bankAccounts]);
+
+  const [avgInflow,   setAvgInflow]   = useState(seed.avgInflow ? String(seed.avgInflow) : "");
+  const [avgBalance,  setAvgBalance]  = useState(seed.bal > 0 ? String(Math.round(seed.bal)) : "");
+  const [inflowCov,   setInflowCov]   = useState(20);  // % coefficient of variation of monthly inflows
+  const [bounces,     setBounces]     = useState(0);   // cheque/ECS bounces in last 6 months
+  const [odDays,      setOdDays]      = useState(0);    // days overdrawn / negative balance in 6 months
+  const [vintage,     setVintage]     = useState(18);   // months of bank-statement history available
+  const [emiOutflow,  setEmiOutflow]  = useState("");   // existing monthly EMI/obligation outflow
+  const [creditConc,  setCreditConc]  = useState(40);   // % of inflow from single top counterparty
+
+  const inflow   = parseFloat(avgInflow)  || 0;
+  const balance  = parseFloat(avgBalance) || 0;
+  const emi      = parseFloat(emiOutflow) || 0;
+
+  // Bank-statement-derived signals → 0–100 sub-scores (lender-style scorecard).
+  const factors = [
+    {
+      label: "Avg monthly inflow",
+      detail: `${formatCurrency(inflow)}/mo`,
+      weight: 25,
+      raw: inflow <= 0 ? 0 : Math.min(1, inflow / 500000), // ₹5L/mo saturates
+    },
+    {
+      label: "Inflow stability (CoV)",
+      detail: `${inflowCov}% variation`,
+      weight: 20,
+      raw: inflowCov >= 60 ? 0 : 1 - inflowCov / 60,
+    },
+    {
+      label: "Avg bank balance / buffer",
+      detail: `${formatCurrency(balance)} · ${inflow > 0 ? (balance / inflow).toFixed(1) : "0"}× monthly inflow`,
+      weight: 15,
+      raw: inflow <= 0 ? 0 : Math.min(1, balance / inflow), // 1 month buffer saturates
+    },
+    {
+      label: "Bounces (6 mo)",
+      detail: `${bounces} bounce${bounces === 1 ? "" : "s"}`,
+      weight: 15,
+      raw: bounces === 0 ? 1 : bounces >= 4 ? 0 : 1 - bounces / 4,
+    },
+    {
+      label: "Overdraft days (6 mo)",
+      detail: `${odDays} day${odDays === 1 ? "" : "s"} negative`,
+      weight: 10,
+      raw: odDays === 0 ? 1 : odDays >= 30 ? 0 : 1 - odDays / 30,
+    },
+    {
+      label: "Banking vintage",
+      detail: `${vintage} months history`,
+      weight: 10,
+      raw: Math.min(1, vintage / 24), // 24 months saturates
+    },
+    {
+      label: "Inflow concentration",
+      detail: `top payer ${creditConc}% of inflow`,
+      weight: 5,
+      raw: creditConc >= 80 ? 0 : 1 - creditConc / 80,
+    },
+  ];
+
+  const score = Math.round(factors.reduce((s, f) => s + f.raw * f.weight, 0));
+
+  // FOIR-anchored eligibility: 50% of net surplus serviceable as EMI, capitalised
+  // at ~16% over 36 months. Surplus = inflow − existing EMI outflow.
+  const surplus     = Math.max(0, inflow - emi);
+  const serviceable = surplus * 0.5;
+  const r36         = 0.16 / 12;
+  const eligible    = serviceable > 0 ? Math.round((serviceable * (Math.pow(1 + r36, 36) - 1)) / (r36 * Math.pow(1 + r36, 36))) : 0;
+  // Risk-adjust by score band.
+  const adjEligible = Math.round(eligible * (score >= 70 ? 1 : score >= 50 ? 0.7 : score >= 35 ? 0.4 : 0));
+
+  const band = score >= 70 ? { label: "Prime", cls: "text-green-400" }
+    : score >= 50 ? { label: "Near-prime", cls: "text-blue-400" }
+    : score >= 35 ? { label: "Sub-prime", cls: "text-yellow-400" }
+    : { label: "Decline-likely", cls: "text-red-400" };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> AA-Data Underwriting Pull</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Models the credit profile a lender derives from your Account Aggregator bank-statement feed. Inflow and balance are pre-filled from your live data — adjust the bank-behaviour signals to see how the underwriting score and indicative limit move.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Avg monthly inflow / credits (₹)</label>
+            <input type="number" min={0} value={avgInflow} onChange={e => setAvgInflow(e.target.value)} placeholder="e.g. 800000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Avg bank balance (₹)</label>
+            <input type="number" min={0} value={avgBalance} onChange={e => setAvgBalance(e.target.value)} placeholder="e.g. 250000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Existing monthly EMI / obligations (₹)</label>
+            <input type="number" min={0} value={emiOutflow} onChange={e => setEmiOutflow(e.target.value)} placeholder="e.g. 50000" className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Banking vintage</span><span className="font-semibold text-[var(--color-text)]">{vintage} mo</span></label>
+            <input type="range" min={1} max={36} value={vintage} onChange={e => setVintage(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Inflow variation (CoV)</span><span className="font-semibold text-[var(--color-text)]">{inflowCov}%</span></label>
+            <input type="range" min={0} max={80} value={inflowCov} onChange={e => setInflowCov(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Top-payer concentration</span><span className="font-semibold text-[var(--color-text)]">{creditConc}%</span></label>
+            <input type="range" min={0} max={100} value={creditConc} onChange={e => setCreditConc(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Bounces (last 6 mo)</span><span className="font-semibold text-[var(--color-text)]">{bounces}</span></label>
+            <input type="range" min={0} max={10} value={bounces} onChange={e => setBounces(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Overdraft days (last 6 mo)</span><span className="font-semibold text-[var(--color-text)]">{odDays}</span></label>
+            <input type="range" min={0} max={60} value={odDays} onChange={e => setOdDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {inflow > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Underwriting score", value: `${score}/100`, color: band.cls },
+              { label: "Risk band",          value: band.label,     color: band.cls },
+              { label: "Indicative limit",   value: formatCurrency(adjEligible), color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">Scorecard breakdown</h3>
+            <div className="space-y-3">
+              {factors.map(f => (
+                <div key={f.label}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span><span className="font-medium">{f.label}</span> <span className="text-[var(--color-muted)]">— {f.detail}</span></span>
+                    <span className="tabular-nums text-[var(--color-muted)]">{Math.round(f.raw * f.weight)} / {f.weight}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${Math.round(f.raw * 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Estimator only — no live Account Aggregator fetch is made. Real underwriting pulls 6–12 months of statements via the AA (Sahamati/RBI) framework with your explicit consent. Indicative limit uses a 50% FOIR cap on surplus inflow, capitalised at ~16% p.a. over 36 months, then risk-adjusted by score band.
+      </div>
+    </div>
+  );
+}
+
+// ── #100 BUSINESS LOAN ELIGIBILITY MATCHER ──────────────────────────────────
+function LoanEligibilityMatcher() {
+  type Product = {
+    name: string; kind: string; minTurnover: number; minVintage: number; minScore: number;
+    maxTicket: number; rateFrom: number; collateral: boolean; tag: string;
+  };
+  const PRODUCTS: Product[] = [
+    { name: "Unsecured Term Loan",      kind: "NBFC / Fintech",   minTurnover: 4000000,  minVintage: 12, minScore: 650, maxTicket: 5000000,  rateFrom: 18, collateral: false, tag: "Fast, no collateral" },
+    { name: "Working Capital OD/CC",    kind: "Private Bank",     minTurnover: 10000000, minVintage: 24, minScore: 700, maxTicket: 20000000, rateFrom: 11, collateral: true,  tag: "Revolving limit" },
+    { name: "CGTMSE Collateral-Free",   kind: "PSU Bank (govt)",  minTurnover: 2000000,  minVintage: 6,  minScore: 600, maxTicket: 50000000, rateFrom: 9.5, collateral: false, tag: "Govt guarantee" },
+    { name: "Invoice / Bill Discounting", kind: "TReDS / NBFC",   minTurnover: 5000000,  minVintage: 12, minScore: 640, maxTicket: 30000000, rateFrom: 12, collateral: false, tag: "Against receivables" },
+    { name: "LAP (Loan Against Property)", kind: "Bank / HFC",    minTurnover: 3000000,  minVintage: 12, minScore: 680, maxTicket: 75000000, rateFrom: 10, collateral: true,  tag: "Lowest rate, secured" },
+    { name: "Merchant Cash Advance",    kind: "Fintech",          minTurnover: 2000000,  minVintage: 6,  minScore: 580, maxTicket: 2500000,  rateFrom: 22, collateral: false, tag: "Repay from sales %" },
+  ];
+
+  const [turnover,  setTurnover]  = useState("");
+  const [vintage,   setVintage]   = useState("18");
+  const [score,     setScore]     = useState("680");
+  const [hasColl,   setHasColl]   = useState(true);
+
+  const t  = parseFloat(turnover) || 0;
+  const v  = parseFloat(vintage)  || 0;
+  const sc = parseFloat(score)    || 0;
+
+  const matched = PRODUCTS.map(p => {
+    const checks = [
+      { ok: t >= p.minTurnover,            why: `Turnover ≥ ${formatCurrency(p.minTurnover)}` },
+      { ok: v >= p.minVintage,             why: `${p.minVintage}+ months vintage` },
+      { ok: sc >= p.minScore,              why: `Bureau score ≥ ${p.minScore}` },
+      { ok: !p.collateral || hasColl,      why: p.collateral ? "Collateral available" : "No collateral needed" },
+    ];
+    const passed = checks.filter(c => c.ok).length;
+    const odds = Math.round((passed / checks.length) * 100);
+    // Indicative offer size: 25% of annual turnover capped at product max ticket.
+    const offer = Math.min(p.maxTicket, Math.round(t * 0.25));
+    return { ...p, checks, odds, offer, eligible: passed === checks.length };
+  }).sort((a, b) => b.odds - a.odds || a.rateFrom - b.rateFrom);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Business Loan Eligibility Matcher</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Match your profile to common Indian SME lending products and see approval odds + indicative ticket size for each.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Annual turnover (₹)</label>
+            <input type="number" min={0} value={turnover} onChange={e => setTurnover(e.target.value)} placeholder="e.g. 12000000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Business vintage (months)</label>
+            <input type="number" min={0} value={vintage} onChange={e => setVintage(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Bureau score (CIBIL/CRIF)</label>
+            <input type="number" min={300} max={900} value={score} onChange={e => setScore(e.target.value)} className={inp} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={hasColl} onChange={e => setHasColl(e.target.checked)} className="accent-[var(--color-primary)]" />
+              Collateral available
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {t > 0 && (
+        <div className="space-y-3">
+          {matched.map(p => (
+            <div key={p.name} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${p.eligible ? "border-green-800/40" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm">{p.name}</p>
+                    <span className="text-[9px] bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full font-semibold">{p.kind}</span>
+                  </div>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">{p.tag} · from {p.rateFrom}% p.a. · {p.collateral ? "secured" : "unsecured"}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-lg font-bold tabular-nums ${p.odds >= 100 ? "text-green-400" : p.odds >= 75 ? "text-blue-400" : p.odds >= 50 ? "text-yellow-400" : "text-red-400"}`}>{p.odds}%</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">match</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {p.checks.map(c => (
+                  <span key={c.why} className={`text-[10px] px-2 py-0.5 rounded-full border ${c.ok ? "bg-green-950/20 text-green-400 border-green-800/30" : "bg-red-950/20 text-red-400 border-red-800/30"}`}>
+                    {c.ok ? "✓" : "✕"} {c.why}
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-xs border-t border-[var(--color-border)] pt-2">
+                <span className="text-[var(--color-muted)]">Indicative ticket (25% of turnover, capped)</span>
+                <span className="font-bold tabular-nums text-[var(--color-primary)]">{p.eligible ? formatCurrency(p.offer) : "—"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Match % and tickets are indicative — final eligibility depends on each lender's policy, bureau report and document verification. CGTMSE coverage and rates vary by scheme; verify current terms with the lender.
+      </div>
+    </div>
+  );
+}
+
+// ── #101 COMMERCIAL CREDIT SCORE TRACKER ────────────────────────────────────
+function CommercialScoreTracker() {
+  type Reading = { id: string; date: string; bureau: "CIBIL Rank" | "CRIF Highmark" | "Experian"; score: number; note: string };
+  const [readings, setReadings] = useFeatureState<Reading[]>("commercial-credit-score", []);
+  const [bureau, setBureau] = useState<Reading["bureau"]>("CIBIL Rank");
+  const [score,  setScore]  = useState("");
+  const [date,   setDate]   = useState(() => new Date().toISOString().split("T")[0]);
+  const [note,   setNote]   = useState("");
+
+  // CIBIL MSME Rank (CMR) is 1 (best) – 10 (worst); CRIF/Experian commercial 300–900-style.
+  const isRank = bureau === "CIBIL Rank";
+
+  const add = () => {
+    const s = parseFloat(score);
+    if (!score || isNaN(s)) { toast.error("Enter a score"); return; }
+    if (isRank && (s < 1 || s > 10)) { toast.error("CIBIL Rank is 1 (best) to 10 (worst)"); return; }
+    setReadings(prev => [...prev, { id: Math.random().toString(36).slice(2), date, bureau, score: s, note }]
+      .sort((a, b) => a.date.localeCompare(b.date)));
+    setScore(""); setNote("");
+  };
+
+  const byBureau = readings.filter(r => r.bureau === bureau);
+  const latest   = byBureau[byBureau.length - 1];
+  const prev     = byBureau[byBureau.length - 2];
+  const delta    = latest && prev ? latest.score - prev.score : 0;
+  // For rank, lower is better → invert the "good" direction.
+  const improving = isRank ? delta < 0 : delta > 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const rankVerdict = (s: number) =>
+    s <= 3 ? { label: "Low risk — best rates", cls: "text-green-400" }
+    : s <= 6 ? { label: "Moderate risk", cls: "text-yellow-400" }
+    : { label: "High risk — limited access", cls: "text-red-400" };
+  const scoreVerdict = (s: number) =>
+    s >= 750 ? { label: "Excellent", cls: "text-green-400" }
+    : s >= 650 ? { label: "Good", cls: "text-blue-400" }
+    : s >= 550 ? { label: "Fair", cls: "text-yellow-400" }
+    : { label: "Poor", cls: "text-red-400" };
+  const verdict = latest ? (isRank ? rankVerdict(latest.score) : scoreVerdict(latest.score)) : null;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Commercial Credit Score Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log your business bureau scores over time — CIBIL MSME Rank (CMR 1–10, lower is better) or CRIF/Experian commercial scores — and track the trend lenders look at.</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Bureau</label>
+            <select value={bureau} onChange={e => setBureau(e.target.value as Reading["bureau"])} className={inp}>
+              {(["CIBIL Rank", "CRIF Highmark", "Experian"] as const).map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">{isRank ? "Rank (1–10)" : "Score (300–900)"}</label>
+            <input type="number" value={score} onChange={e => setScore(e.target.value)} placeholder={isRank ? "e.g. 3" : "e.g. 720"} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">As of date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Note (optional)</label>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. after closing OD" className={inp} />
+          </div>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add reading</button>
+      </div>
+
+      {latest && verdict && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: `Latest ${bureau}`, value: isRank ? `CMR ${latest.score}` : String(latest.score), color: verdict.cls },
+            { label: "Assessment",       value: verdict.label, color: verdict.cls },
+            { label: "Change vs prior",  value: prev ? `${delta > 0 ? "+" : ""}${delta}` : "—", color: !prev ? "text-[var(--color-muted)]" : improving ? "text-green-400" : "text-red-400" },
+            { label: "Readings logged",  value: String(byBureau.length), color: "text-[var(--color-text)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {readings.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Gauge size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No scores logged yet. Add your CIBIL Rank or commercial bureau score to start tracking the trend.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Date", "Bureau", "Score / Rank", "Note", ""].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {readings.slice().reverse().map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 tabular-nums">{r.date}</td>
+                  <td className="px-4 py-2.5">{r.bureau}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold">{r.bureau === "CIBIL Rank" ? `CMR ${r.score}` : r.score}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{r.note || "—"}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button onClick={() => setReadings(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        CIBIL MSME Rank (CMR) runs 1 (lowest risk) to 10 (highest risk). CRIF/Experian commercial scores follow a 300–900-style scale where higher is better. Pull your report at least quarterly — bureaus update with a 30–45 day lag.
+      </div>
+    </div>
+  );
+}
+
+// ── #102 INVOICE-DISCOUNTING MARKETPLACE CONNECTOR ──────────────────────────
+function InvoiceDiscountingConnector() {
+  type Listing = { id: string; buyer: string; invoiceNo: string; amount: number; dueDate: string; discountRate: number; tenureDays: number; status: "listed" | "funded" };
+  const [listings, setListings] = useFeatureState<Listing[]>("invoice-discounting", []);
+  const [buyer,      setBuyer]      = useState("");
+  const [invoiceNo,  setInvoiceNo]  = useState("");
+  const [amount,     setAmount]     = useState("");
+  const [dueDate,    setDueDate]    = useState(() => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().split("T")[0]; });
+  const [rate,       setRate]       = useState("14"); // annualised discount rate offered by financier
+
+  const today = new Date();
+
+  const calc = (l: Listing) => {
+    const tenure = Math.max(1, l.tenureDays);
+    // Discount charge = face × annualised rate × tenure/365 (simple bill-discounting).
+    const discountCharge = Math.round(l.amount * (l.discountRate / 100) * (tenure / 365));
+    // Financiers typically advance ~90% of face; charge deducted upfront.
+    const advance  = Math.round(l.amount * 0.9);
+    const netNow   = advance - discountCharge;
+    const effAnnual = l.amount > 0 ? (discountCharge / l.amount) * (365 / tenure) * 100 : 0;
+    return { discountCharge, advance, netNow, effAnnual, tenure };
+  };
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!buyer || !a || a <= 0) { toast.error("Enter buyer and a valid invoice amount"); return; }
+    const due = new Date(dueDate);
+    const tenureDays = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / 86400000));
+    setListings(prev => [...prev, {
+      id: Math.random().toString(36).slice(2), buyer, invoiceNo: invoiceNo || "—",
+      amount: a, dueDate, discountRate: parseFloat(rate) || 14, tenureDays, status: "listed",
+    }]);
+    setBuyer(""); setInvoiceNo(""); setAmount("");
+  };
+
+  const toggleStatus = (id: string) => setListings(prev => prev.map(l => l.id === id ? { ...l, status: l.status === "listed" ? "funded" : "listed" } : l));
+  const remove = (id: string) => setListings(prev => prev.filter(l => l.id !== id));
+
+  const listed = listings.filter(l => l.status === "listed");
+  const totalListed = listed.reduce((s, l) => s + l.amount, 0);
+  const totalNetNow = listings.reduce((s, l) => s + calc(l).netNow, 0);
+  const totalCost   = listings.reduce((s, l) => s + calc(l).discountCharge, 0);
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      {listings.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Invoices listed", value: String(listed.length), color: "text-[var(--color-text)]" },
+            { label: "Face value listed", value: formatCurrency(totalListed), color: "text-[var(--color-text)]" },
+            { label: "Net cash if all funded", value: formatCurrency(totalNetNow), color: "text-green-400" },
+            { label: "Total discounting cost", value: formatCurrency(totalCost), color: "text-orange-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Invoice-Discounting Marketplace Connector</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">List approved-buyer invoices for financing bids (TReDS-style). See what you net today after the financier's discount charge.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={buyer} onChange={e => setBuyer(e.target.value)} placeholder="Buyer / drawee *" className={inp} />
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no." className={inp} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Invoice amount (₹) *" className={inp} />
+          <div>
+            <label className="block text-[10px] text-[var(--color-muted)] mb-1">Due date</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={`w-full ${inp}`} />
+          </div>
+          <div>
+            <label className="block text-[10px] text-[var(--color-muted)] mb-1">Discount rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="14" className={`w-full ${inp}`} />
+          </div>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ List invoice</button>
+      </div>
+
+      {listings.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Receipt size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No invoices listed. Add a receivable to estimate financing bids and net proceeds.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {listings.map(l => {
+            const { discountCharge, advance, netNow, effAnnual, tenure } = calc(l);
+            return (
+              <div key={l.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${l.status === "funded" ? "border-green-800/40" : "border-[var(--color-border)]"}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm">{l.buyer}</p>
+                      <span className="text-[9px] text-[var(--color-muted)]">#{l.invoiceNo}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${l.status === "funded" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-blue-900/30 text-blue-400 border-blue-800/40"}`}>{l.status === "funded" ? "Funded" : "Listed"}</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-muted)] mt-0.5">{l.discountRate}% p.a. · due {l.dueDate} · {tenure} days tenure</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => toggleStatus(l.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">{l.status === "funded" ? "Mark listed" : "Mark funded"}</button>
+                    <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div><p className="text-[var(--color-muted)]">Face value</p><p className="font-semibold tabular-nums mt-0.5">{formatCurrency(l.amount)}</p></div>
+                  <div><p className="text-[var(--color-muted)]">Advance (90%)</p><p className="font-semibold tabular-nums mt-0.5">{formatCurrency(advance)}</p></div>
+                  <div><p className="text-[var(--color-muted)]">Discount charge</p><p className="font-semibold tabular-nums text-red-400 mt-0.5">({formatCurrency(discountCharge)})</p></div>
+                  <div><p className="text-[var(--color-muted)]">Net now</p><p className="font-bold tabular-nums text-green-400 mt-0.5">{formatCurrency(netNow)}</p></div>
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] mt-2">Effective cost ≈ {effAnnual.toFixed(1)}% annualised over the {tenure}-day tenure.</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Indicative only — actual bids on TReDS (RXIL/M1xchange/Invoicemart) are set by financiers and depend on buyer credit rating. Advance % and rate vary; bill discounting is typically with-recourse unless factored. Discount charge = face × rate × tenure/365.
+      </div>
+    </div>
+  );
+}
+
+// ── #103 LOAN APPLICATION DOCUMENT PACK ─────────────────────────────────────
+function LoanDocumentPack() {
+  type LoanType = "unsecured" | "wc" | "lap" | "cgtmse";
+  type Entity = "proprietorship" | "partnership_llp" | "pvt_ltd";
+  type DocItem = { id: string; label: string; group: string; applies: (lt: LoanType, en: Entity) => boolean };
+
+  const DOCS: DocItem[] = [
+    { id: "pan-entity",   label: "Business PAN card",                       group: "KYC", applies: () => true },
+    { id: "pan-prop",     label: "Proprietor / Directors PAN & Aadhaar",    group: "KYC", applies: () => true },
+    { id: "gst-reg",      label: "GST registration certificate",            group: "KYC", applies: () => true },
+    { id: "udyam",        label: "Udyam / MSME registration",               group: "KYC", applies: (lt) => lt === "cgtmse" || lt === "wc" },
+    { id: "incorp",       label: "Certificate of Incorporation / MOA-AOA",  group: "KYC", applies: (_lt, en) => en === "pvt_ltd" },
+    { id: "partner-deed", label: "Partnership deed / LLP agreement",        group: "KYC", applies: (_lt, en) => en === "partnership_llp" },
+    { id: "shop-act",     label: "Shop & Establishment / trade licence",    group: "KYC", applies: (_lt, en) => en === "proprietorship" },
+    { id: "bank-stmt",    label: "Bank statements (last 12 months)",        group: "Financial", applies: () => true },
+    { id: "itr",          label: "ITR + computation (last 2–3 years)",      group: "Financial", applies: () => true },
+    { id: "financials",   label: "Audited financials / P&L + Balance Sheet", group: "Financial", applies: (_lt, en) => en !== "proprietorship" },
+    { id: "gst-returns",  label: "GST returns (GSTR-3B, last 12 months)",   group: "Financial", applies: () => true },
+    { id: "debt-sheet",   label: "Existing loan sanction letters / repayment track", group: "Financial", applies: () => true },
+    { id: "stock-debtor", label: "Stock & debtor statement",                group: "Financial", applies: (lt) => lt === "wc" },
+    { id: "proj-fin",     label: "Projected financials & fund-utilisation plan", group: "Financial", applies: (lt) => lt === "wc" || lt === "cgtmse" },
+    { id: "prop-docs",    label: "Property title deed & valuation report",  group: "Collateral", applies: (lt) => lt === "lap" },
+    { id: "ec",           label: "Encumbrance certificate (property)",      group: "Collateral", applies: (lt) => lt === "lap" },
+    { id: "guarantor",    label: "Guarantor KYC & net-worth statement",     group: "Collateral", applies: (lt) => lt === "lap" || lt === "unsecured" },
+  ];
+
+  const [loanType, setLoanType] = useState<LoanType>("wc");
+  const [entity,   setEntity]   = useState<Entity>("pvt_ltd");
+  const [checked,  setChecked]  = useFeatureState<Record<string, boolean>>("loan-doc-pack", {});
+
+  const required = DOCS.filter(d => d.applies(loanType, entity));
+  const groups = ["KYC", "Financial", "Collateral"].filter(g => required.some(d => d.group === g));
+  const done = required.filter(d => checked[d.id]).length;
+  const pct  = required.length > 0 ? Math.round((done / required.length) * 100) : 0;
+
+  const toggle = (id: string) => setChecked(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Loan Application Document Pack</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Auto-assembles the lender document checklist for your loan type and entity structure. Tick items off as you collect them — progress is saved.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Loan type</label>
+            <select value={loanType} onChange={e => setLoanType(e.target.value as LoanType)} className={inp}>
+              <option value="unsecured">Unsecured Term Loan</option>
+              <option value="wc">Working Capital (OD/CC)</option>
+              <option value="lap">Loan Against Property</option>
+              <option value="cgtmse">CGTMSE Collateral-Free</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Entity type</label>
+            <select value={entity} onChange={e => setEntity(e.target.value as Entity)} className={inp}>
+              <option value="proprietorship">Proprietorship</option>
+              <option value="partnership_llp">Partnership / LLP</option>
+              <option value="pvt_ltd">Pvt Ltd / OPC</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="font-semibold">{done} of {required.length} documents ready</span>
+          <span className={`font-bold tabular-nums ${pct === 100 ? "text-green-400" : "text-[var(--color-primary)]"}`}>{pct}%</span>
+        </div>
+        <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      {groups.map(g => (
+        <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">{g} documents</h3>
+          <div className="space-y-2">
+            {required.filter(d => d.group === g).map(d => (
+              <label key={d.id} className={`flex items-center gap-3 text-sm cursor-pointer p-2 rounded-lg border ${checked[d.id] ? "border-green-800/30 bg-green-950/10" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
+                <input type="checkbox" checked={!!checked[d.id]} onChange={() => toggle(d.id)} className="accent-[var(--color-primary)]" />
+                <span className={checked[d.id] ? "line-through text-[var(--color-muted)]" : ""}>{d.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {pct === 100 && (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
+          <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+          <p className="text-sm font-semibold text-green-400">Document pack complete — you're ready to submit your application.</p>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Checklist is indicative of common Indian SME lending requirements. Individual lenders may ask for additional documents (CA-certified turnover, board resolution, projected DSCR working). Keep statements in PDF as downloaded from net-banking for faster verification.
+      </div>
+    </div>
+  );
+}
+
+// ── #104 REPAYMENT CAPACITY / FOIR CALCULATOR ───────────────────────────────
+function FoirCalculator() {
+  const { store } = useApp();
+
+  // Pre-fill monthly income from live revenue; existing EMI from active loans.
+  const seed = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const months = Math.max(1, Math.round(txns.length / 30));
+    const rev = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const exp = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const profit = Math.max(0, Math.round((rev - exp) / months));
+    const emi = (store.activeLoans ?? []).reduce((s, l) => s + l.monthlyEmi, 0);
+    return { profit, emi: Math.round(emi) };
+  }, [store.transactions, store.activeLoans]);
+
+  const [income,     setIncome]     = useState(seed.profit > 0 ? String(seed.profit) : "");
+  const [existEmi,   setExistEmi]   = useState(seed.emi > 0 ? String(seed.emi) : "");
+  const [otherOblig, setOtherOblig] = useState(""); // rent, card min-dues, other fixed outflows
+  const [foirCap,    setFoirCap]    = useState(50);  // lender FOIR policy ceiling %
+  const [newRate,    setNewRate]    = useState("16"); // proposed new loan rate p.a.
+  const [newTenure,  setNewTenure]  = useState("48"); // proposed tenure (months)
+
+  const inc   = parseFloat(income)     || 0;
+  const emiEx = parseFloat(existEmi)   || 0;
+  const oth   = parseFloat(otherOblig) || 0;
+  const obligations = emiEx + oth;
+
+  const currentFoir = inc > 0 ? Math.round((obligations / inc) * 100) : 0;
+  // Headroom for new EMI under the lender's FOIR ceiling.
+  const maxOblig    = inc * (foirCap / 100);
+  const newEmiRoom  = Math.max(0, Math.round(maxOblig - obligations));
+
+  // Reverse the EMI formula to find max principal serviceable by that EMI room.
+  const r = (parseFloat(newRate) || 16) / 100 / 12;
+  const n = parseInt(newTenure) || 48;
+  const maxPrincipal = newEmiRoom > 0 && r > 0
+    ? Math.round((newEmiRoom * (Math.pow(1 + r, n) - 1)) / (r * Math.pow(1 + r, n)))
+    : newEmiRoom > 0 ? newEmiRoom * n : 0;
+
+  const verdict = inc <= 0 ? null
+    : currentFoir >= foirCap ? { label: "No headroom — at/over FOIR cap", cls: "text-red-400" }
+    : currentFoir >= foirCap * 0.8 ? { label: "Limited headroom", cls: "text-yellow-400" }
+    : { label: "Healthy repayment capacity", cls: "text-green-400" };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Repayment Capacity / FOIR Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">FOIR (Fixed Obligation to Income Ratio) is the test lenders run before sanction. Income and existing EMIs are pre-filled from your data — see how much new EMI and principal you can safely service.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Net monthly income / surplus (₹)</label>
+            <input type="number" min={0} value={income} onChange={e => setIncome(e.target.value)} placeholder={seed.profit > 0 ? String(seed.profit) : "e.g. 200000"} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Existing monthly EMIs (₹)</label>
+            <input type="number" min={0} value={existEmi} onChange={e => setExistEmi(e.target.value)} placeholder="e.g. 40000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Other fixed obligations (rent, card dues) (₹)</label>
+            <input type="number" min={0} value={otherOblig} onChange={e => setOtherOblig(e.target.value)} placeholder="e.g. 25000" className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Lender FOIR ceiling</span><span className="font-semibold text-[var(--color-text)]">{foirCap}%</span></label>
+            <input type="range" min={30} max={70} value={foirCap} onChange={e => setFoirCap(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Proposed loan rate (% p.a.)</label>
+            <input type="number" value={newRate} onChange={e => setNewRate(e.target.value)} placeholder="16" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Proposed tenure (months)</label>
+            <input type="number" value={newTenure} onChange={e => setNewTenure(e.target.value)} placeholder="48" className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {inc > 0 && verdict && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Current FOIR", value: `${currentFoir}%`, color: verdict.cls },
+              { label: "Assessment",   value: verdict.label,     color: verdict.cls },
+              { label: "New EMI headroom", value: formatCurrency(newEmiRoom), color: "text-[var(--color-primary)]" },
+              { label: "Max new loan", value: formatCurrency(maxPrincipal), color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">FOIR utilisation</h3>
+            <div className="flex justify-between text-[10px] text-[var(--color-muted)] mb-1">
+              <span>Obligations {formatCurrency(obligations)}</span>
+              <span>Cap {foirCap}% = {formatCurrency(Math.round(maxOblig))}</span>
+            </div>
+            <div className="w-full h-3 bg-[var(--color-bg)] rounded-full overflow-hidden relative">
+              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, currentFoir)}%`, background: currentFoir >= foirCap ? "#ef4444" : currentFoir >= foirCap * 0.8 ? "#eab308" : "#22c55e" }} />
+              <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/60" style={{ left: `${Math.min(100, foirCap)}%` }} title="FOIR ceiling" />
+            </div>
+            <div className="space-y-2 mt-4">
+              {[
+                { label: "Net monthly income", value: formatCurrency(inc) },
+                { label: "Existing EMIs + obligations", value: `(${formatCurrency(obligations)})`, color: "text-red-400" },
+                { label: `Serviceable obligations @ ${foirCap}% FOIR`, value: formatCurrency(Math.round(maxOblig)), bold: true },
+                { label: "Headroom for new EMI", value: formatCurrency(newEmiRoom), color: "text-green-400", bold: true },
+              ].map(r2 => (
+                <div key={r2.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]">{r2.label}</span>
+                  <span className={`tabular-nums ${r2.bold ? "font-bold" : ""} ${r2.color ?? "text-[var(--color-text)]"}`}>{r2.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40–55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative — lenders also apply DSCR and bureau checks.
+      </div>
     </div>
   );
 }

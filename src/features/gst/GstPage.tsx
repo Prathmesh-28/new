@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -19,7 +19,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -241,7 +241,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1433,6 +1433,20 @@ export default function GstPage() {
       {tab === "notice" && (() => {
         return <GstNoticeTemplates />;
       })()}
+
+      {tab === "gstr3b-prep"        && <Gstr3bAutoPrep />}
+      {tab === "itc-recon"          && <ItcBooksReconciliation />}
+      {tab === "liability-forecast" && <GstLiabilityForecaster />}
+      {tab === "place-supply"       && <PlaceOfSupplyDeterminer />}
+      {tab === "multi-gstin"        && <MultiGstinConsolidator />}
+      {tab === "rate-impact"        && <RateChangeSimulator />}
+      {tab === "blocked-credit"     && <BlockedCreditChecker />}
+      {tab === "itc-reversal"       && <ItcReversalCalculator />}
+      {tab === "vendor-score"       && <VendorComplianceScore />}
+      {tab === "drc03"              && <Drc03Helper />}
+      {tab === "gst-advances"       && <GstAdvancesTracker />}
+      {tab === "zero-rated"         && <ZeroRatedInvoiceKit />}
+      {tab === "health-score"       && <GstHealthScore />}
     </div>
   );
 }
@@ -2070,6 +2084,1060 @@ function GstNoticeTemplates() {
         <pre className="p-4 text-xs font-mono text-[var(--color-muted)] whitespace-pre-wrap leading-relaxed">{text}</pre>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Templates are starting points — always review with your CA before submitting. Replace all [bracketed] fields. Attach supporting documents as annexures.</p>
+    </div>
+  );
+}
+
+// ── #1 GSTR-3B Auto-Prep ──────────────────────────────────────────────────────
+function Gstr3bAutoPrep() {
+  const { store } = useApp();
+  const firm = store.firm;
+  const rate = (firm.gstRate ?? 18) / 100;
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const data = useMemo(() => {
+    const txns = (store.transactions ?? []).filter(t => t.date.slice(0, 7) === period);
+    // Outward: revenue inflows are GST-inclusive sale receipts → back out taxable value.
+    const outwardGross = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const outwardTaxable = Math.round(outwardGross / (1 + rate));
+    const outputTax = outwardGross - outwardTaxable;
+    // Inward: expense outflows eligible for ITC (exclude payroll/tax/loan/transfer).
+    const inwardGross = txns.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const inwardTaxable = Math.round(inwardGross / (1 + rate));
+    const itc = inwardGross - inwardTaxable;
+    const half = (n: number) => Math.round(n / 2);
+    const net = Math.max(0, outputTax - itc);
+    const itcCarry = Math.max(0, itc - outputTax);
+    return { outwardGross, outwardTaxable, outputTax, inwardGross, inwardTaxable, itc, half, net, itcCarry };
+  }, [store.transactions, period, rate]);
+
+  const downloadCsv = () => {
+    const rows = [
+      ["GSTR-3B Draft", period],
+      [],
+      ["Table", "Particulars", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax"],
+      ["3.1(a)", "Outward taxable supplies", data.outwardTaxable, data.half(data.outputTax), data.half(data.outputTax), 0, data.outputTax],
+      ["4(A)(5)", "ITC — all other ITC", data.inwardTaxable, data.half(data.itc), data.half(data.itc), 0, data.itc],
+      ["5.1", "Net tax payable (in cash)", "", data.half(data.net), data.half(data.net), 0, data.net],
+      ["", "ITC carried forward", "", "", "", "", data.itcCarry],
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `GSTR3B-${period}.csv`; a.click();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold">GSTR-3B Auto-Prep</h2>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Auto-builds Table 3.1 (outward), Table 4 (ITC) and Table 5.1 (net cash) from your booked sales &amp; purchase transactions at {firm.gstRate ?? 18}%.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
+            <button onClick={downloadCsv} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/10"><Download size={11} /> CSV</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Output tax (3.1a)", value: fc(data.outputTax), color: "text-red-400" },
+            { label: "ITC (Table 4)", value: fc(data.itc), color: "text-green-400" },
+            { label: "Net payable in cash (5.1)", value: fc(data.net), color: "text-[var(--color-primary)]" },
+            { label: "ITC carry-forward", value: fc(data.itcCarry), color: "text-blue-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--color-bg)] border-b border-[var(--color-border)]">
+            <tr>{["Table", "Particulars", "Taxable Value", "CGST", "SGST", "Total Tax"].map((h, i) => (
+              <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i < 2 ? "text-left" : "text-right"}`}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)] text-xs">
+            <tr><td className="px-4 py-2.5 font-mono">3.1(a)</td><td className="px-4 py-2.5">Outward taxable supplies</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.outwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.outputTax)}</td></tr>
+            <tr><td className="px-4 py-2.5 font-mono">4(A)(5)</td><td className="px-4 py-2.5">All other ITC</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.inwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.itc)}</td></tr>
+            <tr className="bg-[var(--color-accent)]/40"><td className="px-4 py-2.5 font-mono">5.1</td><td className="px-4 py-2.5 font-semibold">Tax payable in cash</td><td className="px-4 py-2.5" /><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums font-bold text-[var(--color-primary)]">{fc(data.net)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">v1 estimate: treats revenue receipts as GST-inclusive and expenses as ITC-eligible at the firm rate. Exclude blocked credits (Sec 17(5)) and reconcile against GSTR-2B before filing. Inter-state (IGST) split needs place-of-supply data.</p>
+    </div>
+  );
+}
+
+// ── #2 GSTR-2B vs Books ITC Reconciliation (line-level verdict) ───────────────
+function ItcBooksReconciliation() {
+  type Row = { id: string; gstin: string; invoiceNo: string; party: string; booksTax: number; portalTax: number; supplierFiled: boolean };
+  const [rows, setRows] = useFeatureState<Row[]>("itc-recon-books", []);
+  const [gstin, setGstin] = useState("");
+  const [invNo, setInvNo] = useState("");
+  const [party, setParty] = useState("");
+  const [booksTax, setBooksTax] = useState("");
+  const [portalTax, setPortalTax] = useState("");
+  const [filed, setFiled] = useState(true);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (!gstin || !invNo) { toast.error("GSTIN and invoice no. required"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), gstin: gstin.toUpperCase(), invoiceNo: invNo, party, booksTax: parseFloat(booksTax) || 0, portalTax: parseFloat(portalTax) || 0, supplierFiled: filed }]);
+    setGstin(""); setInvNo(""); setParty(""); setBooksTax(""); setPortalTax(""); setFiled(true);
+  };
+
+  const verdict = (r: Row): { label: string; cls: string; advice: string } => {
+    if (r.portalTax === 0 || !r.supplierFiled) return { label: "Chase vendor", cls: "bg-red-950/40 text-red-400 border-red-800/30", advice: "Not in 2B — supplier hasn't filed. ITC blocked under Rule 36(4). Withhold payment / chase." };
+    if (Math.abs(r.booksTax - r.portalTax) <= 1) return { label: "Claim now", cls: "bg-green-950/40 text-green-400 border-green-800/30", advice: "Matched in 2B — eligible to claim this period." };
+    if (r.portalTax < r.booksTax) return { label: "Defer", cls: "bg-orange-950/40 text-orange-400 border-orange-800/30", advice: "Portal value lower — claim only the 2B amount; defer the balance till supplier amends." };
+    return { label: "Claim (book ↑)", cls: "bg-yellow-950/40 text-yellow-400 border-yellow-800/30", advice: "Portal value higher than books — verify your booking, you may be under-claiming." };
+  };
+
+  const claimNow = rows.filter(r => verdict(r).label === "Claim now").reduce((s, r) => s + r.booksTax, 0);
+  const chase = rows.filter(r => verdict(r).label === "Chase vendor").reduce((s, r) => s + r.booksTax, 0);
+  const defer = rows.filter(r => verdict(r).label === "Defer").reduce((s, r) => s + (r.booksTax - r.portalTax), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">GSTR-2B vs Books ITC Reconciliation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Enter each purchase invoice with its book ITC and the tax actually appearing in your GSTR-2B. The engine gives a line-level <strong>Claim now / Defer / Chase vendor</strong> verdict per Rule 36(4).</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="Supplier GSTIN *" className={`${inp} font-mono`} />
+          <input value={invNo} onChange={e => setInvNo(e.target.value)} placeholder="Invoice no. *" className={inp} />
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={inp} />
+          <input type="number" value={booksTax} onChange={e => setBooksTax(e.target.value)} placeholder="Tax as per books (₹)" className={inp} />
+          <input type="number" value={portalTax} onChange={e => setPortalTax(e.target.value)} placeholder="Tax in GSTR-2B (₹)" className={inp} />
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={filed} onChange={e => setFiled(e.target.checked)} className="accent-[var(--color-primary)]" /> Supplier filed GSTR-1</label>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add invoice</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Claim now", value: fc(claimNow), color: "text-green-400" },
+          { label: "Defer (gap)", value: fc(defer), color: "text-orange-400" },
+          { label: "Chase vendor (at risk)", value: fc(chase), color: "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]">
+                <tr>{["Verdict", "Supplier", "Invoice", "Books", "2B", "Advice", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {rows.map(r => { const v = verdict(r); return (
+                  <tr key={r.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${v.cls}`}>{v.label}</span></td>
+                    <td className="px-3 py-2"><span>{r.party || "—"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{r.gstin}</span></td>
+                    <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(r.booksTax)}</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(r.portalTax)}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)] max-w-[260px]">{v.advice}</td>
+                    <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Rule 36(4): ITC restricted to invoices reflected in GSTR-2B. Defer the un-reflected portion to the period the supplier amends and your 2B updates.</p>
+    </div>
+  );
+}
+
+// ── #3 GST Liability Forecaster ───────────────────────────────────────────────
+function GstLiabilityForecaster() {
+  const { store } = useApp();
+  const rate = (store.firm.gstRate ?? 18) / 100;
+  const [months, setMonths] = useState(3);
+  const [growth, setGrowth] = useState("0");
+  const fc = formatCurrency;
+
+  const base = useMemo(() => {
+    const txns = store.transactions ?? [];
+    // Average of last up-to-3 months of revenue & expense.
+    const byMonth: Record<string, { rev: number; exp: number }> = {};
+    txns.forEach(t => {
+      const k = t.date.slice(0, 7);
+      byMonth[k] = byMonth[k] ?? { rev: 0, exp: 0 };
+      if (t.category === "revenue") byMonth[k].rev += Math.abs(t.amount);
+      else if (t.category === "expense") byMonth[k].exp += Math.abs(t.amount);
+    });
+    const recent = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 3).map(([, v]) => v);
+    const n = Math.max(1, recent.length);
+    const avgRev = recent.reduce((s, m) => s + m.rev, 0) / n;
+    const avgExp = recent.reduce((s, m) => s + m.exp, 0) / n;
+    // Open invoices in pipeline that will likely turn into outward supplies.
+    const pipeline = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    return { avgRev, avgExp, pipeline };
+  }, [store.transactions, store.invoices]);
+
+  const g = (parseFloat(growth) || 0) / 100;
+  const proj = useMemo(() => {
+    const out: { label: string; output: number; itc: number; net: number }[] = [];
+    const now = new Date();
+    for (let i = 1; i <= months; i++) {
+      const factor = Math.pow(1 + g, i);
+      const rev = base.avgRev * factor + (i === 1 ? base.pipeline * 0.5 : 0);
+      const exp = base.avgExp * factor;
+      const output = Math.round((rev / (1 + rate)) * rate);
+      const itc = Math.round((exp / (1 + rate)) * rate);
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }), output, itc, net: Math.max(0, output - itc) });
+    }
+    return out;
+  }, [base, months, g, rate]);
+
+  const totalNet = proj.reduce((s, p) => s + p.net, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">GST Liability Forecaster</h2>
+        <p className="text-xs text-[var(--color-muted)]">Projects your net cash GST outgo for the coming months from recent run-rate + open invoice pipeline, so you can pre-fund the cash ledger.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months ahead</label>
+            <select value={months} onChange={e => setMonths(Number(e.target.value))} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+              {[1, 2, 3, 6, 12].map(m => <option key={m} value={m}>{m} month{m > 1 ? "s" : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly growth %</label>
+            <input type="number" value={growth} onChange={e => setGrowth(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <div className="flex items-end"><p className="text-xs text-[var(--color-muted)]">Open pipeline: <strong className="text-[var(--color-text)]">{fc(base.pipeline)}</strong></p></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-4 py-3 flex items-center gap-3">
+        <TrendingUp size={16} className="text-[var(--color-primary)] shrink-0" />
+        <p className="text-sm">Projected net GST cash outgo over next {months} month{months > 1 ? "s" : ""}: <strong className="text-[var(--color-primary)]">{fc(totalNet)}</strong></p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--color-bg)] border-b border-[var(--color-border)]">
+            <tr>{["Month", "Est. Output Tax", "Est. ITC", "Net Cash GST"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)] text-xs">
+            {proj.map(p => (
+              <tr key={p.label} className="hover:bg-white/2">
+                <td className="px-4 py-2.5 font-medium">{p.label}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(p.output)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(p.itc)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[var(--color-primary)]">{fc(p.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Forecast assumes recent run-rate continues with the growth applied. Month 1 adds 50% of open invoice pipeline as expected billings. Actuals depend on collections and ITC timing.</p>
+    </div>
+  );
+}
+
+// ── #4 Place-of-Supply Determiner ─────────────────────────────────────────────
+const STATE_CODES: { code: string; name: string }[] = [
+  { code: "01", name: "Jammu & Kashmir" }, { code: "02", name: "Himachal Pradesh" }, { code: "03", name: "Punjab" },
+  { code: "04", name: "Chandigarh" }, { code: "05", name: "Uttarakhand" }, { code: "06", name: "Haryana" },
+  { code: "07", name: "Delhi" }, { code: "08", name: "Rajasthan" }, { code: "09", name: "Uttar Pradesh" },
+  { code: "10", name: "Bihar" }, { code: "19", name: "West Bengal" }, { code: "22", name: "Chhattisgarh" },
+  { code: "23", name: "Madhya Pradesh" }, { code: "24", name: "Gujarat" }, { code: "27", name: "Maharashtra" },
+  { code: "29", name: "Karnataka" }, { code: "32", name: "Kerala" }, { code: "33", name: "Tamil Nadu" },
+  { code: "36", name: "Telangana" }, { code: "37", name: "Andhra Pradesh" },
+];
+function PlaceOfSupplyDeterminer() {
+  const [supplyType, setSupplyType] = useState<"goods" | "services">("goods");
+  const [supplier, setSupplier] = useState("27");
+  const [recipient, setRecipient] = useState("27");
+  const [sez, setSez] = useState(false);
+  const [billShipDiff, setBillShipDiff] = useState(false);
+  const [shipTo, setShipTo] = useState("27");
+  const [amount, setAmount] = useState("100000");
+  const [rate, setRate] = useState(18);
+  const fc = formatCurrency;
+
+  // Place of supply: for bill-to/ship-to of goods (Sec 10(1)(b)), POS = bill-to (recipient) location.
+  const pos = recipient;
+  const interState = sez || supplier !== pos;
+  const taxable = parseFloat(amount) || 0;
+  const tax = Math.round(taxable * rate / 100);
+  const half = Math.round(tax / 2);
+  const name = (c: string) => STATE_CODES.find(s => s.code === c)?.name ?? c;
+
+  const Select = ({ v, set, label }: { v: string; set: (s: string) => void; label: string }) => (
+    <div>
+      <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+      <select value={v} onChange={e => set(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+        {STATE_CODES.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Place-of-Supply Determiner</h2>
+        <p className="text-xs text-[var(--color-muted)]">Determines inter vs intra-state supply and the CGST/SGST vs IGST split — including SEZ and bill-to/ship-to (Sec 10–12 IGST Act).</p>
+        <div className="flex gap-2">
+          {(["goods", "services"] as const).map(t => (
+            <button key={t} onClick={() => setSupplyType(t)} className={`flex-1 py-2 text-xs font-semibold rounded-lg border capitalize transition-colors ${supplyType === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{t}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select v={supplier} set={setSupplier} label="Supplier state (location)" />
+          <Select v={recipient} set={setRecipient} label={supplyType === "goods" && billShipDiff ? "Bill-to state" : "Recipient state"} />
+          {supplyType === "goods" && billShipDiff && <Select v={shipTo} set={setShipTo} label="Ship-to state" />}
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={sez} onChange={e => setSez(e.target.checked)} className="accent-[var(--color-primary)]" /> Supply to SEZ / export</label>
+          {supplyType === "goods" && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={billShipDiff} onChange={e => setBillShipDiff(e.target.checked)} className="accent-[var(--color-primary)]" /> Bill-to ≠ Ship-to</label>}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Taxable value (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
+        </div>
+      </div>
+
+      <div className={`rounded-lg border p-5 ${interState ? "bg-blue-950/20 border-blue-800/40" : "bg-green-950/20 border-green-800/40"}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <MapPin size={15} className={interState ? "text-blue-400" : "text-green-400"} />
+          <p className="text-sm font-bold">{sez ? "Inter-State — Zero-rated (SEZ / Export)" : interState ? "Inter-State Supply → IGST" : "Intra-State Supply → CGST + SGST"}</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Place of supply: <strong className="text-[var(--color-text)]">{name(pos)}</strong> · Supplier: <strong className="text-[var(--color-text)]">{name(supplier)}</strong>{supplyType === "goods" && billShipDiff && <> · POS = bill-to location per Sec 10(1)(b)</>}</p>
+        <div className="grid grid-cols-3 gap-3">
+          {sez ? (
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center col-span-3"><p className="text-[10px] text-[var(--color-muted)] mb-1">Tax (zero-rated — LUT or refund)</p><p className="text-lg font-bold tabular-nums text-green-400">{fc(0)}</p></div>
+          ) : interState ? (
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center col-span-3"><p className="text-[10px] text-[var(--color-muted)] mb-1">IGST @ {rate}%</p><p className="text-lg font-bold tabular-nums text-blue-400">{fc(tax)}</p></div>
+          ) : (
+            <>
+              <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center"><p className="text-[10px] text-[var(--color-muted)] mb-1">CGST @ {rate / 2}%</p><p className="text-lg font-bold tabular-nums text-orange-400">{fc(half)}</p></div>
+              <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center"><p className="text-[10px] text-[var(--color-muted)] mb-1">SGST @ {rate / 2}%</p><p className="text-lg font-bold tabular-nums text-orange-400">{fc(half)}</p></div>
+              <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center"><p className="text-[10px] text-[var(--color-muted)] mb-1">Total tax</p><p className="text-lg font-bold tabular-nums">{fc(tax)}</p></div>
+            </>
+          )}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 7–8 (inter/intra) &amp; Sec 10–13 IGST Act (place of supply). SEZ/export = zero-rated inter-state. For goods with bill-to ≠ ship-to, POS is the bill-to (third party) location.</p>
+    </div>
+  );
+}
+
+// ── #5 Multi-GSTIN Consolidator ───────────────────────────────────────────────
+function MultiGstinConsolidator() {
+  type Unit = { id: string; gstin: string; state: string; output: number; itc: number; cashLedger: number };
+  const [units, setUnits] = useFeatureState<Unit[]>("multi-gstin-units", []);
+  const [gstin, setGstin] = useState("");
+  const [state, setState] = useState("");
+  const [output, setOutput] = useState("");
+  const [itc, setItc] = useState("");
+  const [cash, setCash] = useState("");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (gstin.length !== 15) { toast.error("Enter a 15-char GSTIN"); return; }
+    setUnits(prev => [...prev, { id: crypto.randomUUID(), gstin: gstin.toUpperCase(), state: state || STATE_CODES.find(s => s.code === gstin.slice(0, 2))?.name || gstin.slice(0, 2), output: parseFloat(output) || 0, itc: parseFloat(itc) || 0, cashLedger: parseFloat(cash) || 0 }]);
+    setGstin(""); setState(""); setOutput(""); setItc(""); setCash("");
+  };
+
+  const tOut = units.reduce((s, u) => s + u.output, 0);
+  const tItc = units.reduce((s, u) => s + u.itc, 0);
+  const tCash = units.reduce((s, u) => s + u.cashLedger, 0);
+  const tNet = units.reduce((s, u) => s + Math.max(0, u.output - u.itc - u.cashLedger), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Multi-GSTIN Consolidator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Single dashboard across all your state GST registrations under one PAN. ITC cannot cross GSTINs — each unit settles separately.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15))} placeholder="GSTIN *" className={`${inp} font-mono`} maxLength={15} />
+          <input value={state} onChange={e => setState(e.target.value)} placeholder="State (auto)" className={inp} />
+          <input type="number" value={output} onChange={e => setOutput(e.target.value)} placeholder="Output tax ₹" className={inp} />
+          <input type="number" value={itc} onChange={e => setItc(e.target.value)} placeholder="ITC ₹" className={inp} />
+          <input type="number" value={cash} onChange={e => setCash(e.target.value)} placeholder="Cash ledger ₹" className={inp} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add GSTIN</button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Registrations", value: String(units.length), color: "text-[var(--color-primary)]" },
+          { label: "Total output tax", value: fc(tOut), color: "text-red-400" },
+          { label: "Total ITC", value: fc(tItc), color: "text-green-400" },
+          { label: "Net cash payable", value: fc(tNet), color: "text-[var(--color-primary)]" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {units.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["GSTIN", "State", "Output", "ITC", "Cash ledger", "Net payable", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <tbody>
+                {units.map(u => { const net = Math.max(0, u.output - u.itc - u.cashLedger); return (
+                  <tr key={u.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-mono">{u.gstin}</td>
+                    <td className="px-3 py-2">{u.state}</td>
+                    <td className="px-3 py-2 tabular-nums text-red-400">{fc(u.output)}</td>
+                    <td className="px-3 py-2 tabular-nums text-green-400">{fc(u.itc)}</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(u.cashLedger)}</td>
+                    <td className="px-3 py-2 tabular-nums font-semibold">{fc(net)}</td>
+                    <td className="px-3 py-2"><button onClick={() => setUnits(prev => prev.filter(x => x.id !== u.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Each GSTIN is a distinct registration — output, ITC and electronic cash/credit ledgers are state-specific. Cross-utilisation of ITC between GSTINs is not permitted (except via ISD distribution).</p>
+    </div>
+  );
+}
+
+// ── #6 GST Rate-Change Impact Simulator ───────────────────────────────────────
+function RateChangeSimulator() {
+  type Item = { id: string; name: string; base: number; oldRate: number; newRate: number; gstInclusive: boolean };
+  const [items, setItems] = useFeatureState<Item[]>("rate-change-items", []);
+  const [name, setName] = useState("");
+  const [base, setBase] = useState("");
+  const [oldRate, setOldRate] = useState(12);
+  const [newRate, setNewRate] = useState(18);
+  const [inclusive, setInclusive] = useState(true);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (!name || !base) { toast.error("Item name and price required"); return; }
+    setItems(prev => [...prev, { id: crypto.randomUUID(), name, base: parseFloat(base) || 0, oldRate, newRate, gstInclusive: inclusive }]);
+    setName(""); setBase("");
+  };
+
+  // If price is GST-inclusive we hold the MRP and recompute taxable; else taxable held and gross moves.
+  const calc = (it: Item) => {
+    if (it.gstInclusive) {
+      const taxableOld = it.base / (1 + it.oldRate / 100);
+      const taxableNew = it.base / (1 + it.newRate / 100); // hold MRP → margin shrinks/grows
+      const grossNew = it.base; // unchanged MRP
+      return { grossOld: it.base, grossNew, taxableOld: Math.round(taxableOld), taxableNew: Math.round(taxableNew), marginDelta: Math.round(taxableNew - taxableOld) };
+    }
+    const grossOld = it.base * (1 + it.oldRate / 100);
+    const grossNew = it.base * (1 + it.newRate / 100);
+    return { grossOld: Math.round(grossOld), grossNew: Math.round(grossNew), taxableOld: it.base, taxableNew: it.base, marginDelta: 0, mrpDelta: Math.round(grossNew - grossOld) };
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">GST Rate-Change Impact Simulator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Re-prices your catalogue when a GST slab changes. Choose whether you hold the MRP (margin moves) or the base price (MRP moves).</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Item / SKU *" className={inp} />
+          <input type="number" value={base} onChange={e => setBase(e.target.value)} placeholder={inclusive ? "Current MRP ₹ *" : "Base price ₹ *"} className={inp} />
+          <select value={oldRate} onChange={e => setOldRate(Number(e.target.value))} className={inp}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>Old {r}%</option>)}</select>
+          <select value={newRate} onChange={e => setNewRate(Number(e.target.value))} className={inp}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>New {r}%</option>)}</select>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={inclusive} onChange={e => setInclusive(e.target.checked)} className="accent-[var(--color-primary)]" /> Price is GST-inclusive</label>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add item</button>
+      </div>
+
+      {items.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Item", "Mode", "Old → New", "Gross old", "Gross new", "Impact", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <tbody>
+                {items.map(it => { const c = calc(it); const impact = it.gstInclusive ? c.marginDelta : (c.grossNew - c.grossOld); return (
+                  <tr key={it.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-medium">{it.name}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)]">{it.gstInclusive ? "Hold MRP" : "Hold base"}</td>
+                    <td className="px-3 py-2">{it.oldRate}% → {it.newRate}%</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(c.grossOld)}</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(c.grossNew)}</td>
+                    <td className={`px-3 py-2 tabular-nums font-semibold ${impact >= 0 ? "text-green-400" : "text-red-400"}`}>{impact >= 0 ? "+" : ""}{fc(impact)} {it.gstInclusive ? "margin" : "MRP"}</td>
+                    <td className="px-3 py-2"><button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Hold-MRP: customer price unchanged, your taxable margin moves with the rate. Hold-base: you pass the rate change to the customer. Re-print MRP stickers and update e-invoice masters on the effective date.</p>
+    </div>
+  );
+}
+
+// ── #7 Blocked Credit (Sec 17(5)) Checker ─────────────────────────────────────
+function BlockedCreditChecker() {
+  type Entry = { id: string; head: string; amount: number; blocked: boolean; reason: string };
+  const HEADS: { key: string; label: string; blocked: boolean; reason: string }[] = [
+    { key: "motor", label: "Motor vehicles (≤13 seats) — not for resale/transport/training", blocked: true, reason: "17(5)(a)" },
+    { key: "food", label: "Food, beverages, outdoor catering", blocked: true, reason: "17(5)(b)(i)" },
+    { key: "health", label: "Health services, cosmetic surgery, club membership", blocked: true, reason: "17(5)(b)(ii)" },
+    { key: "rentcab", label: "Rent-a-cab, life/health insurance (non-mandatory)", blocked: true, reason: "17(5)(b)(iii)" },
+    { key: "construction", label: "Works contract / goods for construction of immovable property", blocked: true, reason: "17(5)(c)/(d)" },
+    { key: "csr", label: "CSR expenditure", blocked: true, reason: "17(5)(fa)" },
+    { key: "personal", label: "Goods/services for personal consumption", blocked: true, reason: "17(5)(g)" },
+    { key: "lost", label: "Goods lost, stolen, destroyed, written off, gifts/free samples", blocked: true, reason: "17(5)(h)" },
+    { key: "inputs", label: "Raw materials / inputs for taxable supply", blocked: false, reason: "Eligible" },
+    { key: "capital", label: "Plant & machinery for business", blocked: false, reason: "Eligible" },
+    { key: "services", label: "Business services (audit, IT, rent of commercial premise)", blocked: false, reason: "Eligible" },
+    { key: "resale", label: "Motor vehicle for resale / passenger transport business", blocked: false, reason: "Exception 17(5)(a)" },
+  ];
+  const [entries, setEntries] = useFeatureState<Entry[]>("blocked-credit-entries", []);
+  const [head, setHead] = useState(HEADS[0].key);
+  const [amount, setAmount] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const h = HEADS.find(x => x.key === head)!;
+    if (!amount) { toast.error("Enter ITC amount"); return; }
+    setEntries(prev => [...prev, { id: crypto.randomUUID(), head: h.label, amount: parseFloat(amount) || 0, blocked: h.blocked, reason: h.reason }]);
+    setAmount("");
+  };
+
+  const blocked = entries.filter(e => e.blocked).reduce((s, e) => s + e.amount, 0);
+  const eligible = entries.filter(e => !e.blocked).reduce((s, e) => s + e.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Blocked Credit Checker — Sec 17(5)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Flag ineligible ITC before you file 3B. Claiming blocked credit attracts reversal + interest @18% + penalty.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select value={head} onChange={e => setHead(e.target.value)} className="md:col-span-2 w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {HEADS.map(h => <option key={h.key} value={h.key}>{h.blocked ? "🚫 " : "✅ "}{h.label}</option>)}
+          </select>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="ITC amount (₹)" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Check &amp; add</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Blocked ITC (must NOT claim)</p><p className="text-xl font-bold tabular-nums text-red-400">{fc(blocked)}</p></div>
+        <div className="bg-green-950/20 border border-green-800/40 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Eligible ITC</p><p className="text-xl font-bold tabular-nums text-green-400">{fc(eligible)}</p></div>
+      </div>
+
+      {entries.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Status", "Head", "Section", "ITC", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {entries.map(e => (
+                <tr key={e.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${e.blocked ? "bg-red-950/40 text-red-400 border-red-800/30" : "bg-green-950/40 text-green-400 border-green-800/30"}`}>{e.blocked ? "Blocked" : "Eligible"}</span></td>
+                  <td className="px-3 py-2 max-w-[320px]">{e.head}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{e.reason}</td>
+                  <td className="px-3 py-2 tabular-nums">{fc(e.amount)}</td>
+                  <td className="px-3 py-2"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 17(5) CGST Act. Exceptions: motor vehicles &gt;13 seats, for resale, passenger transport, or driving school; food/insurance where statutorily obligatory for employer. Verify edge cases with your CA.</p>
+    </div>
+  );
+}
+
+// ── #8 ITC Reversal (Rule 42/43) Calculator ───────────────────────────────────
+function ItcReversalCalculator() {
+  const [common, setCommon] = useState("");
+  const [exclTaxable, setExclTaxable] = useState("");
+  const [exclExempt, setExclExempt] = useState("");
+  const [taxableSupply, setTaxableSupply] = useState("");
+  const [exemptSupply, setExemptSupply] = useState("");
+  const [capital, setCapital] = useState("");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  // Rule 42 (inputs/input services)
+  const T = parseFloat(common) || 0;            // total ITC on common inputs (C2-relevant)
+  const T2 = parseFloat(exclTaxable) || 0;       // ITC exclusively for taxable
+  const T3 = parseFloat(exclExempt) || 0;        // ITC exclusively for exempt
+  const taxable = parseFloat(taxableSupply) || 0;
+  const exempt = parseFloat(exemptSupply) || 0;
+  const totalTurnover = taxable + exempt;
+  const C2 = Math.max(0, T - T2 - T3);           // common credit
+  const ratio = totalTurnover > 0 ? exempt / totalTurnover : 0;
+  const D1 = Math.round(C2 * ratio);             // exempt-attributable reversal
+  const D2 = Math.round(C2 * 0.05);              // 5% deemed personal/non-business
+  const eligibleCommon = C2 - D1 - D2;
+
+  // Rule 43 (capital goods) — reversal over 60 months
+  const Tc = parseFloat(capital) || 0;
+  const monthlyCap = Tc / 60;
+  const capReversalMonthly = Math.round(monthlyCap * ratio);
+
+  const totalReversal = D1 + D2 + capReversalMonthly;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">ITC Reversal — Rule 42 / 43</h2>
+        <p className="text-xs text-[var(--color-muted)]">Proportionate reversal of common ITC for exempt + non-business use. Rule 42 = inputs/services (monthly), Rule 43 = capital goods (over 60 months).</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Total ITC on common inputs/services — T (₹)</label><input type="number" value={common} onChange={e => setCommon(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for taxable — T2 (₹)</label><input type="number" value={exclTaxable} onChange={e => setExclTaxable(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for exempt — T3 (₹)</label><input type="number" value={exclExempt} onChange={e => setExclExempt(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Common capital-goods ITC — Tc (₹)</label><input type="number" value={capital} onChange={e => setCapital(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Taxable turnover (₹)</label><input type="number" value={taxableSupply} onChange={e => setTaxableSupply(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Exempt turnover (₹)</label><input type="number" value={exemptSupply} onChange={e => setExemptSupply(e.target.value)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">Computation</p>
+        {[
+          ["Common credit C2 = T − T2 − T3", C2],
+          [`Exempt ratio (E/F) = ${(ratio * 100).toFixed(2)}%`, null],
+          ["D1 — reversal for exempt supplies (C2 × ratio)", D1],
+          ["D2 — deemed 5% non-business use", D2],
+          ["Rule 43 — capital goods reversal this month (Tc/60 × ratio)", capReversalMonthly],
+          ["Eligible common credit C3 = C2 − D1 − D2", eligibleCommon],
+        ].map(([label, val]) => (
+          <div key={String(label)} className="flex justify-between text-xs py-1.5 border-b border-[var(--color-border)] last:border-0">
+            <span className="text-[var(--color-muted)]">{label}</span>
+            {val !== null && <span className="font-semibold tabular-nums">{fc(Number(val))}</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2"><Divide size={15} className="text-red-400" /><p className="text-sm font-semibold">Total ITC to reverse this month (D1 + D2 + capital)</p></div>
+        <p className="text-xl font-bold tabular-nums text-red-400">{fc(totalReversal)}</p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Rule 42/43 CGST Rules. Reverse via GSTR-3B Table 4(B)(1). Capital-goods reversal runs each month for 60 months from the date of use. Recompute and true-up annually before September of the next FY.</p>
+    </div>
+  );
+}
+
+// ── #9 Vendor GST Compliance Score ────────────────────────────────────────────
+function VendorComplianceScore() {
+  type Vendor = { id: string; name: string; gstin: string; filedOnTime: number; totalReturns: number; itcAtRisk: number; lastFiled: string };
+  const [vendors, setVendors] = useFeatureState<Vendor[]>("vendor-gst-score", []);
+  const [name, setName] = useState("");
+  const [gstin, setGstin] = useState("");
+  const [filed, setFiled] = useState("");
+  const [total, setTotal] = useState("");
+  const [itc, setItc] = useState("");
+  const [last, setLast] = useState("");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (!name) { toast.error("Vendor name required"); return; }
+    setVendors(prev => [...prev, { id: crypto.randomUUID(), name, gstin: gstin.toUpperCase(), filedOnTime: parseInt(filed) || 0, totalReturns: parseInt(total) || 0, itcAtRisk: parseFloat(itc) || 0, lastFiled: last }]);
+    setName(""); setGstin(""); setFiled(""); setTotal(""); setItc(""); setLast("");
+  };
+
+  const scoreOf = (v: Vendor) => {
+    const filingRate = v.totalReturns > 0 ? v.filedOnTime / v.totalReturns : 0;
+    let score = Math.round(filingRate * 80);
+    // recency bonus (filed in last 60 days)
+    if (v.lastFiled) {
+      const days = (Date.now() - new Date(v.lastFiled).getTime()) / 86400000;
+      score += days <= 60 ? 20 : days <= 120 ? 10 : 0;
+    }
+    return Math.min(100, score);
+  };
+  const grade = (s: number) => s >= 80 ? { label: "Low risk", cls: "text-green-400" } : s >= 50 ? { label: "Watch", cls: "text-yellow-400" } : { label: "High risk", cls: "text-red-400" };
+  const totalAtRisk = vendors.filter(v => scoreOf(v) < 50).reduce((s, v) => s + v.itcAtRisk, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Vendor GST Compliance Score</h2>
+        <p className="text-xs text-[var(--color-muted)]">Ranks suppliers by filing regularity. A non-filing vendor blocks your ITC under Rule 36(4) — score them before you place orders.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Vendor name *" className={inp} />
+          <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN" className={`${inp} font-mono`} />
+          <input type="number" value={filed} onChange={e => setFiled(e.target.value)} placeholder="Returns filed on time" className={inp} />
+          <input type="number" value={total} onChange={e => setTotal(e.target.value)} placeholder="Total returns due" className={inp} />
+          <input type="number" value={itc} onChange={e => setItc(e.target.value)} placeholder="Your ITC exposure (₹)" className={inp} />
+          <input type="date" value={last} onChange={e => setLast(e.target.value)} className={inp} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add vendor</button>
+      </div>
+
+      {totalAtRisk > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3"><AlertTriangle size={15} className="text-red-400 shrink-0" /><p className="text-sm">{fc(totalAtRisk)} of ITC is exposed to high-risk (low-score) vendors.</p></div>
+      )}
+
+      {vendors.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Score", "Risk", "Vendor", "Filing rate", "ITC exposure", "Last filed", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {vendors.slice().sort((a, b) => scoreOf(a) - scoreOf(b)).map(v => { const s = scoreOf(v); const g = grade(s); return (
+                <tr key={v.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2"><span className={`font-bold ${g.cls}`}>{s}</span><span className="text-[var(--color-muted)]">/100</span></td>
+                  <td className="px-3 py-2"><span className={`text-[10px] font-bold ${g.cls}`}>{g.label}</span></td>
+                  <td className="px-3 py-2"><span className="font-medium">{v.name}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{v.gstin}</span></td>
+                  <td className="px-3 py-2">{v.totalReturns > 0 ? `${Math.round(v.filedOnTime / v.totalReturns * 100)}%` : "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{fc(v.itcAtRisk)}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{v.lastFiled || "—"}</td>
+                  <td className="px-3 py-2"><button onClick={() => setVendors(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ); })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Score = 80% filing regularity + 20% recency. High-risk vendors should be put on payment-hold or asked to file before you claim their ITC. Cross-check filing status on the GST portal.</p>
+    </div>
+  );
+}
+
+// ── #10 DRC-03 Voluntary Payment Helper ───────────────────────────────────────
+function Drc03Helper() {
+  const [tax, setTax] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [cause, setCause] = useState<"short-payment" | "excess-itc" | "voluntary">("voluntary");
+  const [copied, setCopied] = useState(false);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const t = parseFloat(tax) || 0;
+  const days = dueDate && payDate ? Math.max(0, Math.ceil((new Date(payDate).getTime() - new Date(dueDate).getTime()) / 86400000)) : 0;
+  const interest = Math.round(t * 0.18 * days / 365); // 18% p.a. Sec 50
+  // Penalty: 15% if voluntary before SCN (Sec 73(5)); else higher. Voluntary self-ascertained = nil/low.
+  const penalty = cause === "voluntary" ? 0 : Math.round(t * 0.15);
+  const total = t + interest + penalty;
+
+  const challan = `FORM GST DRC-03 — Voluntary Payment\n\nCause of payment: ${cause}\nTax (CGST+SGST/IGST): ${fc(t)}\nInterest @18% p.a. for ${days} day(s) u/s 50: ${fc(interest)}\nPenalty u/s 73(5)/74(5): ${fc(penalty)}\nTotal payable: ${fc(total)}\n\nDeclared and paid voluntarily before issuance of notice/order. Reference DRC-03 ARN to be quoted in subsequent correspondence.`;
+  const copy = () => navigator.clipboard.writeText(challan).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">DRC-03 Voluntary Payment Helper</h2>
+        <p className="text-xs text-[var(--color-muted)]">Computes interest @18% p.a. (Sec 50) and penalty, and drafts the DRC-03 challan note for a voluntary self-ascertained payment.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Tax shortfall (₹)</label><input type="number" value={tax} onChange={e => setTax(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cause</label>
+            <select value={cause} onChange={e => setCause(e.target.value as typeof cause)} className={inp}>
+              <option value="voluntary">Voluntary (self-ascertained, no SCN)</option>
+              <option value="short-payment">Short payment after SCN</option>
+              <option value="excess-itc">Excess ITC reversal</option>
+            </select>
+          </div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Original due date</label><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Payment date</label><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Tax", value: fc(t), color: "text-[var(--color-text)]" },
+          { label: `Interest (${days}d @18%)`, value: fc(interest), color: "text-orange-400" },
+          { label: "Penalty", value: fc(penalty), color: penalty > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Total payable", value: fc(total), color: "text-[var(--color-primary)]" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">DRC-03 Challan Note</span>
+          <button onClick={copy} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90"><Banknote size={11} /> {copied ? "Copied!" : "Copy"}</button>
+        </div>
+        <pre className="p-4 text-xs font-mono text-[var(--color-muted)] whitespace-pre-wrap leading-relaxed">{challan}</pre>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Interest u/s 50 @18% p.a. on tax (24% on undue/excess ITC). Voluntary payment before SCN u/s 73(5) carries nil penalty; after SCN, 15%. File DRC-03 on the GST portal and quote the ARN in your reply.</p>
+    </div>
+  );
+}
+
+// ── #11 GST on Advances Tracker ───────────────────────────────────────────────
+function GstAdvancesTracker() {
+  type Adv = { id: string; customer: string; advance: number; rate: number; date: string; adjusted: boolean; invoiceNo: string };
+  const [rows, setRows] = useFeatureState<Adv[]>("gst-advances", []);
+  const [customer, setCustomer] = useState("");
+  const [advance, setAdvance] = useState("");
+  const [rate, setRate] = useState(18);
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (!customer || !advance) { toast.error("Customer and advance amount required"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), customer, advance: parseFloat(advance) || 0, rate, date, adjusted: false, invoiceNo: "" }]);
+    setCustomer(""); setAdvance("");
+  };
+  // GST on advance is computed on a tax-inclusive basis: tax = advance × r/(100+r)
+  const taxOn = (a: Adv) => Math.round(a.advance * a.rate / (100 + a.rate));
+  const markAdjusted = (id: string, inv: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, adjusted: true, invoiceNo: inv } : r));
+
+  const totalTaxPaid = rows.reduce((s, r) => s + taxOn(r), 0);
+  const unadjusted = rows.filter(r => !r.adjusted).reduce((s, r) => s + taxOn(r), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">GST on Advances Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">For <strong>services</strong>, GST is payable on advance receipts (Sec 13) via a receipt voucher, then adjusted when the tax invoice is raised. Goods advances are exempt (Notfn 66/2017).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={inp} />
+          <input type="number" value={advance} onChange={e => setAdvance(e.target.value)} placeholder="Advance received ₹ *" className={inp} />
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{[5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record advance</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Advances received", value: fc(rows.reduce((s, r) => s + r.advance, 0)), color: "text-[var(--color-text)]" },
+          { label: "GST paid on advances", value: fc(totalTaxPaid), color: "text-orange-400" },
+          { label: "Unadjusted (open) GST", value: fc(unadjusted), color: unadjusted > 0 ? "text-yellow-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Date", "Customer", "Advance", "Rate", "GST on advance", "Status", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{r.date}</td>
+                  <td className="px-3 py-2 font-medium">{r.customer}</td>
+                  <td className="px-3 py-2 tabular-nums">{fc(r.advance)}</td>
+                  <td className="px-3 py-2">{r.rate}%</td>
+                  <td className="px-3 py-2 tabular-nums text-orange-400">{fc(taxOn(r))}</td>
+                  <td className="px-3 py-2">{r.adjusted ? <span className="text-[10px] text-green-400">Adjusted · {r.invoiceNo || "inv"}</span> : <button onClick={() => { const inv = prompt("Invoice no. against which advance is adjusted?") || ""; markAdjusted(r.id, inv); }} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark adjusted</button>}</td>
+                  <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 12/13 + Notfn 66/2017. Report advances in GSTR-1 Table 11A, and the adjustment in Table 11B. Issue a Receipt Voucher on advance and a Refund Voucher if the order is cancelled.</p>
+    </div>
+  );
+}
+
+// ── #12 Export/SEZ Zero-Rated Invoice Kit ─────────────────────────────────────
+function ZeroRatedInvoiceKit() {
+  type Exp = { id: string; invoiceNo: string; buyer: string; type: "export-goods" | "export-services" | "sez"; method: "lut" | "with-igst"; value: number; igst: number; firc: string; fircReceived: boolean };
+  const [rows, setRows] = useFeatureState<Exp[]>("zero-rated-invoices", []);
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [buyer, setBuyer] = useState("");
+  const [type, setType] = useState<Exp["type"]>("export-services");
+  const [method, setMethod] = useState<Exp["method"]>("lut");
+  const [value, setValue] = useState("");
+  const [rate, setRate] = useState(18);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    if (!invoiceNo || !value) { toast.error("Invoice no. and value required"); return; }
+    const v = parseFloat(value) || 0;
+    const igst = method === "with-igst" ? Math.round(v * rate / 100) : 0;
+    setRows(prev => [...prev, { id: crypto.randomUUID(), invoiceNo, buyer, type, method, value: v, igst, firc: "", fircReceived: false }]);
+    setInvoiceNo(""); setBuyer(""); setValue("");
+  };
+  const toggleFirc = (id: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, fircReceived: !r.fircReceived } : r));
+
+  const totalExport = rows.reduce((s, r) => s + r.value, 0);
+  const igstRefundable = rows.filter(r => r.method === "with-igst").reduce((s, r) => s + r.igst, 0);
+  const firPending = rows.filter(r => !r.fircReceived).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Export / SEZ Zero-Rated Invoice Kit</h2>
+        <p className="text-xs text-[var(--color-muted)]">Track zero-rated supplies under LUT (without IGST) or with-IGST-and-refund, plus FIRC/BRC linkage for export proceeds (Sec 16 IGST Act).</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Export invoice no. *" className={inp} />
+          <input value={buyer} onChange={e => setBuyer(e.target.value)} placeholder="Foreign buyer / SEZ unit" className={inp} />
+          <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Invoice value ₹ *" className={inp} />
+          <select value={type} onChange={e => setType(e.target.value as Exp["type"])} className={inp}>
+            <option value="export-goods">Export of goods</option>
+            <option value="export-services">Export of services</option>
+            <option value="sez">Supply to SEZ</option>
+          </select>
+          <select value={method} onChange={e => setMethod(e.target.value as Exp["method"])} className={inp}>
+            <option value="lut">Under LUT (no IGST)</option>
+            <option value="with-igst">With IGST (claim refund)</option>
+          </select>
+          {method === "with-igst" && <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{[5, 12, 18, 28].map(r => <option key={r} value={r}>IGST {r}%</option>)}</select>}
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add export invoice</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total zero-rated turnover", value: fc(totalExport), color: "text-[var(--color-primary)]" },
+          { label: "IGST refundable", value: fc(igstRefundable), color: "text-green-400" },
+          { label: "FIRC/BRC pending", value: String(firPending), color: firPending > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Invoice", "Buyer", "Type", "Method", "Value", "IGST", "FIRC", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
+                    <td className="px-3 py-2">{r.buyer || "—"}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)]">{r.type.replace("-", " ")}</td>
+                    <td className="px-3 py-2">{r.method === "lut" ? "LUT" : "With IGST"}</td>
+                    <td className="px-3 py-2 tabular-nums">{fc(r.value)}</td>
+                    <td className="px-3 py-2 tabular-nums text-green-400">{r.igst ? fc(r.igst) : "—"}</td>
+                    <td className="px-3 py-2"><button onClick={() => toggleFirc(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.fircReceived ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{r.fircReceived ? "Received" : "Pending"}</button></td>
+                    <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Under LUT: export without paying IGST, claim refund of accumulated ITC (RFD-01). With IGST: pay tax, refund auto-flows from shipping bill (goods) or RFD-01 (services). FIRC/BRC from your bank is mandatory proof of realisation for service exports.</p>
+    </div>
+  );
+}
+
+// ── #13 GST Health Score & Filing Streak ──────────────────────────────────────
+function GstHealthScore() {
+  const { store } = useApp();
+  type Filing = { id: string; period: string; type: "GSTR-1" | "GSTR-3B"; onTime: boolean };
+  const [filings, setFilings] = useFeatureState<Filing[]>("gst-filing-log", []);
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [type, setType] = useState<Filing["type"]>("GSTR-3B");
+  const [onTime, setOnTime] = useState(true);
+
+  const add = () => {
+    setFilings(prev => [{ id: crypto.randomUUID(), period, type, onTime }, ...prev.filter(f => !(f.period === period && f.type === type))]);
+  };
+
+  const score = useMemo(() => {
+    const total = filings.length;
+    const onTimeCount = filings.filter(f => f.onTime).length;
+    const filingScore = total > 0 ? (onTimeCount / total) * 50 : 30; // 50 pts filing punctuality
+    // GSTIN configured (15 pts)
+    const gstinScore = store.firm.gstNumber && store.firm.gstNumber.length === 15 ? 15 : 0;
+    // Registered & rate set (10 pts)
+    const regScore = store.firm.gstRegistered ? 10 : 0;
+    // Recent activity (25 pts) — has a filing in the last 60 days
+    const recent = filings.some(f => { const d = new Date(f.period + "-01"); return (Date.now() - d.getTime()) / 86400000 <= 75; });
+    const recencyScore = recent ? 25 : (total > 0 ? 5 : 0);
+    return Math.round(filingScore + gstinScore + regScore + recencyScore);
+  }, [filings, store.firm]);
+
+  // Filing streak: consecutive on-time 3B from most recent period backwards.
+  const streak = useMemo(() => {
+    const log = filings.filter(f => f.type === "GSTR-3B").sort((a, b) => b.period.localeCompare(a.period));
+    let s = 0;
+    for (const f of log) { if (f.onTime) s++; else break; }
+    return s;
+  }, [filings]);
+
+  const band = score >= 80 ? { label: "Excellent", cls: "text-green-400", bar: "bg-green-400" } : score >= 60 ? { label: "Good", cls: "text-yellow-400", bar: "bg-yellow-400" } : score >= 40 ? { label: "Needs work", cls: "text-orange-400", bar: "bg-orange-400" } : { label: "At risk", cls: "text-red-400", bar: "bg-red-400" };
+
+  const nudges: string[] = [];
+  if (!store.firm.gstRegistered) nudges.push("Mark your firm GST-registered and set the rate in Settings.");
+  if (!store.firm.gstNumber || store.firm.gstNumber.length !== 15) nudges.push("Add your 15-character GSTIN in Settings.");
+  if (filings.some(f => !f.onTime)) nudges.push("Late filings detected — late fee ₹50/day (₹20 nil) + 18% interest applies. File before the 11th (GSTR-1) / 20th (3B).");
+  if (filings.length === 0) nudges.push("Log your GSTR-1 & 3B filings to start building your streak.");
+  if (streak >= 6) nudges.push(`On-time streak of ${streak} — eligible for a smoother refund/credit experience. Keep it up!`);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 md:col-span-2">
+          <div className="flex items-center gap-2 mb-2"><Activity size={15} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">GST Health Score</h2></div>
+          <div className="flex items-end gap-3 mb-2">
+            <p className={`text-4xl font-bold tabular-nums ${band.cls}`}>{score}</p>
+            <p className="text-sm text-[var(--color-muted)] mb-1">/100 · <span className={`font-semibold ${band.cls}`}>{band.label}</span></p>
+          </div>
+          <div className="h-2 w-full bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full ${band.bar}`} style={{ width: `${score}%` }} /></div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-2">Filing punctuality (50) · GSTIN configured (15) · Registration (10) · Recent activity (25).</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 flex flex-col items-center justify-center">
+          <p className="text-xs text-[var(--color-muted)] mb-1">On-time GSTR-3B streak</p>
+          <p className="text-4xl font-bold text-[var(--color-primary)]">{streak}</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-1">consecutive months</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Log a filing</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
+          <select value={type} onChange={e => setType(e.target.value as Filing["type"])} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none"><option>GSTR-1</option><option>GSTR-3B</option></select>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={onTime} onChange={e => setOnTime(e.target.checked)} className="accent-[var(--color-primary)]" /> Filed on time</label>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log filing</button>
+        </div>
+      </div>
+
+      {nudges.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold mb-2 text-[var(--color-muted)] uppercase tracking-wide">Nudges</p>
+          <div className="space-y-2">
+            {nudges.map(n => (
+              <div key={n} className="flex items-start gap-2 text-xs"><CheckCircle2 size={12} className="text-[var(--color-primary)] shrink-0 mt-0.5" /><p>{n}</p></div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {filings.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Period", "Return", "Status", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {filings.sort((a, b) => b.period.localeCompare(a.period)).map(f => (
+                <tr key={f.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2">{f.period}</td>
+                  <td className="px-3 py-2">{f.type}</td>
+                  <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f.onTime ? "bg-green-950/30 text-green-400" : "bg-red-950/30 text-red-400"}`}>{f.onTime ? "On time" : "Late"}</span></td>
+                  <td className="px-3 py-2"><button onClick={() => setFilings(prev => prev.filter(x => x.id !== f.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A single compliance score with actionable nudges. Late GSTR-3B: ₹50/day (₹20 if nil), capped, plus 18% interest on tax. A clean streak supports lender trust and smoother refunds.</p>
     </div>
   );
 }
