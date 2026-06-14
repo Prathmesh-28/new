@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Transaction } from "@/data/types";
@@ -75,7 +75,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -274,7 +274,34 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Advanced tools tab strip */}
+      <div className="flex items-center gap-1.5 flex-wrap border-t border-[var(--color-border)] pt-3">
+        <span className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] font-semibold mr-1">Tools</span>
+        {([
+          ["cat-rules",        "Auto-Categorise",  Wand2],
+          ["recon-workbench",  "Recon Workbench",  GitCompareArrows],
+          ["split-txn",        "Split Txn",        Split],
+          ["bulk-tag",         "Bulk Tag",         Layers],
+          ["transfer-detect",  "Transfer Detect",  ArrowLeftRight],
+          ["cost-center",      "Cost Centers",     FolderTree],
+          ["cash-accrual",     "Cash / Accrual",   Scale],
+        ] as const).map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setView(v => v === id ? "transactions" : id)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <Icon size={12} /> {label}
+          </button>
+        ))}
+      </div>
+
       {showReconcile && <ReconcileModal onClose={() => setShowReconcile(false)} />}
+
+      {view === "cat-rules"       && <CategorisationRulesEngine />}
+      {view === "recon-workbench" && <ReconciliationWorkbench />}
+      {view === "split-txn"       && <SplitTransactionTool />}
+      {view === "bulk-tag"        && <BulkTaggingTool />}
+      {view === "transfer-detect" && <TransferDetection />}
+      {view === "cost-center"     && <CostCenterTagging />}
+      {view === "cash-accrual"    && <CashAccrualToggle />}
 
       {view === "pdc" && <PDCRegister />}
       {view === "bounce" && <BounceTracker />}
@@ -1234,6 +1261,655 @@ function RecurringTemplates() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Templates are for cash-flow planning only and are not booked to the ledger automatically. Monthly equivalent: monthly = amount, quarterly = amount/3, annual = amount/12.</p>
+    </div>
+  );
+}
+
+// ── #186 AUTO-CATEGORISATION RULES ENGINE ───────────────────────────────────
+// Build payee/amount rules → preview the transactions each would re-classify.
+function CategorisationRulesEngine() {
+  const { store } = useApp();
+  type Field = "counterparty" | "description";
+  type Op = "contains" | "equals";
+  type Rule = { id: string; field: Field; op: Op; needle: string; minAmount: string; maxAmount: string; category: Transaction["category"] };
+  const [rules, setRules] = useFeatureState<Rule[]>("txn-cat-rules", []);
+  const [field, setField]   = useState<Field>("counterparty");
+  const [op, setOp]         = useState<Op>("contains");
+  const [needle, setNeedle] = useState("");
+  const [minAmt, setMinAmt] = useState("");
+  const [maxAmt, setMaxAmt] = useState("");
+  const [cat, setCat]       = useState<Transaction["category"]>("expense");
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const matchesRule = useCallback((r: Rule, t: Transaction) => {
+    const hay = (r.field === "counterparty" ? t.counterparty : t.description).toLowerCase();
+    const n = r.needle.toLowerCase();
+    const textOk = r.op === "equals" ? hay === n : hay.includes(n);
+    const abs = Math.abs(t.amount);
+    const lo = parseFloat(r.minAmount); const hi = parseFloat(r.maxAmount);
+    const loOk = isNaN(lo) || abs >= lo;
+    const hiOk = isNaN(hi) || abs <= hi;
+    return r.needle !== "" && textOk && loOk && hiOk;
+  }, []);
+
+  const addRule = () => {
+    if (!needle.trim()) { toast.error("Enter text to match on payee/description"); return; }
+    setRules(prev => [...prev, { id: generateId(), field, op, needle: needle.trim(), minAmount: minAmt, maxAmount: maxAmt, category: cat }]);
+    setNeedle(""); setMinAmt(""); setMaxAmt("");
+    toast.success("Rule added");
+  };
+  const removeRule = (id: string) => setRules(prev => prev.filter(r => r.id !== id));
+
+  // First-match-wins evaluation across the ledger (preview only — does not write).
+  const preview = useMemo(() => {
+    return txns.map(t => {
+      const hit = rules.find(r => matchesRule(r, t));
+      return hit && hit.category !== t.category ? { t, to: hit.category } : null;
+    }).filter((x): x is { t: Transaction; to: Transaction["category"] } => x !== null);
+  }, [txns, rules, matchesRule]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Wand2 size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Auto-Categorisation Rules</h3></div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <select value={field} onChange={e => setField(e.target.value as Field)} className={inp}>
+            <option value="counterparty">Payee</option><option value="description">Description</option>
+          </select>
+          <select value={op} onChange={e => setOp(e.target.value as Op)} className={inp}>
+            <option value="contains">contains</option><option value="equals">equals</option>
+          </select>
+          <input value={needle} onChange={e => setNeedle(e.target.value)} placeholder="Text to match" className={`${inp} md:col-span-2`} />
+          <input type="number" value={minAmt} onChange={e => setMinAmt(e.target.value)} placeholder="Min ₹" className={inp} />
+          <input type="number" value={maxAmt} onChange={e => setMaxAmt(e.target.value)} placeholder="Max ₹" className={inp} />
+          <select value={cat} onChange={e => setCat(e.target.value as Transaction["category"])} className={`${inp} md:col-span-2`}>
+            {CATEGORIES.map(c => <option key={c} value={c}>→ {c}</option>)}
+          </select>
+          <button onClick={addRule} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 md:col-span-2">+ Add rule</button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Rules are evaluated top-to-bottom; the first match decides the category. Amount bounds compare absolute value.</p>
+      </div>
+
+      {rules.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Field","Match","Value","Amount range","Category",""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+            <tbody>
+              {rules.map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-2.5 capitalize">{r.field === "counterparty" ? "Payee" : "Description"}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.op}</td>
+                  <td className="px-4 py-2.5 font-medium">{r.needle}</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.minAmount || maxLabel(r.maxAmount) ? `${r.minAmount ? fc(parseFloat(r.minAmount)) : "0"} – ${r.maxAmount ? fc(parseFloat(r.maxAmount)) : "∞"}` : "any"}</td>
+                  <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded border ${CAT_COLOR[r.category]}`}>{r.category}</span></td>
+                  <td className="px-4 py-2.5"><button onClick={() => removeRule(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-2">Would re-classify <span className="text-[var(--color-primary)]">{preview.length}</span> transaction{preview.length !== 1 ? "s" : ""}</p>
+        {preview.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)]">No transactions match your rules (or they already carry the target category). Add rules above to preview.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+            {preview.slice(0, 100).map(({ t, to }) => (
+              <div key={t.id} className="flex items-center justify-between text-xs border-b border-[var(--color-border)] last:border-0 pb-1.5">
+                <span className="flex-1 truncate">{t.date} · {t.description}{t.counterparty ? ` · ${t.counterparty}` : ""}</span>
+                <span className="flex items-center gap-1 shrink-0"><span className={`text-[9px] px-1.5 py-0.5 rounded border ${CAT_COLOR[t.category]}`}>{t.category}</span>→<span className={`text-[9px] px-1.5 py-0.5 rounded border ${CAT_COLOR[to]}`}>{to}</span></span>
+                <span className="tabular-nums font-semibold w-24 text-right">{fc(Math.abs(t.amount))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Preview only — review changes here, then apply categories on the main Transactions table or via Bulk Tag.</p>
+      </div>
+    </div>
+  );
+}
+function maxLabel(v: string) { return v !== ""; }
+
+// ── #187 BANK RECONCILIATION WORKBENCH ──────────────────────────────────────
+// Paste/enter bank lines, auto-match to book txns by amount+date proximity,
+// clear the unmatched ones manually.
+function ReconciliationWorkbench() {
+  const { store } = useApp();
+  type BankLine = { id: string; date: string; amount: string; narration: string };
+  const [lines, setLines] = useState<BankLine[]>([]);
+  const [bDate, setBDate] = useState("");
+  const [bAmt, setBAmt]   = useState("");
+  const [bNar, setBNar]   = useState("");
+  const [cleared, setCleared] = useState<Set<string>>(new Set());
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const addLine = () => {
+    if (!bDate || !bAmt) { toast.error("Date and amount required"); return; }
+    setLines(prev => [...prev, { id: generateId(), date: bDate, amount: bAmt, narration: bNar }]);
+    setBDate(""); setBAmt(""); setBNar("");
+  };
+
+  // Match: same signed amount and date within 3 days. One book txn per bank line.
+  const matched = useMemo(() => {
+    const usedBook = new Set<string>();
+    const out: Record<string, Transaction | null> = {};
+    for (const l of lines) {
+      const amt = parseFloat(l.amount);
+      const ld = new Date(l.date).getTime();
+      const hit = txns.find(t => !usedBook.has(t.id) && Math.abs(t.amount - amt) < 0.5 &&
+        Math.abs(new Date(t.date).getTime() - ld) <= 3 * 86400000);
+      if (hit) usedBook.add(hit.id);
+      out[l.id] = hit ?? null;
+    }
+    return out;
+  }, [lines, txns]);
+
+  const matchedBookIds = useMemo(() => new Set(Object.values(matched).filter(Boolean).map(t => (t as Transaction).id)), [matched]);
+  const unmatchedLines = lines.filter(l => !matched[l.id] && !cleared.has(l.id));
+  const unmatchedBook  = txns.filter(t => !matchedBookIds.has(t.id));
+  const toggleClear = (id: string) => setCleared(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Bank lines", value: lines.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Auto-matched", value: Object.values(matched).filter(Boolean).length.toString(), color: "text-green-400" },
+          { label: "Unmatched (bank)", value: unmatchedLines.length.toString(), color: unmatchedLines.length ? "text-orange-400" : "text-green-400" },
+          { label: "Book txns w/o bank line", value: unmatchedBook.length.toString(), color: unmatchedBook.length ? "text-yellow-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Add Bank Statement Line</h3></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input type="date" value={bDate} onChange={e => setBDate(e.target.value)} className={inp} />
+          <input type="number" value={bAmt} onChange={e => setBAmt(e.target.value)} placeholder="Amount ± (₹)" className={inp} />
+          <input value={bNar} onChange={e => setBNar(e.target.value)} placeholder="Narration" className={inp} />
+          <button onClick={addLine} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add line</button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Use a negative amount for debits/payments. Lines auto-match a book transaction with the same amount within ±3 days.</p>
+      </div>
+
+      {lines.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Bank date","Amount","Narration","Match status","Matched book txn",""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+            <tbody>
+              {lines.map(l => {
+                const m = matched[l.id];
+                const isCleared = cleared.has(l.id);
+                return (
+                  <tr key={l.id} className={`border-b border-[var(--color-border)] last:border-0 ${m || isCleared ? "opacity-60" : "hover:bg-[var(--color-accent)]"}`}>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${parseFloat(l.amount) >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(parseFloat(l.amount) || 0)}</td>
+                    <td className="px-4 py-2.5 text-xs">{l.narration || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${m ? "bg-green-950/30 text-green-400" : isCleared ? "bg-blue-950/30 text-blue-400" : "bg-orange-950/30 text-orange-400"}`}>{m ? "Auto-matched" : isCleared ? "Cleared" : "Unmatched"}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m ? `${m.description} (${m.date})` : "—"}</td>
+                    <td className="px-4 py-2.5">{!m && <button onClick={() => toggleClear(l.id)} className="text-[9px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-0.5 rounded hover:text-[var(--color-text)]">{isCleared ? "Reopen" : "Clear"}</button>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {unmatchedBook.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-sm font-semibold mb-2 text-yellow-400">Book transactions with no bank line ({unmatchedBook.length})</p>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {unmatchedBook.slice(0, 100).map(t => (
+              <div key={t.id} className="flex items-center justify-between text-xs border-b border-[var(--color-border)] last:border-0 pb-1">
+                <span className="flex-1 truncate">{t.date} · {t.description}</span>
+                <span className={`tabular-nums font-semibold ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(t.amount)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-2">These are deposits-in-transit / outstanding cheques, or items still to appear on the bank feed.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #188 SPLIT-TRANSACTION TOOL ─────────────────────────────────────────────
+// Take one payment and split it across multiple categories/heads.
+function SplitTransactionTool() {
+  const { store } = useApp();
+  type Leg = { id: string; category: Transaction["category"]; label: string; amount: string };
+  const [txnId, setTxnId] = useState("");
+  const [legs, setLegs] = useState<Leg[]>([{ id: generateId(), category: "expense", label: "", amount: "" }]);
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const selected = txns.find(t => t.id === txnId) ?? null;
+  const total = selected ? Math.abs(selected.amount) : 0;
+  const allocated = legs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const remaining = total - allocated;
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const addLeg = () => setLegs(prev => [...prev, { id: generateId(), category: "expense", label: "", amount: "" }]);
+  const updateLeg = (id: string, patch: Partial<Leg>) => setLegs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
+  const removeLeg = (id: string) => setLegs(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
+  const splitEqually = () => {
+    if (!selected || legs.length === 0) return;
+    const each = Math.round((total / legs.length) * 100) / 100;
+    setLegs(prev => prev.map((l, i) => ({ ...l, amount: String(i === prev.length - 1 ? Math.round((total - each * (prev.length - 1)) * 100) / 100 : each) })));
+    toast.success("Split equally");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Split size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Split a Transaction Across Heads</h3></div>
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Pick a transaction</label>
+        <select value={txnId} onChange={e => setTxnId(e.target.value)} className={inp}>
+          <option value="">— select —</option>
+          {txns.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 200).map(t => (
+            <option key={t.id} value={t.id}>{t.date} · {t.description} · {fc(t.amount)}</option>
+          ))}
+        </select>
+      </div>
+
+      {selected && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total to split", value: fc(total), color: "text-[var(--color-text)]" },
+              { label: "Allocated", value: fc(allocated), color: "text-[var(--color-primary)]" },
+              { label: "Remaining", value: fc(remaining), color: Math.abs(remaining) < 0.5 ? "text-green-400" : remaining < 0 ? "text-red-400" : "text-orange-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+            {legs.map(l => (
+              <div key={l.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+                <select value={l.category} onChange={e => updateLeg(l.id, { category: e.target.value as Transaction["category"] })} className={`${inp} md:col-span-3`}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input value={l.label} onChange={e => updateLeg(l.id, { label: e.target.value })} placeholder="Head / memo" className={`${inp} md:col-span-5`} />
+                <input type="number" value={l.amount} onChange={e => updateLeg(l.id, { amount: e.target.value })} placeholder="Amount ₹" className={`${inp} md:col-span-3`} />
+                <button onClick={() => removeLeg(l.id)} className="text-[var(--color-muted)] hover:text-red-400 md:col-span-1 justify-self-end"><X size={14} /></button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button onClick={addLeg} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">+ Add split</button>
+              <button onClick={splitEqually} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">Split equally</button>
+            </div>
+            <div className={`rounded-lg p-3 border text-xs ${Math.abs(remaining) < 0.5 ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-orange-800/40 bg-orange-950/20 text-orange-400"}`}>
+              {Math.abs(remaining) < 0.5 ? "✓ Splits balance to the transaction total." : `Splits are off by ${fc(Math.abs(remaining))} — adjust the legs to balance.`}
+            </div>
+          </div>
+        </>
+      )}
+      {!selected && <p className="text-xs text-[var(--color-muted)]">Select a transaction to break it into multiple expense / project heads.</p>}
+    </div>
+  );
+}
+
+// ── #189 BULK EDIT / TAGGING ────────────────────────────────────────────────
+// Filter the ledger, select many, re-categorise in one shot.
+function BulkTaggingTool() {
+  const { store, updateTransaction } = useApp();
+  const [q, setQ] = useState("");
+  const [fromCat, setFromCat] = useState<string>("all");
+  const [toCat, setToCat] = useState<Transaction["category"]>("expense");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const filtered = useMemo(() => txns.filter(t => {
+    const qOk = !q || t.description.toLowerCase().includes(q.toLowerCase()) || t.counterparty.toLowerCase().includes(q.toLowerCase());
+    const cOk = fromCat === "all" || t.category === fromCat;
+    return qOk && cOk;
+  }), [txns, q, fromCat]);
+
+  const allSel = filtered.length > 0 && filtered.every(t => sel.has(t.id));
+  const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map(t => t.id)));
+  const toggle = (id: string) => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const apply = () => {
+    let count = 0;
+    txns.forEach(t => { if (sel.has(t.id) && t.category !== toCat) { updateTransaction({ ...t, category: toCat }); count++; } });
+    toast.success(`Re-categorised ${count} transaction${count !== 1 ? "s" : ""} → ${toCat}`);
+    setSel(new Set());
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Layers size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Bulk Edit / Tagging</h3></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search payee / description" className={`${inp} md:col-span-2`} />
+          <select value={fromCat} onChange={e => setFromCat(e.target.value)} className={inp}>
+            <option value="all">From: all categories</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>From: {c}</option>)}
+          </select>
+          <select value={toCat} onChange={e => setToCat(e.target.value as Transaction["category"])} className={inp}>
+            {CATEGORIES.map(c => <option key={c} value={c}>To: {c}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-xs text-[var(--color-muted)]">{filtered.length} match filter · {sel.size} selected</span>
+          <button onClick={apply} disabled={sel.size === 0} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">Apply → {toCat} ({sel.size})</button>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
+          <thead><tr className="border-b border-[var(--color-border)]">
+            <th className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSel} onChange={toggleAll} className="accent-[var(--color-primary)] cursor-pointer" /></th>
+            {["Date","Description","Category","Amount"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.slice(0, 300).map(t => (
+              <tr key={t.id} className={`border-b border-[var(--color-border)] last:border-0 ${sel.has(t.id) ? "bg-[var(--color-primary)]/5" : "hover:bg-[var(--color-accent)]"}`}>
+                <td className="px-3 py-2"><input type="checkbox" checked={sel.has(t.id)} onChange={() => toggle(t.id)} className="accent-[var(--color-primary)] cursor-pointer" /></td>
+                <td className="px-3 py-2 text-xs text-[var(--color-muted)] tabular-nums">{t.date}</td>
+                <td className="px-3 py-2"><span className="font-medium">{t.description}</span>{t.counterparty && <span className="text-[var(--color-muted)] text-xs"> · {t.counterparty}</span>}</td>
+                <td className="px-3 py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded border ${CAT_COLOR[t.category]}`}>{t.category}</span></td>
+                <td className="px-3 py-2 tabular-nums text-right font-semibold">{fc(t.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && <p className="p-8 text-sm text-[var(--color-muted)] text-center">No transactions match this filter.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── #190 INTER-ACCOUNT TRANSFER DETECTION ───────────────────────────────────
+// Find offsetting debit/credit pairs (self-transfers) so they aren't double
+// counted in revenue/spend.
+function TransferDetection() {
+  const { store, updateTransaction } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+
+  // Pair an outflow with an inflow of the same magnitude, opposite sign,
+  // within 2 days, across different bank accounts.
+  const pairs = useMemo(() => {
+    const out: { debit: Transaction; credit: Transaction }[] = [];
+    const used = new Set<string>();
+    const debits = txns.filter(t => t.amount < 0);
+    const credits = txns.filter(t => t.amount > 0);
+    for (const d of debits) {
+      if (used.has(d.id)) continue;
+      const c = credits.find(c =>
+        !used.has(c.id) &&
+        Math.abs(c.amount + d.amount) < 0.5 &&
+        c.bankAccountId !== d.bankAccountId &&
+        Math.abs(new Date(c.date).getTime() - new Date(d.date).getTime()) <= 2 * 86400000);
+      if (c) { out.push({ debit: d, credit: c }); used.add(d.id); used.add(c.id); }
+    }
+    return out;
+  }, [txns]);
+
+  const acctName = (id: string) => store.bankAccounts.find(a => a.id === id)?.name ?? "—";
+  const netAmount = pairs.reduce((s, p) => s + Math.abs(p.debit.amount), 0);
+
+  const markTransfer = (p: { debit: Transaction; credit: Transaction }) => {
+    if (p.debit.category !== "transfer") updateTransaction({ ...p.debit, category: "transfer" });
+    if (p.credit.category !== "transfer") updateTransaction({ ...p.credit, category: "transfer" });
+    toast.success("Both legs tagged as transfer (excluded from revenue/spend)");
+  };
+  const markAll = () => { pairs.forEach(markTransfer); toast.success(`Tagged ${pairs.length} transfer pair${pairs.length !== 1 ? "s" : ""}`); };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Suspected transfer pairs", value: pairs.length.toString(), color: pairs.length ? "text-orange-400" : "text-green-400" },
+          { label: "Gross value moved", value: fc(netAmount), color: "text-[var(--color-text)]" },
+          { label: "Already tagged transfer", value: pairs.filter(p => p.debit.category === "transfer" && p.credit.category === "transfer").length.toString(), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Detected Self-Transfers</span></div>
+          {pairs.length > 0 && <button onClick={markAll} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">Tag all as transfer</button>}
+        </div>
+        {pairs.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No offsetting debit/credit pairs found across your accounts. Self-transfers show up as a matched payment-out and receipt-in within 2 days.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Out (from)","In (to)","Amount","Dates","Status",""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {pairs.map(p => {
+                  const done = p.debit.category === "transfer" && p.credit.category === "transfer";
+                  return (
+                    <tr key={p.debit.id + p.credit.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-2.5 text-xs">{acctName(p.debit.bankAccountId)}<div className="text-[var(--color-muted)]">{p.debit.description}</div></td>
+                      <td className="px-4 py-2.5 text-xs">{acctName(p.credit.bankAccountId)}<div className="text-[var(--color-muted)]">{p.credit.description}</div></td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{fc(Math.abs(p.debit.amount))}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{p.debit.date} → {p.credit.date}</td>
+                      <td className="px-4 py-2.5">{done ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-950/30 text-green-400">Tagged</span> : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-950/30 text-orange-400">Counted twice</span>}</td>
+                      <td className="px-4 py-2.5">{!done && <button onClick={() => markTransfer(p)} className="text-[9px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-0.5 rounded hover:text-[var(--color-text)]">Tag</button>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Tagging both legs as "transfer" nets them out of revenue and spend totals so moving money between your own accounts isn't double-counted.</p>
+    </div>
+  );
+}
+
+// ── #191 PROJECT / COST-CENTER TAGGING ──────────────────────────────────────
+// Assign txns to projects/cost-centres, then read a P&L per project.
+function CostCenterTagging() {
+  const { store } = useApp();
+  type Assign = Record<string, string>; // txnId -> projectId
+  const [projects, setProjects] = useFeatureState<{ id: string; name: string }[]>("txn-cost-centers", []);
+  const [assign, setAssign] = useFeatureState<Assign>("txn-cost-center-map", {});
+  const [name, setName] = useState("");
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const addProject = () => {
+    if (!name.trim()) return;
+    setProjects(prev => [...prev, { id: generateId(), name: name.trim() }]);
+    setName("");
+  };
+  const setTxnProject = (txnId: string, projectId: string) => setAssign(prev => {
+    const next = { ...prev };
+    if (projectId) next[txnId] = projectId; else delete next[txnId];
+    return next;
+  });
+
+  // P&L per project: revenue (positive) vs cost (negative) of assigned txns.
+  const pnl = useMemo(() => {
+    const acc: Record<string, { rev: number; cost: number }> = {};
+    projects.forEach(p => { acc[p.id] = { rev: 0, cost: 0 }; });
+    txns.forEach(t => {
+      const pid = assign[t.id];
+      if (pid && acc[pid]) { if (t.amount >= 0) acc[pid].rev += t.amount; else acc[pid].cost += Math.abs(t.amount); }
+    });
+    return acc;
+  }, [projects, assign, txns]);
+
+  const projName = (id?: string) => projects.find(p => p.id === id)?.name ?? "";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><FolderTree size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Projects / Cost Centres</h3></div>
+        <div className="flex gap-2">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="New project / job / cost-centre name" className={inp} />
+          <button onClick={addProject} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 shrink-0">+ Add</button>
+        </div>
+      </div>
+
+      {projects.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {projects.map(p => {
+            const r = pnl[p.id] ?? { rev: 0, cost: 0 };
+            const net = r.rev - r.cost;
+            return (
+              <div key={p.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold truncate">{p.name}</p>
+                  <button onClick={() => { setProjects(prev => prev.filter(x => x.id !== p.id)); setAssign(prev => { const n = { ...prev }; Object.keys(n).forEach(k => { if (n[k] === p.id) delete n[k]; }); return n; }); }} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                </div>
+                <div className="space-y-0.5 text-xs">
+                  <div className="flex justify-between"><span className="text-[var(--color-muted)]">Revenue</span><span className="text-green-400 tabular-nums">{fc(r.rev)}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--color-muted)]">Cost</span><span className="text-red-400 tabular-nums">{fc(r.cost)}</span></div>
+                  <div className="flex justify-between font-semibold border-t border-[var(--color-border)] pt-0.5 mt-0.5"><span>Net P&amp;L</span><span className={`tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(net)}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Date","Description","Amount","Project / Cost-centre"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {txns.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 300).map(t => (
+              <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-3 py-2 text-xs text-[var(--color-muted)] tabular-nums">{t.date}</td>
+                <td className="px-3 py-2"><span className="font-medium">{t.description}</span>{assign[t.id] && <span className="ml-2 text-[9px] px-1 py-0.5 rounded bg-[var(--color-primary)]/15 text-[var(--color-primary)]">{projName(assign[t.id])}</span>}</td>
+                <td className={`px-3 py-2 tabular-nums font-semibold ${t.amount >= 0 ? "text-green-400" : "text-[var(--color-text)]"}`}>{fc(t.amount)}</td>
+                <td className="px-3 py-2">
+                  <select value={assign[t.id] ?? ""} onChange={e => setTxnProject(t.id, e.target.value)} disabled={projects.length === 0}
+                    className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-0.5 outline-none disabled:opacity-50">
+                    <option value="">— unassigned —</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {projects.length === 0 && <p className="p-6 text-xs text-[var(--color-muted)] text-center">Add a project above to start tagging transactions.</p>}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Assignments are saved and synced across devices. P&amp;L per project = revenue (inflows) minus cost (outflows) of assigned transactions.</p>
+    </div>
+  );
+}
+
+// ── #192 CASH vs ACCRUAL TOGGLE ─────────────────────────────────────────────
+// View the period P&L on a cash basis (booked txns) or accrual basis
+// (cash adjusted for open invoices/bills awaiting settlement).
+function CashAccrualToggle() {
+  const { store } = useApp();
+  type Basis = "cash" | "accrual";
+  const [basis, setBasis] = useState<Basis>("cash");
+  const [months, setMonths] = useState<3 | 6 | 12>(6);
+
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const invoices = useMemo(() => store.invoices ?? [], [store.invoices]);
+  const fc = formatCurrency;
+
+  const cutoff = useMemo(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - months);
+    return d.toISOString().slice(0, 10);
+  }, [months]);
+
+  // Cash basis: actual inflows/outflows in the window.
+  const cashRev = useMemo(() => txns.filter(t => t.amount > 0 && t.category === "revenue" && t.date >= cutoff).reduce((s, t) => s + t.amount, 0), [txns, cutoff]);
+  const cashExp = useMemo(() => txns.filter(t => t.amount < 0 && t.date >= cutoff).reduce((s, t) => s + Math.abs(t.amount), 0), [txns, cutoff]);
+
+  // Accrual adjustment: add unpaid invoiced revenue (earned, not yet received).
+  const openInvoiced = useMemo(() => invoices
+    .filter(i => i.status !== "paid" && (i.invoiceDate ?? "") >= cutoff)
+    .reduce((s, i) => s + (i.amount ?? 0), 0), [invoices, cutoff]);
+
+  const accrualRev = cashRev + openInvoiced;
+  const rev = basis === "cash" ? cashRev : accrualRev;
+  const exp = cashExp; // expense accrual would need open bills; cash expenses shown on both
+  const net = rev - exp;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Scale size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Cash vs Accrual P&amp;L</h3></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1">
+            {(["cash", "accrual"] as const).map(b => (
+              <button key={b} onClick={() => setBasis(b)} className={`px-4 py-1.5 rounded-lg text-xs font-medium border capitalize transition-colors ${basis === b ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{b} basis</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {([3, 6, 12] as const).map(m => (
+              <button key={m} onClick={() => setMonths(m)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${months === m ? "bg-[var(--color-accent)] text-[var(--color-text)] border-[var(--color-primary)]/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{m}M</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: `Revenue (${basis})`, value: fc(rev), color: "text-green-400" },
+          { label: "Expenses", value: fc(exp), color: "text-red-400" },
+          { label: `Net (${basis})`, value: fc(net), color: net >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Accrual adjustment", value: fc(openInvoiced), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Particulars", "Cash basis", "Accrual basis"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Revenue received (cash)", c: cashRev, a: cashRev },
+              { label: "Add: unpaid invoiced revenue", c: 0, a: openInvoiced },
+              { label: "Total revenue", c: cashRev, a: accrualRev, bold: true },
+              { label: "Less: expenses paid", c: -cashExp, a: -cashExp },
+              { label: "Net profit", c: cashRev - cashExp, a: accrualRev - cashExp, bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.c < 0 ? `(${fc(Math.abs(r.c))})` : fc(r.c)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.a < 0 ? `(${fc(Math.abs(r.a))})` : fc(r.a)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative — confirm your method with your CA.</p>
     </div>
   );
 }
