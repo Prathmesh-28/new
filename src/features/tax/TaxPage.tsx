@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import {
   ShieldCheck, AlertTriangle, Calendar, CheckCircle2, ChevronRight,
-  TrendingUp, FileText, Plus, ArrowRight,
+  TrendingUp, FileText, Plus, ArrowRight, Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -63,6 +63,10 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad">("overview");
+  const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
+  const [aaTurnover, setAaTurnover] = useState("");
+  const [aaDigital,  setAaDigital]  = useState(false);
 
   const deadlines = useMemo(() => computeTaxCalendar(today), []);
 
@@ -120,13 +124,130 @@ export default function TaxPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Tax Autopilot
-        </h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Tax Autopilot
+          </h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
+        </div>
+        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator]] as const).map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setTaxTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              <Icon size={11} />{label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {taxTab === "44ad" && (() => {
+        const turnover = parseFloat(aaTurnover) || 0;
+        const presumptivePct = aaScheme === "44ad" ? (aaDigital ? 6 : 8) : 50;
+        const presumptiveIncome = Math.round(turnover * presumptivePct / 100);
+        const stdDeduction = 75000;
+        const netTaxable = Math.max(0, presumptiveIncome - stdDeduction);
+        const slabs: [number, number, number][] = [
+          [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
+          [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+        ];
+        let slabTax = 0;
+        let rem = netTaxable;
+        for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); slabTax += t * r; rem -= t; }
+        const cess = Math.round(slabTax * 0.04);
+        const totalTax = Math.round(slabTax + cess);
+        const limit44AD  = 30000000; // ₹3 crore (digital only above ₹2 crore)
+        const limit44ADA = 7500000;  // ₹75 lakh
+        const eligible = aaScheme === "44ad"
+          ? turnover <= limit44AD
+          : turnover <= limit44ADA;
+
+        return (
+          <div className="space-y-4 max-w-xl">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Presumptive Tax Estimator</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Section 44AD (businesses) and 44ADA (professionals) let eligible assessees declare income as a % of turnover — no books required.</p>
+
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  {(["44ad", "44ada"] as const).map(s => (
+                    <button key={s} onClick={() => setAaScheme(s)}
+                      className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${aaScheme === s ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                      {s === "44ad" ? "Sec 44AD — Business" : "Sec 44ADA — Profession"}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--color-muted)] mb-1">
+                    {aaScheme === "44ad" ? "Annual Turnover (₹)" : "Gross Receipts (₹)"}
+                    <span className="ml-2 text-[10px]">Limit: {aaScheme === "44ad" ? "₹3 cr" : "₹75 lakh"}</span>
+                  </label>
+                  <input
+                    type="number" min={0}
+                    value={aaTurnover}
+                    onChange={e => setAaTurnover(e.target.value)}
+                    placeholder={aaScheme === "44ad" ? "e.g. 5000000" : "e.g. 3000000"}
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+                  />
+                </div>
+                {aaScheme === "44ad" && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={aaDigital} onChange={e => setAaDigital(e.target.checked)} className="accent-[var(--color-primary)]" />
+                    <span>All receipts via digital mode (qualifies for 6% rate instead of 8%)</span>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {turnover > 0 && (
+              <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${!eligible ? "border-red-700/40" : "border-[var(--color-border)]"}`}>
+                {!eligible && (
+                  <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-950/20 border border-red-800/30 rounded-lg">
+                    <AlertTriangle size={12} className="text-red-400 shrink-0" />
+                    <p className="text-xs text-red-300">Turnover exceeds the {aaScheme === "44ad" ? "₹3 crore" : "₹75 lakh"} limit — presumptive scheme not available. Tax audit (44AB) mandatory.</p>
+                  </div>
+                )}
+                <h3 className="text-sm font-semibold mb-3">Tax Computation</h3>
+                <div className="space-y-2">
+                  {[
+                    { label: `Presumptive Income (${presumptivePct}% of turnover)`, value: formatCurrency(presumptiveIncome), color: "text-[var(--color-text)]" },
+                    { label: "Less: Standard Deduction", value: `(${formatCurrency(Math.min(stdDeduction, presumptiveIncome))})`, color: "text-green-400" },
+                    { label: "Net Taxable Income", value: formatCurrency(netTaxable), color: "text-[var(--color-text)] font-semibold" },
+                    { label: "Income Tax (new regime slabs)", value: formatCurrency(Math.round(slabTax)), color: "text-orange-400" },
+                    { label: "Health & Education Cess (4%)", value: formatCurrency(cess), color: "text-orange-400" },
+                    { label: "Total Tax Payable", value: formatCurrency(totalTax), color: "text-red-400 font-bold" },
+                  ].map(row => (
+                    <div key={row.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                      <span className="text-xs text-[var(--color-muted)]">{row.label}</span>
+                      <span className={`tabular-nums text-sm ${row.color}`}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {totalTax > 0 && (
+                  <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
+                    <p className="text-xs text-[var(--color-muted)]">Advance tax instalments (if tax &gt; ₹10,000/year):</p>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      {[["1st Jun", Math.round(totalTax * 0.15)], ["2nd Sep", Math.round(totalTax * 0.45)], ["3rd Dec", Math.round(totalTax * 0.75)], ["Final Mar", totalTax]].map(([label, amt]) => (
+                        <div key={label as string} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2.5 text-center">
+                          <p className="text-[10px] text-[var(--color-muted)]">{label as string}</p>
+                          <p className="text-xs font-bold tabular-nums text-orange-400 mt-0.5">{formatCurrency(amt as number)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+              <AlertTriangle size={12} className="shrink-0 mt-px" />
+              44AD: businesses with turnover ≤₹3 crore (digital-only receipts). 44ADA: specified professions (doctors, lawyers, engineers, CAs, architects) with gross receipts ≤₹75 lakh. Consult your CA before opting in.
+            </div>
+          </div>
+        );
+      })()}
+
+      {taxTab === "overview" && <>
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -293,6 +414,7 @@ export default function TaxPage() {
           </button>
         </div>
       )}
+      </>}
     </div>
   );
 }

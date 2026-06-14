@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -42,6 +42,60 @@ export default function GstPage() {
     const expiry   = format(addDays(new Date(), validity), "d MMM yyyy");
     return { required: true, validity, expiry } as const;
   }, [ewayValue, ewayDist, ewayOdc, ewayCancelled]);
+
+  // ── HSN Lookup state ──
+  const [hsnSearch, setHsnSearch] = useState("");
+
+  const HSN_CODES: { code: string; desc: string; rate: number; type: "goods" | "service" }[] = [
+    { code: "0101", desc: "Live horses, asses, mules, hinnies", rate: 0, type: "goods" },
+    { code: "0401", desc: "Milk and cream, not concentrated or sweetened", rate: 0, type: "goods" },
+    { code: "0901", desc: "Coffee (roasted, green)", rate: 5, type: "goods" },
+    { code: "0902", desc: "Tea (black, green, oolong)", rate: 5, type: "goods" },
+    { code: "1001", desc: "Wheat and meslin", rate: 0, type: "goods" },
+    { code: "1701", desc: "Cane or beet sugar (granulated, raw)", rate: 5, type: "goods" },
+    { code: "2101", desc: "Coffee/tea extracts, instant coffee, chicory", rate: 18, type: "goods" },
+    { code: "2106", desc: "Food preparations NEC (protein powders, health drinks)", rate: 18, type: "goods" },
+    { code: "3004", desc: "Medicaments — packed for retail sale", rate: 12, type: "goods" },
+    { code: "3006", desc: "Pharmaceutical goods — bandages, dental cements", rate: 12, type: "goods" },
+    { code: "3401", desc: "Soap, surface-active products for washing", rate: 18, type: "goods" },
+    { code: "3402", desc: "Detergents, surface-active agents (non-soap)", rate: 18, type: "goods" },
+    { code: "3808", desc: "Insecticides, disinfectants, fungicides, herbicides", rate: 18, type: "goods" },
+    { code: "3923", desc: "Plastic packing articles — boxes, bags, bottles", rate: 18, type: "goods" },
+    { code: "4011", desc: "New pneumatic tyres of rubber", rate: 28, type: "goods" },
+    { code: "4802", desc: "Uncoated paper and paperboard for writing/printing", rate: 12, type: "goods" },
+    { code: "4819", desc: "Cartons, boxes, bags of paper (packing material)", rate: 18, type: "goods" },
+    { code: "5208", desc: "Woven fabrics of cotton ≤200 g/m²", rate: 5, type: "goods" },
+    { code: "6109", desc: "T-shirts, singlets and other knitted vests", rate: 5, type: "goods" },
+    { code: "6203", desc: "Men's suits, ensembles, jackets, trousers", rate: 12, type: "goods" },
+    { code: "7108", desc: "Gold (including gold plated with platinum)", rate: 3, type: "goods" },
+    { code: "7113", desc: "Articles of jewellery and parts — gold, silver", rate: 3, type: "goods" },
+    { code: "8413", desc: "Pumps for liquids (hand pumps, power pumps)", rate: 18, type: "goods" },
+    { code: "8418", desc: "Refrigerators, freezers, A/C units, heat pumps", rate: 28, type: "goods" },
+    { code: "8471", desc: "Computers, laptops, desktops and peripherals", rate: 18, type: "goods" },
+    { code: "8517", desc: "Telephones, smartphones, feature phones", rate: 18, type: "goods" },
+    { code: "8528", desc: "Monitors, projectors, televisions", rate: 28, type: "goods" },
+    { code: "8544", desc: "Insulated wire and cable (electric)", rate: 18, type: "goods" },
+    { code: "8704", desc: "Motor vehicles for goods transport — trucks, lorries", rate: 28, type: "goods" },
+    { code: "8708", desc: "Parts and accessories for motor vehicles", rate: 28, type: "goods" },
+    { code: "9401", desc: "Seats — chairs, sofas, car seats", rate: 18, type: "goods" },
+    { code: "9403", desc: "Furniture — tables, shelves, office furniture", rate: 18, type: "goods" },
+    { code: "9405", desc: "Lamps, lighting fittings, illuminated signs", rate: 18, type: "goods" },
+    { code: "9954", desc: "Construction services — works contracts, civil", rate: 18, type: "service" },
+    { code: "9963", desc: "Food and beverage services — restaurants, hotels", rate: 5, type: "service" },
+    { code: "9971", desc: "Financial and related services — banking, insurance", rate: 18, type: "service" },
+    { code: "9972", desc: "Real estate services — renting, property management", rate: 18, type: "service" },
+    { code: "9983", desc: "IT and computer services — software, consulting", rate: 18, type: "service" },
+    { code: "9984", desc: "Telecommunications and related services", rate: 18, type: "service" },
+    { code: "9985", desc: "Business support services — BPO, KPO, call centres", rate: 18, type: "service" },
+    { code: "9986", desc: "Agriculture, forestry and fishing support services", rate: 0, type: "service" },
+    { code: "9987", desc: "Maintenance, repair and installation services", rate: 18, type: "service" },
+    { code: "9988", desc: "Manufacturing services on physical inputs (job work)", rate: 18, type: "service" },
+    { code: "9992", desc: "Education services", rate: 0, type: "service" },
+    { code: "9993", desc: "Human health and social care services", rate: 0, type: "service" },
+    { code: "9997", desc: "Other miscellaneous services NEC", rate: 18, type: "service" },
+    { code: "9961", desc: "Wholesale trade services — commission agents", rate: 18, type: "service" },
+    { code: "9973", desc: "Leasing and rental services — machinery, equipment", rate: 18, type: "service" },
+  ];
 
   // ── GSTR-2B reconciliation state ──
   const [twoBCount, setTwoBCount]   = useState<number | null>(null);
@@ -178,7 +232,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -670,6 +724,71 @@ export default function GstPage() {
           </div>
         </div>
       )}
+
+      {/* ── HSN LOOKUP ── */}
+      {tab === "hsn" && (() => {
+        const q = hsnSearch.trim().toLowerCase();
+        const results = q.length < 2
+          ? HSN_CODES
+          : HSN_CODES.filter(h => h.code.includes(q) || h.desc.toLowerCase().includes(q));
+
+        const RATE_CHIP: Record<number, string> = {
+          0:  "bg-green-950/30 text-green-400 border-green-800/30",
+          3:  "bg-yellow-950/30 text-yellow-400 border-yellow-800/30",
+          5:  "bg-blue-950/30 text-blue-400 border-blue-800/30",
+          12: "bg-purple-950/30 text-purple-400 border-purple-800/30",
+          18: "bg-orange-950/30 text-orange-400 border-orange-800/30",
+          28: "bg-red-950/30 text-red-400 border-red-800/30",
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <h2 className="text-sm font-semibold mb-1">HSN / SAC Code Lookup</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-3">Search by code number or description. HSN = goods, SAC = services. GST rates shown are standard rates — verify on GST portal for exceptions.</p>
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                <input
+                  value={hsnSearch}
+                  onChange={e => setHsnSearch(e.target.value)}
+                  placeholder="Search: 8517, laptop, software, restaurant…"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
+                <BookOpen size={12} className="text-[var(--color-primary)]" />
+                <span className="text-xs font-semibold">{results.length} codes</span>
+                <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                  {[0, 5, 12, 18, 28].map(r => (
+                    <span key={r} className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${RATE_CHIP[r]}`}>{r}%</span>
+                  ))}
+                </div>
+              </div>
+              <div className="divide-y divide-[var(--color-border)] max-h-[480px] overflow-y-auto">
+                {results.length === 0 && (
+                  <div className="py-8 text-center text-sm text-[var(--color-muted)]">No codes match "{hsnSearch}"</div>
+                )}
+                {results.map(h => (
+                  <div key={h.code} className="flex items-center gap-4 px-4 py-2.5 hover:bg-[var(--color-accent)] transition-colors">
+                    <span className="font-mono text-sm font-semibold text-[var(--color-primary)] w-16 shrink-0">{h.code}</span>
+                    <span className="flex-1 text-sm text-[var(--color-text)]">{h.desc}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold shrink-0 ${RATE_CHIP[h.rate] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{h.rate}% GST</span>
+                    <span className="text-[10px] text-[var(--color-muted)] shrink-0 w-12 text-right">{h.type === "service" ? "SAC" : "HSN"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+              <AlertTriangle size={12} className="shrink-0 mt-px" />
+              Rates shown are standard GST rates. Concessional rates, exemptions, and state-specific notifications may apply. Always verify at gstn.gov.in before filing.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── VERIFY GSTIN ── */}
       {tab === "verify" && (

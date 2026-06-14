@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -116,7 +116,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging">("directory");
+  const [view, setView] = useState<"directory" | "aging" | "msme">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -208,10 +208,10 @@ export default function VendorsPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">All vendors derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {(["directory", "aging"] as const).map(v => (
+          {(["directory", "aging", "msme"] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              {v === "directory" ? "Directory" : "AP Aging"}
+              {v === "directory" ? "Directory" : v === "aging" ? "AP Aging" : "MSME 45-Day"}
             </button>
           ))}
         </div>
@@ -393,6 +393,107 @@ export default function VendorsPage() {
           )}
         </div>
       )}
+
+      {/* ── MSME 45-DAY RULE ── */}
+      {view === "msme" && (() => {
+        const today = new Date();
+        const msmeObligations = store.obligations
+          .filter(o => o.type === "other" || o.type === "loan")
+          .map(o => {
+            const due = new Date(o.dueDate);
+            const daysSinceDue = Math.floor((today.getTime() - due.getTime()) / 86400000);
+            return { ...o, daysSinceDue };
+          })
+          .sort((a, b) => b.daysSinceDue - a.daysSinceDue);
+
+        const breach    = msmeObligations.filter(o => o.daysSinceDue > 45);
+        const warning   = msmeObligations.filter(o => o.daysSinceDue > 30 && o.daysSinceDue <= 45);
+        const safe      = msmeObligations.filter(o => o.daysSinceDue <= 30 && o.daysSinceDue > 0);
+        const upcoming  = msmeObligations.filter(o => o.daysSinceDue <= 0);
+
+        const breachAmt  = breach.reduce((s, o) => s + o.amount, 0);
+        const warningAmt = warning.reduce((s, o) => s + o.amount, 0);
+
+        return (
+          <div className="space-y-4">
+            <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
+              <ShieldAlert size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-300">MSME Samadhan — 45-Day Payment Rule</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">Under MSMED Act 2006, payments to MSME vendors must be made within 45 days of acceptance. Delays attract 3× bank rate compound interest and mandatory disclosure in ITR. Mark vendor obligations as "expense" type to track here.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "In Breach (>45d)",  value: breach.length.toString(),    color: "text-red-400",    sub: formatCurrency(breachAmt) },
+                { label: "At Risk (31–45d)",   value: warning.length.toString(),   color: "text-orange-400", sub: formatCurrency(warningAmt) },
+                { label: "Safe (1–30d)",       value: safe.length.toString(),      color: "text-yellow-400", sub: formatCurrency(safe.reduce((s,o) => s + o.amount, 0)) },
+                { label: "Upcoming",           value: upcoming.length.toString(),  color: "text-green-400",  sub: formatCurrency(upcoming.reduce((s,o) => s + o.amount, 0)) },
+              ].map(c => (
+                <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                  <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-1">{c.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {msmeObligations.length === 0 ? (
+              <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+                <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400 opacity-50" />
+                <p className="text-sm text-[var(--color-muted)]">No outstanding obligations. Schedule vendor payments via AP Aging to track MSME compliance.</p>
+              </div>
+            ) : (
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+                <table className="w-full text-sm min-w-[520px]">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {["Vendor / Obligation","Amount","Due Date","Days Since Due","MSME Status"].map(h => (
+                        <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {msmeObligations.map(o => {
+                      const isBreached = o.daysSinceDue > 45;
+                      const isWarning  = o.daysSinceDue > 30;
+                      const isPending  = o.daysSinceDue > 0;
+                      return (
+                        <tr key={o.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                          <td className="px-4 py-3 font-medium">{o.name}</td>
+                          <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
+                          <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{new Date(o.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                          <td className={`px-4 py-3 tabular-nums font-bold ${isBreached ? "text-red-400" : isWarning ? "text-orange-400" : isPending ? "text-yellow-400" : "text-green-400"}`}>
+                            {o.daysSinceDue > 0 ? `${o.daysSinceDue}d overdue` : `Due in ${Math.abs(o.daysSinceDue)}d`}
+                          </td>
+                          <td className="px-4 py-3">
+                            {isBreached ? (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/30 flex items-center gap-1 w-fit">
+                                <ShieldAlert size={10} /> Breach — ITR disclosure
+                              </span>
+                            ) : isWarning ? (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/30 w-fit flex items-center gap-1">
+                                <AlertTriangle size={10} /> Pay within {45 - o.daysSinceDue}d
+                              </span>
+                            ) : isPending ? (
+                              <span className="text-xs px-2 py-0.5 rounded border bg-yellow-950/20 text-yellow-400 border-yellow-800/30 w-fit">
+                                {45 - o.daysSinceDue}d remaining
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 rounded border bg-green-950/20 text-green-400 border-green-800/30 w-fit">Upcoming</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
     </div>

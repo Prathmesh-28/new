@@ -6,7 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import { differenceInDays, format, parseISO } from "date-fns";
 import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
-  Send, ChevronDown, TrendingDown, ArrowUpRight, Zap, MailOpen, RefreshCw,
+  Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,6 +123,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
+  const [view, setView]           = useState<"collections" | "profitability">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -167,6 +168,39 @@ export default function CollectionsPage() {
     agingSummary[r.aging].amount += r.amount;
   });
 
+  // Customer profitability: all invoices grouped by customer
+  const customerProfitability = useMemo(() => {
+    const map: Record<string, { totalInvoiced: number; totalPaid: number; invoiceCount: number; paidCount: number; totalDaysToCollect: number; overdueAmount: number }> = {};
+    store.invoices.forEach(inv => {
+      if (!map[inv.customer]) map[inv.customer] = { totalInvoiced: 0, totalPaid: 0, invoiceCount: 0, paidCount: 0, totalDaysToCollect: 0, overdueAmount: 0 };
+      const c = map[inv.customer];
+      c.totalInvoiced += inv.amount;
+      c.invoiceCount++;
+      if (inv.status === "paid") {
+        c.totalPaid += inv.amount;
+        c.paidCount++;
+        const dueDate = parseISO(inv.dueDate);
+        const daysTaken = differenceInDays(new Date(), dueDate);
+        c.totalDaysToCollect += Math.max(0, daysTaken);
+      } else {
+        const overdueDays = Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate)));
+        if (overdueDays > 0) c.overdueAmount += inv.amount;
+      }
+    });
+    return Object.entries(map)
+      .map(([customer, d]) => ({
+        customer,
+        totalInvoiced: d.totalInvoiced,
+        totalPaid: d.totalPaid,
+        invoiceCount: d.invoiceCount,
+        collectionRate: d.invoiceCount > 0 ? Math.round((d.paidCount / d.invoiceCount) * 100) : 0,
+        avgDaysToCollect: d.paidCount > 0 ? Math.round(d.totalDaysToCollect / d.paidCount) : 0,
+        overdueAmount: d.overdueAmount,
+        score: Math.round((d.paidCount / Math.max(d.invoiceCount, 1)) * 100 - (d.totalDaysToCollect / Math.max(d.paidCount, 1)) * 0.5),
+      }))
+      .sort((a, b) => b.totalInvoiced - a.totalInvoiced);
+  }, [store.invoices]);
+
   const markContacted = (id: string) => {
     setContacted(s => new Set([...s, id]));
     toast.success("Marked as contacted");
@@ -174,7 +208,7 @@ export default function CollectionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <PhoneCall size={20} className="text-[var(--color-primary)]" />
@@ -184,11 +218,90 @@ export default function CollectionsPage() {
             Active AR chase — send reminders, track follow-ups, close overdue faster.
           </p>
         </div>
-        <Link to="/invoices" className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
-          <RefreshCw size={12} /> Manage invoices
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+            {(["collections", "profitability"] as const).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {v === "collections" ? <><PhoneCall size={10} /> Collections</> : <><BarChart2 size={10} /> Profitability</>}
+              </button>
+            ))}
+          </div>
+          <Link to="/invoices" className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
+            <RefreshCw size={12} /> Invoices
+          </Link>
+        </div>
       </div>
 
+      {view === "profitability" && (
+        <div className="space-y-4">
+          {customerProfitability.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+              <BarChart2 size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+              <p className="text-sm text-[var(--color-muted)]">Create invoices to see per-customer profitability metrics.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total Customers", value: customerProfitability.length.toString(), color: "text-[var(--color-primary)]" },
+                  { label: "Total Invoiced",  value: formatCurrency(customerProfitability.reduce((s, c) => s + c.totalInvoiced, 0)), color: "text-blue-400" },
+                  { label: "Total Collected", value: formatCurrency(customerProfitability.reduce((s, c) => s + c.totalPaid, 0)), color: "text-green-400" },
+                  { label: "Still Overdue",   value: formatCurrency(customerProfitability.reduce((s, c) => s + c.overdueAmount, 0)), color: "text-red-400" },
+                ].map(c => (
+                  <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                    <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                  <Star size={13} className="text-[var(--color-primary)]" />
+                  <span className="text-sm font-semibold">Customer Profitability</span>
+                  <span className="text-xs text-[var(--color-muted)] ml-auto">Sorted by invoice value</span>
+                </div>
+                <table className="w-full text-sm min-w-[640px]">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {["Customer","Total Invoiced","Collected","Collection Rate","Avg Days to Pay","Overdue","Score"].map(h => (
+                        <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customerProfitability.map(c => (
+                      <tr key={c.customer} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                        <td className="px-4 py-3 font-semibold">{c.customer}</td>
+                        <td className="px-4 py-3 tabular-nums">{formatCurrency(c.totalInvoiced)}</td>
+                        <td className="px-4 py-3 tabular-nums text-green-400">{formatCurrency(c.totalPaid)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden w-16">
+                              <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${c.collectionRate}%` }} />
+                            </div>
+                            <span className="tabular-nums text-xs font-semibold">{c.collectionRate}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{c.avgDaysToCollect > 0 ? `${c.avgDaysToCollect}d` : "—"}</td>
+                        <td className="px-4 py-3 tabular-nums text-red-400">{c.overdueAmount > 0 ? formatCurrency(c.overdueAmount) : "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.score >= 80 ? "bg-green-950/30 text-green-400" : c.score >= 50 ? "bg-yellow-950/30 text-yellow-400" : "bg-red-950/30 text-red-400"}`}>
+                            {c.score >= 80 ? "A" : c.score >= 50 ? "B" : "C"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)]">Score A = high collection rate + fast payment · B = moderate · C = slow payer or high overdue risk</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {view === "collections" && <>
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -347,6 +460,7 @@ export default function CollectionsPage() {
           onSent={() => markContacted(reminder.id)}
         />
       )}
+      </>}
     </div>
   );
 }

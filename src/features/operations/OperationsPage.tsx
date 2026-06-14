@@ -413,6 +413,74 @@ export default function OperationsPage() {
         </div>
       )}
 
+      {/* ── REORDER POINT CALCULATOR ── */}
+      {tab === "inventory" && inventory.length > 0 && (() => {
+        // Compute avg monthly units sold per product from confirmed/delivered orders
+        const salesByProduct: Record<string, number> = {};
+        orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+          o.items.forEach(item => {
+            salesByProduct[item.productName] = (salesByProduct[item.productName] ?? 0) + item.quantity;
+          });
+        });
+        const monthsOfData = Math.max(1, Object.keys(salesByProduct).length > 0 ? 3 : 1);
+        const reorderItems = inventory.map(item => {
+          const totalSold   = salesByProduct[item.productName] ?? 0;
+          const dailyDemand = totalSold / (monthsOfData * 30);
+          const leadTimeDays = 7; // default 7-day supplier lead time
+          const safetyStock  = Math.ceil(dailyDemand * leadTimeDays);
+          const reorderPoint = Math.ceil(dailyDemand * leadTimeDays + safetyStock);
+          const daysUntilOut = dailyDemand > 0 ? Math.floor(item.quantity / dailyDemand) : null;
+          return { ...item, dailyDemand, reorderPoint, safetyStock, daysUntilOut, needsReorder: item.quantity <= Math.max(reorderPoint, item.reorderLevel) };
+        }).filter(i => i.needsReorder || i.daysUntilOut !== null);
+
+        if (reorderItems.length === 0) return null;
+        return (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+              <TrendingUp size={13} className="text-[var(--color-primary)]" />
+              <h3 className="text-sm font-semibold">Reorder Point Calculator</h3>
+              <span className="text-[10px] text-[var(--color-muted)] ml-1">Based on order history · 7d default lead time</span>
+            </div>
+            <table className="w-full text-xs min-w-[560px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Product","Stock","Daily Demand","Reorder Point","Days Until Stockout","Action"].map(h => (
+                    <th key={h} className="text-left text-[var(--color-muted)] font-semibold px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {reorderItems.map(item => (
+                  <tr key={item.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium">{item.productName}</td>
+                    <td className={`px-4 py-2.5 font-bold tabular-nums ${item.quantity === 0 ? "text-red-400" : item.quantity <= item.reorderLevel ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{item.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{item.dailyDemand > 0 ? `${item.dailyDemand.toFixed(1)}/day` : "No history"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400 font-semibold">{item.reorderPoint > 0 ? item.reorderPoint : item.reorderLevel}</td>
+                    <td className="px-4 py-2.5">
+                      {item.daysUntilOut === null ? (
+                        <span className="text-[var(--color-muted)]">—</span>
+                      ) : item.daysUntilOut <= 7 ? (
+                        <span className="text-red-400 font-bold">{item.daysUntilOut}d ⚠</span>
+                      ) : item.daysUntilOut <= 14 ? (
+                        <span className="text-yellow-400 font-semibold">{item.daysUntilOut}d</span>
+                      ) : (
+                        <span className="text-[var(--color-muted)]">{item.daysUntilOut}d</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => { setTab("procurement"); setShowPoForm(true); setPoItemName(item.productName); setPoItemCost(String(item.unitCost)); setPoItemQty(String(Math.max(item.reorderLevel * 2, 20))); }}
+                        className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
+                        Create PO →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
       {/* ── PROCUREMENT ── */}
       {tab === "procurement" && (
         <div className="space-y-4">
