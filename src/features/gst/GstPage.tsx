@@ -3,10 +3,11 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
+import { addDays, format } from "date-fns";
 
 interface Liability { month: number; year: number; output_tax: number; input_tax_credit: number; net_liability: number; breakdown: Record<string, number>; }
 interface GstReturn  { id: string; return_type: string; period_month: number; period_year: number; output_tax: number; input_tax_credit: number; net_liability: number; status: string; filed_at?: string; gstn_arn?: string; }
@@ -17,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -27,6 +28,20 @@ export default function GstPage() {
   const [calendar, setCalendar]   = useState<CalDate[]>([]);
   const [loading, setLoading]     = useState(false);
   const [selMonth, setSelMonth]   = useState(() => { const n = new Date(); return { m: n.getMonth() + 1, y: n.getFullYear() }; });
+
+  // ── E-Way Bill state ──
+  const [ewayValue, setEwayValue]         = useState<number>(0);
+  const [ewayDist, setEwayDist]           = useState<number>(0);
+  const [ewayOdc, setEwayOdc]             = useState<boolean>(false);
+  const [ewayCancelled, setEwayCancelled] = useState<boolean>(false);
+
+  const ewayResult = useMemo(() => {
+    const required = ewayValue > 50000 && !ewayCancelled;
+    if (!required) return { required: false } as const;
+    const validity = Math.max(1, Math.ceil(ewayDist / (ewayOdc ? 20 : 200)));
+    const expiry   = format(addDays(new Date(), validity), "d MMM yyyy");
+    return { required: true, validity, expiry } as const;
+  }, [ewayValue, ewayDist, ewayOdc, ewayCancelled]);
 
   // ── GSTR-2B reconciliation state ──
   const [twoBCount, setTwoBCount]   = useState<number | null>(null);
@@ -163,7 +178,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -555,6 +570,103 @@ export default function GstPage() {
           <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
             <AlertTriangle size={12} className="text-[var(--color-muted)] shrink-0 mt-px" />
             Amounts derive from your invoice register (taxable value × rate ÷ 2 for CGST/SGST). Review and correct GST rates per line on the portal before filing. Inter-state supplies (IGST) and HSN-wise B2B/B2C splits require GSP integration.
+          </div>
+        </div>
+      )}
+
+      {/* ── E-WAY BILL ── */}
+      {tab === "eway" && (
+        <div className="space-y-4 max-w-xl">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Truck size={16} className="text-[var(--color-primary)]" />
+              <h2 className="text-sm font-semibold">E-Way Bill Estimator</h2>
+            </div>
+            <p className="text-xs text-[var(--color-muted)] mb-4">Check if you need an e-way bill and how long it's valid. All calculations are offline.</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Invoice value (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={ewayValue || ""}
+                  onChange={e => setEwayValue(Number(e.target.value))}
+                  placeholder="e.g. 75000"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Distance (km)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={ewayDist || ""}
+                  onChange={e => setEwayDist(Number(e.target.value))}
+                  placeholder="e.g. 350"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ewayOdc}
+                  onChange={e => setEwayOdc(e.target.checked)}
+                  className="accent-[var(--color-primary)]"
+                />
+                <span>ODC (Oversized / Over-dimensional cargo)</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ewayCancelled}
+                  onChange={e => setEwayCancelled(e.target.checked)}
+                  className="accent-[var(--color-primary)]"
+                />
+                <span>Exempted goods (gold, jewellery, currency, cancelled invoice)</span>
+              </label>
+            </div>
+          </div>
+
+          {ewayValue > 0 && (
+            <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${ewayResult.required ? "border-orange-700/40" : "border-green-700/40"}`}>
+              <h3 className="text-sm font-semibold mb-3">Result</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--color-muted)]">E-way bill required</span>
+                  {ewayResult.required
+                    ? <span className="text-xs font-bold text-orange-400 flex items-center gap-1"><AlertTriangle size={11} /> Yes</span>
+                    : <span className="text-xs font-bold text-green-400 flex items-center gap-1"><CheckCircle2 size={11} /> No</span>}
+                </div>
+                {ewayResult.required && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[var(--color-muted)]">Validity</span>
+                      <span className="text-xs font-semibold text-[var(--color-text)]">{ewayResult.validity} day{ewayResult.validity !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[var(--color-muted)]">Expires on</span>
+                      <span className="text-xs font-semibold text-[var(--color-primary)]">{ewayResult.expiry}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[var(--color-muted)]">Formula used</span>
+                      <span className="text-xs text-[var(--color-muted)]">1 day per {ewayOdc ? "20" : "200"} km{ewayOdc ? " (ODC)" : ""}</span>
+                    </div>
+                  </>
+                )}
+                {!ewayResult.required && !ewayCancelled && (
+                  <p className="text-xs text-[var(--color-muted)]">Invoice value ₹{ewayValue.toLocaleString("en-IN")} is at or below the ₹50,000 threshold.</p>
+                )}
+                {!ewayResult.required && ewayCancelled && (
+                  <p className="text-xs text-[var(--color-muted)]">Goods are in an exempted category — no e-way bill needed.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+            <AlertTriangle size={12} className="text-[var(--color-muted)] shrink-0 mt-px" />
+            E-way bill rules: required for goods worth &gt; ₹50,000 transported &gt; 50 km (own vehicle) or any distance (common carrier). Verify current exemptions at ewaybillgst.gov.in.
           </div>
         </div>
       )}

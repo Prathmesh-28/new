@@ -26,6 +26,7 @@ export interface ForecastConfig {
   historyDays?: number;
   scenarios?: Scenario[];
   revenueFactor?: number; // slow-month multiplier on variable + invoice inflows
+  burnFactor?: number;   // outflow multiplier — e.g. 1.2 means 20% higher costs
 }
 
 export interface RecurringSeries {
@@ -607,6 +608,7 @@ export function runForecast(store: AppStore, cfg: ForecastConfig = {}, today = n
   const N = cfg.numSims ?? 1000;
   const historyDays = cfg.historyDays ?? 540;
   const revenueFactor = cfg.revenueFactor ?? 1;
+  const burnFactor = cfg.burnFactor ?? 1;
   const seed = cfg.seed ?? hashStore(store, cfg);
   const rng = makeRng(seed);
 
@@ -618,12 +620,16 @@ export function runForecast(store: AppStore, cfg: ForecastConfig = {}, today = n
   const txns = store.transactions ?? [];
   const recurring = detectRecurring(txns, today, historyDays);
   const model = fitResidualModel(txns, recurring, today, historyDays);
+  // Apply burn-rate inflation multiplier to outflow before simulation
+  const modelWithBurn = burnFactor !== 1
+    ? { ...model, baseDailyOutflow: model.baseDailyOutflow * burnFactor }
+    : model;
   const ledger = buildLedger(store, recurring, today, H);
   const profiles = customerPaymentProfiles(store, today);
   const draws = projectCollections(store, profiles, today, H);
   const scenarioDelta = scenarioToDailyDelta(cfg.scenarios ?? [], H, today);
 
-  const balances = simulatePaths(B0, ledger, model, draws, scenarioDelta, revenueFactor, rng, N, H, today);
+  const balances = simulatePaths(B0, ledger, modelWithBurn, draws, scenarioDelta, revenueFactor, rng, N, H, today);
   const points = bandsFromMatrix(balances, N, H, today);
   const risk = computeRisk(balances, points, B0, thresholdCash, N, H);
 

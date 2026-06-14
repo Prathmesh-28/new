@@ -30,6 +30,7 @@ export default function ForecastPage() {
   const [oblAmount, setOblAmount] = useState("");
   const [oblDate,   setOblDate]   = useState("");
   const [slowPct,   setSlowPct]   = useState(100);
+  const [burnFactor, setBurnFactor] = useState(100);
   const [aiOpen,    setAiOpen]    = useState(false);
   const [aiText,    setAiText]    = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -41,8 +42,8 @@ export default function ForecastPage() {
   // Live probabilistic forecast — scenarios + slow-month baked into BOTH bands
   // (honest), via the Monte-Carlo engine. Risk metrics come from the same paths.
   const result = useMemo(
-    () => runForecast(store, { scenarios: scenarios.filter(s => s.active), revenueFactor: slowPct / 100 }),
-    [store, scenarios, slowPct],
+    () => runForecast(store, { scenarios: scenarios.filter(s => s.active), revenueFactor: slowPct / 100, burnFactor: burnFactor / 100 }),
+    [store, scenarios, slowPct, burnFactor],
   );
   const risk = result.risk;
   const pressureDay = risk.expectedTimeToBreachDays;
@@ -299,6 +300,30 @@ export default function ForecastPage() {
             )}
           </div>
 
+          {/* Burn rate inflation slider */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <h2 className="text-sm font-semibold mb-1">Burn rate inflation — what if costs rise?</h2>
+            <p className="text-xs text-[var(--color-muted)] mb-3">Drag to simulate higher or lower outflows and see the impact on your forecast.</p>
+            <div className="flex items-center gap-4">
+              <input type="range" min="80" max="150" step="5" value={burnFactor}
+                onChange={e => setBurnFactor(Number(e.target.value))}
+                className="flex-1 accent-[var(--color-primary)]" />
+              <span className={`text-lg font-bold w-16 text-right ${burnFactor > 120 ? "text-red-400" : burnFactor > 100 ? "text-yellow-400" : "text-green-400"}`}>
+                {burnFactor}%
+              </span>
+            </div>
+            <div className="flex justify-between text-xs text-[var(--color-muted)] mt-1">
+              <span>80% (leaner)</span>
+              <span>{burnFactor === 100 ? "Normal burn — no adjustment" : `Burn at ${burnFactor}% — chart updated`}</span>
+              <span>150% (higher burn)</span>
+            </div>
+            {burnFactor > 120 && (
+              <div className="mt-3 text-xs bg-red-950/20 border border-red-800/40 rounded-lg px-3 py-2 text-red-400">
+                A {burnFactor - 100}% cost increase significantly shortens your runway. Consider expense controls or a credit buffer.
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Scenarios */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -381,6 +406,25 @@ export default function ForecastPage() {
                 ))}
                 {obligations.length === 0 && <p className="text-sm text-[var(--color-muted)] py-4 text-center">No obligations yet</p>}
               </div>
+              {isNative() && (
+                <button
+                  onClick={async () => {
+                    const overdueInvoices = (store.invoices ?? []).filter(inv => inv.status === "overdue" || new Date(inv.dueDate) < new Date());
+                    if (overdueInvoices.length === 0) { toast.info("No overdue invoices to notify about"); return; }
+                    const reminders = overdueInvoices.map(inv => ({
+                      id: Math.abs(inv.id.split("").reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0)) % 900000 + 100000,
+                      title: "Invoice overdue",
+                      body: `${inv.customer ?? "Customer"} · ${formatCurrency(inv.amount)}`,
+                      at: new Date(),
+                    }));
+                    const n = await scheduleReminders(reminders);
+                    toast.success(n > 0 ? `${n} overdue invoice reminder${n > 1 ? "s" : ""} scheduled` : "Reminders scheduled");
+                  }}
+                  className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg font-medium hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"
+                >
+                  Notify me
+                </button>
+              )}
             </div>
           </div>
         </>

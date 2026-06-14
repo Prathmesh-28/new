@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -171,6 +171,7 @@ export default function AnalyticsPage() {
     { id: "expenses",   label: "Expenses" },
     { id: "benchmarks", label: "Benchmarks" },
     { id: "pl",         label: "P&L Deep Dive" },
+    { id: "cashflow",   label: "Cash Flow" },
   ] as const;
 
   const benchmarks = [
@@ -752,6 +753,170 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+
+      {/* ── CASH FLOW ── */}
+      {tab === "cashflow" && (() => {
+        // Build 12-month data from all transactions (independent of range selector)
+        const cfMonths = Array.from({ length: 12 }, (_, i) => {
+          const d = subMonths(now, 11 - i);
+          return {
+            month: format(d, "MMM yy"),
+            start: startOfMonth(d),
+            end:   endOfMonth(d),
+            inflow:  0,
+            outflow: 0,
+            net:     0,
+            cumulative: 0,
+          };
+        });
+        transactions.forEach(tx => {
+          const txDate = parseISO(tx.date);
+          const idx = cfMonths.findIndex(m => txDate >= m.start && txDate <= m.end);
+          if (idx === -1) return;
+          const amt = Math.abs(tx.amount ?? 0);
+          if ((tx.amount ?? 0) >= 0) {
+            cfMonths[idx].inflow += amt;
+          } else {
+            cfMonths[idx].outflow += amt;
+          }
+        });
+        let running = 0;
+        cfMonths.forEach(m => {
+          m.net = m.inflow - m.outflow;
+          running += m.net;
+          m.cumulative = running;
+        });
+
+        const exportCfCsv = () => {
+          const header = "Month,Inflows,Outflows,Net Cash Flow,Cumulative Position\n";
+          const rows = cfMonths.map(m =>
+            `${m.month},${m.inflow.toFixed(2)},${(-m.outflow).toFixed(2)},${m.net.toFixed(2)},${m.cumulative.toFixed(2)}`
+          ).join("\n");
+          const blob = new Blob([header + rows], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "cash_flow_12m.csv";
+          a.click();
+          URL.revokeObjectURL(url);
+          toast.success("Cash flow CSV downloaded");
+        };
+
+        return (
+          <div className="space-y-5">
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Total Inflows (12M)",    value: cfMonths.reduce((s, m) => s + m.inflow,  0), color: "text-green-400" },
+                { label: "Total Outflows (12M)",   value: cfMonths.reduce((s, m) => s + m.outflow, 0), color: "text-red-400"   },
+                { label: "Net Cash Flow (12M)",    value: cfMonths.reduce((s, m) => s + m.net,     0), color: cfMonths.reduce((s, m) => s + m.net, 0) >= 0 ? "text-green-400" : "text-red-400" },
+                { label: "Current Cash Position",  value: cfMonths[cfMonths.length - 1].cumulative, color: cfMonths[cfMonths.length - 1].cumulative >= 0 ? "text-green-400" : "text-red-400" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <p className="text-xs text-[var(--color-muted)] mb-2">{label}</p>
+                  <p className={`text-xl font-bold tabular-nums ${color}`}>{formatAmount(Math.abs(value))}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Bar chart — net cash flow per month with color per sign + cumulative line */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-semibold">Monthly Net Cash Flow · 12 Months</p>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">Green = net positive month · Red = net negative · Line = cumulative cash position</p>
+                </div>
+                <button
+                  onClick={exportCfCsv}
+                  className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors"
+                >
+                  <FileDown size={13} /> Export CSV
+                </button>
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={cfMonths} barCategoryGap="28%" margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--color-accent)", opacity: 0.4 }} />
+                  <Bar yAxisId="left" dataKey="net" name="Net Cash Flow" radius={[3,3,0,0]} animationDuration={400}>
+                    {cfMonths.map((m, i) => (
+                      <Cell key={i} fill={m.net >= 0 ? "#22c55e" : "#ef4444"} />
+                    ))}
+                  </Bar>
+                  <Line yAxisId="right" type="monotone" dataKey="cumulative" name="Cumulative" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: "#3b82f6" }} animationDuration={400} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-3 h-3 rounded-sm bg-green-500" /> Positive month</div>
+                <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-3 h-3 rounded-sm bg-red-500" /> Negative month</div>
+                <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5 bg-blue-500" /> Cumulative position</div>
+              </div>
+            </div>
+
+            {/* Inflows vs Outflows stacked */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <p className="text-sm font-semibold mb-1">Inflows vs Outflows · Monthly</p>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Total cash received vs total cash paid each month over the last 12 months.</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={cfMonths} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--color-accent)", opacity: 0.4 }} />
+                  <Bar dataKey="inflow"  name="Inflows"  fill="#22c55e" radius={[3,3,0,0]} animationDuration={400} />
+                  <Bar dataKey="outflow" name="Outflows" fill="#ef4444" radius={[3,3,0,0]} animationDuration={400} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Monthly table */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Monthly Cash Flow Table</p>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">Last 12 months · all amounts in ₹</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                    <tr>
+                      {(["Month", "Inflows", "Outflows", "Net Cash Flow", "Cumulative Position"] as string[]).map(h => (
+                        <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${h === "Month" ? "text-left" : "text-right"}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {cfMonths.map((m, i) => {
+                      const isCurrent = i === cfMonths.length - 1;
+                      return (
+                        <tr key={m.month} className={`hover:bg-white/2 text-xs ${isCurrent ? "bg-[var(--color-accent)]/30" : ""}`}>
+                          <td className="px-4 py-2.5 font-medium">{m.month}{isCurrent ? " · current" : ""}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(m.inflow)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-red-400">({formatAmount(m.outflow)})</td>
+                          <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatAmount(m.net)}</td>
+                          <td className={`px-4 py-2.5 text-right tabular-nums ${m.cumulative >= 0 ? "text-[var(--color-primary)]" : "text-red-400"}`}>{formatAmount(m.cumulative)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]">
+                    <tr className="text-xs font-bold">
+                      <td className="px-4 py-2.5 text-[var(--color-primary)]">12-Month Total</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{formatAmount(cfMonths.reduce((s, m) => s + m.inflow, 0))}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">({formatAmount(cfMonths.reduce((s, m) => s + m.outflow, 0))})</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums ${cfMonths.reduce((s, m) => s + m.net, 0) >= 0 ? "text-green-400" : "text-red-400"}`}>{formatAmount(cfMonths.reduce((s, m) => s + m.net, 0))}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums ${cfMonths[cfMonths.length - 1].cumulative >= 0 ? "text-[var(--color-primary)]" : "text-red-400"}`}>{formatAmount(cfMonths[cfMonths.length - 1].cumulative)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

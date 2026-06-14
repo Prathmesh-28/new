@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared export helpers — turn statement/analytics data into downloadable
@@ -42,4 +43,18 @@ export function exportPdf(filename: string, title: string, subtitle: string, tab
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
   }
   doc.save(filename);
+}
+
+/** Render an HTML element to a PDF and trigger download. */
+export async function exportElementAsPdf(element: HTMLElement, filename: string): Promise<void> {
+  const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+  const imgWidth = canvas.width * ratio;
+  const imgHeight = canvas.height * ratio;
+  pdf.addImage(imgData, "PNG", (pageWidth - imgWidth) / 2, 20, imgWidth, imgHeight);
+  pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
 }
