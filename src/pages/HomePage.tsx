@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, ChevronDown } from "lucide-react";
+import {
+  CheckCircle2, ChevronDown, Radar, LineChart, Bell, Zap, Activity, ScanSearch,
+  ReceiptText, TrendingUp, RefreshCw, Calculator, Briefcase, Landmark, Rocket,
+  Users, CreditCard, Award, Palette, type LucideIcon,
+} from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
 import Logo from "@/components/Logo";
 
@@ -118,6 +122,30 @@ function Label({ text, dark = false }: { text: string; dark?: boolean }) {
   return (
     <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: dark ? C.pale : C.bright, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ color: C.gold }}>▚</span>{text}
+    </div>
+  );
+}
+
+/* Crafted icon tile — a soft olive→gold gradient chip with an inset top highlight,
+   a hairline ring and a low drop shadow (premium "app-tile" depth). A tiny gold
+   corner dot echoes the Headroom logo mark. One system, used across every section. */
+function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; size?: number; dark?: boolean }) {
+  const r = Math.round(size * 0.3);
+  const style: React.CSSProperties = dark
+    ? {
+        background: "linear-gradient(150deg, rgba(150,184,61,0.22), rgba(201,162,39,0.10))",
+        border: "1px solid rgba(196,217,122,0.22)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px rgba(0,0,0,0.35)",
+      }
+    : {
+        background: "linear-gradient(150deg, #FCFDF6 0%, rgba(150,184,61,0.16) 100%)",
+        border: "1px solid rgba(74,94,26,0.14)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8), 0 4px 14px rgba(74,94,26,0.10)",
+      };
+  return (
+    <div style={{ position: "relative", width: size, height: size, borderRadius: r, display: "grid", placeItems: "center", flexShrink: 0, ...style }}>
+      <Icon size={Math.round(size * 0.44)} color={dark ? C.pale : C.mid} strokeWidth={1.85} />
+      <span style={{ position: "absolute", top: Math.round(size * 0.16), right: Math.round(size * 0.16), width: Math.max(4, Math.round(size * 0.1)), height: Math.max(4, Math.round(size * 0.1)), borderRadius: "50%", background: C.gold, opacity: 0.9 }} />
     </div>
   );
 }
@@ -330,13 +358,13 @@ export default function HomePage() {
           <div data-h3d-deco="orbs" style={{ maxWidth: 1100, margin: "52px auto 0", background: C.deepest, borderRadius: 16, padding: "36px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", position: "relative" }}>
             <div style={{ position: "absolute", top: "50%", left: "12.5%", right: "12.5%", height: 1, background: "rgba(196,217,122,0.1)" }} />
             {[
-              { step:"Detect",   icon:"📡", desc:"Live signals from bank + books" },
-              { step:"Forecast", icon:"📈", desc:"90-day P10/P50/P90 model runs" },
-              { step:"Alert",    icon:"🔔", desc:"Plain-language warning, 45 days early" },
-              { step:"Act",      icon:"⚡", desc:"Credit or capital options, in context" },
-            ].map(({ step, icon, desc }, i) => (
+              { step:"Detect",   icon:Radar,      desc:"Live signals from bank + books" },
+              { step:"Forecast", icon:LineChart,  desc:"90-day P10/P50/P90 model runs" },
+              { step:"Alert",    icon:Bell,       desc:"Plain-language warning, 45 days early" },
+              { step:"Act",      icon:Zap,        desc:"Credit or capital options, in context" },
+            ].map(({ step, icon: Icon, desc }, i) => (
               <div key={step} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.08)" : "none", position: "relative", zIndex: 1 }}>
-                <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.deep, border: "1px solid rgba(196,217,122,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", fontSize: 20 }}>{icon}</div>
+                <div style={{ display: "flex", justifyContent: "center", margin: "0 auto 14px" }}><IconTile icon={Icon} size={48} dark /></div>
                 <div style={{ fontFamily: sans, fontSize: 12, fontWeight: 700, color: C.pale, marginBottom: 6 }}>{step}</div>
                 <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.4)", lineHeight: 1.5 }}>{desc}</div>
               </div>
@@ -360,15 +388,15 @@ export default function HomePage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20, marginBottom: 52 }}>
             {[
-              { n:"1", icon:"📊", t:"Forecast identifies pressure",    d:"The 90-day model spots a cash gap weeks before it arrives." },
-              { n:"2", icon:"🔔", t:"Alerts explain what changed",     d:"Plain-language notification tells you exactly what the risk is and when." },
-              { n:"3", icon:"🔍", t:"Silent underwriting runs",        d:"Pre-qualification happens in the background from your own data. No forms, no bureau pull." },
-              { n:"4", icon:"✅", t:"Repayment simulated first",       d:"See exactly how any option affects your forecast before you accept a single rupee." },
-            ].map(({ n, icon, t, d }, i) => (
+              { n:"1", icon:Activity,    t:"Forecast identifies pressure",    d:"The 90-day model spots a cash gap weeks before it arrives." },
+              { n:"2", icon:Bell,        t:"Alerts explain what changed",     d:"Plain-language notification tells you exactly what the risk is and when." },
+              { n:"3", icon:ScanSearch,  t:"Silent underwriting runs",        d:"Pre-qualification happens in the background from your own data. No forms, no bureau pull." },
+              { n:"4", icon:CheckCircle2, t:"Repayment simulated first",      d:"See exactly how any option affects your forecast before you accept a single rupee." },
+            ].map(({ n, icon: Icon, t, d }, i) => (
               <Reveal key={n} delay={i * 80}>
                 <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, position: "relative" }}>
                   <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.mid, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, fontSize: 13, fontWeight: 700, color: "#fff", position: "absolute", top: -13, left: 20 }}>{n}</div>
-                  <div style={{ fontSize: 22, marginBottom: 12, marginTop: 10 }}>{icon}</div>
+                  <div style={{ marginBottom: 12, marginTop: 10 }}><IconTile icon={Icon} size={44} /></div>
                   <h4 style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 8 }}>{t}</h4>
                   <p style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.6 }}>{d}</p>
                 </div>
@@ -395,12 +423,12 @@ export default function HomePage() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  { icon:"📈", t:"Revenue-based advance",  d:"Repay as % of monthly revenue. No fixed EMI.",         amt:"Up to 3× monthly revenue" },
-                  { icon:"📄", t:"Invoice financing",      d:"Get paid on outstanding invoices today.",               amt:"Up to 90% of invoice value" },
-                  { icon:"🔒", t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:inr ? "Up to ₹50L" : "Up to $60K" },
-                ].map(({ icon, t, d, amt }) => (
+                  { icon:TrendingUp,  t:"Revenue-based advance",  d:"Repay as % of monthly revenue. No fixed EMI.",         amt:"Up to 3× monthly revenue" },
+                  { icon:ReceiptText, t:"Invoice financing",      d:"Get paid on outstanding invoices today.",               amt:"Up to 90% of invoice value" },
+                  { icon:RefreshCw,   t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:inr ? "Up to ₹50L" : "Up to $60K" },
+                ].map(({ icon: Icon, t, d, amt }) => (
                   <div key={t} data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 9, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>{icon}</div>
+                    <IconTile icon={Icon} size={42} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 600, color: C.txt, marginBottom: 2 }}>{t}</div>
                       <div style={{ fontFamily: sans, fontSize: 12, color: C.txtMut }}>{d}</div>
@@ -525,16 +553,16 @@ export default function HomePage() {
 
         <div style={{ maxWidth: 1100, margin: "0 auto 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18 }}>
           {[
-            { role:"Chartered Accountant", emoji:"📋", tagline:"Replace quarterly check-ins with a live cash dashboard.", perks:["Spot tax obligations early","Vendor payment visibility","Low-balance risk alerts","Multi-client view"] },
-            { role:"Fractional CFO",        emoji:"📊", tagline:"Serve more clients without hiring analysts.",           perks:["Auto forecast generation","Scenario modelling","Weekly narrative summary","Board-ready language"] },
-            { role:"Business Banker",       emoji:"🏦", tagline:"Identify credit needs before clients ask.",             perks:["Pre-qualification signals","Lead with the right product","Live cash visibility","Credit rescue context"] },
-            { role:"Startup Advisor",       emoji:"🚀", tagline:"Monitor burn and runway across your portfolio.",        perks:["Burn rate tracking","Runway visibility","Capital readiness scoring","Investor dashboard"] },
-          ].map(({ role, emoji, tagline, perks }, i) => (
+            { role:"Chartered Accountant", emoji:Calculator, tagline:"Replace quarterly check-ins with a live cash dashboard.", perks:["Spot tax obligations early","Vendor payment visibility","Low-balance risk alerts","Multi-client view"] },
+            { role:"Fractional CFO",        emoji:Briefcase,  tagline:"Serve more clients without hiring analysts.",           perks:["Auto forecast generation","Scenario modelling","Weekly narrative summary","Board-ready language"] },
+            { role:"Business Banker",       emoji:Landmark,   tagline:"Identify credit needs before clients ask.",             perks:["Pre-qualification signals","Lead with the right product","Live cash visibility","Credit rescue context"] },
+            { role:"Startup Advisor",       emoji:Rocket,     tagline:"Monitor burn and runway across your portfolio.",        perks:["Burn rate tracking","Runway visibility","Capital readiness scoring","Investor dashboard"] },
+          ].map(({ role, emoji: Icon, tagline, perks }, i) => (
             <Reveal key={role} delay={i * 80}>
               <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, height: "100%", transition: "border-color 0.2s, box-shadow 0.2s" }}
                 onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.35)"; el.style.boxShadow = "0 8px 28px rgba(44,58,16,0.07)"; }}
                 onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.boxShadow = "none"; }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: C.wash, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 14 }}>{emoji}</div>
+                <div style={{ marginBottom: 14 }}><IconTile icon={Icon} size={46} /></div>
                 <h4 style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.txt, marginBottom: 6 }}>{role}</h4>
                 <p style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.6, marginBottom: 16 }}>{tagline}</p>
                 <ul style={{ listStyle: "none", margin: 0 }}>
@@ -552,15 +580,15 @@ export default function HomePage() {
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 40 }}>
             {[
-              { icon:"👥", t:"Client portfolio view",     d:"All clients in one list with current balance, runway, and latest alert." },
-              { icon:"📈", t:"Live 90-day forecasts",     d:"Every client's forecast refreshed automatically. No manual data pulls." },
-              { icon:"🔔", t:"Alert feed",                d:"One feed across all clients, sorted by severity — act on the right thing first." },
-              { icon:"💳", t:"Credit rescue context",     d:"See which clients are pre-qualified and for how much before they ask." },
-              { icon:"🏆", t:"Capital readiness scoring", d:"Know which clients are raise-ready and which track suits them best." },
-              { icon:"🎨", t:"White-label ready",         d:"Your brand, your portal. Headroom powers it behind the scenes." },
-            ].map(({ icon, t, d }) => (
+              { icon:Users,      t:"Client portfolio view",     d:"All clients in one list with current balance, runway, and latest alert." },
+              { icon:LineChart,  t:"Live 90-day forecasts",     d:"Every client's forecast refreshed automatically. No manual data pulls." },
+              { icon:Bell,       t:"Alert feed",                d:"One feed across all clients, sorted by severity — act on the right thing first." },
+              { icon:CreditCard, t:"Credit rescue context",     d:"See which clients are pre-qualified and for how much before they ask." },
+              { icon:Award,      t:"Capital readiness scoring", d:"Know which clients are raise-ready and which track suits them best." },
+              { icon:Palette,    t:"White-label ready",         d:"Your brand, your portal. Headroom powers it behind the scenes." },
+            ].map(({ icon: Icon, t, d }) => (
               <div key={t} data-h3d-tilt style={{ background: C.wash, border: "1px solid rgba(74,94,26,0.1)", borderRadius: 12, padding: "20px 20px" }}>
-                <div style={{ fontSize: 20, marginBottom: 10 }}>{icon}</div>
+                <div style={{ marginBottom: 12 }}><IconTile icon={Icon} size={42} /></div>
                 <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 6 }}>{t}</div>
                 <div style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, lineHeight: 1.6 }}>{d}</div>
               </div>
