@@ -139,4 +139,69 @@ router.get("/calendar", authenticate, async (_req, res) => {
   res.json(dates.slice(0, 6));
 });
 
+// ── GSTIN verification ────────────────────────────────────────────────────────
+const GST_STATE = {
+  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+  "25": "Daman & Diu", "26": "Dadra & Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh (old)",
+  "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+  "34": "Puducherry", "35": "Andaman & Nicobar", "36": "Telangana", "37": "Andhra Pradesh",
+  "38": "Ladakh", "97": "Other Territory",
+};
+
+// Verify a GSTIN's structure + check digit. This is fully offline and real — the
+// 15th character is a modulo-36 checksum over the first 14, so a typo is caught
+// deterministically. Returns the embedded state + PAN. We do NOT invent a trade
+// name; a live registry lookup only happens when a verification provider is set.
+function gstinChecksumValid(gstin) {
+  const code = (c) => (c >= "0" && c <= "9" ? c.charCodeAt(0) - 48 : c.charCodeAt(0) - 55); // 0-9, A-Z → 0-35
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const p = code(gstin[i]) * (i % 2 === 0 ? 1 : 2);
+    sum += Math.floor(p / 36) + (p % 36);
+  }
+  const checkVal = (36 - (sum % 36)) % 36;
+  const checkChar = checkVal < 10 ? String(checkVal) : String.fromCharCode(checkVal + 55);
+  return checkChar === gstin[14];
+}
+
+// GET /api/gst/verify?gstin=… — structural/checksum validation (always), plus a
+// live registry lookup when KYC_API_KEY is configured.
+router.get("/verify", authenticate, async (req, res) => {
+  const gstin = String(req.query.gstin || "").toUpperCase().trim();
+  const FORMAT = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  if (!FORMAT.test(gstin)) {
+    return res.status(400).json({ valid: false, status: "invalid", reason: "format", message: "Not a valid GSTIN format." });
+  }
+  if (!gstinChecksumValid(gstin)) {
+    return res.status(200).json({ valid: false, status: "invalid", reason: "checksum", message: "GSTIN check digit failed — likely a typo." });
+  }
+  const stateCode = gstin.slice(0, 2);
+  const base = {
+    valid: true,
+    gstin,
+    state: GST_STATE[stateCode] || "Unknown",
+    stateCode,
+    pan: gstin.slice(2, 12),
+    source: "format", // structural + checksum only, not a registry lookup
+  };
+
+  // Live GSTN registry lookup (trade name, status, registration date) only when a
+  // provider key is set — otherwise we honestly return the format result, never a
+  // fabricated company name/status.
+  if (!process.env.KYC_API_KEY) {
+    return res.json({ ...base, status: "format_ok", message: "Format & check digit valid. Live registry lookup not configured." });
+  }
+  try {
+    // Provider call goes here (e.g. Signzy/IDfy/Masters India GST verify API).
+    // Until wired, surface format result honestly rather than guessing.
+    return res.json({ ...base, status: "format_ok", message: "Format & check digit valid. Connect a GST verification provider for live status." });
+  } catch {
+    return res.json({ ...base, status: "format_ok", message: "Format valid; live lookup unavailable." });
+  }
+});
+
 module.exports = router;

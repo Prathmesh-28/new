@@ -293,6 +293,15 @@ export interface Invoice {
   status: "pending" | "overdue" | "paid";
 }
 
+// ── Budget entity ───────────────────────────────────────────────────────────
+export interface Budget {
+  id: string;
+  category: string;
+  label: string;
+  monthlyLimit: number;
+  color: string;
+}
+
 // ── App store ─────────────────────────────────────────────────────────────────
 export interface AppStore {
   firm: FirmSettings;
@@ -314,6 +323,7 @@ export interface AppStore {
   orders: Order[];
   inventory: InventoryItem[];
   procurement: ProcurementOrder[];
+  budgets: Budget[];
   whatsappPreferences: WhatsAppPreferences;
 }
 
@@ -338,6 +348,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   orders:              "operations",
   inventory:           "operations",
   procurement:         "operations",
+  budgets:             "app",
   whatsappPreferences: "app",
 };
 

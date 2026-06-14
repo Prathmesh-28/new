@@ -89,6 +89,12 @@ interface AppCtx {
   addFixedAsset:           (x: AppStore["fixedAssets"][0])         => void;
   updateFixedAsset:        (x: AppStore["fixedAssets"][0])         => void;
   deleteFixedAsset:        (id: string)                            => void;
+  // Budgets
+  addBudget:               (x: AppStore["budgets"][0])            => void;
+  updateBudget:            (x: AppStore["budgets"][0])            => void;
+  deleteBudget:            (id: string)                            => void;
+  // Resolve an alert with the note the user typed (persisted to actionTaken).
+  resolveAlert:            (id: string, note?: string)            => void;
 }
 
 const Ctx = createContext<AppCtx | null>(null);
@@ -332,6 +338,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addFixedAsset:           add("fixedAssets"),
     updateFixedAsset:        update("fixedAssets"),
     deleteFixedAsset:        del("fixedAssets"),
+    addBudget:               add("budgets"),
+    updateBudget:            update("budgets"),
+    deleteBudget:            del("budgets"),
+    resolveAlert:            (id, note) => setStore(s => ({ ...s, alerts: s.alerts.map(a => a.id === id ? { ...a, isRead: true, actionTaken: note?.trim() || a.actionTaken || "Resolved" } : a) })),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

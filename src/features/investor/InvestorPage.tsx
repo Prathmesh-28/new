@@ -125,11 +125,10 @@ function PortfolioTab({ portfolio }: { portfolio: PortfolioCompany[] }) {
         <div className="flex items-start gap-3">
           <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold">AA-Verified Financials — the end of founder-reported numbers</p>
+            <p className="text-sm font-semibold">AA-Verified Financials — sample preview</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
-              Revenue, burn, and runway shown here are pulled directly from the bank via Account Aggregator — not typed into a deck.
-              No competitor can offer this without rebuilding their entire data layer.
-              <span className="text-[var(--color-primary)] font-semibold"> You see distress the same moment the founder does.</span>
+              The companies below are <span className="text-[var(--color-text)]">illustrative sample data</span> showing how portfolio monitoring works. Once a founder grants Account Aggregator consent, revenue, burn, and runway here are pulled directly from their bank — not typed into a deck —
+              <span className="text-[var(--color-primary)] font-semibold"> so you see distress the same moment they do.</span>
             </p>
           </div>
         </div>
@@ -183,7 +182,7 @@ function PortfolioTab({ portfolio }: { portfolio: PortfolioCompany[] }) {
       )}
 
       <p className="text-[10px] text-[var(--color-muted)] text-center">
-        All metrics pulled via Account Aggregator · Last synced: {format(new Date(), "d MMM yyyy, HH:mm")}
+        Sample data · connect Account Aggregator to populate with live bank-verified metrics
       </p>
     </div>
   );
@@ -206,7 +205,7 @@ function CompanyCard({ company: c }: { company: PortfolioCompany }) {
             <p className="text-sm font-semibold">{c.name}</p>
             {c.aa_verified && (
               <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
-                <ShieldCheck size={8} /> AA Verified
+                <ShieldCheck size={8} /> Sample
               </span>
             )}
             {!c.aa_verified && (
@@ -344,8 +343,8 @@ function DealFlowTab({ publicRaises, loading, user, onCommit, capitalInvestments
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="text-sm font-semibold">{r.name}</p>
-                      <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
-                        <ShieldCheck size={8} /> AA Verified
+                      <span className="flex items-center gap-0.5 text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">
+                        <ShieldCheck size={8} /> Sample
                       </span>
                       <span className="text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{r.sector}</span>
                     </div>
@@ -368,10 +367,10 @@ function DealFlowTab({ publicRaises, loading, user, onCommit, capitalInvestments
                   </div>
                 </div>
 
-                {/* AA-verified metrics */}
+                {/* Illustrative sample metrics (until AA-connected) */}
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   {[
-                    { label: "Verified MRR",    value: formatCurrency(r.revenue_verified),  color: "text-green-400" },
+                    { label: "MRR (sample)",    value: formatCurrency(r.revenue_verified),  color: "text-green-400" },
                     { label: "MoM Growth",      value: `+${r.growth_pct}%`,                color: "text-[var(--color-primary)]" },
                     { label: "Use of funds",    value: r.use_of_funds,                      color: "text-[var(--color-text)]" },
                   ].map(m => (
@@ -634,7 +633,7 @@ export default function InvestorPage() {
               <ShieldCheck size={13} className="text-green-400 shrink-0" />
               <div>
                 <p className="text-sm font-semibold">{commitRaise.name}</p>
-                <p className="text-xs text-green-400">AA-verified financials · data pulled from bank</p>
+                <p className="text-xs text-[var(--color-muted)]">Sample financials · connect Account Aggregator for bank-verified data</p>
               </div>
             </div>
             <div>

@@ -12,7 +12,7 @@ const SEV: Record<string, { color: string; bg: string; icon: React.ElementType; 
 };
 
 export default function AlertsPage() {
-  const { store, markAlertRead, deleteAlert, addAlert, updateFirm } = useApp();
+  const { store, markAlertRead, deleteAlert, addAlert, updateFirm, resolveAlert } = useApp();
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 
@@ -36,8 +36,9 @@ export default function AlertsPage() {
   const low      = active.filter(a => a.severity === "low");
 
   const handleMarkResolved = (id: string) => {
-    const text = actionText[id] ?? "Resolved";
-    markAlertRead(id);
+    // Persist the note the user typed (was previously computed then dropped, so
+    // the history's "✓ {actionTaken}" line never showed what was done).
+    resolveAlert(id, actionText[id]);
     toast.success("Alert marked as resolved");
     setActionText(prev => { const n = { ...prev }; delete n[id]; return n; });
   };

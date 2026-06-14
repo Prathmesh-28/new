@@ -1,24 +1,10 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
-import { PiggyBank, Plus, X, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, X, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
-
-interface Budget {
-  id: string;
-  category: string;
-  label: string;
-  monthlyLimit: number;
-  color: string;
-}
-
-const DEFAULT_BUDGETS: Budget[] = [
-  { id: "payroll",  category: "payroll",  label: "Payroll",    monthlyLimit: 500000,  color: "#3b82f6" },
-  { id: "expense",  category: "expense",  label: "Operations", monthlyLimit: 200000,  color: "#ef4444" },
-  { id: "tax",      category: "tax",      label: "Tax",        monthlyLimit: 100000,  color: "#f97316" },
-  { id: "loan",     category: "loan",     label: "Loan EMIs",  monthlyLimit: 150000,  color: "#a855f7" },
-];
+import type { Budget } from "@/data/types";
 
 function AddBudgetModal({ existing, onSave, onClose }: {
   existing?: Budget;
@@ -87,9 +73,8 @@ function AddBudgetModal({ existing, onSave, onClose }: {
 }
 
 export default function BudgetsPage() {
-  const { store } = useApp();
-  const { transactions } = store;
-  const [budgets, setBudgets] = useState<Budget[]>(DEFAULT_BUDGETS);
+  const { store, addBudget, updateBudget, deleteBudget } = useApp();
+  const { transactions, budgets } = store;
   const [adding,  setAdding]  = useState(false);
   const [editing, setEditing] = useState<Budget | null>(null);
 
@@ -127,15 +112,13 @@ export default function BudgetsPage() {
   const warnCount    = rows.filter(r => r.warn).length;
 
   const saveBudget = (b: Budget) => {
-    setBudgets(prev => {
-      const idx = prev.findIndex(x => x.id === b.id);
-      return idx >= 0 ? prev.map(x => x.id === b.id ? b : x) : [...prev, b];
-    });
+    if (budgets.some(x => x.id === b.id)) updateBudget(b);
+    else addBudget(b);
     toast.success(editing ? "Budget updated" : "Budget created");
   };
 
-  const deleteBudget = (id: string) => {
-    setBudgets(prev => prev.filter(b => b.id !== id));
+  const removeBudget = (id: string) => {
+    deleteBudget(id);
     toast.success("Budget removed");
   };
 
@@ -213,7 +196,7 @@ export default function BudgetsPage() {
                   className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] px-2 py-1 rounded">
                   Edit
                 </button>
-                <button onClick={() => deleteBudget(r.id)}
+                <button onClick={() => removeBudget(r.id)}
                   className="text-[10px] text-[var(--color-muted)] hover:text-red-400 border border-[var(--color-border)] px-2 py-1 rounded">
                   <X size={10} />
                 </button>

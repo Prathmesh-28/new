@@ -705,8 +705,8 @@ export default function AnalyticsPage() {
       {tab === "benchmarks" && (
         <div className="space-y-5">
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <p className="text-sm font-semibold mb-1">Industry Benchmarks</p>
-            <p className="text-xs text-[var(--color-muted)] mb-4">Compared to median for {firm.industry || "your industry"} businesses in India</p>
+            <p className="text-sm font-semibold mb-1">Reference Benchmarks</p>
+            <p className="text-xs text-[var(--color-muted)] mb-4">Your ratios vs typical SMB reference figures. These are static reference points, <span className="text-[var(--color-text)]">not live peer data</span> for {firm.industry || "your sector"}.</p>
             <div className="space-y-4">
               {benchmarks.map(b => {
                 const diff = b.yours - b.industry;
@@ -716,7 +716,7 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm font-medium">{b.label}</span>
                       <div className="flex items-center gap-3 text-xs">
-                        <span className="text-[var(--color-muted)]">Industry: <strong className="text-[var(--color-text)]">{b.industry}{b.unit}</strong></span>
+                        <span className="text-[var(--color-muted)]">Reference: <strong className="text-[var(--color-text)]">{b.industry}{b.unit}</strong></span>
                         <span className={`font-bold ${good ? "text-green-400" : "text-red-400"}`}>You: {b.yours}{b.unit}</span>
                       </div>
                     </div>
@@ -725,7 +725,7 @@ export default function AnalyticsPage() {
                       <div className={`absolute h-full rounded-full transition-all ${good ? "bg-[var(--color-primary)]" : "bg-red-500"}`} style={{ width: `${Math.min(100, Math.abs(b.yours))}%` }} />
                     </div>
                     <p className="text-[10px] text-[var(--color-muted)] mt-1">
-                      {diff === 0 ? "At par with industry" : good ? `${Math.abs(diff)}${b.unit} better than industry median` : `${Math.abs(diff)}${b.unit} above industry median — review needed`}
+                      {diff === 0 ? "At par with reference" : good ? `${Math.abs(diff)}${b.unit} better than reference` : `${Math.abs(diff)}${b.unit} above reference — review needed`}
                     </p>
                   </div>
                 );

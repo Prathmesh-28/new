@@ -109,5 +109,13 @@ export const defaultConfig: AppStore = {
   orders:             [],
   inventory:          [],
   procurement:        [],
+  // Starter budget categories — editable presets; once the user changes them,
+  // their saved set takes over (the KV load merges saved over these defaults).
+  budgets: [
+    { id: "payroll", category: "payroll", label: "Payroll",    monthlyLimit: 500000, color: "#3b82f6" },
+    { id: "expense", category: "expense", label: "Operations", monthlyLimit: 200000, color: "#ef4444" },
+    { id: "tax",     category: "tax",     label: "Tax",        monthlyLimit: 100000, color: "#f97316" },
+    { id: "loan",    category: "loan",    label: "Loan EMIs",  monthlyLimit: 150000, color: "#a855f7" },
+  ],
   whatsappPreferences: { ...DEFAULT_WA_PREFS },
 };

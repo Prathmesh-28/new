@@ -17,9 +17,9 @@ export default function GstPage() {
   const firm = store.firm;
   const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify">("calculator");
   const [gstin, setGstin]         = useState("");
-  const [verifyResult, setVerifyResult] = useState<{ status: "valid" | "invalid" | "suspended"; tradeName: string; legalName: string; state: string; type: string; registrationDate: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [verifyHistory, setVerifyHistory] = useState<{ gstin: string; tradeName: string; status: string }[]>([]);
+  const [verifyHistory, setVerifyHistory] = useState<{ gstin: string; state?: string; status: string }[]>([]);
   const [liability, setLiability] = useState<Liability | null>(null);
   const [returns, setReturns]     = useState<GstReturn[]>([]);
   const [calendar, setCalendar]   = useState<CalDate[]>([]);
@@ -299,24 +299,13 @@ export default function GstPage() {
                   setVerifying(true);
                   setVerifyResult(null);
                   try {
-                    const res = await api.get<typeof verifyResult>(`/api/gst/verify?gstin=${gstin}`);
+                    const res = await api.get<NonNullable<typeof verifyResult>>(`/api/gst/verify?gstin=${gstin}`);
                     setVerifyResult(res);
-                    if (res) setVerifyHistory(h => [{ gstin, tradeName: res.tradeName, status: res.status }, ...h.filter(x => x.gstin !== gstin).slice(0, 9)]);
-                  } catch {
-                    // Demo: generate a fake but realistic result
-                    const state = gstin.slice(0, 2);
-                    const stateMap: Record<string, string> = { "27": "Maharashtra", "29": "Karnataka", "07": "Delhi", "09": "Uttar Pradesh", "33": "Tamil Nadu" };
-                    const stateName = stateMap[state] ?? "Maharashtra";
-                    const fakeResult = {
-                      status: (Math.random() > 0.15 ? "valid" : "suspended") as "valid" | "invalid" | "suspended",
-                      tradeName: "Sample Traders Pvt Ltd",
-                      legalName: "SAMPLE TRADERS PRIVATE LIMITED",
-                      state: stateName,
-                      type: "Regular",
-                      registrationDate: "01/04/2019",
-                    };
-                    setVerifyResult(fakeResult);
-                    setVerifyHistory(h => [{ gstin, tradeName: fakeResult.tradeName, status: fakeResult.status }, ...h.filter(x => x.gstin !== gstin).slice(0, 9)]);
+                    setVerifyHistory(h => [{ gstin, state: res.state, status: res.status }, ...h.filter(x => x.gstin !== gstin).slice(0, 9)]);
+                  } catch (e) {
+                    // Honest failure — never fabricate a trade name / status.
+                    const msg = String((e as Error)?.message || "");
+                    toast.error(msg.startsWith("400") ? "Not a valid GSTIN format." : "Couldn't verify GSTIN. Please try again.");
                   } finally { setVerifying(false); }
                 }}
                 disabled={verifying || gstin.length < 15}
@@ -328,32 +317,35 @@ export default function GstPage() {
             </div>
 
             {verifyResult && (
-              <div className={`mt-4 rounded-lg border p-4 ${verifyResult.status === "valid" ? "bg-green-950/20 border-green-800/30" : "bg-red-950/20 border-red-800/30"}`}>
-                <div className="flex items-center gap-2 mb-3">
-                  {verifyResult.status === "valid"
+              <div className={`mt-4 rounded-lg border p-4 ${verifyResult.valid ? "bg-green-950/20 border-green-800/30" : "bg-red-950/20 border-red-800/30"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  {verifyResult.valid
                     ? <CheckCircle2 size={16} className="text-green-400" />
                     : <XCircle size={16} className="text-red-400" />}
-                  <p className={`text-sm font-bold ${verifyResult.status === "valid" ? "text-green-300" : "text-red-300"}`}>
-                    {verifyResult.status === "valid" ? "Active — Safe to transact" : verifyResult.status === "suspended" ? "SUSPENDED — Do not transact" : "Invalid GSTIN"}
+                  <p className={`text-sm font-bold ${verifyResult.valid ? "text-green-300" : "text-red-300"}`}>
+                    {verifyResult.valid ? "Format & check digit valid" : "Invalid GSTIN"}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    ["Trade Name",     verifyResult.tradeName],
-                    ["Legal Name",     verifyResult.legalName],
-                    ["State",          verifyResult.state],
-                    ["Type",           verifyResult.type],
-                    ["Registered",     verifyResult.registrationDate],
-                    ["GSTIN",          gstin],
-                  ].map(([k, v]) => (
-                    <div key={k}>
-                      <p className="text-[var(--color-muted)]">{k}</p>
-                      <p className="font-semibold text-[var(--color-text)]">{v}</p>
-                    </div>
-                  ))}
-                </div>
-                {verifyResult.status === "suspended" && (
-                  <p className="text-xs text-red-400 mt-3 font-medium">⚠ ITC claim on invoices from suspended GSTINs will be disallowed by GSTN. Raise with vendor immediately.</p>
+                {verifyResult.message && <p className="text-xs text-[var(--color-muted)] mb-3">{verifyResult.message}</p>}
+                {verifyResult.valid && (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[
+                      ["GSTIN",      verifyResult.gstin ?? gstin],
+                      ["State",      verifyResult.state],
+                      ["State code", verifyResult.stateCode],
+                      ["PAN",        verifyResult.pan],
+                    ].map(([k, v]) => (
+                      <div key={k}>
+                        <p className="text-[var(--color-muted)]">{k}</p>
+                        <p className="font-semibold text-[var(--color-text)]">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {verifyResult.valid && verifyResult.source === "format" && (
+                  <p className="text-[11px] text-[var(--color-muted)] mt-3">
+                    ℹ This checks the GSTIN structure + check digit only (offline). Connect a GST verification provider for live trade name &amp; active/suspended status.
+                  </p>
                 )}
               </div>
             )}
@@ -365,11 +357,11 @@ export default function GstPage() {
               <div className="space-y-2">
                 {verifyHistory.map(h => (
                   <div key={h.gstin} className="flex items-center gap-3 py-1.5 border-b border-[var(--color-border)] last:border-0">
-                    {h.status === "valid"
+                    {h.status !== "invalid"
                       ? <CheckCircle2 size={12} className="text-green-400 shrink-0" />
                       : <XCircle size={12} className="text-red-400 shrink-0" />}
                     <span className="text-xs font-mono text-[var(--color-muted)] shrink-0">{h.gstin}</span>
-                    <span className="text-xs text-[var(--color-text)] flex-1 truncate">{h.tradeName}</span>
+                    <span className="text-xs text-[var(--color-text)] flex-1 truncate">{h.state ?? ""}</span>
                     <button onClick={() => setGstin(h.gstin)} className="text-[10px] text-[var(--color-primary)] hover:underline shrink-0">Re-verify</button>
                   </div>
                 ))}
