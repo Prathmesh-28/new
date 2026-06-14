@@ -5,6 +5,7 @@ import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
+import PreviewBadge from "@/components/PreviewBadge";
 
 function emi(principal: number, annualRate: number, months: number): number {
   const r = annualRate / 100 / 12;
@@ -143,7 +144,7 @@ export default function CreditPage() {
       )}
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Credit & Loans</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">Credit & Loans <PreviewBadge capability="creditDisbursement" /></h1>
       </div>
 
       {/* Tabs */}

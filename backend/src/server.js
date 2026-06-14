@@ -57,6 +57,9 @@ const authLimiter = rateLimit({
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
+// Capability map — which integrations are live vs. preview (public, no secrets)
+app.use("/api/capabilities", require("./routes/capabilities"));
+
 // Auth (rate limited)
 app.use("/auth",                   authLimiter, require("./routes/auth"));
 

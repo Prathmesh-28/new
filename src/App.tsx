@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { CapabilitiesProvider } from "@/context/CapabilitiesContext";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -229,6 +230,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AppProvider>
+        <CapabilitiesProvider>
         <BrowserRouter>
           <Toaster position="top-right" theme="dark" richColors />
           <InstallPrompt />
@@ -245,6 +247,7 @@ export default function App() {
             </Suspense>
           </ErrorBoundary>
         </BrowserRouter>
+        </CapabilitiesProvider>
       </AppProvider>
     </AuthProvider>
   );

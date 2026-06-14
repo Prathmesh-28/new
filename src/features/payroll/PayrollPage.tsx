@@ -4,6 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import PreviewBadge from "@/components/PreviewBadge";
 
 interface Employee {
   id: string; name: string; email?: string; pan?: string;
@@ -347,7 +348,7 @@ export default function PayrollPage() {
         ) : (
           <div className="space-y-3">
             <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-3">
-              <p className="text-sm font-semibold text-blue-300 mb-0.5">Earned Wage Access · Day {ewaData.day_of_month} of month</p>
+              <p className="text-sm font-semibold text-blue-300 mb-0.5 flex items-center gap-2">Earned Wage Access · Day {ewaData.day_of_month} of month <PreviewBadge capability="ewaPayout" /></p>
               <p className="text-xs text-[var(--color-muted)]">Employees can access up to 50% of wages earned so far this month. Deducted from next salary.</p>
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">

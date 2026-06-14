@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Package, Zap, TrendingDown, Check } from "lucide-react";
 import { toast } from "sonner";
+import PreviewBadge from "@/components/PreviewBadge";
 
 interface SupplierOffer {
   id: string;
@@ -45,7 +46,7 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold">Supplier Early-Pay</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">Supplier Early-Pay <PreviewBadge capability="supplierMarketplace" /></h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">Pay early, save on invoice cost · Suppliers get paid today</p>
       </div>
 

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
+import PreviewBadge from "@/components/PreviewBadge";
 
 const PROVIDERS: {
   id: ConnectorProvider;
@@ -167,7 +168,7 @@ export default function ConnectorsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Bank & Accounting Connectors</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">Bank & Accounting Connectors <PreviewBadge capability="bankSync" /></h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
           Connect your bank accounts and accounting tools so Headroom can sync transactions automatically.
         </p>

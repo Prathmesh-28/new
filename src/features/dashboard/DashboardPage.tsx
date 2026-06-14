@@ -11,6 +11,7 @@ import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/cha
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
+import PreviewBadge from "@/components/PreviewBadge";
 import { api } from "@/lib/api";
 
 const SEV_COLOR: Record<string, string> = {
@@ -268,7 +269,7 @@ function TreasuryBanner() {
           <Landmark size={14} className="text-[var(--color-primary)]" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold">₹{idleL}L idle in current account · Auto-sweep could earn {yieldAmt}/yr at 6.5%</p>
+          <p className="text-sm font-semibold flex items-center gap-2">₹{idleL}L idle in current account · Auto-sweep could earn {yieldAmt}/yr at 6.5% <PreviewBadge capability="treasurySweep" /></p>
           <p className="text-xs text-[var(--color-muted)]">Put excess cash to work in liquid mutual funds — withdraw anytime, same-day.</p>
         </div>
       </div>

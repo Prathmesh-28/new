@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import { ShieldCheck, TrendingUp, Landmark, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
+import PreviewBadge from "@/components/PreviewBadge";
 
 interface Application {
   id: string;
@@ -102,7 +103,7 @@ export default function LendersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold">Lender Dashboard</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">Lender Dashboard <PreviewBadge capability="lenderMarketplace" /></h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">AA-verified credit applications · Bid on loans · Best rate wins</p>
       </div>
 
