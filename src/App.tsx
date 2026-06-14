@@ -13,7 +13,10 @@ import TenantSwitcher from "@/components/TenantSwitcher";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
 import { onAppResume } from "@/lib/mobile";
+import { onDeepLink } from "@/lib/native";
+import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { registerPush } from "@/lib/nativeFeatures";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Capacitor } from "@capacitor/core";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
@@ -138,7 +141,7 @@ function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette  = useCallback(() => setPaletteOpen(true),  []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
-  const { refreshUser } = useAuth();
+  const { refreshUser, logout } = useAuth();
   const navigate = useNavigate();
 
   // Register for push notifications (native only) — store the token server-side
@@ -149,6 +152,14 @@ function AppShell() {
       onOpen: (path) => { if (path) navigate(path); },
     });
   }, [navigate]);
+
+  // Deep links (headroom:// + https app links) → in-app navigation (native only).
+  useEffect(() => onDeepLink((path) => navigate(path)), [navigate]);
+
+  // Auto sign-out after 30 minutes of inactivity (protects unattended sessions).
+  useIdleLogout(useCallback(() => {
+    logout().then(() => { toast("Signed out after 30 minutes of inactivity"); navigate("/login"); });
+  }, [logout, navigate]));
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

@@ -41,3 +41,35 @@ export function initNative(): void {
     Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => {});
   }
 }
+
+/**
+ * Listen for deep links (headroom://… custom scheme + https app links) and hand
+ * the in-app path to `navigate`. e.g. headroom://app/forecast → "/forecast".
+ * No-ops on web. Returns an unsubscribe function.
+ */
+export function onDeepLink(navigate: (path: string) => void): () => void {
+  if (!Capacitor.isNativePlatform()) return () => {};
+  const handle = CapApp.addListener("appUrlOpen", ({ url }) => {
+    const path = parseDeepLinkPath(url);
+    if (path) navigate(path);
+  });
+  return () => { handle.then((h) => h.remove()).catch(() => {}); };
+}
+
+/** Extract an in-app route from a deep link URL, or null if it isn't one. */
+export function parseDeepLinkPath(url: string): string | null {
+  if (!url) return null;
+  try {
+    // Custom scheme: headroom://app/forecast  or  headroom://forecast
+    if (url.startsWith("headroom://")) {
+      const rest = url.slice("headroom://".length).replace(/^app\//, "");
+      return "/" + rest.replace(/^\/+/, "");
+    }
+    // Universal/App link: https://headroom.app/forecast → /forecast
+    const u = new URL(url);
+    if (/(^|\.)headroom\.app$/.test(u.hostname) || u.hostname.endsWith("vercel.app")) {
+      return u.pathname + u.search;
+    }
+  } catch { /* not a parseable URL */ }
+  return null;
+}

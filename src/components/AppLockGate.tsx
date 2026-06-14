@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Delete, Lock } from "lucide-react";
-import { isLockEnabled, verifyPin } from "@/lib/appLock";
+import { Delete, Lock, Fingerprint } from "lucide-react";
+import { isLockEnabled, verifyPin, isBiometricEnabled } from "@/lib/appLock";
+import { biometricAvailable, biometricVerify } from "@/lib/biometric";
 import { onAppResume } from "@/lib/mobile";
 import { LogoMark } from "@/components/Logo";
 
@@ -20,6 +21,23 @@ export default function AppLockGate({ children }: { children: React.ReactNode })
 function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   const [pin, setPin] = useState("");
   const [err, setErr] = useState(false);
+  const [bio, setBio] = useState(false);
+
+  const tryBiometric = useCallback(async () => {
+    if (await biometricVerify("Unlock Headroom")) onUnlock();
+  }, [onUnlock]);
+
+  // Auto-prompt biometrics on lock when enabled + supported; PIN stays available.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ok = (await isBiometricEnabled()) && (await biometricAvailable());
+      if (cancelled || !ok) return;
+      setBio(true);
+      tryBiometric();
+    })();
+    return () => { cancelled = true; };
+  }, [tryBiometric]);
 
   const submit = useCallback(async (value: string) => {
     if (await verifyPin(value)) onUnlock();
@@ -74,6 +92,13 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
           <Delete size={22} />
         </button>
       </div>
+
+      {bio && (
+        <button onClick={tryBiometric}
+          className="mt-8 flex items-center gap-2 text-sm text-[var(--color-primary)] hover:opacity-80">
+          <Fingerprint size={18} /> Unlock with biometrics
+        </button>
+      )}
     </div>
   );
 }

@@ -51,5 +51,52 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>in.headroom.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>headroom</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>in.headroom.app.dashboard</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Dashboard</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>headroom://app/dashboard</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>in.headroom.app.forecast</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>90-day Forecast</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>headroom://app/forecast</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>in.headroom.app.alerts</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Alerts</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>headroom://app/alerts</string>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -4,6 +4,7 @@
 import { Preferences } from "@capacitor/preferences";
 
 const KEY = "hr_pin_hash";
+const BIO_KEY = "hr_pin_biometric";
 
 async function sha256(s: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("hr-pin:" + s));
@@ -27,4 +28,16 @@ export async function verifyPin(pin: string): Promise<boolean> {
     const stored = (await Preferences.get({ key: KEY })).value;
     return !!stored && stored === (await sha256(pin));
   } catch { return false; }
+}
+
+// Opt-in biometric unlock flag (PIN remains the fallback).
+export async function isBiometricEnabled(): Promise<boolean> {
+  try { return (await Preferences.get({ key: BIO_KEY })).value === "1"; } catch { return false; }
+}
+
+export async function setBiometricEnabled(on: boolean): Promise<void> {
+  try {
+    if (on) await Preferences.set({ key: BIO_KEY, value: "1" });
+    else await Preferences.remove({ key: BIO_KEY });
+  } catch { /* ignore */ }
 }

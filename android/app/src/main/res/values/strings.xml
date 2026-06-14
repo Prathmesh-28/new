@@ -4,4 +4,7 @@
     <string name="title_activity_main">Headroom</string>
     <string name="package_name">in.headroom.app</string>
     <string name="custom_url_scheme">in.headroom.app</string>
+    <string name="shortcut_dashboard">Dashboard</string>
+    <string name="shortcut_forecast">Forecast</string>
+    <string name="shortcut_alerts">Alerts</string>
 </resources>

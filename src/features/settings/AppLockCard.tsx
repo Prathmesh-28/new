@@ -1,16 +1,21 @@
 import { useState, useEffect } from "react";
-import { Lock, ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck, Fingerprint } from "lucide-react";
 import { toast } from "sonner";
-import { isLockEnabled, setPin, clearPin } from "@/lib/appLock";
+import { isLockEnabled, setPin, clearPin, isBiometricEnabled, setBiometricEnabled } from "@/lib/appLock";
+import { biometricAvailable, biometricVerify } from "@/lib/biometric";
 
-/* Settings card to turn on a 4-digit app-lock PIN (asked on launch + resume). */
+/* Settings card to turn on a 4-digit app-lock PIN (asked on launch + resume),
+   with an optional Face ID / fingerprint fast-unlock on supported devices. */
 export default function AppLockCard() {
   const [enabled, setEnabled] = useState(false);
   const [editing, setEditing] = useState(false);
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioOn, setBioOn] = useState(false);
 
   useEffect(() => { isLockEnabled().then(setEnabled); }, []);
+  useEffect(() => { biometricAvailable().then(setBioSupported); isBiometricEnabled().then(setBioOn); }, []);
 
   const save = async () => {
     if (!/^\d{4}$/.test(p1)) { toast.error("PIN must be exactly 4 digits"); return; }
@@ -19,7 +24,14 @@ export default function AppLockCard() {
     setEnabled(true); setEditing(false); setP1(""); setP2("");
     toast.success("App lock enabled — you'll be asked for your PIN on launch");
   };
-  const disable = async () => { await clearPin(); setEnabled(false); toast.success("App lock removed"); };
+  const disable = async () => { await clearPin(); await setBiometricEnabled(false); setBioOn(false); setEnabled(false); toast.success("App lock removed"); };
+
+  const toggleBio = async () => {
+    if (bioOn) { await setBiometricEnabled(false); setBioOn(false); toast.success("Biometric unlock turned off"); return; }
+    if (!(await biometricVerify("Enable biometric unlock"))) { toast.error("Biometric check failed"); return; }
+    await setBiometricEnabled(true); setBioOn(true);
+    toast.success("Biometric unlock enabled");
+  };
 
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
@@ -41,6 +53,22 @@ export default function AppLockCard() {
             : <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90"><Lock size={12} /> Set PIN</button>
         )}
       </div>
+
+      {enabled && bioSupported && !editing && (
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4">
+          <div className="flex items-center gap-2.5">
+            <Fingerprint size={16} className="text-[var(--color-primary)]" />
+            <div>
+              <p className="text-sm font-medium">Biometric unlock</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">Use Face ID / fingerprint instead of typing your PIN.</p>
+            </div>
+          </div>
+          <button onClick={toggleBio}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${bioOn ? "border border-[var(--color-border)] hover:bg-[var(--color-accent)]" : "bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"}`}>
+            {bioOn ? "Turn off" : "Turn on"}
+          </button>
+        </div>
+      )}
 
       {editing && (
         <div className="mt-4 p-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg space-y-3 max-w-xs">
