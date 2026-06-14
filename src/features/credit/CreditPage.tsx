@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -184,6 +184,7 @@ export default function CreditPage() {
           ["apply",    "Apply"],
           ["loans",    `Active Loans${activeLoans.length > 0 ? ` (${activeLoans.length})` : ""}`],
           ["notyet",   "Not yet"],
+          ["wc",       "WC Sizing"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -697,6 +698,93 @@ export default function CreditPage() {
           </div>
         );
       })()}
+
+      {/* ── WC LOAN SIZING ── */}
+      {tab === "wc" && <WCSizingTab />}
+    </div>
+  );
+}
+
+function WCSizingTab() {
+  const { store } = useApp();
+  const [arDays,  setArDays]  = useState(45);
+  const [apDays,  setApDays]  = useState(30);
+  const [invDays, setInvDays] = useState(60);
+  const [annualRevStr, setAnnualRevStr] = useState(() => {
+    const rev12 = store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    return rev12 > 0 ? String(Math.round(rev12)) : "";
+  });
+  const annualRev = parseFloat(annualRevStr) || 0;
+  const dailySales = annualRev / 365;
+
+  const arReq  = Math.round(dailySales * arDays);
+  const invReq = Math.round(dailySales * invDays * 0.6); // COGS ~60% of sales
+  const apCred = Math.round(dailySales * 0.6 * apDays);
+  const wcReq  = arReq + invReq - apCred;
+  const mpbfCalc = Math.max(0, Math.round(0.75 * wcReq));
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Working Capital Loan Sizing</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Based on Tandon Committee's 2nd method (MPBF = 75% of net working capital requirement). Adjust operating cycle days to model your business.</p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Annual Revenue / Net Sales (₹)</label>
+            <input type="number" min={0} value={annualRevStr} onChange={e => setAnnualRevStr(e.target.value)} placeholder="e.g. 10000000"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+
+          {[
+            { label: "Debtor days (AR collection period)", value: arDays, set: setArDays, min: 7, max: 180 },
+            { label: "Inventory holding days", value: invDays, set: setInvDays, min: 7, max: 365 },
+            { label: "Creditor days (AP payment period)", value: apDays, set: setApDays, min: 7, max: 120 },
+          ].map(({ label, value, set, min, max }) => (
+            <div key={label}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <label className="text-[var(--color-muted)]">{label}</label>
+                <span className="font-semibold text-[var(--color-text)]">{value} days</span>
+              </div>
+              <input type="range" min={min} max={max} value={value} onChange={e => set(Number(e.target.value))}
+                className="w-full accent-[var(--color-primary)]" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {annualRev > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Working Capital Requirement</h3>
+          <div className="space-y-2 mb-4">
+            {[
+              { label: "Debtors (AR)",       value: arReq,    color: "text-blue-400",   op: "+" },
+              { label: "Inventory",           value: invReq,   color: "text-orange-400", op: "+" },
+              { label: "Creditors (AP)",      value: apCred,   color: "text-green-400",  op: "−" },
+              { label: "Net WC Requirement",  value: wcReq,    color: "text-[var(--color-text)] font-bold", op: "=" },
+            ].map(r => (
+              <div key={r.label} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0 ${r.label.startsWith("Net") ? "pt-1" : ""}`}>
+                <span className="text-xs text-[var(--color-muted)]"><span className="mr-2 font-mono">{r.op}</span>{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{formatCurrency(r.value)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">MPBF (Max Permissible Bank Finance)</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">75% × Net WC Requirement (Tandon 2nd method)</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(mpbfCalc)}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">indicative limit</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        MPBF is a guideline; banks apply their own credit policies. Operating cycle = debtor days + inventory days − creditor days. Shorter cycle = lower WC need = better terms.
+      </div>
     </div>
   );
 }

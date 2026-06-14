@@ -9,7 +9,7 @@ import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns
 interface ComplianceEvent {
   date: Date;
   label: string;
-  kind: "gst" | "tds" | "advance_tax" | "payroll" | "obligation";
+  kind: "gst" | "tds" | "advance_tax" | "payroll" | "obligation" | "roc";
   amount: number | null;
   path: string;
   note: string;
@@ -21,6 +21,7 @@ const KIND_STYLE: Record<ComplianceEvent["kind"], { chip: string; label: string 
   advance_tax: { chip: "bg-orange-900/30 text-orange-400 border-orange-800/40", label: "Advance Tax" },
   payroll:     { chip: "bg-green-900/30 text-green-400 border-green-800/40",  label: "PF / ESI" },
   obligation:  { chip: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", label: "Obligation" },
+  roc:         { chip: "bg-pink-900/30 text-pink-400 border-pink-800/40",     label: "ROC / MCA" },
 };
 
 export default function CompliancePage() {
@@ -54,6 +55,26 @@ export default function CompliancePage() {
         push(15, "Advance tax instalment", "advance_tax", inst?.installment ?? null, "/tax", inst ? `Cumulative ${inst.cumulativePct}% of estimated annual tax` : "Quarterly instalment");
       }
     }
+
+    // ROC / MCA annual filings (fixed calendar, not month-rolling)
+    const year = now.getFullYear();
+    const rocDates: { day: number; month: number; label: string; note: string }[] = [
+      { day: 30, month: 9,  label: "MGT-7 / MGT-7A — Annual Return", note: "File within 60 days of AGM (default: Sep 30). Private companies with turnover ≤₹2 crore use MGT-7A." },
+      { day: 30, month: 9,  label: "AOC-4 / AOC-4 XBRL — Financial Statements", note: "File audited financials within 30 days of AGM (default: Sep 30 for Oct AGM deadline)." },
+      { day: 30, month: 6,  label: "Form 11 — LLP Annual Return", note: "Annual return for LLPs — due June 30 every year." },
+      { day: 30, month: 9,  label: "Form 8 — LLP Statement of Accounts", note: "LLP statement of accounts and solvency — due Oct 30 (offset 30 days after Oct 31 FY end)." },
+      { day: 31, month: 3,  label: "DIR-3 KYC — Director KYC", note: "Annual KYC for every DIN holder — due March 31." },
+      { day: 30, month: 11, label: "MSME Form-1 — Outstanding Payments Disclosure", note: "Half-yearly return: payments outstanding >45 days to MSME vendors (Apr–Sep due Oct 31, Oct–Mar due Apr 30)." },
+    ];
+    rocDates.forEach(({ day, month, label, note }) => {
+      const d = new Date(year, month, day);
+      if (!isBefore(d, now)) out.push({ date: d, label, kind: "roc", amount: null, path: "/compliance", note });
+      // Also add next year's if it's already past
+      else {
+        const next = new Date(year + 1, month, day);
+        out.push({ date: next, label, kind: "roc", amount: null, path: "/compliance", note });
+      }
+    });
 
     // User-defined obligations
     store.obligations.forEach(o => {

@@ -413,6 +413,77 @@ export default function OperationsPage() {
         </div>
       )}
 
+      {/* ── SLOW / DEAD STOCK ── */}
+      {tab === "inventory" && inventory.length > 0 && (() => {
+        // Map last sale date per product from orders
+        const lastSaleDate: Record<string, string> = {};
+        orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+          o.items.forEach(item => {
+            const prev = lastSaleDate[item.productName];
+            if (!prev || o.createdAt > prev) lastSaleDate[item.productName] = o.createdAt;
+          });
+        });
+        const today = new Date();
+        const slowItems = inventory.map(item => {
+          const last = lastSaleDate[item.productName];
+          const daysSinceSale = last
+            ? Math.floor((today.getTime() - new Date(last).getTime()) / 86400000)
+            : null;
+          const stockValue = item.quantity * item.unitCost;
+          const category: "dead" | "slow" | "active" | "unsold" =
+            daysSinceSale === null ? "unsold"
+            : daysSinceSale > 180 ? "dead"
+            : daysSinceSale > 60  ? "slow"
+            : "active";
+          return { ...item, daysSinceSale, stockValue, category };
+        }).filter(i => i.category === "dead" || i.category === "slow" || i.category === "unsold");
+
+        if (slowItems.length === 0) return null;
+        const deadValue = slowItems.filter(i => i.category === "dead" || i.category === "unsold").reduce((s, i) => s + i.stockValue, 0);
+
+        const CAT_STYLE: Record<string, string> = {
+          dead:   "bg-red-950/30 text-red-400 border-red-800/30",
+          slow:   "bg-yellow-950/30 text-yellow-400 border-yellow-800/30",
+          unsold: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+        };
+
+        return (
+          <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+              <AlertTriangle size={13} className="text-orange-400" />
+              <h3 className="text-sm font-semibold">Slow / Dead Stock</h3>
+              <span className="text-xs text-[var(--color-muted)] ml-1">{slowItems.length} SKUs · ₹{(deadValue / 100000).toFixed(1)}L tied up</span>
+            </div>
+            <table className="w-full text-xs min-w-[480px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Product","Stock","Value","Last Sold","Status"].map(h => (
+                    <th key={h} className="text-left text-[var(--color-muted)] font-semibold px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {slowItems.map(item => (
+                  <tr key={item.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium">{item.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{item.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(item.stockValue)}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">
+                      {item.daysSinceSale !== null ? `${item.daysSinceSale}d ago` : "Never sold"}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${CAT_STYLE[item.category]}`}>
+                        {item.category === "dead" ? "Dead (>180d)" : item.category === "slow" ? "Slow (60–180d)" : "Never sold"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
       {/* ── REORDER POINT CALCULATOR ── */}
       {tab === "inventory" && inventory.length > 0 && (() => {
         // Compute avg monthly units sold per product from confirmed/delivered orders

@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -166,12 +166,13 @@ export default function AnalyticsPage() {
   }, [transactions]);
 
   const TABS = [
-    { id: "overview",   label: "Overview" },
-    { id: "revenue",    label: "Revenue" },
-    { id: "expenses",   label: "Expenses" },
-    { id: "benchmarks", label: "Benchmarks" },
-    { id: "pl",         label: "P&L Deep Dive" },
-    { id: "cashflow",   label: "Cash Flow" },
+    { id: "overview",       label: "Overview" },
+    { id: "revenue",        label: "Revenue" },
+    { id: "expenses",       label: "Expenses" },
+    { id: "benchmarks",     label: "Benchmarks" },
+    { id: "pl",             label: "P&L Deep Dive" },
+    { id: "cashflow",       label: "Cash Flow" },
+    { id: "concentration",  label: "Concentration" },
   ] as const;
 
   const benchmarks = [
@@ -913,6 +914,129 @@ export default function AnalyticsPage() {
                   </tfoot>
                 </table>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── CONCENTRATION ── */}
+      {tab === "concentration" && (() => {
+        const ALERT_PCT = 20; // single customer > 20% = concentration risk
+
+        // Revenue by customer (counterparty on positive txns)
+        const custRev: Record<string, number> = {};
+        transactions.filter(t => t.amount > 0 && t.counterparty).forEach(t => {
+          custRev[t.counterparty] = (custRev[t.counterparty] ?? 0) + t.amount;
+        });
+        const custRows = Object.entries(custRev)
+          .map(([name, rev]) => ({ name, rev, pct: totalRevenue > 0 ? (rev / totalRevenue) * 100 : 0 }))
+          .sort((a, b) => b.rev - a.rev);
+
+        const top1Pct  = custRows[0]?.pct ?? 0;
+        const top3Rev  = custRows.slice(0, 3).reduce((s, c) => s + c.rev, 0);
+        const top3Pct  = totalRevenue > 0 ? (top3Rev / totalRevenue) * 100 : 0;
+        const hhi      = custRows.reduce((s, c) => s + (c.pct / 100) ** 2, 0) * 10000; // Herfindahl-Hirschman Index
+
+        // Expense by vendor
+        const vendExp: Record<string, number> = {};
+        transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+          vendExp[t.counterparty] = (vendExp[t.counterparty] ?? 0) + Math.abs(t.amount);
+        });
+        const totalExp = Object.values(vendExp).reduce((s, v) => s + v, 0);
+        const vendRows = Object.entries(vendExp)
+          .map(([name, exp]) => ({ name, exp, pct: totalExp > 0 ? (exp / totalExp) * 100 : 0 }))
+          .sort((a, b) => b.exp - a.exp)
+          .slice(0, 8);
+
+        const riskLevel = top1Pct > 40 ? "high" : top1Pct > 20 ? "medium" : "low";
+        const RISK_STYLE = { high: "border-red-700/40 bg-red-950/15 text-red-300", medium: "border-orange-700/40 bg-orange-950/15 text-orange-300", low: "border-green-700/40 bg-green-950/15 text-green-300" };
+
+        return (
+          <div className="space-y-5">
+            {/* Risk banner */}
+            <div className={`border rounded-lg px-4 py-3 flex items-center gap-3 ${RISK_STYLE[riskLevel]}`}>
+              <TrendingUp size={15} className="shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">
+                  Revenue concentration risk: <span className="uppercase">{riskLevel}</span>
+                </p>
+                <p className="text-xs opacity-80 mt-0.5">
+                  {top1Pct > 0
+                    ? `Top customer = ${top1Pct.toFixed(1)}% of revenue${top1Pct > ALERT_PCT ? " — above 20% threshold, lender scrutiny likely" : ""}`
+                    : "No counterparty data — tag transactions to unlock"}
+                </p>
+              </div>
+            </div>
+
+            {/* KPI row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Unique customers",  value: custRows.length.toString(),          color: "text-[var(--color-text)]" },
+                { label: "Top customer share",value: `${top1Pct.toFixed(1)}%`,            color: top1Pct > 40 ? "text-red-400" : top1Pct > 20 ? "text-orange-400" : "text-green-400" },
+                { label: "Top 3 share",       value: `${top3Pct.toFixed(1)}%`,            color: top3Pct > 60 ? "text-red-400" : "text-[var(--color-text)]" },
+                { label: "HHI Index",         value: hhi > 0 ? Math.round(hhi).toString() : "—", color: hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-orange-400" : "text-green-400" },
+              ].map(c => (
+                <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                  <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Customer concentration */}
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+                  <TrendingUp size={12} className="text-green-400" />
+                  <span className="text-sm font-semibold">Revenue by Customer</span>
+                </div>
+                {custRows.length === 0 ? (
+                  <p className="p-4 text-sm text-[var(--color-muted)]">Tag counterparty on transactions to see concentration.</p>
+                ) : (
+                  <div className="divide-y divide-[var(--color-border)]">
+                    {custRows.slice(0, 8).map((c, i) => (
+                      <div key={c.name} className="px-4 py-2.5 flex items-center gap-3">
+                        <span className="text-[10px] text-[var(--color-muted)] w-4">{i + 1}</span>
+                        <span className="flex-1 text-sm font-medium truncate">{c.name}</span>
+                        <div className="w-24 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(c.pct, 100)}%`, background: c.pct > 40 ? "#ef4444" : c.pct > 20 ? "#f97316" : "#22c55e" }} />
+                        </div>
+                        <span className={`text-xs font-semibold tabular-nums w-10 text-right ${c.pct > 40 ? "text-red-400" : c.pct > 20 ? "text-orange-400" : "text-[var(--color-text)]"}`}>{c.pct.toFixed(1)}%</span>
+                        <span className="text-xs text-[var(--color-muted)] tabular-nums w-20 text-right">{formatAmount(c.rev)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Vendor concentration */}
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+                  <TrendingDown size={12} className="text-red-400" />
+                  <span className="text-sm font-semibold">Spend by Vendor</span>
+                </div>
+                {vendRows.length === 0 ? (
+                  <p className="p-4 text-sm text-[var(--color-muted)]">Tag counterparty on expense transactions to see vendor concentration.</p>
+                ) : (
+                  <div className="divide-y divide-[var(--color-border)]">
+                    {vendRows.map((v, i) => (
+                      <div key={v.name} className="px-4 py-2.5 flex items-center gap-3">
+                        <span className="text-[10px] text-[var(--color-muted)] w-4">{i + 1}</span>
+                        <span className="flex-1 text-sm font-medium truncate">{v.name}</span>
+                        <div className="w-24 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-red-400" style={{ width: `${Math.min(v.pct, 100)}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums w-10 text-right text-red-400">{v.pct.toFixed(1)}%</span>
+                        <span className="text-xs text-[var(--color-muted)] tabular-nums w-20 text-right">{formatAmount(v.exp)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+              HHI &gt;2,500 = highly concentrated · &gt;1,500 = moderate · &lt;1,500 = healthy. Lenders typically flag single-customer concentration &gt;20% as underwriting risk.
             </div>
           </div>
         );

@@ -117,7 +117,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -220,7 +220,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -796,6 +796,152 @@ export default function PayrollPage() {
 
             <div className="bg-blue-950/20 border border-blue-800/30 rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
               UAN numbers shown are placeholders — replace with actual UANs from the EPFO unified portal before filing. Deposit ECR on the EPFO portal by the 15th of the following month.
+            </div>
+          </div>
+        );
+      })()}
+
+      {tab === "labor" && (() => {
+        const activeEmps = employees.filter(e => e.status === "active");
+        // ESI: employees earning ≤ ₹21,000/month
+        const ESI_LIMIT = 21000;
+        const esiEligible = activeEmps.filter(e => parseFloat(String(e.gross_salary)) <= ESI_LIMIT);
+        const esiRows = esiEligible.map(e => {
+          const gross = parseFloat(String(e.gross_salary));
+          const empEsi = Math.round(gross * 0.0075);
+          const erEsi  = Math.round(gross * 0.0325);
+          return { name: e.name, gross, empEsi, erEsi, total: empEsi + erEsi };
+        });
+        const esiTotals = esiRows.reduce((a, r) => ({ emp: a.emp + r.empEsi, er: a.er + r.erEsi, total: a.total + r.total }), { emp: 0, er: 0, total: 0 });
+
+        // Bonus Act: employees earning ≤ ₹21,000/month
+        const BONUS_WAGE_CEILING = 7000; // calculation ceiling
+        const bonusRows = activeEmps.filter(e => parseFloat(String(e.gross_salary)) <= 21000).map(e => {
+          const gross    = parseFloat(String(e.gross_salary));
+          const calcWage = Math.min(gross, BONUS_WAGE_CEILING);
+          const minBonus = Math.round(calcWage * 12 * 0.0833);
+          const maxBonus = Math.round(calcWage * 12 * 0.20);
+          return { name: e.name, gross, calcWage, minBonus, maxBonus };
+        });
+
+        // Gratuity: 15/26 × monthly salary × years (assume 1 year for illustration)
+        const gratuityRows = activeEmps.map(e => {
+          const monthly = parseFloat(String(e.gross_salary));
+          const gratuityPerYear = Math.round((15 / 26) * monthly);
+          return { name: e.name, monthly, gratuityPerYear, provision5yr: gratuityPerYear * 5 };
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* ESI */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <CheckCircle2 size={13} className="text-green-400" />
+                <h3 className="text-sm font-semibold">ESI Contributions</h3>
+                <span className="text-xs text-[var(--color-muted)] ml-1">Employee ≤ ₹21,000/month · EE 0.75% + ER 3.25%</span>
+                <span className="ml-auto text-xs font-semibold text-green-400">{esiEligible.length} eligible · Total: {formatCurrency(esiTotals.total)}/mo</span>
+              </div>
+              {esiEligible.length === 0 ? (
+                <p className="p-4 text-sm text-[var(--color-muted)]">No employees in ESI bracket (all earning &gt; ₹21,000/month).</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {["Name","Gross","EE ESI (0.75%)","ER ESI (3.25%)","Monthly Total"].map(h => (
+                        <th key={h} className="text-left font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {esiRows.map(r => (
+                      <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                        <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.empEsi)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.erEsi)}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t border-[var(--color-border)] bg-[var(--color-accent)]/30">
+                    <tr>
+                      <td className="px-4 py-2 font-bold text-xs" colSpan={2}>Total</td>
+                      <td className="px-4 py-2 tabular-nums font-semibold text-blue-400">{formatCurrency(esiTotals.emp)}</td>
+                      <td className="px-4 py-2 tabular-nums font-semibold text-orange-400">{formatCurrency(esiTotals.er)}</td>
+                      <td className="px-4 py-2 tabular-nums font-bold text-[var(--color-primary)]">{formatCurrency(esiTotals.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+
+            {/* Bonus Act */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <CheckCircle2 size={13} className="text-yellow-400" />
+                <h3 className="text-sm font-semibold">Payment of Bonus Act</h3>
+                <span className="text-xs text-[var(--color-muted)] ml-1">Min 8.33% · Max 20% · Wage ceiling ₹7,000/month</span>
+              </div>
+              {bonusRows.length === 0 ? (
+                <p className="p-4 text-sm text-[var(--color-muted)]">No employees eligible (all earn &gt; ₹21,000/month).</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {["Name","Gross","Calc. Wage","Min Bonus (8.33%)","Max Bonus (20%)"].map(h => (
+                        <th key={h} className="text-left font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bonusRows.map(r => (
+                      <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                        <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.calcWage)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(r.minBonus)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(r.maxBonus)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="px-4 py-2.5 text-[10px] text-[var(--color-muted)] border-t border-[var(--color-border)]">Annual bonus — payable to employees who complete ≥30 working days. Allocable surplus must exist. Shown amounts are annual totals.</p>
+            </div>
+
+            {/* Gratuity */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <CheckCircle2 size={13} className="text-purple-400" />
+                <h3 className="text-sm font-semibold">Gratuity Provision</h3>
+                <span className="text-xs text-[var(--color-muted)] ml-1">15/26 × last drawn salary × years of service</span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)]">
+                    {["Name","Monthly Salary","Per Year Provision","5-Year Total (₹)"].map(h => (
+                      <th key={h} className="text-left font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {gratuityRows.map(r => (
+                    <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthly)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-purple-400 font-semibold">{formatCurrency(r.gratuityPerYear)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(r.provision5yr)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-[var(--color-border)] bg-[var(--color-accent)]/30">
+                  <tr>
+                    <td className="px-4 py-2 font-bold text-xs" colSpan={2}>Total annual provision</td>
+                    <td className="px-4 py-2 tabular-nums font-bold text-purple-400" colSpan={2}>{formatCurrency(gratuityRows.reduce((s, r) => s + r.gratuityPerYear, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="px-4 py-2.5 text-[10px] text-[var(--color-muted)] border-t border-[var(--color-border)]">Payable on resignation/retirement after ≥5 years of service. Max gratuity: ₹20 lakh. Consider a Group Gratuity scheme for tax-efficient provisioning.</p>
             </div>
           </div>
         );
