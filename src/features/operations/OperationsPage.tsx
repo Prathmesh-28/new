@@ -12,7 +12,7 @@ import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices";
+type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -154,6 +154,7 @@ export default function OperationsPage() {
           ["procurement",   "Procurement",  null],
           ["intelligence",  "Anomaly Radar", null],
           ["prices",        "Price List",    null],
+          ["bom",           "BOM Costing",   null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -701,6 +702,7 @@ export default function OperationsPage() {
       )}
 
       {tab === "prices" && <PriceListTab />}
+      {tab === "bom" && <BomCostingTab />}
     </div>
   );
 }
@@ -868,6 +870,183 @@ function PriceListTab() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Price list auto-populates from your inventory. Click any base price to edit it inline. Export as CSV to share with customers or dealers.
       </div>
+    </div>
+  );
+}
+
+function BomCostingTab() {
+  type BomLine = { id: string; material: string; qty: number; unit: string; unitCost: number };
+  type Bom = { id: string; product: string; outputQty: number; outputUnit: string; overheadPct: number; sellingPrice: number; lines: BomLine[] };
+
+  const [boms, setBoms]     = useState<Bom[]>([]);
+  const [activeBom, setActiveBom] = useState<string | null>(null);
+  const [product,   setProduct]   = useState("");
+  const [outQty,    setOutQty]    = useState("1");
+  const [outUnit,   setOutUnit]   = useState("piece");
+  const [overhead,  setOverhead]  = useState("15");
+  const [sellPrice, setSellPrice] = useState("");
+
+  // Line form
+  const [lMat,  setLMat]  = useState("");
+  const [lQty,  setLQty]  = useState("");
+  const [lUnit, setLUnit] = useState("kg");
+  const [lCost, setLCost] = useState("");
+
+  const createBom = () => {
+    if (!product) return;
+    const id = Math.random().toString(36).slice(2);
+    setBoms(prev => [...prev, { id, product, outputQty: parseFloat(outQty)||1, outputUnit: outUnit, overheadPct: parseFloat(overhead)||15, sellingPrice: parseFloat(sellPrice)||0, lines: [] }]);
+    setActiveBom(id); setProduct(""); setOutQty("1"); setOutUnit("piece"); setSellPrice("");
+  };
+
+  const addLine = (bomId: string) => {
+    if (!lMat || !lCost || !lQty) return;
+    setBoms(prev => prev.map(b => b.id === bomId ? { ...b, lines: [...b.lines, { id: Math.random().toString(36).slice(2), material: lMat, qty: parseFloat(lQty), unit: lUnit, unitCost: parseFloat(lCost) }] } : b));
+    setLMat(""); setLQty(""); setLCost("");
+  };
+
+  const removeLine = (bomId: string, lineId: string) =>
+    setBoms(prev => prev.map(b => b.id === bomId ? { ...b, lines: b.lines.filter(l => l.id !== lineId) } : b));
+
+  const calcBom = (b: Bom) => {
+    const materialCost = b.lines.reduce((s,l) => s + l.qty * l.unitCost, 0);
+    const overhead     = Math.round(materialCost * b.overheadPct / 100);
+    const totalCost    = materialCost + overhead;
+    const costPerUnit  = b.outputQty > 0 ? totalCost / b.outputQty : totalCost;
+    const gm           = b.sellingPrice > 0 ? Math.round(((b.sellingPrice - costPerUnit) / b.sellingPrice) * 100) : null;
+    return { materialCost, overhead, totalCost, costPerUnit, gm };
+  };
+
+  const active = boms.find(b => b.id === activeBom) ?? null;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      {/* BOM list */}
+      {boms.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Your BOMs ({boms.length})</p>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {boms.map(b => {
+              const { totalCost, costPerUnit, gm } = calcBom(b);
+              return (
+                <button key={b.id} onClick={() => setActiveBom(b.id === activeBom ? null : b.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm hover:bg-white/2 transition-colors ${b.id === activeBom ? "bg-[var(--color-primary)]/10" : ""}`}>
+                  <div>
+                    <p className="font-medium">{b.product}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{b.lines.length} components · {b.outputQty} {b.outputUnit} output</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="tabular-nums font-semibold">{formatCurrency(Math.round(costPerUnit))}/unit</p>
+                    {gm !== null && <p className={`text-[10px] font-semibold ${gm >= 30 ? "text-green-400" : gm >= 15 ? "text-yellow-400" : "text-red-400"}`}>{gm}% GM</p>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Create new BOM */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Create New BOM</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={product} onChange={e=>setProduct(e.target.value)} placeholder="Finished product name *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] col-span-2 md:col-span-1" />
+          <div className="flex gap-2">
+            <input type="number" value={outQty} onChange={e=>setOutQty(e.target.value)} placeholder="Qty"
+              className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={outUnit} onChange={e=>setOutUnit(e.target.value)} placeholder="Unit"
+              className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <input type="number" value={sellPrice} onChange={e=>setSellPrice(e.target.value)} placeholder="Selling price (₹, optional)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Overhead %</span><span className="font-semibold text-[var(--color-text)]">{overhead}%</span></label>
+            <input type="range" min={0} max={50} value={overhead} onChange={e=>setOverhead(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+        <button onClick={createBom} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          Create BOM
+        </button>
+      </div>
+
+      {/* Active BOM detail */}
+      {active && (() => {
+        const { materialCost, overhead: oh, totalCost, costPerUnit, gm } = calcBom(active);
+        return (
+          <div className="space-y-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">BOM: {active.product}</h3>
+                <button onClick={() => setBoms(prev => prev.filter(b => b.id !== active.id))}
+                  className="text-xs text-red-400 hover:underline">Delete BOM</button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: "Material cost",   value: formatCurrency(Math.round(materialCost)), color: "text-[var(--color-text)]" },
+                  { label: `Overhead (${active.overheadPct}%)`, value: formatCurrency(oh), color: "text-orange-400" },
+                  { label: "Total cost",      value: formatCurrency(Math.round(totalCost)),    color: "text-red-400" },
+                  { label: `Cost per ${active.outputUnit}`, value: formatCurrency(Math.round(costPerUnit)), color: "text-[var(--color-primary)]" },
+                ].map(k => (
+                  <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                    <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                    <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              {active.sellingPrice > 0 && (
+                <div className={`rounded-lg px-4 py-3 border text-sm flex items-center justify-between ${(gm??0) >= 20 ? "bg-green-950/30 border-green-800/40" : "bg-red-950/30 border-red-800/40"}`}>
+                  <div>
+                    <p className="font-semibold">Gross Margin</p>
+                    <p className="text-xs text-[var(--color-muted)]">Selling price {formatCurrency(active.sellingPrice)} − cost {formatCurrency(Math.round(costPerUnit))}</p>
+                  </div>
+                  <p className={`text-2xl font-bold tabular-nums ${(gm??0) >= 20 ? "text-green-400" : "text-red-400"}`}>{gm ?? 0}%</p>
+                </div>
+              )}
+            </div>
+
+            {/* Components */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--color-border)]">
+                <p className="text-sm font-semibold">Components / Raw Materials</p>
+              </div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {active.lines.map(l => (
+                  <div key={l.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                    <span className="flex-1 font-medium">{l.material}</span>
+                    <span className="text-xs text-[var(--color-muted)] tabular-nums">{l.qty} {l.unit} × {formatCurrency(l.unitCost)}</span>
+                    <span className="tabular-nums font-semibold text-xs w-20 text-right">{formatCurrency(Math.round(l.qty * l.unitCost))}</span>
+                    <button onClick={() => removeLine(active.id, l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                ))}
+                {active.lines.length === 0 && <p className="px-4 py-3 text-sm text-[var(--color-muted)]">No components yet. Add raw materials below.</p>}
+              </div>
+              <div className="px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-bg)]">
+                <div className="flex items-end gap-2 flex-wrap">
+                  <input value={lMat} onChange={e=>setLMat(e.target.value)} placeholder="Material / component *"
+                    className="flex-1 min-w-[140px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                  <input type="number" value={lQty} onChange={e=>setLQty(e.target.value)} placeholder="Qty"
+                    className="w-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                  <input value={lUnit} onChange={e=>setLUnit(e.target.value)} placeholder="Unit"
+                    className="w-14 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                  <input type="number" value={lCost} onChange={e=>setLCost(e.target.value)} placeholder="Unit cost (₹)"
+                    className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+                  <button onClick={() => addLine(active.id)} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">+ Add</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {boms.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No BOMs yet. Create a Bill of Materials to cost your manufactured or assembled products.</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -118,7 +118,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -221,7 +221,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -950,6 +950,7 @@ export default function PayrollPage() {
 
       {tab === "fnf" && <FnFTab employees={employees} />}
       {tab === "variance" && <PayrollVarianceTab />}
+      {tab === "pt" && <PtCalculatorTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1193,6 +1194,127 @@ function PayrollVarianceTab() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Data sourced from transactions tagged as "payroll" category. For per-employee breakdown, use the Payroll Runs tab to run monthly payroll cycles.
       </div>
+    </div>
+  );
+}
+
+function PtCalculatorTab({ employees }: { employees: { id: string; name: string; gross_salary: number }[] }) {
+  type PtSlab = { upTo: number | null; tax: number };
+  type StateData = { name: string; slabs: PtSlab[]; note: string };
+
+  const STATES: Record<string, StateData> = {
+    MH: { name: "Maharashtra",    note: "₹200/mo for salary ≥₹10K; ₹175/mo for ₹7.5K–₹10K",   slabs: [{ upTo: 7500, tax: 0 }, { upTo: 10000, tax: 175 }, { upTo: null, tax: 200 }] },
+    KA: { name: "Karnataka",      note: "₹200/mo above ₹35K; ₹175 for ₹25K–₹35K; ₹150 for ₹15K–₹25K", slabs: [{ upTo: 15000, tax: 0 }, { upTo: 25000, tax: 150 }, { upTo: 35000, tax: 175 }, { upTo: null, tax: 200 }] },
+    WB: { name: "West Bengal",    note: "Graduated slabs; max ₹200/mo for salary above ₹40K",   slabs: [{ upTo: 10000, tax: 0 }, { upTo: 15000, tax: 110 }, { upTo: 25000, tax: 130 }, { upTo: 40000, tax: 150 }, { upTo: null, tax: 200 }] },
+    TN: { name: "Tamil Nadu",     note: "₹208/mo (semi-annual ₹1,250) for salary ≥₹21K",        slabs: [{ upTo: 21000, tax: 0 }, { upTo: null, tax: 208 }] },
+    AP: { name: "Andhra Pradesh", note: "₹200/mo above ₹20K; ₹150/mo for ₹15K–₹20K",           slabs: [{ upTo: 15000, tax: 0 }, { upTo: 20000, tax: 150 }, { upTo: null, tax: 200 }] },
+    TS: { name: "Telangana",      note: "Same as Andhra Pradesh post-bifurcation",                slabs: [{ upTo: 15000, tax: 0 }, { upTo: 20000, tax: 150 }, { upTo: null, tax: 200 }] },
+    GJ: { name: "Gujarat",        note: "₹200/mo above ₹12K; ₹150 for ₹9K–₹12K",               slabs: [{ upTo: 6000, tax: 0 }, { upTo: 9000, tax: 80 }, { upTo: 12000, tax: 150 }, { upTo: null, tax: 200 }] },
+    MP: { name: "Madhya Pradesh", note: "₹208/mo (annual ₹2,500) for salary above ₹18.75K",     slabs: [{ upTo: 18750, tax: 0 }, { upTo: null, tax: 208 }] },
+  };
+
+  const [state, setState] = useState<string>("MH");
+
+  const calcPt = (grossMonthly: number): number => {
+    const s = STATES[state];
+    for (const slab of s.slabs) {
+      if (slab.upTo === null || grossMonthly <= slab.upTo) return slab.tax;
+    }
+    return 0;
+  };
+
+  const sd = STATES[state];
+  const totalEmpPt  = employees.reduce((s,e) => s + calcPt(e.gross_salary), 0);
+  const totalAnnual = totalEmpPt * 12;
+
+  const downloadCsv = () => {
+    const rows = [["Employee","Gross Salary","Monthly PT","Annual PT"], ...employees.map(e => [e.name, e.gross_salary, calcPt(e.gross_salary), calcPt(e.gross_salary) * 12])];
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")], { type: "text/csv" }));
+    a.download = `PT-${sd.name.replace(/\s/g,"-")}.csv`; a.click();
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1">Professional Tax — State-wise Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">PT is a state-level tax deducted from employee salary. Select your state to compute deductions for your team.</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.entries(STATES).map(([code, s]) => (
+            <button key={code} onClick={() => setState(code)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors ${state === code ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {s.name.split(" ")[0]}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mt-3 p-3 bg-[var(--color-bg)] rounded-lg">{sd.note}</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">{sd.name} — PT Slabs</p>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Monthly Gross","Monthly PT"].map(h => (
+                <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {sd.slabs.map((sl, i) => {
+              const from = i === 0 ? 0 : (sd.slabs[i-1].upTo ?? 0) + 1;
+              return (
+                <tr key={i}>
+                  <td className="px-4 py-2.5 text-xs tabular-nums">{formatCurrency(from)} – {sl.upTo ? formatCurrency(sl.upTo) : "above"}</td>
+                  <td className={`px-4 py-2.5 text-xs tabular-nums font-semibold ${sl.tax > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{sl.tax > 0 ? formatCurrency(sl.tax) : "Nil"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {employees.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">Employee-wise PT — {sd.name}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">Total monthly: {formatCurrency(totalEmpPt)} · Annual: {formatCurrency(totalAnnual)}</p>
+            </div>
+            <button onClick={downloadCsv} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Employee","Gross Salary","Monthly PT","Annual PT"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {employees.map(e => {
+                const pt = calcPt(e.gross_salary);
+                return (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium">{e.name}</td>
+                    <td className="px-4 py-3 tabular-nums">{formatCurrency(e.gross_salary)}</td>
+                    <td className={`px-4 py-3 tabular-nums font-semibold ${pt > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{pt > 0 ? formatCurrency(pt) : "Nil"}</td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{pt > 0 ? formatCurrency(pt * 12) : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {employees.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-8 text-center">
+          <Users size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add employees to compute PT deductions.</p>
+        </div>
+      )}
     </div>
   );
 }

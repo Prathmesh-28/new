@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -240,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1032,10 +1032,6 @@ export default function GstPage() {
       )}
 
       {tab === "itc" && (() => {
-        const GST_RATES = [5, 12, 18, 28];
-        // Derive ITC from expense transactions: approximate ITC = amount × rate / (100 + rate)
-        const expenseTxns = store.transactions.filter(t => t.amount < 0 && ["expense","payroll","loan","tax"].includes(t.category) === false && t.amount < 0);
-        // Simpler: use all negative-amount transactions as potential ITC sources
         const purchaseTxns = store.transactions.filter(t => t.amount < 0);
 
         // Group by month
@@ -1154,6 +1150,159 @@ export default function GstPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {tab === "gstr9" && (() => {
+        // Aggregate annual data from transactions
+        const fy = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+        const fyStart = `${fy}-04-01`;
+        const fyEnd   = `${fy + 1}-03-31`;
+        const fyTxns  = store.transactions.filter(t => t.date >= fyStart && t.date <= fyEnd);
+
+        const outwardTaxable = fyTxns.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0);
+        const outputTax      = Math.round(outwardTaxable * 0.18);
+        const inwardPurchase = fyTxns.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0);
+        const itcAvailable   = Math.round(inwardPurchase * 0.18 / 1.18);
+        const netPayable     = Math.max(0, outputTax - itcAvailable);
+        const excessCredit   = Math.max(0, itcAvailable - outputTax);
+
+        // Monthly breakdown for Table 5 (outward supplies) and Table 6 (ITC)
+        const monthlyMap: Record<string, { out: number; inp: number }> = {};
+        fyTxns.forEach(t => {
+          const key = t.date.slice(0, 7);
+          if (!monthlyMap[key]) monthlyMap[key] = { out: 0, inp: 0 };
+          if (t.amount > 0) monthlyMap[key].out += t.amount;
+          else monthlyMap[key].inp += Math.abs(t.amount);
+        });
+        const months = Object.entries(monthlyMap).sort((a,b) => a[0].localeCompare(b[0])).map(([key, v]) => {
+          const d = new Date(key + "-01");
+          return { label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }), ...v };
+        });
+
+        const downloadCsv = () => {
+          const rows = [
+            ["GSTR-9 Annual Return — Draft", `FY ${fy}-${fy+1}`],
+            [],
+            ["Table", "Description", "Amount (₹)"],
+            ["4A", "Outward taxable supplies (excl. zero-rated)", outwardTaxable],
+            ["4B", "Output GST (18% est.)", outputTax],
+            ["6B", "ITC on inward supplies", itcAvailable],
+            ["7", "Net GST payable / (refundable)", netPayable || -excessCredit],
+            [],
+            ["Month", "Outward Sales", "Purchases", "Est. Output GST", "Est. ITC"],
+            ...months.map(m => [m.label, m.out, m.inp, Math.round(m.out * 0.18), Math.round(m.inp * 0.18 / 1.18)]),
+          ];
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")], { type: "text/csv" }));
+          a.download = `GSTR9-FY${fy}-${fy+1}.csv`; a.click();
+        };
+
+        return (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">GSTR-9 Annual Return Builder</h2>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">Draft annual summary for FY {fy}–{fy+1} (Apr–Mar). Figures are estimates based on your transactions at 18% avg GST — verify against filed GSTR-1/3B before submission.</p>
+              </div>
+              <button onClick={downloadCsv} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/10">
+                <Download size={11} /> Export CSV
+              </button>
+            </div>
+
+            {/* Summary tables */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part II — Outward Supplies (Table 4)</p>
+                <div className="space-y-2.5">
+                  {[
+                    { ref: "4A", label: "Taxable outward supplies",          value: outwardTaxable, color: "text-green-400" },
+                    { ref: "4B", label: "Zero-rated / nil-rated supplies",    value: 0,              color: "text-[var(--color-muted)]" },
+                    { ref: "9",  label: "Total output GST (est. 18%)",        value: outputTax,      color: "text-blue-400", bold: true },
+                  ].map(r => (
+                    <div key={r.ref} className={`flex items-center justify-between text-sm pb-2.5 border-b border-[var(--color-border)] last:border-0 last:pb-0 ${r.bold ? "pt-1" : ""}`}>
+                      <span className="text-xs text-[var(--color-muted)]"><span className="font-mono mr-2">{r.ref}</span>{r.label}</span>
+                      <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color}`}>{formatAmount(r.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part III — ITC (Table 6 & 7)</p>
+                <div className="space-y-2.5">
+                  {[
+                    { ref: "6B",  label: "ITC on inward supplies",              value: itcAvailable, color: "text-green-400" },
+                    { ref: "6C",  label: "ITC on import of services",           value: 0,            color: "text-[var(--color-muted)]" },
+                    { ref: "7",   label: "ITC reversed (blocked credits)",      value: 0,            color: "text-red-400" },
+                    { ref: "Net", label: "Net ITC available",                   value: itcAvailable, color: "text-[var(--color-primary)]", bold: true },
+                  ].map(r => (
+                    <div key={r.ref} className={`flex items-center justify-between text-sm pb-2.5 border-b border-[var(--color-border)] last:border-0 last:pb-0 ${r.bold ? "pt-1" : ""}`}>
+                      <span className="text-xs text-[var(--color-muted)]"><span className="font-mono mr-2">{r.ref}</span>{r.label}</span>
+                      <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color}`}>{formatAmount(r.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Net position */}
+            <div className={`rounded-lg border p-5 ${netPayable > 0 ? "bg-red-950/20 border-red-800/40" : "bg-green-950/20 border-green-800/40"}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">{netPayable > 0 ? "Net GST Payable (Table 9)" : "Excess ITC / Refund Eligible"}</p>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">Output tax {formatAmount(outputTax)} − ITC {formatAmount(itcAvailable)}</p>
+                </div>
+                <p className={`text-2xl font-bold tabular-nums ${netPayable > 0 ? "text-red-400" : "text-green-400"}`}>
+                  {formatAmount(netPayable || excessCredit)}
+                </p>
+              </div>
+            </div>
+
+            {/* Monthly table */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--color-border)]">
+                <p className="text-sm font-semibold">Monthly Breakdown — FY {fy}–{fy+1}</p>
+              </div>
+              {months.length === 0 ? (
+                <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transactions found for this financial year.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)]">
+                        {["Month","Outward Sales","Output GST (18%)","Purchases","ITC (18%)","Net"].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]">
+                      {months.map(m => {
+                        const out = Math.round(m.out * 0.18);
+                        const itc = Math.round(m.inp * 0.18 / 1.18);
+                        return (
+                          <tr key={m.label} className="hover:bg-white/2">
+                            <td className="px-4 py-3 font-medium">{m.label}</td>
+                            <td className="px-4 py-3 tabular-nums text-green-400">{formatAmount(m.out)}</td>
+                            <td className="px-4 py-3 tabular-nums text-blue-400">{formatAmount(out)}</td>
+                            <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{formatAmount(m.inp)}</td>
+                            <td className="px-4 py-3 tabular-nums text-purple-400">{formatAmount(itc)}</td>
+                            <td className={`px-4 py-3 tabular-nums font-semibold ${out - itc >= 0 ? "text-red-400" : "text-green-400"}`}>
+                              {out - itc >= 0 ? formatAmount(out - itc) : `(${formatAmount(itc - out)})`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+              GSTR-9 is due by Dec 31 for the preceding FY. These are estimated figures — actual figures must match your filed GSTR-1 and GSTR-3B returns. A CA must sign the audit report (GSTR-9C) if turnover exceeds ₹5 crore.
             </div>
           </div>
         );

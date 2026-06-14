@@ -73,7 +73,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -253,12 +253,17 @@ export default function TransactionsPage() {
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "pdc" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
             <FileText size={12} /> PDC Register
           </button>
+          <button onClick={() => setView(v => v === "bounce" ? "transactions" : "bounce")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "bounce" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <X size={12} /> Bounce Tracker
+          </button>
         </div>
       </div>
 
       {showReconcile && <ReconcileModal onClose={() => setShowReconcile(false)} />}
 
       {view === "pdc" && <PDCRegister />}
+      {view === "bounce" && <BounceTracker />}
 
       {view === "transactions" && <>
       {/* Financial Intelligence Bar */}
@@ -661,6 +666,146 @@ function PDCRegister() {
           <p className="text-sm text-[var(--color-muted)]">No post-dated cheques recorded yet. Add your first PDC above.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function BounceTracker() {
+  type BounceReason = "insufficient_funds" | "signature_mismatch" | "account_closed" | "payment_stopped" | "other";
+  type BounceStatus = "open" | "represented" | "recovered" | "legal";
+  type Bounce = { id: string; party: string; chequeNo: string; bank: string; amount: number; bounceDate: string; reason: BounceReason; status: BounceStatus; representDate: string; notes: string };
+
+  const REASONS: Record<BounceReason, string> = {
+    insufficient_funds: "Insufficient funds",
+    signature_mismatch: "Signature mismatch",
+    account_closed:     "Account closed",
+    payment_stopped:    "Payment stopped",
+    other:              "Other",
+  };
+
+  const [records, setRecords]     = useState<Bounce[]>([]);
+  const [party,       setParty]       = useState("");
+  const [chequeNo,    setChequeNo]    = useState("");
+  const [bank,        setBank]        = useState("");
+  const [amount,      setAmount]      = useState("");
+  const [bounceDate,  setBounceDate]  = useState(() => new Date().toISOString().split("T")[0]);
+  const [reason,      setReason]      = useState<BounceReason>("insufficient_funds");
+  const [notes,       setNotes]       = useState("");
+
+  const addBounce = () => {
+    if (!party || !amount || !chequeNo) return;
+    const presentAfter = new Date(bounceDate);
+    presentAfter.setDate(presentAfter.getDate() + 30);
+    setRecords(prev => [...prev, {
+      id: Math.random().toString(36).slice(2), party, chequeNo, bank, amount: parseFloat(amount),
+      bounceDate, reason, status: "open",
+      representDate: presentAfter.toISOString().split("T")[0],
+      notes,
+    }]);
+    setParty(""); setChequeNo(""); setBank(""); setAmount(""); setNotes("");
+  };
+
+  const updateStatus = (id: string, status: BounceStatus) =>
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+
+  const totalBounced   = records.reduce((s,r) => s + r.amount, 0);
+  const totalRecovered = records.filter(r => r.status === "recovered").reduce((s,r) => s + r.amount, 0);
+  const openCount      = records.filter(r => r.status === "open" || r.status === "represented").length;
+
+  const STATUS_STYLE: Record<BounceStatus, string> = {
+    open:        "bg-red-900/30 text-red-400 border-red-800/40",
+    represented: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    recovered:   "bg-green-900/30 text-green-400 border-green-800/40",
+    legal:       "bg-purple-900/30 text-purple-400 border-purple-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total bounced",    value: formatCurrency(totalBounced),   color: "text-red-400" },
+          { label: "Recovered",        value: formatCurrency(totalRecovered), color: "text-green-400" },
+          { label: "Open / pending",   value: openCount.toString(),           color: openCount > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Record Bounced Cheque</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={party} onChange={e=>setParty(e.target.value)} placeholder="Party name *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={chequeNo} onChange={e=>setChequeNo(e.target.value)} placeholder="Cheque number *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={bank} onChange={e=>setBank(e.target.value)} placeholder="Bank"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Amount (₹) *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="date" value={bounceDate} onChange={e=>setBounceDate(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <select value={reason} onChange={e=>setReason(e.target.value as BounceReason)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+            {(Object.entries(REASONS) as [BounceReason, string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Notes / memo reference"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] col-span-2" />
+        </div>
+        <button onClick={addBounce} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          + Record bounce
+        </button>
+      </div>
+
+      {records.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <X size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No bounced cheques recorded. Use this tracker to follow up on bounces and manage recovery.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Party","Cheque","Bank","Amount","Bounce Date","Reason","Status","Actions"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {records.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium">{r.party}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{r.chequeNo}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{r.bank || "—"}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-red-400">{formatCurrency(r.amount)}</td>
+                    <td className="px-4 py-3 text-xs tabular-nums">{r.bounceDate}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{REASONS[r.reason]}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {r.status === "open" && <button onClick={()=>updateStatus(r.id,"represented")} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded hover:bg-yellow-900/20">Re-present</button>}
+                        {(r.status === "open" || r.status === "represented") && <button onClick={()=>updateStatus(r.id,"recovered")} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded hover:bg-green-900/20">Recovered</button>}
+                        {r.status !== "legal" && r.status !== "recovered" && <button onClick={()=>updateStatus(r.id,"legal")} className="text-[9px] text-purple-400 border border-purple-800/40 px-1.5 py-0.5 rounded hover:bg-purple-900/20">Legal</button>}
+                        <button onClick={()=>setRecords(prev=>prev.filter(x=>x.id!==r.id))} className="text-[9px] text-[var(--color-muted)] hover:text-red-400 px-1">✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Under Sec 138 of the Negotiable Instruments Act, a bounced cheque is a criminal offence. File a complaint within 30 days of receiving the bank memo — after a 15-day notice to the drawer. Keep the original cheque, bank memo, and courier receipts.
+      </div>
     </div>
   );
 }

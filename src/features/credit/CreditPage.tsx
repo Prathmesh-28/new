@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -187,6 +187,7 @@ export default function CreditPage() {
           ["wc",       "WC Sizing"],
           ["equip",    "Finance vs Lease"],
           ["cc",       "CC Utilization"],
+          ["fd",       "FD / RD"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -705,6 +706,7 @@ export default function CreditPage() {
       {tab === "wc" && <WCSizingTab />}
       {tab === "equip" && <EquipmentFinanceLease />}
       {tab === "cc" && <CcUtilizationTab />}
+      {tab === "fd" && <FdRdTab />}
     </div>
   );
 }
@@ -947,6 +949,184 @@ function EquipmentFinanceLease() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Finance tax saving assumes 15% WDV depreciation (Plant & Machinery, IT equipment). Lease tax saving assumes full rent deductible as operating expense. Consult your CA for actual deductibility based on asset class and lease structure.
       </div>
+    </div>
+  );
+}
+
+function FdRdTab() {
+  type Deposit = { id: string; kind: "FD" | "RD"; bank: string; principal: number; rate: number; tenure: number; tenureUnit: "months" | "years"; startDate: string; monthlyRd?: number; tdsApplied: boolean };
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [kind,        setKind]        = useState<"FD" | "RD">("FD");
+  const [bank,        setBank]        = useState("");
+  const [principal,   setPrincipal]   = useState("");
+  const [rate,        setRate]        = useState("");
+  const [tenure,      setTenure]      = useState("");
+  const [tenureUnit,  setTenureUnit]  = useState<"months" | "years">("months");
+  const [startDate,   setStartDate]   = useState(() => new Date().toISOString().split("T")[0]);
+  const [monthlyRd,   setMonthlyRd]   = useState("");
+  const [tdsApplied,  setTdsApplied]  = useState(true);
+
+  const addDeposit = () => {
+    if (!bank || !principal || !rate || !tenure) return;
+    setDeposits(prev => [...prev, {
+      id: Math.random().toString(36).slice(2), kind, bank,
+      principal: parseFloat(principal), rate: parseFloat(rate),
+      tenure: parseFloat(tenure), tenureUnit, startDate,
+      monthlyRd: kind === "RD" ? parseFloat(monthlyRd) || undefined : undefined,
+      tdsApplied,
+    }]);
+    setBank(""); setPrincipal(""); setRate(""); setTenure(""); setMonthlyRd("");
+  };
+
+  const today = new Date();
+
+  const calcMaturity = (d: Deposit) => {
+    const months = d.tenureUnit === "years" ? d.tenure * 12 : d.tenure;
+    const maturityDate = new Date(d.startDate);
+    maturityDate.setMonth(maturityDate.getMonth() + months);
+
+    let interest = 0;
+    if (d.kind === "FD") {
+      // Compound interest quarterly
+      const n = months / 3;
+      const r = d.rate / 100 / 4;
+      interest = Math.round(d.principal * (Math.pow(1 + r, n) - 1));
+    } else {
+      // RD: M × ((1+r)^n - 1) / (1 - (1+r)^(-1/3)) where r=quarterly rate
+      const monthly = d.monthlyRd ?? d.principal;
+      const r = d.rate / 100 / 4;
+      const n = months / 3;
+      const maturity = monthly * (Math.pow(1 + r, n) - 1) / (1 - Math.pow(1 + r, -1/3));
+      interest = Math.round(maturity - monthly * months);
+    }
+
+    const tds     = d.tdsApplied ? Math.round(interest * 0.1) : 0;
+    const netInt  = interest - tds;
+    const daysLeft = Math.ceil((maturityDate.getTime() - today.getTime()) / 86400000);
+    const matured  = daysLeft <= 0;
+    return { maturityDate, interest, tds, netInt, daysLeft, matured, maturityValue: d.principal + netInt };
+  };
+
+  const totalPrincipal = deposits.reduce((s,d) => s + d.principal, 0);
+  const totalInterest  = deposits.reduce((s,d) => s + calcMaturity(d).netInt, 0);
+  const maturing30     = deposits.filter(d => { const { daysLeft } = calcMaturity(d); return daysLeft >= 0 && daysLeft <= 30; });
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      {deposits.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total principal",        value: formatCurrency(totalPrincipal), color: "text-[var(--color-text)]" },
+            { label: "Net interest (post-TDS)", value: formatCurrency(totalInterest),  color: "text-green-400" },
+            { label: "Total deposits",          value: deposits.length.toString(),      color: "text-[var(--color-text)]" },
+            { label: "Maturing in 30 days",     value: maturing30.length.toString(),   color: maturing30.length > 0 ? "text-yellow-400" : "text-[var(--color-muted)]" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Add Deposit</h3>
+        <div className="flex gap-2 mb-3">
+          {(["FD","RD"] as const).map(k => (
+            <button key={k} onClick={() => setKind(k)}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${kind === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {k === "FD" ? "Fixed Deposit" : "Recurring Deposit"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={bank} onChange={e=>setBank(e.target.value)} placeholder="Bank / institution *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={principal} onChange={e=>setPrincipal(e.target.value)} placeholder={kind === "FD" ? "Principal (₹) *" : "Total deposit (₹) *"}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          {kind === "RD" && (
+            <input type="number" value={monthlyRd} onChange={e=>setMonthlyRd(e.target.value)} placeholder="Monthly instalment (₹)"
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          )}
+          <input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="Interest rate (% p.a.) *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <div className="flex gap-2">
+            <input type="number" value={tenure} onChange={e=>setTenure(e.target.value)} placeholder="Tenure *"
+              className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <select value={tenureUnit} onChange={e=>setTenureUnit(e.target.value as "months"|"years")}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+              <option value="months">Mo</option>
+              <option value="years">Yr</option>
+            </select>
+          </div>
+          <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={tdsApplied} onChange={e=>setTdsApplied(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <span>TDS @ 10% applicable (interest &gt; ₹40K/yr)</span>
+          </label>
+          <button onClick={addDeposit} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+            + Add
+          </button>
+        </div>
+      </div>
+
+      {deposits.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <TrendingUp size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No deposits tracked. Add FDs and RDs to monitor maturity dates and interest.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {deposits
+            .slice()
+            .sort((a,b) => calcMaturity(a).daysLeft - calcMaturity(b).daysLeft)
+            .map(d => {
+              const { maturityDate, interest, tds, netInt, daysLeft, matured, maturityValue } = calcMaturity(d);
+              return (
+                <div key={d.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${matured ? "border-purple-800/40" : daysLeft <= 30 ? "border-yellow-800/40" : "border-[var(--color-border)]"}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">{d.bank}</p>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${d.kind === "FD" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-purple-900/30 text-purple-400 border-purple-800/40"}`}>{d.kind}</span>
+                        {matured && <span className="text-[9px] bg-purple-900/30 text-purple-400 border border-purple-800/40 px-1.5 py-0.5 rounded-full font-semibold">Matured</span>}
+                        {!matured && daysLeft <= 30 && <span className="text-[9px] bg-yellow-900/30 text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded-full font-semibold">Maturing soon</span>}
+                      </div>
+                      <p className="text-xs text-[var(--color-muted)] mt-0.5">{d.rate}% p.a. · {d.tenure} {d.tenureUnit} · Started {d.startDate} · Matures {maturityDate.toISOString().split("T")[0]}</p>
+                    </div>
+                    <button onClick={() => setDeposits(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div><p className="text-[var(--color-muted)]">Principal</p><p className="font-semibold tabular-nums mt-0.5">{formatCurrency(d.principal)}</p></div>
+                    <div><p className="text-[var(--color-muted)]">Gross interest</p><p className="font-semibold tabular-nums text-green-400 mt-0.5">{formatCurrency(interest)}</p></div>
+                    <div><p className="text-[var(--color-muted)]">TDS {d.tdsApplied ? "(10%)" : "(nil)"}</p><p className="font-semibold tabular-nums text-red-400 mt-0.5">{d.tdsApplied ? `(${formatCurrency(tds)})` : "—"}</p></div>
+                    <div><p className="text-[var(--color-muted)]">Maturity value</p><p className="font-bold tabular-nums text-[var(--color-primary)] mt-0.5">{formatCurrency(maturityValue)}</p></div>
+                  </div>
+                  {!matured && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-[10px] text-[var(--color-muted)] mb-1">
+                        <span>{d.startDate}</span>
+                        <span className={daysLeft <= 30 ? "text-yellow-400 font-semibold" : ""}>{daysLeft}d remaining</span>
+                        <span>{maturityDate.toISOString().split("T")[0]}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                        {(() => {
+                          const totalDays = Math.ceil((maturityDate.getTime() - new Date(d.startDate).getTime()) / 86400000);
+                          const elapsed   = totalDays - Math.max(0, daysLeft);
+                          const pct       = totalDays > 0 ? Math.min(100, Math.round((elapsed / totalDays) * 100)) : 0;
+                          return <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${pct}%` }} />;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
     </div>
   );
 }

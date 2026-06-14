@@ -314,6 +314,91 @@ export default function CompliancePage() {
           </div>
         )}
       </div>
+
+      {/* Labour Law Checklist */}
+      <LabourLawChecklist employeeCount={store.transactions.filter(t=>t.category==="payroll").length > 0 ? 15 : 0} />
+    </div>
+  );
+}
+
+function LabourLawChecklist({ employeeCount }: { employeeCount: number }) {
+  const [count, setCount] = useState(employeeCount > 0 ? employeeCount : 10);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => setChecked(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  type Act = { id: string; name: string; threshold: number; desc: string; freq: string; risk: "high" | "medium" | "low" };
+
+  const ACTS: Act[] = [
+    { id: "pf",       name: "Employees' Provident Fund (EPF)",    threshold: 20, desc: "Mandatory PF @ 12% employee + 12% employer on wages up to ₹15K. Register on EPFO portal.",       freq: "Monthly",   risk: "high" },
+    { id: "esi",      name: "Employees' State Insurance (ESI)",    threshold: 10, desc: "ESI @ 0.75% employee + 3.25% employer on wages up to ₹21K. File half-yearly return.",            freq: "Monthly",   risk: "high" },
+    { id: "bonus",    name: "Payment of Bonus Act",                threshold: 20, desc: "Minimum 8.33% bonus on ₹7K ceiling (max 20%) to employees earning ≤₹21K/month.",               freq: "Annual",    risk: "high" },
+    { id: "gratuity", name: "Payment of Gratuity Act",             threshold: 10, desc: "Gratuity of 15 days salary per year of service after 5 years. Fund or insure obligation.",      freq: "On exit",   risk: "medium" },
+    { id: "minwage",  name: "Minimum Wages Act",                   threshold: 1,  desc: "Ensure all employees paid ≥ state minimum wage for their skill category. Revised periodically.", freq: "Ongoing",   risk: "high" },
+    { id: "pt",       name: "Professional Tax",                    threshold: 1,  desc: "Deduct state PT from employee salary per applicable slab. Remit to state government.",          freq: "Monthly",   risk: "medium" },
+    { id: "maternity",name: "Maternity Benefit Act",               threshold: 10, desc: "26 weeks paid maternity leave. Advance pay before leave, creche facilities if >50 employees.", freq: "As needed", risk: "medium" },
+    { id: "shops",    name: "Shops & Establishments Act",          threshold: 1,  desc: "Register shop/office with labour department. Governs working hours, leave, holidays.",          freq: "Annual",    risk: "medium" },
+    { id: "lwf",      name: "Labour Welfare Fund",                 threshold: 1,  desc: "State-specific contribution to LWF. Ranges from ₹3–₹60/employee per period.",                  freq: "Monthly",   risk: "low" },
+    { id: "factories",name: "Factories Act",                       threshold: 10, desc: "Applicable if using power & ≥10 workers, or ≥20 workers without power. Safety compliance.",   freq: "Ongoing",   risk: "high" },
+    { id: "contract", name: "Contract Labour (Regulation)",        threshold: 20, desc: "If engaging contract workers, obtain principal employer registration. Contractor needs licence.", freq: "Ongoing",  risk: "medium" },
+    { id: "posh",     name: "POSH Act (Sexual Harassment)",        threshold: 10, desc: "Constitute Internal Complaints Committee. Display policy. Annual report to District Officer.",  freq: "Annual",    risk: "high" },
+  ];
+
+  const applicable = ACTS.filter(a => count >= a.threshold);
+  const done        = applicable.filter(a => checked.has(a.id)).length;
+
+  const RISK_STYLE: Record<Act["risk"], string> = {
+    high:   "bg-red-900/30 text-red-400 border-red-800/40",
+    medium: "bg-orange-900/30 text-orange-400 border-orange-800/40",
+    low:    "bg-green-900/30 text-green-400 border-green-800/40",
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+      <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <ShieldCheck size={14} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Labour Law Compliance Checklist</p>
+          <span className={`text-xs font-semibold ${done === applicable.length ? "text-green-400" : "text-orange-400"}`}>{done}/{applicable.length}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-[var(--color-muted)]">Employees:</label>
+          <input type="number" min={1} max={500} value={count} onChange={e => setCount(Number(e.target.value))}
+            className="w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {applicable.length === 0 ? (
+        <p className="p-6 text-sm text-[var(--color-muted)] text-center">Set your employee count above to see applicable labour laws.</p>
+      ) : (
+        <div className="divide-y divide-[var(--color-border)]">
+          {applicable.map(act => (
+            <label key={act.id} className="flex items-start gap-3 px-5 py-4 cursor-pointer hover:bg-white/2 transition-colors">
+              <input type="checkbox" checked={checked.has(act.id)} onChange={() => toggle(act.id)}
+                className="mt-0.5 accent-[var(--color-primary)] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className={`text-sm font-medium ${checked.has(act.id) ? "line-through text-[var(--color-muted)]" : ""}`}>{act.name}</p>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${RISK_STYLE[act.risk]}`}>{act.risk} risk</span>
+                  <span className="text-[9px] bg-[var(--color-bg)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{act.freq}</span>
+                </div>
+                <p className="text-xs text-[var(--color-muted)]">{act.desc}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Applies from: {act.threshold} employee{act.threshold > 1 ? "s" : ""}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {done === applicable.length && applicable.length > 0 && (
+        <div className="px-5 py-3 bg-green-950/30 border-t border-green-800/40 text-sm text-green-400 flex items-center gap-2">
+          <ShieldCheck size={14} /> All {applicable.length} applicable acts checked — review periodically as employee count grows.
+        </div>
+      )}
     </div>
   );
 }
