@@ -63,7 +63,7 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit">("overview");
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -137,7 +137,7 @@ export default function TaxPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -629,6 +629,224 @@ export default function TaxPage() {
           </div>
         );
       })()}
+
+      {taxTab === "tcs" && (() => {
+        type TcsEntry = { id: string; buyer: string; goods: string; saleAmount: number; tcsRate: number; date: string; deposited: boolean };
+        const TCS_RATES = [
+          { goods: "Scrap (Sec 206C(1))",                rate: 1   },
+          { goods: "Timber from forest lease",            rate: 2.5 },
+          { goods: "Timber from other sources",           rate: 2.5 },
+          { goods: "Tendu leaves",                        rate: 5   },
+          { goods: "Forest produce (other)",              rate: 2.5 },
+          { goods: "Minerals (coal, lignite, iron ore)",  rate: 1   },
+          { goods: "Liquor for human consumption",        rate: 1   },
+          { goods: "Motor vehicles >₹10L",                rate: 1   },
+          { goods: "Sale of goods >₹50L (Sec 206C(1H))", rate: 0.1 },
+        ];
+
+        const [entries, setEntries] = useState<TcsEntry[]>([]);
+        const [buyer,   setBuyer]   = useState("");
+        const [goods,   setGoods]   = useState(TCS_RATES[0].goods);
+        const [saleAmt, setSaleAmt] = useState("");
+        const [tcsRate, setTcsRate] = useState(TCS_RATES[0].rate);
+        const [date,    setDate]    = useState(() => new Date().toISOString().split("T")[0]);
+
+        const addEntry = () => {
+          if (!buyer || !saleAmt) return;
+          setEntries(prev => [...prev, { id: Math.random().toString(36).slice(2), buyer, goods, saleAmount: parseFloat(saleAmt), tcsRate, date, deposited: false }]);
+          setBuyer(""); setSaleAmt("");
+        };
+
+        const totalTcs       = entries.reduce((s,e) => s + Math.round(e.saleAmount * e.tcsRate / 100), 0);
+        const totalDeposited = entries.filter(e => e.deposited).reduce((s,e) => s + Math.round(e.saleAmount * e.tcsRate / 100), 0);
+        const pending        = totalTcs - totalDeposited;
+
+        return (
+          <div className="space-y-4 max-w-2xl">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1">TCS Tracker — Tax Collected at Source</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Under Sec 206C, sellers of specified goods must collect TCS at source. Deposit by the 7th of the following month. File Form 27EQ quarterly.</p>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <input value={buyer} onChange={e=>setBuyer(e.target.value)} placeholder="Buyer / party name *"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input type="number" value={saleAmt} onChange={e=>setSaleAmt(e.target.value)} placeholder="Sale amount (₹) *"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <select value={goods} onChange={e => { setGoods(e.target.value); setTcsRate(TCS_RATES.find(r=>r.goods===e.target.value)?.rate ?? 1); }}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+                  {TCS_RATES.map(r => <option key={r.goods} value={r.goods}>{r.goods}</option>)}
+                </select>
+                <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+              {saleAmt && <p className="text-xs text-[var(--color-muted)] mb-3">TCS @ {tcsRate}% = <span className="font-semibold text-[var(--color-primary)]">{formatCurrency(Math.round(parseFloat(saleAmt) * tcsRate / 100))}</span></p>}
+              <button onClick={addEntry} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add entry</button>
+            </div>
+
+            {entries.length > 0 && <>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Total TCS to collect", value: formatCurrency(totalTcs),   color: "text-blue-400" },
+                  { label: "Deposited",             value: formatCurrency(totalDeposited), color: "text-green-400" },
+                  { label: "Pending deposit",       value: formatCurrency(pending),    color: pending > 0 ? "text-red-400" : "text-green-400" },
+                ].map(k => (
+                  <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                    <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)]">
+                        {["Buyer","Goods","Sale Amount","Rate","TCS","Date","Status",""].map(h => (
+                          <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]">
+                      {entries.map(e => {
+                        const tcsAmt = Math.round(e.saleAmount * e.tcsRate / 100);
+                        return (
+                          <tr key={e.id} className="hover:bg-white/2">
+                            <td className="px-3 py-2.5 font-medium text-xs">{e.buyer}</td>
+                            <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate">{e.goods}</td>
+                            <td className="px-3 py-2.5 tabular-nums text-xs">{formatCurrency(e.saleAmount)}</td>
+                            <td className="px-3 py-2.5 tabular-nums text-xs">{e.tcsRate}%</td>
+                            <td className="px-3 py-2.5 tabular-nums text-xs font-semibold text-blue-400">{formatCurrency(tcsAmt)}</td>
+                            <td className="px-3 py-2.5 text-xs">{e.date}</td>
+                            <td className="px-3 py-2.5">
+                              <button onClick={() => setEntries(prev => prev.map(x => x.id === e.id ? { ...x, deposited: !x.deposited } : x))}
+                                className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.deposited ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                                {e.deposited ? "Deposited" : "Pending"}
+                              </button>
+                            </td>
+                            <td className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>}
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs font-semibold mb-2">TCS Rates Quick Reference (Sec 206C)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+                {TCS_RATES.map(r => (
+                  <div key={r.goods} className="flex items-center justify-between text-xs py-1 border-b border-[var(--color-border)] last:border-0">
+                    <span className="text-[var(--color-muted)] truncate pr-2">{r.goods}</span>
+                    <span className="font-semibold tabular-nums shrink-0">{r.rate}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {taxTab === "mat" && (() => {
+        return <MatChecker />;
+      })()}
+    </div>
+  );
+}
+
+function MatChecker() {
+  const [bookProfit,   setBookProfit]   = useState("");
+  const [netIncome,    setNetIncome]    = useState("");
+  const [additions,    setAdditions]    = useState("");   // items added back to book profit
+  const [deductions,   setDeductions]   = useState("");   // items deducted
+  const [entityType,   setEntityType]   = useState<"company" | "llp">("company");
+
+  const bp = parseFloat(bookProfit)  || 0;
+  const ni = parseFloat(netIncome)   || 0;
+  const add = parseFloat(additions)  || 0;
+  const ded = parseFloat(deductions) || 0;
+
+  const adjBookProfit = bp + add - ded;
+  const matRate       = entityType === "company" ? 15 : 0; // MAT applies to companies; AMT (18.5%) for others
+  const amtRate       = 18.5;
+  const matLiability  = entityType === "company" ? adjBookProfit * matRate / 100 : adjBookProfit * amtRate / 100;
+  const normalTax     = ni * 0.25; // Sec 115BAA flat 25% simplified
+  const matApplies    = matLiability > normalTax;
+  const matCredit     = matApplies ? matLiability - normalTax : 0; // carry forward 15 yrs
+
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const ADDITIONS_LIST  = ["Depreciation as per books","Income tax paid/payable","Deferred tax (Dr)","Provision for losses of subsidiaries","Dividend paid/proposed","Expenditure on CSR (Sec 135)"];
+  const DEDUCTIONS_LIST = ["Depreciation as per Sch II","Deferred tax credit (Cr)","Withdrawal from reserves","Amount carried to profits of company","Income exempt under Sec 10 (part)"];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">MAT / AMT Calculator (Sec 115JB / 115JC)</h3>
+          <div className="flex gap-2">
+            {(["company","llp"] as const).map(t => (
+              <button key={t} onClick={() => setEntityType(t)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold border transition-colors ${entityType === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                {t === "company" ? "Company (MAT)" : "LLP/Individual (AMT)"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Book Profit as per P&L (₹)</label>
+            <input type="number" value={bookProfit} onChange={e => setBookProfit(e.target.value)} placeholder="e.g. 5000000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Additions to Book Profit (₹)</label>
+            <input type="number" value={additions} onChange={e => setAdditions(e.target.value)} placeholder="e.g. 200000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deductions from Book Profit (₹)</label>
+            <input type="number" value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="e.g. 100000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Normal Taxable Income (₹)</label>
+            <input type="number" value={netIncome} onChange={e => setNetIncome(e.target.value)} placeholder="e.g. 3000000" className={inp} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Adj. Book Profit",     value: fc(adjBookProfit), color: "text-[var(--color-primary)]" },
+          { label: `${entityType === "company" ? "MAT" : "AMT"} Liability (${entityType === "company" ? matRate : amtRate}%)`, value: fc(matLiability), color: "text-orange-400" },
+          { label: "Normal Tax Est (25%)",  value: fc(normalTax),    color: "text-blue-400" },
+          { label: "MAT Credit (c/f 15yr)", value: fc(matCredit),    color: matApplies ? "text-yellow-400" : "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${matApplies ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold ${matApplies ? "text-orange-400" : "text-green-400"}`}>
+          {matApplies
+            ? `⚠ MAT applies — pay ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} (higher than normal tax ${fc(normalTax)}). MAT credit ${fc(matCredit)} can be carried forward 15 years.`
+            : `✓ Normal tax applies — ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} is lower than normal tax ${fc(normalTax)}. No MAT credit arises.`}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Common Additions to Book Profit</p>
+          <ul className="space-y-1">{ADDITIONS_LIST.map(i => <li key={i} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-orange-400">+</span>{i}</li>)}</ul>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Common Deductions from Book Profit</p>
+          <ul className="space-y-1">{DEDUCTIONS_LIST.map(i => <li key={i} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-green-400">−</span>{i}</li>)}</ul>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">MAT: Sec 115JB — companies pay higher of normal tax or 15% of adjusted book profit. AMT: Sec 115JC — LLPs/individuals claiming profit-linked deductions. MAT credit under Sec 115JAA. Consult CA for full computation.</p>
     </div>
   );
 }

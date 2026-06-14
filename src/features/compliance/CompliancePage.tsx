@@ -315,11 +315,141 @@ export default function CompliancePage() {
         )}
       </div>
 
+      {/* MSME / Udyam Checker */}
+      <MsmeChecker />
+
       {/* Labour Law Checklist */}
       <LabourLawChecklist employeeCount={store.transactions.filter(t=>t.category==="payroll").length > 0 ? 15 : 0} />
 
       {/* Insurance Calendar */}
       <InsuranceCalendar />
+    </div>
+  );
+}
+
+function MsmeChecker() {
+  const [plantMachinery, setPlantMachinery] = useState("");
+  const [annualTurnover, setAnnualTurnover] = useState("");
+  const [udyamNo, setUdyamNo] = useState("");
+  const [registered, setRegistered] = useState(false);
+
+  const pm = parseFloat(plantMachinery) || 0;
+  const at = parseFloat(annualTurnover) || 0;
+
+  type MsmeCategory = "Micro" | "Small" | "Medium" | "Not MSME";
+  const getCategory = (): MsmeCategory => {
+    if (pm <= 1000000 && at <= 5000000)   return "Micro";
+    if (pm <= 10000000 && at <= 50000000) return "Small";
+    if (pm <= 50000000 && at <= 250000000) return "Medium";
+    return "Not MSME";
+  };
+  const category = getCategory();
+  const isMsme = category !== "Not MSME";
+
+  const CATEGORY_COLOR: Record<MsmeCategory, string> = {
+    Micro: "text-green-400", Small: "text-blue-400", Medium: "text-yellow-400", "Not MSME": "text-red-400",
+  };
+  const BENEFITS = [
+    "Priority lending under PSL (Priority Sector Lending)",
+    "Collateral-free loans up to ₹10L (CGTMSE scheme)",
+    "Interest subvention schemes (ECLGS, etc.)",
+    "45-day payment protection under MSMED Act Sec 15-23",
+    "1% stamp duty exemption (state-specific)",
+    "Subsidy on ISO certification / barcode / patent",
+    "GeM portal registration preference",
+    "Delayed payment: 3× bank rate interest on default",
+  ];
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc  = formatCurrency;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-[var(--color-border)]">
+        <ShieldCheck size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">MSME / Udyam Registration Checker</p>
+        {registered && udyamNo && (
+          <span className="text-xs bg-green-950/30 text-green-400 font-semibold px-2 py-0.5 rounded-full">Registered: {udyamNo}</span>
+        )}
+      </div>
+
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Plant & Machinery Investment (₹)</label>
+            <input type="number" value={plantMachinery} onChange={e => setPlantMachinery(e.target.value)} placeholder="e.g. 500000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Turnover (₹)</label>
+            <input type="number" value={annualTurnover} onChange={e => setAnnualTurnover(e.target.value)} placeholder="e.g. 3000000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Udyam No. (if registered)</label>
+            <input value={udyamNo} onChange={e => setUdyamNo(e.target.value)} placeholder="UDYAM-XX-00-0000000" className={inp} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={() => setRegistered(r => !r)}
+              className={`w-full py-2 text-xs font-semibold rounded-lg border transition-colors ${registered ? "bg-green-950/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {registered ? "✓ Registered on Udyam Portal" : "Not Yet Registered"}
+            </button>
+          </div>
+        </div>
+
+        <div className={`rounded-lg p-4 border ${isMsme ? "border-[var(--color-primary)]/40 bg-[var(--color-accent)]" : "border-red-800/40 bg-red-950/20"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`text-2xl font-bold ${CATEGORY_COLOR[category]}`}>{category}</span>
+            {isMsme && (
+              <div className="text-xs text-[var(--color-muted)]">
+                <div>P&M: {fc(pm)} · Turnover: {fc(at)}</div>
+                {!registered && <div className="text-yellow-400 mt-0.5">⚠ Not registered — register free at udyamregistration.gov.in</div>}
+              </div>
+            )}
+            {!isMsme && <span className="text-xs text-red-400">Exceeds MSME thresholds. Not eligible for MSME benefits.</span>}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Category","P&M Limit","Turnover Limit","Your Status"].map(h => (
+                  <th key={h} className="text-left font-semibold text-[var(--color-muted)] px-3 py-2">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {([
+                { cat: "Micro",  pm: 1000000,   at: 5000000   },
+                { cat: "Small",  pm: 10000000,  at: 50000000  },
+                { cat: "Medium", pm: 50000000,  at: 250000000 },
+              ] as const).map(r => {
+                const match = category === r.cat;
+                return (
+                  <tr key={r.cat} className={`border-b border-[var(--color-border)] last:border-0 ${match ? "bg-[var(--color-primary)]/5" : ""}`}>
+                    <td className={`px-3 py-2.5 font-semibold ${CATEGORY_COLOR[r.cat]}`}>{r.cat}</td>
+                    <td className="px-3 py-2.5">≤ {fc(r.pm)}</td>
+                    <td className="px-3 py-2.5">≤ {fc(r.at)}</td>
+                    <td className="px-3 py-2.5">{match ? <span className="font-bold text-[var(--color-primary)]">← You</span> : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {isMsme && (
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Benefits Available to MSME</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              {BENEFITS.map(b => (
+                <div key={b} className="flex items-start gap-2 text-xs text-[var(--color-muted)]">
+                  <span className="text-green-400 mt-0.5 shrink-0">✓</span>{b}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

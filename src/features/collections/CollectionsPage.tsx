@@ -123,7 +123,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -224,6 +224,7 @@ export default function CollectionsPage() {
               { id: "collections",   label: "Collections",   icon: <PhoneCall size={10} /> },
               { id: "profitability", label: "Profitability",  icon: <BarChart2 size={10} /> },
               { id: "clv",           label: "CLV",            icon: <Star size={10} /> },
+              { id: "score",         label: "Risk Score",     icon: <AlertTriangle size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -467,6 +468,7 @@ export default function CollectionsPage() {
       </>}
 
       {view === "clv" && <ClvCalculator />}
+      {view === "score" && <LatePaymentScorer />}
     </div>
   );
 }
@@ -592,6 +594,117 @@ function ClvCalculator() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Platinum = top 20% by CLV · CLV formula: AOV × purchase frequency × lifespan × margin · Adjust sliders to model scenarios</p>
+    </div>
+  );
+}
+
+function LatePaymentScorer() {
+  const { store } = useApp();
+
+  const scored = useMemo(() => {
+    const inv = store.invoices ?? [];
+    const map: Record<string, { total: number; overdue: number; paid: number; avgDaysLate: number[]; lastPaid: number }> = {};
+
+    for (const i of inv) {
+      const name = i.customer ?? "Unknown";
+      if (!map[name]) map[name] = { total: 0, overdue: 0, paid: 0, avgDaysLate: [], lastPaid: 0 };
+      map[name].total += 1;
+      if (i.status === "overdue") map[name].overdue += 1;
+      if (i.status === "paid") {
+        map[name].paid += 1;
+        const due = new Date(i.dueDate).getTime();
+        const now = Date.now();
+        const late = Math.max(0, Math.round((now - due) / 86400000));
+        map[name].avgDaysLate.push(late);
+        map[name].lastPaid = Math.max(map[name].lastPaid, new Date(i.invoiceDate).getTime());
+      }
+    }
+
+    return Object.entries(map).map(([customer, d]) => {
+      const overdueRate  = d.total > 0 ? d.overdue / d.total : 0;
+      const avgLate      = d.avgDaysLate.length > 0 ? d.avgDaysLate.reduce((a, b) => a + b, 0) / d.avgDaysLate.length : 0;
+      const recency      = d.lastPaid > 0 ? Math.min(1, (Date.now() - d.lastPaid) / (365 * 86400000)) : 1;
+
+      // Score 0–100: lower = safer
+      const riskScore = Math.round(
+        overdueRate * 40 +            // overdue frequency weight 40
+        Math.min(avgLate / 90, 1) * 35 + // avg days late weight 35
+        recency * 25                  // recency weight 25
+      );
+
+      const risk = riskScore >= 65 ? "High" : riskScore >= 35 ? "Medium" : "Low";
+      return { customer, total: d.total, overdueRate: Math.round(overdueRate * 100), avgLate: Math.round(avgLate), riskScore, risk };
+    }).sort((a, b) => b.riskScore - a.riskScore);
+  }, [store.invoices]);
+
+  const high   = scored.filter(s => s.risk === "High").length;
+  const medium = scored.filter(s => s.risk === "Medium").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "High Risk",   value: high.toString(),              color: "text-red-400" },
+          { label: "Medium Risk", value: medium.toString(),            color: "text-yellow-400" },
+          { label: "Low Risk",    value: (scored.length - high - medium).toString(), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-2xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {scored.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <AlertTriangle size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add invoices to calculate late payment risk scores.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <AlertTriangle size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Late Payment Risk Scores</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">Higher score = higher risk</span>
+          </div>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer","Invoices","Overdue Rate","Avg Days Late","Risk Score","Risk"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {scored.map(s => {
+                const barPct = s.riskScore;
+                const riskCls = s.risk === "High" ? "bg-red-950/30 text-red-400" : s.risk === "Medium" ? "bg-yellow-950/30 text-yellow-400" : "bg-green-950/30 text-green-400";
+                const barColor = s.risk === "High" ? "bg-red-500" : s.risk === "Medium" ? "bg-yellow-500" : "bg-green-500";
+                return (
+                  <tr key={s.customer} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-semibold">{s.customer}</td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{s.total}</td>
+                    <td className="px-4 py-3 tabular-nums">{s.overdueRate}%</td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{s.avgLate > 0 ? `${s.avgLate}d` : "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden w-20">
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${barPct}%` }} />
+                        </div>
+                        <span className="tabular-nums text-xs font-semibold w-6">{s.riskScore}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${riskCls}`}>{s.risk}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Score = 40% overdue frequency + 35% avg days late + 25% recency penalty · High ≥65 · Medium ≥35 · Low &lt;35 · Use to prioritise follow-up</p>
     </div>
   );
 }

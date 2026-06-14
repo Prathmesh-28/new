@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -240,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1408,6 +1408,359 @@ export default function GstPage() {
           </div>
         );
       })()}
+
+      {tab === "refund" && (() => {
+        return <GstRefundTracker />;
+      })()}
+
+      {tab === "composition" && (() => {
+        return <CompositionChecker />;
+      })()}
+
+      {tab === "qrmp" && (() => {
+        return <QrmpChecker />;
+      })()}
+    </div>
+  );
+}
+
+function GstRefundTracker() {
+  type RefundStatus = "Draft" | "Filed" | "Acknowledged" | "Processing" | "Approved" | "Credited" | "Deficiency" | "Rejected";
+  type RefundType   = "Export (LUT)" | "Inverted Duty" | "Excess Cash Ledger" | "IGST on Export" | "Deemed Export" | "Other";
+  type RefundEntry  = { id: string; refNo: string; type: RefundType; period: string; claimed: number; status: RefundStatus; filedDate: string; notes: string };
+
+  const [entries,   setEntries]   = useState<RefundEntry[]>([]);
+  const [showForm,  setShowForm]  = useState(false);
+  const [rType,     setRType]     = useState<RefundType>("Export (LUT)");
+  const [rPeriod,   setRPeriod]   = useState("");
+  const [rClaimed,  setRClaimed]  = useState("");
+  const [rStatus,   setRStatus]   = useState<RefundStatus>("Draft");
+  const [rFiled,    setRFiled]    = useState("");
+  const [rNotes,    setRNotes]    = useState("");
+
+  const TYPES: RefundType[]   = ["Export (LUT)", "Inverted Duty", "Excess Cash Ledger", "IGST on Export", "Deemed Export", "Other"];
+  const STATUSES: RefundStatus[] = ["Draft","Filed","Acknowledged","Processing","Approved","Credited","Deficiency","Rejected"];
+  const STATUS_COLOR: Record<RefundStatus, string> = {
+    Draft: "text-[var(--color-muted)]", Filed: "text-blue-400", Acknowledged: "text-blue-400",
+    Processing: "text-yellow-400", Approved: "text-green-400", Credited: "text-green-400",
+    Deficiency: "text-orange-400", Rejected: "text-red-400",
+  };
+
+  const addEntry = () => {
+    if (!rPeriod || !rClaimed) return;
+    setEntries(prev => [...prev, { id: Math.random().toString(36).slice(2), refNo: `RFD-${Math.floor(Math.random()*90000+10000)}`, type: rType, period: rPeriod, claimed: parseFloat(rClaimed) || 0, status: rStatus, filedDate: rFiled, notes: rNotes }]);
+    setRPeriod(""); setRClaimed(""); setRFiled(""); setRNotes(""); setShowForm(false);
+  };
+
+  const updateStatus = (id: string, s: RefundStatus) => setEntries(prev => prev.map(e => e.id === id ? { ...e, status: s } : e));
+
+  const totalClaimed  = entries.reduce((s, e) => s + e.claimed, 0);
+  const totalCredited = entries.filter(e => e.status === "Credited").reduce((s, e) => s + e.claimed, 0);
+  const pending       = entries.filter(e => !["Credited","Rejected"].includes(e.status)).length;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc  = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <Download size={14} className="text-[var(--color-primary)]" />
+            <p className="text-sm font-semibold">GST Refund Tracker</p>
+            {pending > 0 && <span className="text-xs bg-yellow-950/30 text-yellow-400 font-semibold px-2 py-0.5 rounded-full">{pending} in progress</span>}
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <X size={11} className={showForm ? "" : "rotate-45"} /> {showForm ? "Cancel" : "Add claim"}
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Refund Type</label>
+                <select value={rType} onChange={e => setRType(e.target.value as RefundType)} className={inp}>
+                  {TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Tax Period (e.g. Apr 2024)</label>
+                <input value={rPeriod} onChange={e => setRPeriod(e.target.value)} placeholder="Apr 2024" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Amount Claimed (₹)</label>
+                <input type="number" value={rClaimed} onChange={e => setRClaimed(e.target.value)} className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Status</label>
+                <select value={rStatus} onChange={e => setRStatus(e.target.value as RefundStatus)} className={inp}>
+                  {STATUSES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Filed Date</label>
+                <input type="date" value={rFiled} onChange={e => setRFiled(e.target.value)} className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Notes</label>
+                <input value={rNotes} onChange={e => setRNotes(e.target.value)} placeholder="ARN, officer name, etc." className={inp} />
+              </div>
+            </div>
+            <button onClick={addEntry} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-3 p-4 border-b border-[var(--color-border)]">
+          {[
+            { label: "Total Claimed",  value: fc(totalClaimed),   color: "text-[var(--color-primary)]" },
+            { label: "Credited",       value: fc(totalCredited),  color: "text-green-400" },
+            { label: "In Progress",    value: pending.toString(), color: "text-yellow-400" },
+          ].map(c => (
+            <div key={c.label} className="text-center">
+              <p className="text-xs text-[var(--color-muted)]">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {entries.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No refund claims yet. Add export refunds, inverted duty refunds, or excess cash ledger claims.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Ref No","Type","Period","Claimed","Filed","Status",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(e => (
+                  <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-mono text-xs">{e.refNo}</td>
+                    <td className="px-4 py-3 text-xs">{e.type}</td>
+                    <td className="px-4 py-3">{e.period}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold">{fc(e.claimed)}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.filedDate || "—"}</td>
+                    <td className="px-4 py-3">
+                      <select value={e.status} onChange={ev => updateStatus(e.id, ev.target.value as RefundStatus)}
+                        className={`text-xs font-semibold bg-transparent border-0 outline-none cursor-pointer ${STATUS_COLOR[e.status]}`}>
+                        {STATUSES.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-2 text-[var(--color-muted)]">Refund Timeline (Rule 91/92)</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          {[
+            { step: "File RFD-01", days: "Day 0", note: "Attach ARN + docs" },
+            { step: "Acknowledgement", days: "≤15 days", note: "RFD-02 issued" },
+            { step: "Provisional (Export)", days: "7 days", note: "90% of eligible ITC" },
+            { step: "Final Order", days: "60 days", note: "RFD-06; interest if delayed" },
+          ].map(s => (
+            <div key={s.step} className="bg-[var(--color-accent)] rounded-lg p-3">
+              <p className="font-semibold text-[var(--color-primary)]">{s.step}</p>
+              <p className="font-bold text-xs mt-1">{s.days}</p>
+              <p className="text-[var(--color-muted)] mt-0.5">{s.note}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompositionChecker() {
+  const { store } = useApp();
+  const [scheme, setScheme] = useState<"regular" | "composition">("regular");
+  const [customTurnover, setCustomTurnover] = useState("");
+
+  const annualSales = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const months = Math.max(txns.length / 30, 1);
+    return rev * 12 / months;
+  }, [store.transactions]);
+
+  const turnover = parseFloat(customTurnover) || annualSales;
+
+  const COMP_RATES = [
+    { type: "Manufacturer / Trader",       limit: 15000000, rate: 1,   note: "CGST 0.5% + SGST 0.5% on turnover" },
+    { type: "Restaurant (no alcohol)",     limit: 15000000, rate: 5,   note: "CGST 2.5% + SGST 2.5%" },
+    { type: "Service provider (CSCS)",     limit:  5000000, rate: 6,   note: "CGST 3% + SGST 3%; max ₹50L turnover" },
+  ];
+
+  const fc = formatCurrency;
+  const eligible = turnover <= 15000000;
+
+  const regularGst  = turnover * 0.18; // average blended estimate
+  const compGst     = turnover * 0.01; // trader at 1%
+  const saving      = regularGst - compGst;
+
+  const pros = ["No invoice-level GST compliance", "Quarterly tax payment (PMT-08)", "Lower tax rate", "No input tax credit complexity"];
+  const cons = ["Cannot claim ITC", "Cannot make inter-state supplies", "Cannot supply exempt goods or services (not in list)", "B2B buyers cannot claim ITC from you — lose competitiveness", "Cannot issue tax invoice"];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">Composition Scheme Eligibility Check</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Turnover (₹) — auto from transactions</label>
+            <input type="number" value={customTurnover} onChange={e => setCustomTurnover(e.target.value)}
+              placeholder={`Auto: ${fc(annualSales)}`}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Compare</label>
+            <div className="flex gap-2">
+              {(["regular","composition"] as const).map(s => (
+                <button key={s} onClick={() => setScheme(s)}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${scheme === s ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                  {s === "regular" ? "Regular Scheme" : "Composition"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-lg p-4 border ${eligible ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`text-sm font-bold ${eligible ? "text-green-400" : "text-red-400"}`}>
+              {eligible ? "✓ Eligible for Composition Scheme" : "✗ Not Eligible — Turnover exceeds ₹1.5 Crore"}
+            </span>
+          </div>
+          {eligible && (
+            <p className="text-xs text-[var(--color-muted)]">Estimated tax saving vs 18% blended regular: <span className="font-bold text-green-400">{fc(saving)}/yr</span></p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {COMP_RATES.map(r => (
+          <div key={r.type} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${turnover <= r.limit ? "border-[var(--color-primary)]/40" : "border-[var(--color-border)] opacity-50"}`}>
+            <p className="text-xs font-semibold mb-1">{r.type}</p>
+            <p className="text-2xl font-bold text-[var(--color-primary)]">{r.rate}%</p>
+            <p className="text-xs text-[var(--color-muted)] mt-1">{r.note}</p>
+            <p className={`text-xs mt-2 font-semibold ${turnover <= r.limit ? "text-green-400" : "text-red-400"}`}>
+              Limit: {fc(r.limit)} — {turnover <= r.limit ? "Eligible" : "Exceeds"}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold text-green-400 mb-2">Pros</p>
+          <ul className="space-y-1">
+            {pros.map(p => <li key={p} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-green-400">✓</span>{p}</li>)}
+          </ul>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs font-semibold text-red-400 mb-2">Cons</p>
+          <ul className="space-y-1">
+            {cons.map(c => <li key={c} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-red-400">✗</span>{c}</li>)}
+          </ul>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 10 CGST Act. Composition not available for ice cream, pan masala, tobacco. Interstate supply prohibited. Opt in via CMP-02 before start of FY.</p>
+    </div>
+  );
+}
+
+function QrmpChecker() {
+  const { store } = useApp();
+  const [customTurnover, setCustomTurnover] = useState("");
+
+  const annualTurnover = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const months = Math.max(txns.length / 30, 1);
+    return rev * 12 / months;
+  }, [store.transactions]);
+
+  const turnover = parseFloat(customTurnover) || annualTurnover;
+  const qrmpEligible = turnover <= 50000000; // ₹5 crore
+  const fc = formatCurrency;
+
+  const QUARTERS = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"];
+  const MONTHLY_DUE  = { gstr1: "11th", gstr3b: "20th" };
+  const QRMP_DUE     = { iff: "13th of M2", pmt06: "25th of M1 & M2", gstr3b_q: "22nd/24th of M3" };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">QRMP Suitability Check</h3>
+        <div className="max-w-sm">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Aggregate Turnover (₹)</label>
+          <input type="number" value={customTurnover} onChange={e => setCustomTurnover(e.target.value)}
+            placeholder={`Auto: ${fc(annualTurnover)}`}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className={`mt-4 rounded-lg p-4 border ${qrmpEligible ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+          <p className={`text-sm font-bold ${qrmpEligible ? "text-green-400" : "text-red-400"}`}>
+            {qrmpEligible ? "✓ Eligible for QRMP Scheme" : "✗ Not Eligible — Turnover exceeds ₹5 Crore"}
+          </p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">
+            {qrmpEligible
+              ? "You can opt for quarterly GSTR-1 + GSTR-3B filing via QRMP. File GSTR-1 quarterly with IFF for B2B in months 1 & 2."
+              : "Businesses with turnover > ₹5 Cr must file GSTR-1 and GSTR-3B monthly."}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+            <span className="text-xs font-semibold">Monthly Filing (Current)</span>
+            <span className="text-xs text-[var(--color-muted)]">24 filings/yr</span>
+          </div>
+          <div className="p-4 space-y-2 text-xs">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">GSTR-1</span><span className="font-semibold">By {MONTHLY_DUE.gstr1} each month</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">GSTR-3B</span><span className="font-semibold">By {MONTHLY_DUE.gstr3b} each month</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Annual filings</span><span className="font-semibold text-red-400">24 (12+12)</span></div>
+          </div>
+        </div>
+        <div className={`bg-[var(--color-surface)] border rounded-lg overflow-hidden ${qrmpEligible ? "border-[var(--color-primary)]/40" : "border-[var(--color-border)] opacity-50"}`}>
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--color-primary)]">QRMP Scheme</span>
+            <span className="text-xs text-[var(--color-muted)]">~13 filings/yr</span>
+          </div>
+          <div className="p-4 space-y-2 text-xs">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">IFF (B2B)</span><span className="font-semibold">By {QRMP_DUE.iff} (optional)</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">PMT-06 (tax)</span><span className="font-semibold">By {QRMP_DUE.pmt06}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">GSTR-3B (Q)</span><span className="font-semibold">By {QRMP_DUE.gstr3b_q}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Annual filings</span><span className="font-semibold text-green-400">~13 (4+4+PMT)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-3">Quarterly Filing Calendar</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {QUARTERS.map(q => (
+            <div key={q} className="bg-[var(--color-accent)] rounded-lg p-3 text-xs">
+              <p className="font-semibold text-[var(--color-primary)]">{q}</p>
+              <p className="text-[var(--color-muted)] mt-1">IFF: 13th M1, M2</p>
+              <p className="text-[var(--color-muted)]">PMT-06: 25th M1, M2</p>
+              <p className="text-[var(--color-muted)]">3B: 22nd/24th M3</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">QRMP opt-in via GST portal between 1st–31st of first month of each quarter. Category I taxpayers: 20th; Category II: 22nd/24th for GSTR-3B.</p>
     </div>
   );
 }
