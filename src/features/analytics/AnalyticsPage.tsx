@@ -2,14 +2,14 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2, Package, MapPin, Filter, GitBranch, AlertTriangle, Target, Gauge } from "lucide-react";
 import { totalNetBookValue, totalGrossCost, totalAccumulatedDepreciation } from "@/lib/depreciation";
 import { toast } from "sonner";
 import { exportExcel, exportPdf } from "@/lib/exporters";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
-  AreaChart, Area,
+  AreaChart, Area, ComposedChart,
 } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
@@ -69,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -181,6 +181,15 @@ export default function AnalyticsPage() {
     { id: "ratios",         label: "Ratio Analysis" },
     { id: "trialbalance",   label: "Trial Balance" },
     { id: "commission",     label: "Sales Commission" },
+    { id: "sku-profit",       label: "SKU Profitability" },
+    { id: "customer-cohorts", label: "Customer Cohorts" },
+    { id: "branch-pl",        label: "Region P&L" },
+    { id: "unit-economics",   label: "Unit Economics" },
+    { id: "sales-funnel",     label: "Sales Funnel" },
+    { id: "expense-variance", label: "Expense Variance" },
+    { id: "revenue-pareto",   label: "Pareto 80/20" },
+    { id: "margin-bridge",    label: "Margin Bridge" },
+    { id: "churn-flags",      label: "Churn Flags" },
   ] as const;
 
   const benchmarks = [
@@ -1056,6 +1065,15 @@ export default function AnalyticsPage() {
       {tab === "ratios" && <RatiosTab />}
       {tab === "trialbalance" && <TrialBalanceTab />}
       {tab === "commission" && <CommissionTab />}
+      {tab === "sku-profit" && <SkuProfitabilityTab />}
+      {tab === "customer-cohorts" && <CustomerCohortsTab />}
+      {tab === "branch-pl" && <BranchPLTab />}
+      {tab === "unit-economics" && <UnitEconomicsTab />}
+      {tab === "sales-funnel" && <SalesFunnelTab />}
+      {tab === "expense-variance" && <ExpenseVarianceTab />}
+      {tab === "revenue-pareto" && <RevenueParetoTab />}
+      {tab === "margin-bridge" && <MarginBridgeTab />}
+      {tab === "churn-flags" && <ChurnFlagsTab />}
     </div>
   );
 }
@@ -1886,6 +1904,915 @@ function CommissionTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Tiered mode applies each tier's rate only to the sales within that band (marginal, like income-tax slabs). Commission to non-employee agents may attract TDS u/s 194H (5%) and GST (18%). Indicative only.</p>
+    </div>
+  );
+}
+
+// ── Shared helpers for the new analytics tools ──────────────────────────────────
+const ANALYTICS_INPUT = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]";
+const ANALYTICS_CARD   = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
+const PARETO_PALETTE   = ["#22c55e", "#3b82f6", "#f97316", "#8b5cf6", "#eab308", "#14b8a6", "#ec4899", "#6b7280"];
+
+// Tiny stable hash so the same name always lands in the same derived bucket (region/SKU).
+function bucketIndex(key: string, n: number): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return h % Math.max(1, n);
+}
+
+// Pull a coarse "item / SKU" label from a transaction description.
+function deriveItem(t: { description?: string; counterparty?: string; category: string }): string {
+  const src = (t.description || t.counterparty || "").trim();
+  if (!src) return CATEGORY_LABEL[t.category] ?? t.category;
+  // First 2 significant words, title-cased — a usable proxy when no SKU field exists.
+  const words = src.replace(/[#*₹0-9]+/g, " ").split(/\s+/).filter(w => w.length > 1).slice(0, 2);
+  const label = words.join(" ").trim();
+  return label ? label.replace(/\b\w/g, c => c.toUpperCase()) : (CATEGORY_LABEL[t.category] ?? t.category);
+}
+
+function MetricCard({ label, value, note, color = "text-[var(--color-text)]" }: { label: string; value: string; note?: string; color?: string }) {
+  return (
+    <div className={`${ANALYTICS_CARD} p-4`}>
+      <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
+      <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+      {note && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{note}</p>}
+    </div>
+  );
+}
+
+// ── #134 PRODUCT / SKU PROFITABILITY ────────────────────────────────────────────
+function SkuProfitabilityTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  // Durable: assumed direct-cost % of revenue per item (COGS proxy). Default 60%.
+  const [defaultCogs, setDefaultCogs] = useFeatureState("sku-default-cogs", 60);
+  const [overrides, setOverrides] = useFeatureState<Record<string, number>>("sku-cogs-overrides", {});
+
+  const rows = useMemo(() => {
+    const acc: Record<string, { name: string; revenue: number; units: number }> = {};
+    transactions.filter(t => t.amount > 0 && t.category !== "transfer").forEach(t => {
+      const name = deriveItem(t);
+      const k = name.toLowerCase();
+      if (!acc[k]) acc[k] = { name, revenue: 0, units: 0 };
+      acc[k].revenue += t.amount;
+      acc[k].units += 1;
+    });
+    return Object.entries(acc).map(([k, v]) => {
+      const cogsPct = overrides[k] ?? defaultCogs;
+      const cogs = v.revenue * (cogsPct / 100);
+      const margin = v.revenue - cogs;
+      const marginPct = v.revenue > 0 ? Math.round((margin / v.revenue) * 100) : 0;
+      return { key: k, ...v, cogsPct, cogs, margin, marginPct, avgTicket: v.units > 0 ? v.revenue / v.units : 0 };
+    }).sort((a, b) => b.margin - a.margin);
+  }, [transactions, overrides, defaultCogs]);
+
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalMargin  = rows.reduce((s, r) => s + r.margin, 0);
+  const winners = rows.filter(r => r.marginPct >= 40 && r.margin > 0).slice(0, 5);
+  const losers  = rows.filter(r => r.marginPct < 20).slice(0, 5);
+  const chartData = rows.slice(0, 8).map(r => ({ name: r.name.length > 14 ? r.name.slice(0, 13) + "…" : r.name, margin: Math.round(r.margin), revenue: Math.round(r.revenue) }));
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Items / SKUs" value={rows.length.toString()} color="text-[var(--color-primary)]" note="Derived from descriptions" />
+        <MetricCard label="Total Revenue" value={formatCurrency(totalRevenue)} color="text-green-400" />
+        <MetricCard label="Gross Margin" value={formatCurrency(totalMargin)} color="text-[var(--color-text)]" note={`${totalRevenue > 0 ? Math.round((totalMargin / totalRevenue) * 100) : 0}% blended`} />
+        <MetricCard label="Loss-makers" value={losers.length.toString()} color={losers.length ? "text-red-400" : "text-green-400"} note="Margin < 20%" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Package size={14} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Direct-cost assumption</p>
+          <div className="ml-auto flex items-center gap-2 text-xs">
+            <label className="text-[var(--color-muted)]">Default COGS % of revenue</label>
+            <input type="number" min={0} max={100} value={defaultCogs} onChange={e => setDefaultCogs(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={`${ANALYTICS_INPUT} w-20`} />
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">No SKU master exists, so items are inferred from transaction descriptions and costed at a flat assumed COGS %. Override per item in the table for accuracy.</p>
+      </div>
+
+      {chartData.length > 0 && (
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <p className="text-sm font-semibold mb-4">Gross Margin by Item · Top 8</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={chartData} layout="vertical" barCategoryGap="22%">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={110} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="margin" name="Gross margin" radius={[0, 4, 4, 0]}>
+                {chartData.map((d, i) => <Cell key={i} fill={d.margin >= 0 ? "var(--color-primary)" : "#ef4444"} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Item profitability · winners vs losers</p></div>
+        {rows.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No revenue transactions to analyse.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Item", "Txns", "Revenue", "COGS %", "Margin", "Margin %"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.key} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{r.units}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(r.revenue)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <input type="number" min={0} max={100} value={r.cogsPct} onChange={e => setOverrides(prev => ({ ...prev, [r.key]: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) }))} className={`${ANALYTICS_INPUT} w-16 text-right`} />
+                    </td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.margin >= 0 ? "text-[var(--color-text)]" : "text-red-400"}`}>{formatAmount(r.margin)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${r.marginPct >= 40 ? "text-green-400" : r.marginPct >= 20 ? "text-yellow-400" : "text-red-400"}`}>{r.marginPct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {(winners.length > 0 || losers.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`${ANALYTICS_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3 text-green-400">Winners — protect &amp; push</p>
+            {winners.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No clear winners yet.</p> : winners.map(r => (
+              <div key={r.key} className="flex items-center justify-between text-xs py-1"><span className="truncate pr-2">{r.name}</span><span className="tabular-nums text-green-400 font-semibold">{formatAmount(r.margin)} · {r.marginPct}%</span></div>
+            ))}
+          </div>
+          <div className={`${ANALYTICS_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3 text-red-400">Losers — re-price or drop</p>
+            {losers.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loss-makers — healthy mix.</p> : losers.map(r => (
+              <div key={r.key} className="flex items-center justify-between text-xs py-1"><span className="truncate pr-2">{r.name}</span><span className="tabular-nums text-red-400 font-semibold">{formatAmount(r.margin)} · {r.marginPct}%</span></div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #135 CUSTOMER PROFITABILITY & COHORTS ───────────────────────────────────────
+function CustomerCohortsTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+
+  const customers = useMemo(() => {
+    const acc: Record<string, { name: string; revenue: number; txns: number; first: string; last: string }> = {};
+    transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer").forEach(t => {
+      const k = t.counterparty;
+      if (!acc[k]) acc[k] = { name: k, revenue: 0, txns: 0, first: t.date, last: t.date };
+      acc[k].revenue += t.amount;
+      acc[k].txns += 1;
+      if (t.date < acc[k].first) acc[k].first = t.date;
+      if (t.date > acc[k].last) acc[k].last = t.date;
+    });
+    return Object.values(acc).map(c => {
+      const monthsActive = Math.max(1, Math.round((parseISO(c.last).getTime() - parseISO(c.first).getTime()) / (1000 * 60 * 60 * 24 * 30)) + 1);
+      const monthlyRev = c.revenue / monthsActive;
+      const daysSinceLast = Math.round((now.getTime() - parseISO(c.last).getTime()) / (1000 * 60 * 60 * 24));
+      // Simple LTV proxy: avg monthly revenue × expected 24-month lifetime, contribution at 50%.
+      const ltv = monthlyRev * 24 * 0.5;
+      return { ...c, monthsActive, monthlyRev, daysSinceLast, ltv, active: daysSinceLast <= 90 };
+    }).sort((a, b) => b.revenue - a.revenue);
+  }, [transactions]);
+
+  // Acquisition cohorts by first-seen month.
+  const cohorts = useMemo(() => {
+    const acc: Record<string, { label: string; key: string; customers: number; revenue: number; retained: number }> = {};
+    customers.forEach(c => {
+      const d = parseISO(c.first);
+      const key = format(d, "yyyy-MM");
+      if (!acc[key]) acc[key] = { label: format(d, "MMM yy"), key, customers: 0, revenue: 0, retained: 0 };
+      acc[key].customers += 1;
+      acc[key].revenue += c.revenue;
+      if (c.active) acc[key].retained += 1;
+    });
+    return Object.values(acc).sort((a, b) => a.key.localeCompare(b.key)).slice(-8);
+  }, [customers]);
+
+  const totalRev = customers.reduce((s, c) => s + c.revenue, 0);
+  const activeCount = customers.filter(c => c.active).length;
+  const churnedCount = customers.length - activeCount;
+  const avgLtv = customers.length ? customers.reduce((s, c) => s + c.ltv, 0) / customers.length : 0;
+  const retentionRate = customers.length ? Math.round((activeCount / customers.length) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Customers" value={customers.length.toString()} color="text-[var(--color-primary)]" />
+        <MetricCard label="Active (≤90d)" value={`${activeCount}`} color="text-green-400" note={`${retentionRate}% retention`} />
+        <MetricCard label="Churned (>90d)" value={`${churnedCount}`} color={churnedCount ? "text-red-400" : "text-green-400"} />
+        <MetricCard label="Avg LTV" value={formatCurrency(avgLtv)} color="text-[var(--color-text)]" note="24m × 50% contribution" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <div className="flex items-center gap-2 mb-4"><Users size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Acquisition cohorts · retention</p></div>
+        {cohorts.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No customer history.</p> : (
+          <div className="space-y-2">
+            {cohorts.map(co => {
+              const ret = co.customers > 0 ? Math.round((co.retained / co.customers) * 100) : 0;
+              return (
+                <div key={co.key} className="flex items-center gap-3 text-xs">
+                  <span className="w-16 text-[var(--color-muted)]">{co.label}</span>
+                  <span className="w-24 tabular-nums">{co.customers} cust · {co.retained} live</span>
+                  <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${ret >= 60 ? "bg-green-500" : ret >= 30 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${ret}%` }} />
+                  </div>
+                  <span className="w-10 text-right tabular-nums text-[var(--color-muted)]">{ret}%</span>
+                  <span className="w-20 text-right tabular-nums text-green-400">{formatAmount(co.revenue)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Customer profitability</p></div>
+        {customers.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No customer revenue yet.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Customer", "Revenue", "Share", "Months", "LTV", "Last seen", "Status"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {customers.slice(0, 25).map(c => (
+                  <tr key={c.name} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium truncate max-w-[160px]">{c.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(c.revenue)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{totalRev > 0 ? Math.round((c.revenue / totalRev) * 100) : 0}%</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{c.monthsActive}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{formatAmount(c.ltv)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{c.daysSinceLast}d ago</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${c.active ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>{c.active ? "Active" : "Churned"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">LTV and retention are computed from observed transaction recency/frequency; with no contract data, "churned" means no revenue in 90+ days. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #136 REGION / BRANCH P&L ────────────────────────────────────────────────────
+function BranchPLTab() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  // Durable: how to segment. Bank account is a real field; "region" is a derived proxy.
+  const [segmentBy, setSegmentBy] = useFeatureState<"bank" | "region">("branch-segment-by", "bank");
+  const regions = ["North", "South", "East", "West", "Central"];
+
+  const segments = useMemo(() => {
+    const acc: Record<string, { name: string; revenue: number; expense: number }> = {};
+    const labelFor = (t: { bankAccountId: string; counterparty?: string }) => {
+      if (segmentBy === "bank") {
+        const ba = bankAccounts.find(b => b.id === t.bankAccountId);
+        return ba ? ba.name : "Unassigned";
+      }
+      const key = t.counterparty || t.bankAccountId || "—";
+      return regions[bucketIndex(key, regions.length)];
+    };
+    transactions.filter(t => t.category !== "transfer").forEach(t => {
+      const name = labelFor(t);
+      if (!acc[name]) acc[name] = { name, revenue: 0, expense: 0 };
+      if (t.amount > 0) acc[name].revenue += t.amount;
+      else acc[name].expense += Math.abs(t.amount);
+    });
+    return Object.values(acc).map(s => {
+      const net = s.revenue - s.expense;
+      return { ...s, net, margin: s.revenue > 0 ? Math.round((net / s.revenue) * 100) : 0 };
+    }).sort((a, b) => b.net - a.net);
+  }, [transactions, bankAccounts, segmentBy]);
+
+  const chartData = segments.map(s => ({ name: s.name.length > 12 ? s.name.slice(0, 11) + "…" : s.name, revenue: Math.round(s.revenue), expense: Math.round(s.expense), net: Math.round(s.net) }));
+  const totalNet = segments.reduce((s, x) => s + x.net, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <MapPin size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Segment by</p>
+        <div className="ml-auto flex gap-1">
+          {(["bank", "region"] as const).map(m => (
+            <button key={m} onClick={() => setSegmentBy(m)} className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${segmentBy === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>{m === "bank" ? "Bank account" : "Region (derived)"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Segments" value={segments.length.toString()} color="text-[var(--color-primary)]" />
+        <MetricCard label="Total Net P&L" value={formatCurrency(totalNet)} color={totalNet >= 0 ? "text-green-400" : "text-red-400"} />
+        <MetricCard label="Best segment" value={segments[0]?.name ?? "—"} color="text-green-400" note={segments[0] ? formatCurrency(segments[0].net) : ""} />
+        <MetricCard label="Weakest" value={segments[segments.length - 1]?.name ?? "—"} color="text-red-400" note={segments.length ? formatCurrency(segments[segments.length - 1].net) : ""} />
+      </div>
+
+      {chartData.length > 0 && (
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <p className="text-sm font-semibold mb-4">Revenue vs Expense vs Net by segment</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={chartData} barCategoryGap="24%">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="revenue" name="Revenue" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="expense" name="Expense" fill="#ef4444" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="net" name="Net" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Segment P&L</p></div>
+        {segments.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No data to segment.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Segment", "Revenue", "Expense", "Net P&L", "Margin %"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {segments.map(s => (
+                  <tr key={s.name} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium">{s.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{formatAmount(s.revenue)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-red-400">({formatAmount(s.expense)})</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${s.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatAmount(s.net)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${s.margin >= 10 ? "text-green-400" : s.margin >= 0 ? "text-yellow-400" : "text-red-400"}`}>{s.margin}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">"Bank account" segmentation uses the real account each transaction posts to. "Region" is a deterministic proxy from counterparty (no geo field exists) — useful for shape, not exact geography.</p>
+    </div>
+  );
+}
+
+// ── #137 UNIT ECONOMICS (CAC / LTV / PAYBACK) ───────────────────────────────────
+function UnitEconomicsTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  // Durable assumptions the owner controls.
+  const [salesMarketingPct, setSalesMarketingPct] = useFeatureState("ue-sm-pct", 15); // % of expense treated as S&M
+  const [grossMarginPct, setGrossMarginPct] = useFeatureState("ue-gm-pct", 50);
+  const [lifetimeMonths, setLifetimeMonths] = useFeatureState("ue-lifetime", 24);
+
+  const m = useMemo(() => {
+    const rev = transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const exp = Math.abs(transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    // New customers = unique counterparties whose first revenue is in the dataset window.
+    const firstSeen: Record<string, string> = {};
+    transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer").forEach(t => {
+      if (!firstSeen[t.counterparty] || t.date < firstSeen[t.counterparty]) firstSeen[t.counterparty] = t.date;
+    });
+    const customers = Object.keys(firstSeen);
+    const newCustomers = Math.max(1, customers.length);
+    const smSpend = exp * (salesMarketingPct / 100);
+    const cac = smSpend / newCustomers;
+    const arpa = rev / Math.max(1, customers.length); // avg revenue per account (period)
+    const monthlyArpa = arpa / 6; // dataset window ≈ 6 months of activity
+    const ltv = monthlyArpa * lifetimeMonths * (grossMarginPct / 100);
+    const ratio = cac > 0 ? ltv / cac : 0;
+    const grossPerMonth = monthlyArpa * (grossMarginPct / 100);
+    const paybackMonths = grossPerMonth > 0 ? cac / grossPerMonth : 0;
+    return { rev, exp, customers: customers.length, smSpend, cac, arpa, ltv, ratio, paybackMonths };
+  }, [transactions, salesMarketingPct, grossMarginPct, lifetimeMonths]);
+
+  const ratioColor = m.ratio >= 3 ? "text-green-400" : m.ratio >= 1 ? "text-yellow-400" : "text-red-400";
+  const paybackColor = m.paybackMonths > 0 && m.paybackMonths <= 12 ? "text-green-400" : m.paybackMonths <= 18 ? "text-yellow-400" : "text-red-400";
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2 mb-3"><Gauge size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Assumptions</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          {([
+            { label: "Sales & Marketing (% of total expense)", val: salesMarketingPct, set: setSalesMarketingPct, max: 100 },
+            { label: "Gross margin %", val: grossMarginPct, set: setGrossMarginPct, max: 100 },
+            { label: "Expected lifetime (months)", val: lifetimeMonths, set: setLifetimeMonths, max: 120 },
+          ] as { label: string; val: number; set: (n: number) => void; max: number }[]).map(f => (
+            <label key={f.label} className="block">
+              <span className="text-[var(--color-muted)] block mb-1">{f.label}</span>
+              <input type="number" min={0} max={f.max} value={f.val} onChange={e => f.set(Math.max(0, Math.min(f.max, parseFloat(e.target.value) || 0)))} className={`${ANALYTICS_INPUT} w-full`} />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="CAC" value={formatCurrency(m.cac)} color="text-orange-400" note={`${formatAmount(m.smSpend)} S&M ÷ ${m.customers} cust`} />
+        <MetricCard label="LTV" value={formatCurrency(m.ltv)} color="text-green-400" note={`${lifetimeMonths}m × ${grossMarginPct}% GM`} />
+        <MetricCard label="LTV : CAC" value={`${m.ratio.toFixed(1)}x`} color={ratioColor} note="Target ≥ 3x" />
+        <MetricCard label="CAC Payback" value={m.paybackMonths > 0 ? `${m.paybackMonths.toFixed(1)} mo` : "—"} color={paybackColor} note="Target ≤ 12 mo" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">LTV : CAC payback bridge</p>
+        <div className="space-y-3">
+          {([
+            { label: "Customer LTV (contribution)", value: m.ltv, cls: "bg-green-500" },
+            { label: "Acquisition cost (CAC)", value: m.cac, cls: "bg-orange-400" },
+            { label: "Net lifetime value", value: m.ltv - m.cac, cls: (m.ltv - m.cac) >= 0 ? "bg-[var(--color-primary)]" : "bg-red-500" },
+          ]).map(b => {
+            const max = Math.max(m.ltv, m.cac, 1);
+            return (
+              <div key={b.label}>
+                <div className="flex items-center justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">{b.label}</span><span className="tabular-nums font-semibold">{formatCurrency(b.value)}</span></div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full rounded-full ${b.cls}`} style={{ width: `${Math.min(100, Math.abs(b.value) / max * 100)}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">CAC uses an assumed S&M share of total expense; LTV uses average revenue per account × assumed lifetime × gross margin. Tune the assumptions above for your model. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #138 SALES FUNNEL & CONVERSION ──────────────────────────────────────────────
+function SalesFunnelTab() {
+  const { store } = useApp();
+  const { invoices, transactions } = store;
+  // Durable top-of-funnel counts the owner enters (leads/qualified have no source data).
+  const [leads, setLeads] = useFeatureState("funnel-leads", 0);
+  const [qualified, setQualified] = useFeatureState("funnel-qualified", 0);
+
+  const stages = useMemo(() => {
+    const proposals = invoices.length; // proforma/issued invoices ≈ proposals sent
+    const won = invoices.filter(i => i.status === "paid").length;
+    const wonValue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+    // Fall back to transaction-derived deals if no invoices exist.
+    const revenueDeals = transactions.filter(t => t.amount > 0 && t.category !== "transfer").length;
+    const proposalCount = proposals || revenueDeals;
+    const wonCount = won || revenueDeals;
+    return [
+      { name: "Leads", count: leads, color: "#6b7280" },
+      { name: "Qualified", count: qualified, color: "#3b82f6" },
+      { name: "Proposals / Invoiced", count: proposalCount, color: "#f97316" },
+      { name: "Won / Paid", count: wonCount, color: "#22c55e" },
+    ].map((s, i, arr) => {
+      const prev = i > 0 ? arr[i - 1].count : s.count;
+      const conv = prev > 0 ? Math.round((s.count / prev) * 100) : 0;
+      return { ...s, conv: i === 0 ? 100 : conv, wonValue };
+    });
+  }, [invoices, transactions, leads, qualified]);
+
+  const top = stages[0].count || 1;
+  const winRate = stages[0].count > 0 ? Math.round((stages[stages.length - 1].count / top) * 100) : 0;
+  const wonValue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2 mb-3"><Filter size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Top-of-funnel inputs</p></div>
+        <div className="grid grid-cols-2 gap-3 text-xs max-w-md">
+          <label className="block"><span className="text-[var(--color-muted)] block mb-1">Leads</span><input type="number" min={0} value={leads} onChange={e => setLeads(Math.max(0, parseInt(e.target.value) || 0))} className={`${ANALYTICS_INPUT} w-full`} /></label>
+          <label className="block"><span className="text-[var(--color-muted)] block mb-1">Qualified</span><input type="number" min={0} value={qualified} onChange={e => setQualified(Math.max(0, parseInt(e.target.value) || 0))} className={`${ANALYTICS_INPUT} w-full`} /></label>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Proposals and Won are read live from your invoices (issued → paid). Enter lead/qualified counts to complete the funnel.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Overall win rate" value={`${winRate}%`} color={winRate >= 25 ? "text-green-400" : "text-yellow-400"} note="Won ÷ leads" />
+        <MetricCard label="Won deals" value={stages[stages.length - 1].count.toString()} color="text-green-400" />
+        <MetricCard label="Won value" value={formatCurrency(wonValue)} color="text-green-400" />
+        <MetricCard label="Open invoices" value={invoices.filter(i => i.status !== "paid").length.toString()} color="text-yellow-400" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <div className="flex items-center gap-2 mb-4"><Target size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Conversion funnel</p></div>
+        <div className="space-y-3">
+          {stages.map((s, i) => {
+            const width = Math.max(6, Math.round((s.count / top) * 100));
+            return (
+              <div key={s.name}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-[var(--color-muted)]">{s.name}</span>
+                  <span className="tabular-nums font-semibold">{s.count} {i > 0 && <span className="text-[10px] text-[var(--color-muted)] ml-1">({s.conv}% of prev)</span>}</span>
+                </div>
+                <div className="h-6 bg-[var(--color-bg)] rounded-md overflow-hidden">
+                  <div className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-semibold text-[var(--color-bg)]" style={{ width: `${width}%`, background: s.color }}>{width >= 18 ? `${Math.round((s.count / top) * 100)}%` : ""}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">No CRM pipeline exists, so proposals/wins are proxied from invoices; leads &amp; qualified are your inputs. Win rate = won ÷ leads.</p>
+    </div>
+  );
+}
+
+// ── #139 EXPENSE TREND & VARIANCE (MoM / YoY) ───────────────────────────────────
+function ExpenseVarianceTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [mode, setMode] = useFeatureState<"mom" | "yoy">("variance-mode", "mom");
+  const now = new Date();
+
+  const data = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = subMonths(now, 11 - i);
+      const start = startOfMonth(d).toISOString().split("T")[0];
+      const end = endOfMonth(d).toISOString().split("T")[0];
+      const expense = Math.abs(transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).reduce((s, t) => s + t.amount, 0));
+      return { month: format(d, "MMM yy"), expense: Math.round(expense) };
+    });
+    return months;
+  }, [transactions]);
+
+  const curr = data[data.length - 1];
+  const prevMonthVal = data[data.length - 2]?.expense ?? 0;
+  const prevYearVal = data[0]?.expense ?? 0; // 11 months back ≈ prior year proxy within window
+  const baseVal = mode === "mom" ? prevMonthVal : prevYearVal;
+  const varianceAbs = (curr?.expense ?? 0) - baseVal;
+  const variancePct = baseVal > 0 ? Math.round((varianceAbs / baseVal) * 100) : 0;
+
+  // Per-category MoM variance (current vs previous month).
+  const catVariance = useMemo(() => {
+    const ms = data.length;
+    if (ms < 2) return [];
+    const dCurr = subMonths(now, 0), dPrev = subMonths(now, mode === "mom" ? 1 : 11);
+    const sumCat = (d: Date) => {
+      const start = startOfMonth(d).toISOString().split("T")[0];
+      const end = endOfMonth(d).toISOString().split("T")[0];
+      const acc: Record<string, number> = {};
+      transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => { acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount); });
+      return acc;
+    };
+    const a = sumCat(dCurr), b = sumCat(dPrev);
+    const cats = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...cats].map(c => {
+      const cur = a[c] || 0, pre = b[c] || 0;
+      return { cat: CATEGORY_LABEL[c] ?? c, color: CATEGORY_COLORS[c] ?? "#6b7280", cur, pre, diff: cur - pre, pct: pre > 0 ? Math.round(((cur - pre) / pre) * 100) : (cur > 0 ? 100 : 0) };
+    }).filter(r => r.cur > 0 || r.pre > 0).sort((x, y) => Math.abs(y.diff) - Math.abs(x.diff));
+  }, [transactions, mode, data.length]);
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <Activity size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Expense variance</p>
+        <div className="ml-auto flex gap-1">
+          {(["mom", "yoy"] as const).map(mm => (
+            <button key={mm} onClick={() => setMode(mm)} className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${mode === mm ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>{mm === "mom" ? "Month-on-Month" : "Year-on-Year*"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="This month expense" value={formatCurrency(curr?.expense ?? 0)} color="text-red-400" />
+        <MetricCard label={mode === "mom" ? "Prev month" : "~12m ago"} value={formatCurrency(baseVal)} color="text-[var(--color-muted)]" />
+        <MetricCard label="Variance" value={`${varianceAbs >= 0 ? "+" : "−"}${formatAmount(Math.abs(varianceAbs))}`} color={varianceAbs <= 0 ? "text-green-400" : "text-red-400"} />
+        <MetricCard label="Variance %" value={`${variancePct >= 0 ? "+" : ""}${variancePct}%`} color={variancePct <= 0 ? "text-green-400" : "text-red-400"} />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Monthly expense trend · 12 months</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <Tooltip content={<CustomTooltip />} />
+            <Line type="monotone" dataKey="expense" name="Expense" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: "#ef4444" }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Cost-driver variance by category</p></div>
+        {catVariance.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">Not enough history to compute variance.</p> : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>{["Category", "Current", "Base", "Δ", "Δ%"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {catVariance.map(r => (
+                <tr key={r.cat} className="hover:bg-white/2 text-xs">
+                  <td className="px-4 py-2.5 font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.cat}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatAmount(r.cur)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(r.pre)}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.diff <= 0 ? "text-green-400" : "text-red-400"}`}>{r.diff >= 0 ? "+" : "−"}{formatAmount(Math.abs(r.diff))}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums ${r.pct <= 0 ? "text-green-400" : "text-red-400"}`}>{r.pct >= 0 ? "+" : ""}{r.pct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">*True YoY needs 12+ months of history; within a shorter window this compares against the earliest month available as a proxy.</p>
+    </div>
+  );
+}
+
+// ── #140 REVENUE CONCENTRATION & PARETO (80/20) ─────────────────────────────────
+function RevenueParetoTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [dim, setDim] = useFeatureState<"customer" | "item">("pareto-dim", "customer");
+
+  const { rows, total, count8020, hhi } = useMemo(() => {
+    const acc: Record<string, number> = {};
+    transactions.filter(t => t.amount > 0 && t.category !== "transfer").forEach(t => {
+      const key = dim === "customer" ? (t.counterparty || "Unattributed") : deriveItem(t);
+      acc[key] = (acc[key] || 0) + t.amount;
+    });
+    const sorted = Object.entries(acc).sort((a, b) => b[1] - a[1]);
+    const tot = sorted.reduce((s, [, v]) => s + v, 0);
+    let cum = 0;
+    const out = sorted.map(([name, value]) => {
+      cum += value;
+      const share = tot > 0 ? (value / tot) * 100 : 0;
+      return { name, value, share, cumPct: tot > 0 ? Math.round((cum / tot) * 100) : 0 };
+    });
+    const eighty = out.findIndex(r => r.cumPct >= 80);
+    const hhiVal = Math.round(out.reduce((s, r) => s + r.share * r.share, 0));
+    return { rows: out, total: tot, count8020: eighty < 0 ? out.length : eighty + 1, hhi: hhiVal };
+  }, [transactions, dim]);
+
+  const pct8020 = rows.length ? Math.round((count8020 / rows.length) * 100) : 0;
+  const chartData = rows.slice(0, 12).map((r, i) => ({ name: r.name.length > 12 ? r.name.slice(0, 11) + "…" : r.name, value: Math.round(r.value), cum: r.cumPct, fill: PARETO_PALETTE[i % PARETO_PALETTE.length] }));
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <BarChart3 size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Pareto dimension</p>
+        <div className="ml-auto flex gap-1">
+          {(["customer", "item"] as const).map(d => (
+            <button key={d} onClick={() => setDim(d)} className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${dim === d ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>{d === "customer" ? "By customer" : "By item"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label={`${dim === "customer" ? "Customers" : "Items"}`} value={rows.length.toString()} color="text-[var(--color-primary)]" />
+        <MetricCard label="Drive 80% of revenue" value={`${count8020}`} color="text-yellow-400" note={`${pct8020}% of the base`} />
+        <MetricCard label="Top entity share" value={`${Math.round(rows[0]?.share ?? 0)}%`} color={(rows[0]?.share ?? 0) > 40 ? "text-red-400" : "text-green-400"} note={rows[0]?.name ?? "—"} />
+        <MetricCard label="HHI" value={hhi.toString()} color={hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-yellow-400" : "text-green-400"} note="< 1500 = diversified" />
+      </div>
+
+      {chartData.length > 0 && (
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <p className="text-sm font-semibold mb-4">Pareto · revenue bars + cumulative %</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={chartData} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={0} angle={-25} textAnchor="end" height={60} />
+              <YAxis yAxisId="l" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+              <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={38} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar yAxisId="l" dataKey="value" name="Revenue" radius={[3, 3, 0, 0]}>
+                {chartData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+              </Bar>
+              <Line yAxisId="r" type="monotone" dataKey="cum" name="Cumulative %" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 2 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Ranked contribution</p></div>
+        {rows.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No revenue to rank.</p> : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>{["#", dim === "customer" ? "Customer" : "Item", "Revenue", "Share", "Cumulative"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i <= 1 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.slice(0, 20).map((r, i) => (
+                <tr key={r.name} className={`hover:bg-white/2 text-xs ${i + 1 === count8020 ? "border-b-2 border-yellow-500/40" : ""}`}>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)]">{i + 1}</td>
+                  <td className="px-4 py-2.5 font-medium truncate max-w-[200px]">{r.name}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(r.value)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{Math.round(r.share)}%</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{r.cumPct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Total revenue analysed: {formatCurrency(total)}. The highlighted row marks the 80%-of-revenue cut-off (your vital few). HHI &gt; 2500 indicates risky concentration.</p>
+    </div>
+  );
+}
+
+// ── #141 WHAT-IF MARGIN BRIDGE ──────────────────────────────────────────────────
+function MarginBridgeTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  // Durable what-if levers (% changes).
+  const [priceChg, setPriceChg] = useFeatureState("bridge-price", 0);
+  const [volumeChg, setVolumeChg] = useFeatureState("bridge-volume", 0);
+  const [costChg, setCostChg] = useFeatureState("bridge-cost", 0);
+  const [cogsPct, setCogsPct] = useFeatureState("bridge-cogs-pct", 60);
+
+  const base = useMemo(() => {
+    const revenue = transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const cogs = revenue * (cogsPct / 100);
+    return { revenue, cogs, profit: revenue - cogs };
+  }, [transactions, cogsPct]);
+
+  const bridge = useMemo(() => {
+    // Start from base profit, apply each lever as an incremental contribution.
+    const p = priceChg / 100, v = volumeChg / 100, c = costChg / 100;
+    const baseRev = base.revenue, baseCogs = base.cogs;
+    // Price affects revenue only; volume affects both revenue and COGS; cost affects COGS only.
+    const priceEffect = baseRev * p;                          // extra revenue, no extra cost
+    const volumeEffect = (baseRev - baseCogs) * v;            // extra contribution at current margin
+    const costEffect = -baseCogs * c;                          // higher unit cost reduces profit
+    const newProfit = base.profit + priceEffect + volumeEffect + costEffect;
+    const newRevenue = baseRev * (1 + p) * (1 + v);
+    const newMargin = newRevenue > 0 ? Math.round((newProfit / newRevenue) * 100) : 0;
+    return { priceEffect, volumeEffect, costEffect, newProfit, newRevenue, newMargin };
+  }, [base, priceChg, volumeChg, costChg]);
+
+  const baseMargin = base.revenue > 0 ? Math.round((base.profit / base.revenue) * 100) : 0;
+  const waterfall = [
+    { label: "Base gross profit", value: base.profit, kind: "base" as const },
+    { label: `Price ${priceChg >= 0 ? "+" : ""}${priceChg}%`, value: bridge.priceEffect, kind: "step" as const },
+    { label: `Volume ${volumeChg >= 0 ? "+" : ""}${volumeChg}%`, value: bridge.volumeEffect, kind: "step" as const },
+    { label: `Unit cost ${costChg >= 0 ? "+" : ""}${costChg}%`, value: bridge.costEffect, kind: "step" as const },
+    { label: "New gross profit", value: bridge.newProfit, kind: "result" as const },
+  ];
+  const maxAbs = Math.max(...waterfall.map(w => Math.abs(w.value)), 1);
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2 mb-3"><GitBranch size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">What-if levers</p></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          {([
+            { label: "Price change %", val: priceChg, set: setPriceChg },
+            { label: "Volume change %", val: volumeChg, set: setVolumeChg },
+            { label: "Unit cost change %", val: costChg, set: setCostChg },
+            { label: "Base COGS % of rev", val: cogsPct, set: setCogsPct },
+          ] as { label: string; val: number; set: (n: number) => void }[]).map(f => (
+            <label key={f.label} className="block">
+              <span className="text-[var(--color-muted)] block mb-1">{f.label}</span>
+              <input type="number" value={f.val} onChange={e => f.set(parseFloat(e.target.value) || 0)} className={`${ANALYTICS_INPUT} w-full`} />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Base revenue" value={formatCurrency(base.revenue)} color="text-green-400" />
+        <MetricCard label="Base gross profit" value={formatCurrency(base.profit)} color="text-[var(--color-text)]" note={`${baseMargin}% margin`} />
+        <MetricCard label="New gross profit" value={formatCurrency(bridge.newProfit)} color={bridge.newProfit >= base.profit ? "text-green-400" : "text-red-400"} note={`${bridge.newMargin}% margin`} />
+        <MetricCard label="Profit impact" value={`${bridge.newProfit - base.profit >= 0 ? "+" : "−"}${formatAmount(Math.abs(bridge.newProfit - base.profit))}`} color={bridge.newProfit - base.profit >= 0 ? "text-green-400" : "text-red-400"} />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Profit bridge waterfall</p>
+        <div className="space-y-3">
+          {waterfall.map(w => {
+            const isStep = w.kind === "step";
+            const cls = w.kind === "base" ? "bg-[var(--color-muted)]" : w.kind === "result" ? (w.value >= 0 ? "bg-[var(--color-primary)]" : "bg-red-500") : (w.value >= 0 ? "bg-green-500" : "bg-red-400");
+            return (
+              <div key={w.label}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className={w.kind === "step" ? "text-[var(--color-muted)]" : "font-semibold"}>{w.label}</span>
+                  <span className={`tabular-nums font-semibold ${isStep ? (w.value >= 0 ? "text-green-400" : "text-red-400") : ""}`}>{isStep && w.value >= 0 ? "+" : isStep ? "−" : ""}{formatCurrency(isStep ? Math.abs(w.value) : w.value)}</span>
+                </div>
+                <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full rounded-full ${cls}`} style={{ width: `${Math.min(100, Math.abs(w.value) / maxAbs * 100)}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Price flows straight to profit; volume scales contribution at current margin; cost change hits COGS. Base COGS is an assumption — adjust above. Indicative model.</p>
+    </div>
+  );
+}
+
+// ── #142 PREDICTIVE CHURN / LATE-PAYMENT FLAGS ──────────────────────────────────
+function ChurnFlagsTab() {
+  const { store } = useApp();
+  const { transactions, invoices } = store;
+  const now = new Date();
+
+  // Customer churn risk from revenue recency/frequency.
+  const churnRisk = useMemo(() => {
+    const acc: Record<string, { name: string; txns: number; last: string; first: string; revenue: number }> = {};
+    transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer").forEach(t => {
+      const k = t.counterparty;
+      if (!acc[k]) acc[k] = { name: k, txns: 0, last: t.date, first: t.date, revenue: 0 };
+      acc[k].txns += 1; acc[k].revenue += t.amount;
+      if (t.date > acc[k].last) acc[k].last = t.date;
+      if (t.date < acc[k].first) acc[k].first = t.date;
+    });
+    return Object.values(acc).map(c => {
+      const daysSince = Math.round((now.getTime() - parseISO(c.last).getTime()) / (1000 * 60 * 60 * 24));
+      const spanDays = Math.max(1, Math.round((parseISO(c.last).getTime() - parseISO(c.first).getTime()) / (1000 * 60 * 60 * 24)));
+      const cadence = spanDays / Math.max(1, c.txns); // avg days between purchases
+      // Risk: overdue relative to own cadence, low frequency, long absence.
+      let score = 0;
+      if (daysSince > 90) score += 40; else if (daysSince > 60) score += 25; else if (daysSince > cadence * 2) score += 20;
+      if (c.txns <= 1) score += 25;
+      if (daysSince > cadence * 1.5) score += 15;
+      score = Math.min(100, score);
+      const level = score >= 60 ? "High" : score >= 30 ? "Medium" : "Low";
+      return { ...c, daysSince, cadence: Math.round(cadence), score, level };
+    }).filter(c => c.score >= 30).sort((a, b) => b.score - a.score);
+  }, [transactions]);
+
+  // Late-payment flags from invoices.
+  const lateRisk = useMemo(() => {
+    return invoices.map(inv => {
+      const due = parseISO(inv.dueDate);
+      const daysToDue = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const overdueDays = inv.status === "paid" ? 0 : Math.max(0, -daysToDue);
+      let score = 0;
+      if (inv.status === "overdue") score += 45;
+      if (overdueDays > 30) score += 30; else if (overdueDays > 0) score += 15;
+      else if (daysToDue <= 5 && inv.status !== "paid") score += 15; // due very soon, still open
+      // Prior bad behaviour: any other overdue invoice from same customer.
+      const priorOverdue = invoices.some(o => o.customer === inv.customer && o.id !== inv.id && o.status === "overdue");
+      if (priorOverdue) score += 20;
+      score = Math.min(100, score);
+      return { ...inv, daysToDue, overdueDays, score, level: score >= 60 ? "High" : score >= 30 ? "Medium" : "Low" };
+    }).filter(i => i.status !== "paid" && i.score >= 30).sort((a, b) => b.score - a.score);
+  }, [invoices]);
+
+  const exposureAtRisk = lateRisk.reduce((s, i) => s + i.amount, 0);
+  const revenueAtRisk = churnRisk.filter(c => c.level === "High").reduce((s, c) => s + c.revenue, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Churn-risk accounts" value={churnRisk.length.toString()} color={churnRisk.length ? "text-yellow-400" : "text-green-400"} />
+        <MetricCard label="High-churn revenue" value={formatCurrency(revenueAtRisk)} color="text-red-400" note="From High-risk customers" />
+        <MetricCard label="Late-payment flags" value={lateRisk.length.toString()} color={lateRisk.length ? "text-yellow-400" : "text-green-400"} />
+        <MetricCard label="Exposure at risk" value={formatCurrency(exposureAtRisk)} color="text-red-400" note="Open invoice value flagged" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center gap-2"><AlertTriangle size={14} className="text-yellow-400" /><p className="text-sm font-semibold">Customers likely to churn</p></div>
+        {churnRisk.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No churn signals — customers are buying on cadence.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Customer", "Revenue", "Orders", "Cadence", "Last seen", "Risk"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {churnRisk.slice(0, 20).map(c => (
+                  <tr key={c.name} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium truncate max-w-[180px]">{c.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{formatAmount(c.revenue)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{c.txns}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">~{c.cadence}d</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{c.daysSince}d ago</td>
+                    <td className="px-4 py-2.5 text-right"><span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${c.level === "High" ? "bg-red-900/30 text-red-400" : "bg-yellow-900/30 text-yellow-400"}`}>{c.level} · {c.score}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center gap-2"><AlertTriangle size={14} className="text-red-400" /><p className="text-sm font-semibold">Invoices likely to pay late</p></div>
+        {lateRisk.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No late-payment risk on open invoices.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Customer", "Invoice", "Amount", "Due", "Status", "Risk"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {lateRisk.slice(0, 20).map(inv => (
+                  <tr key={inv.id} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium truncate max-w-[160px]">{inv.customer}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{inv.invoiceNumber ?? inv.id.slice(0, 6)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(inv.amount)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{inv.overdueDays > 0 ? `${inv.overdueDays}d overdue` : `in ${inv.daysToDue}d`}</td>
+                    <td className="px-4 py-2.5 text-right"><span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${inv.status === "overdue" ? "bg-red-900/30 text-red-400" : "bg-yellow-900/30 text-yellow-400"}`}>{inv.status}</span></td>
+                    <td className="px-4 py-2.5 text-right"><span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${inv.level === "High" ? "bg-red-900/30 text-red-400" : "bg-yellow-900/30 text-yellow-400"}`}>{inv.level} · {inv.score}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic scores from observed recency/frequency and invoice aging — not an ML model. Use as a prioritised follow-up list, not a guarantee.</p>
     </div>
   );
 }

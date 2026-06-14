@@ -4,9 +4,10 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { runForecast } from "@/lib/forecastEngine";
 import { updateWidgetData } from "@/lib/widgetBridge";
-import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target, LayoutGrid, Flag, Sunrise, Wallet, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
-import { format, addMonths, setDate, isBefore, addDays } from "date-fns";
+import { format, addMonths, setDate, isBefore, addDays, isToday } from "date-fns";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
@@ -521,6 +522,348 @@ function CashForecastChart({ forecast }: { forecast: { date: string; p10: number
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD TOOLS #147–#150 (FEATURES_200 · "Dashboard" section)
+// Additive, self-contained widgets. Each computes from the live store; durable
+// picks/goals persist via useFeatureState. Do not disturb existing widgets.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── #147 Custom KPI Widget Builder ───────────────────────────────────────────
+// Owner picks which metrics show on a personal board; selection persists.
+type KpiKey = "balance" | "burn" | "runway" | "revenueMtd" | "netMtd" | "alerts" | "topBank" | "accounts";
+
+const KPI_CATALOG: { key: KpiKey; label: string }[] = [
+  { key: "balance",    label: "Total Balance" },
+  { key: "burn",       label: "Monthly Burn" },
+  { key: "runway",     label: "Cash Runway" },
+  { key: "revenueMtd", label: "Revenue (MTD)" },
+  { key: "netMtd",     label: "Net Cash (MTD)" },
+  { key: "alerts",     label: "Unread Alerts" },
+  { key: "topBank",    label: "Largest Account" },
+  { key: "accounts",   label: "Account Count" },
+];
+
+function KpiWidgetBuilder() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, alerts } = store;
+  const [picked, setPicked] = useFeatureState<KpiKey[]>("dashboard-kpi-board", ["balance", "runway", "revenueMtd", "alerts"]);
+  const [editing, setEditing] = useState(false);
+
+  const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const balance  = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const burn     = monthlyBurn(transactions);
+  const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
+  const revMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const outMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const topBank  = bankAccounts.reduce<typeof bankAccounts[number] | null>((best, a) => (!best || a.balance > best.balance ? a : best), null);
+
+  const valueFor = (k: KpiKey): { value: string; color: string } => {
+    switch (k) {
+      case "balance":    return { value: formatCurrency(balance), color: "text-[var(--color-primary)]" };
+      case "burn":       return { value: formatCurrency(burn), color: "text-red-400" };
+      case "runway":     return { value: `${runway} days`, color: runway < 30 ? "text-red-400" : runway < 90 ? "text-yellow-400" : "text-green-400" };
+      case "revenueMtd": return { value: formatCurrency(revMtd), color: "text-green-400" };
+      case "netMtd":     return { value: formatCurrency(revMtd - outMtd), color: revMtd - outMtd >= 0 ? "text-green-400" : "text-red-400" };
+      case "alerts":     return { value: String(alerts.filter(a => !a.isRead).length), color: "text-orange-400" };
+      case "topBank":    return { value: topBank ? `${topBank.name} · ${formatCurrency(topBank.balance)}` : "—", color: "text-[var(--color-text)]" };
+      case "accounts":   return { value: String(bankAccounts.length), color: "text-blue-400" };
+    }
+  };
+
+  const toggle = (k: KpiKey) => setPicked(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]);
+  const board = KPI_CATALOG.filter(c => picked.includes(c.key));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <LayoutGrid size={13} className="text-[var(--color-primary)]" />
+          My KPI Board
+        </h2>
+        <button onClick={() => setEditing(e => !e)} className="text-xs text-[var(--color-primary)] hover:underline">
+          {editing ? "Done" : "Customize"}
+        </button>
+      </div>
+
+      {editing && (
+        <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b border-[var(--color-border)]">
+          {KPI_CATALOG.map(c => {
+            const on = picked.includes(c.key);
+            return (
+              <button key={c.key} onClick={() => toggle(c.key)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent font-semibold" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
+                {on ? "✓ " : "+ "}{c.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {board.length === 0 ? (
+        <p className="text-sm text-[var(--color-muted)] py-6 text-center">No metrics pinned. Tap <span className="text-[var(--color-primary)]">Customize</span> to build your board.</p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {board.map(c => {
+            const v = valueFor(c.key);
+            return (
+              <div key={c.key} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] font-medium mb-1 truncate">{c.label}</p>
+                <p className={`text-base font-bold tabular-nums truncate ${v.color}`}>{v.value}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #148 Daily Cash Position Snapshot ────────────────────────────────────────
+// All-bank balances + today's movements from the store, per account.
+function DailyCashSnapshot() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const todays = transactions.filter(t => t.date === todayStr);
+  const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const inflow  = todays.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const outflow = todays.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const net = inflow - outflow;
+
+  const perAccount = bankAccounts.map(a => {
+    const moves = todays.filter(t => t.bankAccountId === a.id);
+    const accIn  = moves.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const accOut = moves.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    return { ...a, accIn, accOut, count: moves.length };
+  });
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Wallet size={13} className="text-[var(--color-primary)]" />
+          Daily Cash Position
+        </h2>
+        <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(), "EEE, d MMM yyyy")}</span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {[
+          { label: "Opening / Current", value: formatCurrency(totalBalance), color: "text-[var(--color-primary)]" },
+          { label: "Money In Today",    value: formatCurrency(inflow),       color: "text-green-400" },
+          { label: "Money Out Today",   value: formatCurrency(outflow),      color: "text-red-400" },
+          { label: "Net Today",         value: `${net >= 0 ? "+" : "−"}${formatCurrency(Math.abs(net))}`, color: net >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] font-medium mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1">
+        {perAccount.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No accounts connected.</p>}
+        {perAccount.map(a => (
+          <div key={a.id} className="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{a.name}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{a.count > 0 ? `${a.count} movement${a.count > 1 ? "s" : ""} today` : "No movement today"}</p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="text-right">
+                {(a.accIn > 0 || a.accOut > 0) && (
+                  <p className="text-[10px] tabular-nums">
+                    {a.accIn > 0 && <span className="text-green-400">+{formatCurrency(a.accIn)}</span>}
+                    {a.accIn > 0 && a.accOut > 0 && <span className="text-[var(--color-muted)]"> · </span>}
+                    {a.accOut > 0 && <span className="text-red-400">−{formatCurrency(a.accOut)}</span>}
+                  </p>
+                )}
+              </div>
+              <span className="text-sm font-semibold tabular-nums">{formatCurrency(a.balance)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── #149 Goal / Target Tracker ───────────────────────────────────────────────
+// Revenue/profit goals with live progress; goals persist.
+type Goal = { id: string; metric: "revenue" | "profit" | "balance"; label: string; target: number; period: string };
+
+function GoalTracker() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  const [goals, setGoals] = useFeatureState<Goal[]>("dashboard-goals", []);
+  const [adding, setAdding] = useState(false);
+  const [metric, setMetric] = useState<Goal["metric"]>("revenue");
+  const [label, setLabel] = useState("");
+  const [target, setTarget] = useState("");
+
+  const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const revMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const outMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+
+  const actualFor = (m: Goal["metric"]) => m === "revenue" ? revMtd : m === "profit" ? revMtd - outMtd : balance;
+
+  const add = () => {
+    const t = parseFloat(target);
+    if (!label.trim() || isNaN(t) || t <= 0) { toast.error("Enter a label and a positive target"); return; }
+    setGoals(prev => [...prev, { id: generateId(), metric, label: label.trim(), target: t, period: format(new Date(), "MMM yyyy") }]);
+    setLabel(""); setTarget(""); setAdding(false);
+    toast.success("Goal added");
+  };
+  const remove = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Flag size={13} className="text-[var(--color-primary)]" />
+          Goal &amp; Target Tracker
+        </h2>
+        <button onClick={() => setAdding(a => !a)} className="text-xs text-[var(--color-primary)] hover:underline">
+          {adding ? "Cancel" : "+ Add goal"}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3 pb-3 border-b border-[var(--color-border)]">
+          <select value={metric} onChange={e => setMetric(e.target.value as Goal["metric"])} className={inp}>
+            <option value="revenue">Revenue (MTD)</option>
+            <option value="profit">Net Profit (MTD)</option>
+            <option value="balance">Cash Balance</option>
+          </select>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Goal name" className={inp} />
+          <input type="number" min="1" value={target} onChange={e => setTarget(e.target.value)} placeholder="Target (₹)" className={inp} />
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">Save</button>
+        </div>
+      )}
+
+      {goals.length === 0 ? (
+        <p className="text-sm text-[var(--color-muted)] py-6 text-center">No goals yet. Set a revenue, profit or balance target to track progress.</p>
+      ) : (
+        <div className="space-y-3">
+          {goals.map(g => {
+            const actual = actualFor(g.metric);
+            const pct = g.target > 0 ? Math.min(100, (actual / g.target) * 100) : 0;
+            const hit = actual >= g.target;
+            return (
+              <div key={g.id}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-medium flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{g.label}</span>
+                    <span className="text-[var(--color-muted)] shrink-0">· {g.period}</span>
+                    {hit && <CheckCircle2 size={11} className="text-green-400 shrink-0" />}
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="text-[var(--color-muted)] tabular-nums">{formatCurrency(actual)} / {formatCurrency(g.target)}</span>
+                    <button onClick={() => remove(g.id)} className="text-[var(--color-muted)] hover:text-red-400" title="Remove goal"><Trash2 size={11} /></button>
+                  </span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-700 ${hit ? "bg-green-500" : pct >= 60 ? "bg-[var(--color-primary)]" : "bg-yellow-500"}`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{pct.toFixed(0)}% of target{hit ? " — achieved 🎉" : ""}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #150 Morning Brief Card ──────────────────────────────────────────────────
+// Overnight changes + due-today + alerts digest, condensed into one card.
+function MorningBriefCard() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, alerts } = store;
+  const navigate = useNavigate();
+
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const yStr = addDays(now, -1).toISOString().split("T")[0];
+
+  const todayTx = transactions.filter(t => t.date === todayStr);
+  const yTx     = transactions.filter(t => t.date === yStr);
+  const todayNet = todayTx.reduce((s, t) => s + t.amount, 0);
+  const yNet     = yTx.reduce((s, t) => s + t.amount, 0);
+
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const burn    = monthlyBurn(transactions);
+  const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);
+
+  const unread = alerts.filter(a => !a.isRead);
+  const critical = unread.filter(a => a.severity === "critical" || a.severity === "high");
+
+  // Tax/statutory items due today
+  const dueToday = getUpcomingTaxDates().filter(d => isToday(d.date));
+
+  // Recurring outflows landing today (overnight commitments)
+  const recurringToday = todayTx.filter(t => t.isRecurring && t.amount < 0);
+
+  const items: { icon: React.ElementType; tone: string; text: string }[] = [];
+  items.push({
+    icon: yNet >= 0 ? ArrowUpRight : ArrowDownRight,
+    tone: yNet >= 0 ? "text-green-400" : "text-red-400",
+    text: yTx.length ? `Yesterday closed ${yNet >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(yNet))} across ${yTx.length} transaction${yTx.length > 1 ? "s" : ""}.` : "No transactions recorded yesterday.",
+  });
+  items.push({
+    icon: TrendingUp, tone: "text-[var(--color-primary)]",
+    text: `Cash on hand ${formatCurrency(balance)} · ${runway < 999 ? `${runway}-day runway` : "healthy runway"} at current burn.`,
+  });
+  if (todayTx.length) items.push({ icon: Wallet, tone: todayNet >= 0 ? "text-green-400" : "text-red-400", text: `${todayTx.length} movement${todayTx.length > 1 ? "s" : ""} already today, net ${todayNet >= 0 ? "+" : "−"}${formatCurrency(Math.abs(todayNet))}.` });
+  if (recurringToday.length) items.push({ icon: RefreshCcw, tone: "text-orange-400", text: `${recurringToday.length} recurring payment${recurringToday.length > 1 ? "s" : ""} scheduled today (${formatCurrency(recurringToday.reduce((s, t) => s + Math.abs(t.amount), 0))}).` });
+  if (dueToday.length) items.push({ icon: Calendar, tone: "text-red-400", text: `Due today: ${dueToday.map(d => d.label).join(", ")}.` });
+  if (critical.length) items.push({ icon: AlertTriangle, tone: "text-red-400", text: `${critical.length} high-priority alert${critical.length > 1 ? "s" : ""} need attention: ${critical[0].message}` });
+  else if (unread.length) items.push({ icon: Bell, tone: "text-yellow-400", text: `${unread.length} unread alert${unread.length > 1 ? "s" : ""} in your inbox.` });
+
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
+  const allClear = !critical.length && !dueToday.length && unread.length === 0;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Sunrise size={14} className="text-[var(--color-primary)]" />
+          {greeting} — your brief
+        </h2>
+        <span className="text-[10px] text-[var(--color-muted)]">{format(now, "EEE, d MMM · HH:mm")}</span>
+      </div>
+
+      {allClear && (
+        <div className="flex items-center gap-2 mb-2 text-xs text-green-400">
+          <CheckCircle2 size={12} /> All clear — no alerts or deadlines pending.
+        </div>
+      )}
+
+      <ul className="space-y-2">
+        {items.map((it, i) => {
+          const Icon = it.icon;
+          return (
+            <li key={i} className="flex items-start gap-2.5 text-sm">
+              <Icon size={13} className={`${it.tone} shrink-0 mt-0.5`} />
+              <span className="text-[var(--color-text)] leading-snug">{it.text}</span>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--color-border)]">
+        <button onClick={() => navigate("/alerts")} className="text-xs text-[var(--color-primary)] hover:underline">Open alerts →</button>
+        <span className="text-[var(--color-muted)]">·</span>
+        <button onClick={() => navigate("/compliance")} className="text-xs text-[var(--color-primary)] hover:underline">View calendar →</button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
@@ -767,6 +1110,18 @@ export default function DashboardPage() {
           <SmartActionsPanel />
           <TreasuryBanner />
           <HealthScoreWidget />
+
+          {/* ── Dashboard tools #147–#150 ──────────────────────────────── */}
+          <div className="flex items-center gap-2 pt-2">
+            <LayoutGrid size={13} className="text-[var(--color-primary)]" />
+            <h2 className="text-sm font-bold">Your dashboard tools</h2>
+          </div>
+          <MorningBriefCard />
+          <KpiWidgetBuilder />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <DailyCashSnapshot />
+            <GoalTracker />
+          </div>
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

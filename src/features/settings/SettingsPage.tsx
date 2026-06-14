@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { useFeatureState } from "@/hooks/useFeatureState";
+import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUPS, roleLabel, roleBadge } from "@/data/roles";
 import type { UserRole } from "@/data/types";
@@ -24,6 +27,301 @@ function landingFor(role: string): string {
   if (role === "investor") return "/investor";
   if (role === "accountant") return "/advisor";
   return "/dashboard";
+}
+
+/* ── #170 Role & Permission Matrix ─────────────────────────────────────────
+   Team roles × permission grid, persisted. A simple grant table the owner can
+   tune per role, separate from the page-level "stakeholder views" above. */
+const MATRIX_ROLES = [
+  { id: "finance", label: "Finance" },
+  { id: "ca", label: "CA / Accountant" },
+  { id: "sales", label: "Sales" },
+  { id: "ops", label: "Operations" },
+] as const;
+const MATRIX_PERMS = [
+  { id: "view_cash", label: "View cash & runway" },
+  { id: "edit_txn", label: "Add / edit transactions" },
+  { id: "approve_pay", label: "Approve payments" },
+  { id: "manage_invoices", label: "Manage invoices" },
+  { id: "view_reports", label: "View reports & exports" },
+  { id: "manage_team", label: "Manage team & settings" },
+] as const;
+type MatrixRoleId = (typeof MATRIX_ROLES)[number]["id"];
+type MatrixPermId = (typeof MATRIX_PERMS)[number]["id"];
+type PermMatrix = Record<string, boolean>;
+const matrixKey = (r: MatrixRoleId, p: MatrixPermId) => `${r}:${p}`;
+const DEFAULT_MATRIX: PermMatrix = {
+  "finance:view_cash": true, "finance:edit_txn": true, "finance:manage_invoices": true, "finance:view_reports": true,
+  "ca:view_cash": true, "ca:view_reports": true,
+  "sales:manage_invoices": true,
+  "ops:view_cash": true, "ops:edit_txn": true,
+};
+
+function PermissionMatrixCard() {
+  const [matrix, setMatrix] = useFeatureState<PermMatrix>("settings-permission-matrix", DEFAULT_MATRIX);
+  const toggle = (r: MatrixRoleId, p: MatrixPermId) => {
+    const k = matrixKey(r, p);
+    setMatrix(m => ({ ...m, [k]: !m[k] }));
+  };
+  const grantedFor = (r: MatrixRoleId) => MATRIX_PERMS.filter(p => matrix[matrixKey(r, p.id)]).length;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Grid3x3 size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Role &amp; Permission Matrix</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Tick exactly what each team type can do. Changes save automatically and sync across devices.</p>
+        </div>
+      </div>
+      <div className="mt-5 overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr>
+              <th className="text-left font-semibold text-[var(--color-muted)] uppercase tracking-wider py-2 pr-3">Permission</th>
+              {MATRIX_ROLES.map(r => (
+                <th key={r.id} className="text-center font-semibold py-2 px-2 whitespace-nowrap">
+                  {r.label}
+                  <span className="block text-[10px] font-normal text-[var(--color-muted)]">{grantedFor(r.id)}/{MATRIX_PERMS.length}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {MATRIX_PERMS.map(p => (
+              <tr key={p.id}>
+                <td className="py-2.5 pr-3 text-[var(--color-text)]">{p.label}</td>
+                {MATRIX_ROLES.map(r => {
+                  const on = !!matrix[matrixKey(r.id, p.id)];
+                  return (
+                    <td key={r.id} className="text-center py-2.5 px-2">
+                      <input type="checkbox" checked={on} onChange={() => toggle(r.id, p.id)}
+                        aria-label={`${r.label} — ${p.label}`}
+                        className="accent-[var(--color-primary)] w-4 h-4 cursor-pointer" />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── #171 Approval-Policy Builder ──────────────────────────────────────────
+   Value-threshold maker-checker rules: above a rupee amount, a payment needs
+   approval from a chosen role. Stored as an ordered list of rules. */
+type ApprovalRule = { id: string; threshold: number; approver: MatrixRoleId; note: string };
+
+function ApprovalPolicyCard() {
+  const [rules, setRules] = useFeatureState<ApprovalRule[]>("settings-approval-rules", []);
+  const [threshold, setThreshold] = useState("");
+  const [approver, setApprover] = useState<MatrixRoleId>("finance");
+  const [note, setNote] = useState("");
+
+  const addRule = () => {
+    const amt = Number(threshold);
+    if (!amt || amt <= 0) { toast.error("Enter a threshold amount above zero"); return; }
+    const rule: ApprovalRule = { id: crypto.randomUUID(), threshold: amt, approver, note: note.trim() };
+    setRules(rs => [...rs, rule].sort((a, b) => a.threshold - b.threshold));
+    setThreshold(""); setNote("");
+    toast.success(`Payments over ${formatCurrency(amt)} now need ${MATRIX_ROLES.find(r => r.id === approver)?.label} approval`);
+  };
+  const removeRule = (id: string) => setRules(rs => rs.filter(r => r.id !== id));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <GitBranch size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Approval Policy</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Maker-checker rules — require a second approver once a payment crosses an amount.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Payments above (₹)</label>
+          <input type="number" min="1" value={threshold} onChange={e => setThreshold(e.target.value)}
+            placeholder="50000"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Need approval from</label>
+          <select value={approver} onChange={e => setApprover(e.target.value as MatrixRoleId)}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {MATRIX_ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </div>
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Note (optional)</label>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. vendor payouts"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+      <button onClick={addRule}
+        className="mt-3 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+        <Plus size={13} /> Add rule
+      </button>
+
+      <div className="mt-5 space-y-2">
+        {rules.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+            No rules yet — every payment is auto-approved. Add a threshold above to require sign-off.
+          </p>
+        ) : rules.map(r => (
+          <div key={r.id} className="flex items-center justify-between gap-3 p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Over <span className="text-[var(--color-primary)] font-semibold">{formatCurrency(r.threshold)}</span> → {MATRIX_ROLES.find(x => x.id === r.approver)?.label} approves
+              </p>
+              {r.note && <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">{r.note}</p>}
+            </div>
+            <button onClick={() => removeRule(r.id)} title="Delete rule"
+              className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1 shrink-0">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── #172 Financial-Year & Books-Lock ──────────────────────────────────────
+   Set the financial-year start month and a books-lock date; entries on or
+   before the lock date are treated as closed (post-filing). */
+const FY_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+type BooksConfig = { fyStartMonth: number; lockDate: string | null };
+
+function BooksLockCard() {
+  const [cfg, setCfg] = useFeatureState<BooksConfig>("settings-books-lock", { fyStartMonth: 3, lockDate: null });
+  const [lockInput, setLockInput] = useState(cfg.lockDate ?? "");
+
+  const setFy = (m: number) => setCfg(c => ({ ...c, fyStartMonth: m }));
+  const applyLock = () => {
+    if (!lockInput) { toast.error("Pick a lock date first"); return; }
+    setCfg(c => ({ ...c, lockDate: lockInput }));
+    toast.success(`Books locked up to ${format(new Date(lockInput), "dd MMM yyyy")}`);
+  };
+  const clearLock = () => { setCfg(c => ({ ...c, lockDate: null })); setLockInput(""); toast.success("Books unlocked"); };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <CalendarClock size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Financial Year &amp; Books Lock</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Set your FY start and lock periods after filing so closed months can't be edited.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Financial year starts in</label>
+          <select value={cfg.fyStartMonth} onChange={e => setFy(Number(e.target.value))}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {FY_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">India's standard FY runs April–March.</p>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Lock books up to &amp; including</label>
+          <input type="date" value={lockInput} onChange={e => setLockInput(e.target.value)}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button onClick={applyLock}
+          className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          <Lock size={13} /> Lock books
+        </button>
+        {cfg.lockDate && (
+          <button onClick={clearLock}
+            className="text-sm text-[var(--color-muted)] px-4 py-2 rounded-lg hover:bg-[var(--color-accent)]">
+            Unlock
+          </button>
+        )}
+      </div>
+
+      <div className={`mt-4 p-3 rounded-lg text-xs border ${cfg.lockDate ? "bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-muted)]" : "border-dashed border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+        {cfg.lockDate
+          ? <>Books are <strong className="text-[var(--color-text)]">locked through {format(new Date(cfg.lockDate), "dd MMM yyyy")}</strong>. Entries dated on or before this are treated as filed and closed.</>
+          : <>No lock set — all periods are open for edits.</>}
+      </div>
+    </div>
+  );
+}
+
+/* ── #173 Audit Log / Login History ────────────────────────────────────────
+   Security review list. Reads recent live sign-in / settings events the app
+   has recorded; falls back to the current session if none exist yet. */
+type AuditEvent = { id: string; type: "login" | "permission" | "lock" | "policy"; label: string; at: string; meta?: string };
+
+function AuditLogCard() {
+  const { user } = useAuth();
+  const [events] = useFeatureState<AuditEvent[]>("settings-audit-log", []);
+
+  const sessionEntry: AuditEvent = {
+    id: "current-session",
+    type: "login",
+    label: `Signed in${user?.email ? ` as ${user.email}` : ""}`,
+    at: new Date().toISOString(),
+    meta: "This device · current session",
+  };
+  const rows = [sessionEntry, ...[...events].sort((a, b) => b.at.localeCompare(a.at))];
+
+  const icon = (t: AuditEvent["type"]) =>
+    t === "login" ? <LogIn size={13} className="text-[var(--color-primary)]" />
+    : t === "permission" ? <Grid3x3 size={13} className="text-[var(--color-primary)]" />
+    : t === "lock" ? <CalendarClock size={13} className="text-[var(--color-primary)]" />
+    : <GitBranch size={13} className="text-[var(--color-primary)]" />;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <History size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Audit Log &amp; Login History</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Recent sign-ins and security-relevant changes, for access review.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 divide-y divide-[var(--color-border)]">
+        {rows.map(e => (
+          <div key={e.id} className="flex items-center gap-3 py-3">
+            <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
+              {icon(e.type)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{e.label}</p>
+              {e.meta && <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">{e.meta}</p>}
+            </div>
+            <span className="text-[11px] text-[var(--color-muted)] shrink-0 font-mono">
+              {format(new Date(e.at), "dd MMM, HH:mm")}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {events.length === 0 && (
+        <p className="text-[11px] text-[var(--color-muted)] mt-3 flex items-center gap-1.5">
+          <ShieldQuestion size={12} /> Showing your current session — older history appears here as it's recorded.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -209,6 +507,18 @@ export default function SettingsPage() {
 
       {/* Privacy & data rights (DPDP) */}
       <PrivacyCard />
+
+      {/* #170 Role & permission matrix */}
+      <PermissionMatrixCard />
+
+      {/* #171 Approval-policy builder */}
+      <ApprovalPolicyCard />
+
+      {/* #172 Financial-year & books-lock */}
+      <BooksLockCard />
+
+      {/* #173 Audit log / login history */}
+      <AuditLogCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

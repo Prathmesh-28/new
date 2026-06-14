@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
+import { useFeatureState } from "@/hooks/useFeatureState";
+import { formatCurrency } from "@/lib/utils";
 import { API_BASE } from "@/lib/apiBase";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
@@ -229,7 +231,10 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail";
+
 export default function DocumentsPage() {
+  const [docTab, setDocTab]       = useState<DocTab>("vault");
   const [docs, setDocs]           = useState<Doc[]>([]);
   const [loading, setLoading]     = useState(true);
   const [query, setQuery]         = useState("");
@@ -316,13 +321,33 @@ export default function DocumentsPage() {
             GST certificates, bank statements, legal docs — stored securely on your account.
           </p>
         </div>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90 transition-all"
-        >
-          <Plus size={13} /> Upload document
-        </button>
+        {docTab === "vault" && (
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90 transition-all"
+          >
+            <Plus size={13} /> Upload document
+          </button>
+        )}
       </div>
+
+      {/* Section selector */}
+      <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History]] as const).map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setDocTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Icon size={11} />{label}
+          </button>
+        ))}
+      </div>
+
+      {docTab === "ocr"          && <ReceiptOcrCapture />}
+      {docTab === "esign"        && <ESignWorkflow />}
+      {docTab === "expiry"       && <ExpiryRenewalVault />}
+      {docTab === "stmt-parser"  && <BankStatementParser />}
+      {docTab === "audit-trail"  && <AuditTrailLog />}
+
+      {docTab === "vault" && <>
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
@@ -479,8 +504,579 @@ export default function DocumentsPage() {
           })}
         </div>
       </div>
+      </>}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUploaded={onUploaded} />}
+    </div>
+  );
+}
+
+// Shared input style for the Documents tools, mirroring the rest of the app.
+const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+// ── #157 Receipt / Bill OCR Capture ──────────────────────────────────────────────
+type OcrExpense = {
+  id: string;
+  vendor: string;
+  amount: number;
+  gst: number;
+  date: string;
+  category: string;
+  fileName: string;
+  createdAt: string;
+};
+
+// Lightweight parse-hint pass over a filename / typed text. No real OCR backend —
+// we surface best-guess fields the user then confirms before the record is saved.
+function parseReceiptHints(text: string): { vendor?: string; amount?: number; gst?: number; date?: string } {
+  const out: { vendor?: string; amount?: number; gst?: number; date?: string } = {};
+  // Largest rupee-looking number is the likely total.
+  const nums = [...text.matchAll(/(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*\.?[0-9]{0,2})/gi)]
+    .map(m => parseFloat(m[1].replace(/,/g, "")))
+    .filter(n => !Number.isNaN(n) && n >= 1);
+  if (nums.length) out.amount = Math.max(...nums);
+  // GST line if present.
+  const gstM = text.match(/(?:gst|tax|cgst|sgst|igst)\D{0,12}([0-9][0-9,]*\.?[0-9]{0,2})/i);
+  if (gstM) out.gst = parseFloat(gstM[1].replace(/,/g, ""));
+  // dd/mm/yyyy or dd-mm-yyyy.
+  const dateM = text.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+  if (dateM) {
+    const [, d, mo, y] = dateM;
+    const yr = y.length === 2 ? `20${y}` : y;
+    out.date = `${yr}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  // First wordy token as a vendor hint (strip extension).
+  const cleaned = text.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_-]+/g, " ").trim();
+  const word = cleaned.split(/\s+/).find(w => /[a-z]{3,}/i.test(w));
+  if (word) out.vendor = cleaned.split(/\s+/).slice(0, 3).join(" ");
+  return out;
+}
+
+const EXPENSE_CATS = ["Office", "Travel", "Utilities", "Marketing", "Supplies", "Professional fees", "Other"] as const;
+
+function ReceiptOcrCapture() {
+  const [expenses, setExpenses] = useFeatureState<OcrExpense[]>("ocr-expenses", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [gst, setGst] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [category, setCategory] = useState<string>(EXPENSE_CATS[0]);
+  const [fileName, setFileName] = useState("");
+  const [scanned, setScanned] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fc = formatCurrency;
+
+  const onPick = (f: File) => {
+    setFileName(f.name);
+    const hints = parseReceiptHints(f.name);
+    if (hints.vendor && !vendor) setVendor(hints.vendor);
+    if (hints.amount && !amount) setAmount(String(hints.amount));
+    if (hints.gst && !gst) setGst(String(hints.gst));
+    if (hints.date) setDate(hints.date);
+    setScanned(true);
+    toast.success("Receipt captured — confirm the fields below");
+  };
+
+  const save = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!vendor || amt <= 0) { toast.error("Enter a vendor and amount"); return; }
+    setExpenses(prev => [{
+      id: crypto.randomUUID(),
+      vendor,
+      amount: amt,
+      gst: parseFloat(gst) || 0,
+      date,
+      category,
+      fileName: fileName || "manual entry",
+      createdAt: new Date().toISOString(),
+    }, ...prev]);
+    setVendor(""); setAmount(""); setGst(""); setFileName(""); setScanned(false);
+    toast.success("Expense record created");
+  };
+
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalGst = expenses.reduce((s, e) => s + e.gst, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ScanLine size={14} className="text-[var(--color-primary)]" /> Receipt / Bill OCR Capture</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Snap a bill or pick a photo, confirm the auto-suggested vendor / amount / GST, and book it as an expense — no typing the whole bill out. Captured records sync to your account.</p>
+
+        <div
+          onClick={() => inputRef.current?.click()}
+          className="border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)]/40 rounded-lg p-6 text-center mb-4 cursor-pointer transition-colors"
+        >
+          <Camera size={20} className="mx-auto mb-2 text-[var(--color-muted)]" />
+          {fileName
+            ? <p className="text-sm font-medium text-[var(--color-primary)]">{fileName}</p>
+            : <p className="text-sm text-[var(--color-muted)]">Take a photo or choose a receipt image / PDF</p>}
+          <input ref={inputRef} type="file" accept="image/*,.pdf" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
+        </div>
+
+        {scanned && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Parsed a few fields from the file name — please verify the amounts before saving.</p>}
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Total amount (₹) *" className={INP} />
+          <input type="number" value={gst} onChange={e => setGst(e.target.value)} placeholder="GST in bill (₹)" className={INP} />
+          <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
+            {EXPENSE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <button onClick={save} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Book expense</button>
+        </div>
+      </div>
+
+      {expenses.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Receipts captured", value: String(expenses.length), color: "text-[var(--color-text)]" },
+            { label: "Total expense", value: fc(total), color: "text-orange-400" },
+            { label: "GST in bills", value: fc(totalGst), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Category", "Amount", "GST", "Date", "Source", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {expenses.map(e => (
+                <tr key={e.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{e.vendor}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.category}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{fc(e.amount)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs">{e.date}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate flex items-center gap-1"><Receipt size={11} /> {e.fileName}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Field detection is a best-effort hint only — always confirm the amount and GST against the original bill before booking. Keep the source image; ITC claims require a valid tax invoice.</p>
+    </div>
+  );
+}
+
+// ── #158 e-Sign / Aadhaar-eSign Workflow ─────────────────────────────────────────
+type SignDoc = {
+  id: string;
+  title: string;
+  signer: string;
+  email: string;
+  method: "aadhaar" | "dsc" | "email";
+  sentAt: string;
+  status: "draft" | "sent" | "viewed" | "signed" | "declined";
+};
+const SIGN_STATUSES: SignDoc["status"][] = ["draft", "sent", "viewed", "signed", "declined"];
+const SIGN_FLOW: Record<SignDoc["status"], SignDoc["status"]> = { draft: "sent", sent: "viewed", viewed: "signed", signed: "signed", declined: "sent" };
+
+function ESignWorkflow() {
+  const [docs, setDocs] = useFeatureState<SignDoc[]>("esign-docs", []);
+  const [title, setTitle] = useState("");
+  const [signer, setSigner] = useState("");
+  const [email, setEmail] = useState("");
+  const [method, setMethod] = useState<SignDoc["method"]>("aadhaar");
+
+  const METHODS: Record<SignDoc["method"], string> = {
+    aadhaar: "Aadhaar e-Sign (OTP)",
+    dsc: "Digital Signature Certificate",
+    email: "Email click-to-sign",
+  };
+  const STATUS_STYLE: Record<SignDoc["status"], string> = {
+    draft: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+    sent: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    viewed: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    signed: "bg-green-900/30 text-green-400 border-green-800/40",
+    declined: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  const send = () => {
+    if (!title || !signer) { toast.error("Enter a document title and signer"); return; }
+    setDocs(prev => [{
+      id: crypto.randomUUID(), title, signer, email, method,
+      sentAt: new Date().toISOString(), status: "sent",
+    }, ...prev]);
+    setTitle(""); setSigner(""); setEmail("");
+    toast.success("Sent for signature");
+  };
+
+  const advance = (id: string) => setDocs(prev => prev.map(d => d.id === id ? { ...d, status: SIGN_FLOW[d.status] } : d));
+  const decline = (id: string) => setDocs(prev => prev.map(d => d.id === id ? { ...d, status: "declined" } : d));
+
+  const counts = SIGN_STATUSES.reduce<Record<string, number>>((a, s) => { a[s] = docs.filter(d => d.status === s).length; return a; }, {});
+  const pending = (counts.sent || 0) + (counts.viewed || 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PenTool size={14} className="text-[var(--color-primary)]" /> e-Sign / Aadhaar-eSign Workflow</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Send agreements, NDAs and contracts for signature and track them from sent → viewed → signed. Supports Aadhaar e-Sign, DSC and email click-to-sign methods.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Document title *" className={INP} />
+          <input value={signer} onChange={e => setSigner(e.target.value)} placeholder="Signer name *" className={INP} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Signer email" className={INP} />
+          <select value={method} onChange={e => setMethod(e.target.value as SignDoc["method"])} className={INP}>
+            {(Object.keys(METHODS) as SignDoc["method"][]).map(m => <option key={m} value={m}>{METHODS[m]}</option>)}
+          </select>
+        </div>
+        <button onClick={send} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Send size={13} /> Send for signature</button>
+      </div>
+
+      {docs.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Awaiting signature", value: String(pending), color: pending > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Signed", value: String(counts.signed || 0), color: "text-green-400" },
+            { label: "Declined", value: String(counts.declined || 0), color: (counts.declined || 0) > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Signer", "Method", "Sent", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {docs.map(d => (
+                <tr key={d.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{d.title}</td>
+                  <td className="px-3 py-2.5 text-xs">{d.signer}{d.email ? <span className="block text-[10px] text-[var(--color-muted)]">{d.email}</span> : null}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{METHODS[d.method]}</td>
+                  <td className="px-3 py-2.5 text-xs">{format(new Date(d.sentAt), "d MMM")}</td>
+                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[d.status]}`}>{d.status}</span></td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      {d.status !== "signed" && d.status !== "declined" && (
+                        <button onClick={() => advance(d.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark {SIGN_FLOW[d.status]}</button>
+                      )}
+                      {d.status !== "signed" && d.status !== "declined" && (
+                        <button onClick={() => decline(d.id)} className="text-[10px] text-red-400 hover:underline">Decline</button>
+                      )}
+                      <button onClick={() => setDocs(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Statuses are tracked manually here — wire to an ASP/eSign provider (NSDL/CDSL e-Sign, eMudhra) for legally-timestamped audit trails under the IT Act, 2000.</p>
+    </div>
+  );
+}
+
+// ── #159 Document Expiry / Renewal Vault ─────────────────────────────────────────
+type ExpiryItem = {
+  id: string;
+  name: string;
+  type: string;
+  expiresAt: string;
+  owner: string;
+  noticeDays: number;
+};
+const EXPIRY_TYPES = ["License", "Insurance", "Contract", "Certificate", "Registration", "Other"] as const;
+
+function ExpiryRenewalVault() {
+  const [items, setItems] = useFeatureState<ExpiryItem[]>("expiry-items", []);
+  const [name, setName] = useState("");
+  const [type, setType] = useState<string>(EXPIRY_TYPES[0]);
+  const [expiresAt, setExpiresAt] = useState("");
+  const [owner, setOwner] = useState("");
+  const [noticeDays, setNoticeDays] = useState("30");
+
+  const add = () => {
+    if (!name || !expiresAt) { toast.error("Enter a name and expiry date"); return; }
+    setItems(prev => [...prev, {
+      id: crypto.randomUUID(), name, type, expiresAt, owner,
+      noticeDays: parseInt(noticeDays) || 30,
+    }]);
+    setName(""); setExpiresAt(""); setOwner("");
+    toast.success("Added to renewal vault");
+  };
+
+  const enriched = items
+    .map(i => ({ ...i, days: differenceInCalendarDays(new Date(i.expiresAt), new Date()) }))
+    .sort((a, b) => a.days - b.days);
+  const expired = enriched.filter(i => i.days < 0).length;
+  const dueSoon = enriched.filter(i => i.days >= 0 && i.days <= i.noticeDays).length;
+
+  const tone = (i: { days: number; noticeDays: number }) =>
+    i.days < 0 ? { txt: "text-red-400", badge: "bg-red-900/30 text-red-400 border-red-800/40", label: "Expired" }
+    : i.days <= i.noticeDays ? { txt: "text-yellow-400", badge: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", label: "Due soon" }
+    : { txt: "text-green-400", badge: "bg-green-900/30 text-green-400 border-green-800/40", label: "Valid" };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Document Expiry / Renewal Vault</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track licenses, insurance policies, contracts and certificates with their expiry dates and a custom alert window — so nothing lapses without warning.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Document name *" className={INP} />
+          <select value={type} onChange={e => setType(e.target.value)} className={INP}>
+            {EXPIRY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input value={owner} onChange={e => setOwner(e.target.value)} placeholder="Owner / dept" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Expiry date *</label>
+            <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Alert (days before)</label>
+            <input type="number" value={noticeDays} onChange={e => setNoticeDays(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add</button></div>
+        </div>
+      </div>
+
+      {(expired > 0 || dueSoon > 0) && (
+        <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+          <p className="text-sm">
+            {expired > 0 && <span className="font-semibold text-red-400">{expired} expired</span>}
+            {expired > 0 && dueSoon > 0 && <span> · </span>}
+            {dueSoon > 0 && <span className="font-semibold text-yellow-300">{dueSoon} due soon</span>}
+            <span className="text-[var(--color-muted)]"> — renew to avoid compliance gaps.</span>
+          </p>
+        </div>
+      )}
+
+      {enriched.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Type", "Owner", "Expires", "Countdown", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {enriched.map(i => {
+                const t = tone(i);
+                return (
+                  <tr key={i.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{i.name}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.type}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.owner || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(i.expiresAt), "d MMM yyyy")}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{i.days < 0 ? `${Math.abs(i.days)}d ago` : `in ${i.days}d`}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Alerts fire when the days-to-expiry falls within each item's notice window. Connect to the Alerts page to push WhatsApp/email reminders ahead of every renewal.</p>
+    </div>
+  );
+}
+
+// ── #160 Bank Statement Parser (text → txns) ─────────────────────────────────────
+type ParsedRow = { id: string; date: string; description: string; debit: number; credit: number };
+
+// Parse pasted statement text line-by-line. Each line is expected to carry a
+// date, a narration, and one or two trailing amounts (debit/credit or amount + balance).
+function parseStatement(text: string): ParsedRow[] {
+  const out: ParsedRow[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const dateM = line.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4}-\d{2}-\d{2})/);
+    if (!dateM) continue;
+    const amounts = [...line.matchAll(/(-?(?:₹|rs\.?)?\s*[0-9][0-9,]*\.[0-9]{2})(\s*(?:cr|dr))?/gi)]
+      .map(m => ({ value: parseFloat(m[1].replace(/[₹,\s]|rs\.?/gi, "")), tag: (m[2] || "").trim().toLowerCase() }));
+    if (!amounts.length) continue;
+    const date = dateM[0];
+    let description = line;
+    if (dateM.index !== undefined) description = line.slice(dateM.index + dateM[0].length);
+    const firstAmtM = line.match(/-?(?:₹|rs\.?)?\s*[0-9][0-9,]*\.[0-9]{2}/i);
+    if (firstAmtM && firstAmtM.index !== undefined) description = description.slice(0, description.indexOf(firstAmtM[0])) || description;
+    description = description.replace(/\s+/g, " ").replace(/(cr|dr)\b/gi, "").trim() || "—";
+
+    // The first amount is the transaction; sign / Cr/Dr tag decides direction.
+    const first = amounts[0];
+    let debit = 0, credit = 0;
+    if (first.tag === "cr") credit = Math.abs(first.value);
+    else if (first.tag === "dr") debit = Math.abs(first.value);
+    else if (first.value < 0) debit = Math.abs(first.value);
+    else credit = first.value;
+    out.push({ id: crypto.randomUUID(), date, description: description.slice(0, 80), debit, credit });
+  }
+  return out;
+}
+
+function BankStatementParser() {
+  const [text, setText] = useState("");
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const fc = formatCurrency;
+
+  const run = () => {
+    const parsed = parseStatement(text);
+    if (!parsed.length) { toast.error("No transaction rows found — paste lines with a date and an amount"); return; }
+    setRows(parsed);
+    toast.success(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""}`);
+  };
+
+  const totalDr = rows.reduce((s, r) => s + r.debit, 0);
+  const totalCr = rows.reduce((s, r) => s + r.credit, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Bank Statement Parser</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Copy the transaction lines from any bank PDF or net-banking export and paste them below. We detect the date, narration and debit/credit on each line and give you a clean preview to review before import.</p>
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          rows={6}
+          placeholder={"Paste statement rows, e.g.\n05/06/2026  UPI/PAYTM/GROCERY            1,250.00 Dr\n07/06/2026  NEFT INWARD ACME LTD        85,000.00 Cr"}
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono text-xs resize-y"
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <button onClick={run} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><FileText size={13} /> Parse statement</button>
+          {rows.length > 0 && <button onClick={() => { setRows([]); setText(""); }} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-2">Clear</button>}
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Rows parsed", value: String(rows.length), color: "text-[var(--color-text)]" },
+            { label: "Total debits", value: fc(totalDr), color: "text-red-400" },
+            { label: "Total credits", value: fc(totalCr), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Description", "Debit", "Credit"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">{r.date}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.description}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Parsing is a preview only — formats vary by bank, so verify a sample of rows before importing into your ledger. Amounts must include decimals (e.g. 1,250.00) and a Cr/Dr tag or sign for reliable direction detection.</p>
+    </div>
+  );
+}
+
+// ── #161 Audit-Trail / Document Versioning ───────────────────────────────────────
+type AuditEntry = {
+  id: string;
+  document: string;
+  action: "created" | "edited" | "viewed" | "shared" | "deleted" | "signed";
+  actor: string;
+  version: number;
+  note: string;
+  at: string;
+};
+const AUDIT_ACTIONS: AuditEntry["action"][] = ["created", "edited", "viewed", "shared", "deleted", "signed"];
+
+function AuditTrailLog() {
+  const [entries, setEntries] = useFeatureState<AuditEntry[]>("audit-trail-entries", []);
+  const [document, setDocument] = useState("");
+  const [action, setAction] = useState<AuditEntry["action"]>("created");
+  const [actor, setActor] = useState("");
+  const [note, setNote] = useState("");
+  const [filter, setFilter] = useState("");
+
+  const ACTION_STYLE: Record<AuditEntry["action"], string> = {
+    created: "bg-green-900/30 text-green-400 border-green-800/40",
+    edited: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    viewed: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+    shared: "bg-purple-900/30 text-purple-400 border-purple-800/40",
+    deleted: "bg-red-900/30 text-red-400 border-red-800/40",
+    signed: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+  };
+
+  const log = () => {
+    if (!document || !actor) { toast.error("Enter a document and actor"); return; }
+    // Next version = highest recorded version for this document + 1.
+    const prevMax = entries.filter(e => e.document.toLowerCase() === document.toLowerCase())
+      .reduce((m, e) => Math.max(m, e.version), 0);
+    setEntries(prev => [{
+      id: crypto.randomUUID(), document, action, actor,
+      version: action === "viewed" || action === "shared" ? prevMax || 1 : prevMax + 1,
+      note, at: new Date().toISOString(),
+    }, ...prev]);
+    setNote("");
+    toast.success("Logged to audit trail");
+  };
+
+  const visible = entries.filter(e => {
+    const q = filter.toLowerCase();
+    return !q || e.document.toLowerCase().includes(q) || e.actor.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Audit-Trail / Document Versioning</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Keep a who-changed-what log against every document for your auditors. Each edit/sign bumps the version; views and shares are recorded without a version change.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={document} onChange={e => setDocument(e.target.value)} placeholder="Document name *" className={INP} />
+          <select value={action} onChange={e => setAction(e.target.value as AuditEntry["action"])} className={INP}>
+            {AUDIT_ACTIONS.map(a => <option key={a} value={a} className="capitalize">{a}</option>)}
+          </select>
+          <input value={actor} onChange={e => setActor(e.target.value)} placeholder="Actor (who) *" className={INP} />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+        </div>
+        <button onClick={log} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Record entry</button>
+      </div>
+
+      {entries.length > 0 && (
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter by document or actor…" className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      )}
+
+      {visible.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["When", "Document", "Ver", "Action", "Actor", "Note", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {visible.map(e => (
+                <tr key={e.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)] flex items-center gap-1"><Clock size={10} /> {format(new Date(e.at), "d MMM, HH:mm")}</td>
+                  <td className="px-3 py-2.5 text-xs font-medium">{e.document}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">v{e.version}</td>
+                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${ACTION_STYLE[e.action]}`}>{e.action}</span></td>
+                  <td className="px-3 py-2.5 text-xs">{e.actor}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{e.note || "—"}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <History size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">{entries.length === 0 ? "No audit entries yet" : "No entries match your filter"}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Entries are append-only by convention — for tamper-evident audit logs required by statutory audits, back this with a server-side immutable log and hash chaining.</p>
     </div>
   );
 }

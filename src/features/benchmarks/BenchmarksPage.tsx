@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
-import { percentiles } from "@/lib/finance";
-import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info } from "lucide-react";
+import { percentiles, cmgr, dso, dio, dpo } from "@/lib/finance";
+import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 
 const SECTORS = [
@@ -79,10 +79,13 @@ function getLabel(pct: number): { label: string; color: string } {
   return                { label: "Bottom quartile",color: "text-red-400" };
 }
 
+type BmTab = "overview" | "ratios" | "cost-structure" | "growth-percentile" | "working-capital";
+
 export default function BenchmarksPage() {
   const { store }    = useApp();
   const { transactions, bankAccounts, firm } = store;
 
+  const [bmTab, setBmTab] = useState<BmTab>("overview");
   const [sector, setSector] = useState("Manufacturing (SMB)");
   const [showSector, setShowSector] = useState(false);
 
@@ -209,6 +212,25 @@ export default function BenchmarksPage() {
         </div>
       </div>
 
+      {/* Tool selector */}
+      <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+        {([["overview", "Overview", Award], ["ratios", "Industry Ratios", Scale], ["cost-structure", "Cost Structure", PieChart], ["growth-percentile", "Growth Percentile", Gauge], ["working-capital", "Working-Capital", Recycle]] as const).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            onClick={() => setBmTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${bmTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {bmTab === "ratios"            && <IndustryRatioBenchmark sector={sector} />}
+      {bmTab === "cost-structure"   && <CostStructureBenchmark sector={sector} />}
+      {bmTab === "growth-percentile" && <GrowthRatePercentile sector={sector} />}
+      {bmTab === "working-capital"  && <WorkingCapitalBenchmark sector={sector} />}
+
+      {bmTab === "overview" && <>
       {!hasData && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 text-center">
           <BarChart3 size={28} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
@@ -370,6 +392,454 @@ export default function BenchmarksPage() {
           ? "“Your norm” bands are computed from your own last 12 months of data. Sector reference ranges are directional guides for typical Indian SMBs, not live peer data."
           : "Sector reference ranges are directional guides for typical Indian SMBs. Add more history to benchmark against your own months."}
       </p>
+      </>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helpers for the four benchmark tools below
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Where `value` sits given a sector low/median/high band. Returns 0–100 percentile. */
+function bandPercentile(value: number, low: number, mid: number, high: number, higherIsBetter: boolean): number {
+  // Treat the band as a monotone scale and linearly interpolate the rank.
+  const lo = Math.min(low, high), hi = Math.max(low, high);
+  let raw = hi === lo ? 0.5 : (value - lo) / (hi - lo);
+  raw = Math.max(0, Math.min(1, raw));
+  const pct = Math.round(raw * 100);
+  return higherIsBetter ? pct : 100 - pct;
+}
+
+function bandLabel(pct: number): { label: string; color: string } {
+  if (pct >= 75) return { label: "Top quartile",    color: "text-green-400" };
+  if (pct >= 50) return { label: "Above median",    color: "text-[var(--color-primary)]" };
+  if (pct >= 30) return { label: "Below median",    color: "text-yellow-400" };
+  return                { label: "Bottom quartile", color: "text-red-400" };
+}
+
+/** Trailing-12-month monthly revenue series (positive months only kept in order). */
+function useMonthlyRevenue() {
+  const { store } = useApp();
+  const txns = store.transactions ?? [];
+  const now = new Date();
+  const series: { month: string; revenue: number; cost: number; payroll: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const mt = txns.filter(t => t.date.startsWith(k));
+    const revenue = mt.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+    const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
+    const payroll = Math.abs(mt.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+    series.push({ month: k.slice(2), revenue, cost, payroll });
+  }
+  return series;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #143 Industry Ratio Benchmarking — your financial ratios vs sector medians
+// ─────────────────────────────────────────────────────────────────────────────
+type RatioRef = { key: string; label: string; unit: string; low: number; mid: number; high: number; higherIsBetter: boolean; desc: string };
+
+const RATIO_REFS: Record<string, RatioRef[]> = {
+  default: [
+    { key: "current",   label: "Current Ratio",         unit: "x", low: 0.9, mid: 1.5, high: 2.5, higherIsBetter: true,  desc: "Cash + receivables ÷ short-term obligations (EMIs proxy)." },
+    { key: "netmargin", label: "Net Margin",            unit: "%", low: 2,   mid: 8,   high: 18,  higherIsBetter: true,  desc: "Net profit as % of revenue (trailing 12 months)." },
+    { key: "opex",      label: "Opex / Revenue",        unit: "%", low: 75,  mid: 60,  high: 42,  higherIsBetter: false, desc: "Operating spend (ex-payroll) as % of revenue." },
+    { key: "interest",  label: "Interest Coverage",     unit: "x", low: 1.2, mid: 3,   high: 6,   higherIsBetter: true,  desc: "Operating profit ÷ interest/EMI outgo." },
+    { key: "assetturn", label: "Revenue / Cash Assets", unit: "x", low: 1.5, mid: 4,   high: 8,   higherIsBetter: true,  desc: "Annualised revenue ÷ current cash balance." },
+  ],
+  "Manufacturing (SMB)": [
+    { key: "current",   label: "Current Ratio",         unit: "x", low: 1.0, mid: 1.6, high: 2.6, higherIsBetter: true,  desc: "Liquidity buffer for working-capital intensive ops." },
+    { key: "netmargin", label: "Net Margin",            unit: "%", low: 1,   mid: 6,   high: 14,  higherIsBetter: true,  desc: "Net profit % — thin in manufacturing." },
+    { key: "opex",      label: "Opex / Revenue",        unit: "%", low: 80,  mid: 66,  high: 50,  higherIsBetter: false, desc: "Non-payroll operating spend % of revenue." },
+    { key: "interest",  label: "Interest Coverage",     unit: "x", low: 1.1, mid: 2.5, high: 5,   higherIsBetter: true,  desc: "EBIT ÷ interest; lenders watch this." },
+    { key: "assetturn", label: "Revenue / Cash Assets", unit: "x", low: 1.2, mid: 3,   high: 6,   higherIsBetter: true,  desc: "Capital efficiency of cash deployed." },
+  ],
+  "IT Services": [
+    { key: "current",   label: "Current Ratio",         unit: "x", low: 1.2, mid: 2.0, high: 3.2, higherIsBetter: true,  desc: "Asset-light, typically higher liquidity." },
+    { key: "netmargin", label: "Net Margin",            unit: "%", low: 6,   mid: 16,  high: 28,  higherIsBetter: true,  desc: "Net profit % — high for services." },
+    { key: "opex",      label: "Opex / Revenue",        unit: "%", low: 55,  mid: 40,  high: 28,  higherIsBetter: false, desc: "Non-payroll spend; bulk of cost is payroll." },
+    { key: "interest",  label: "Interest Coverage",     unit: "x", low: 2,   mid: 6,   high: 12,  higherIsBetter: true,  desc: "Usually low debt → high coverage." },
+    { key: "assetturn", label: "Revenue / Cash Assets", unit: "x", low: 2,   mid: 5,   high: 10,  higherIsBetter: true,  desc: "Revenue turned per rupee of cash." },
+  ],
+};
+
+function IndustryRatioBenchmark({ sector }: { sector: string }) {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const refs = RATIO_REFS[sector] ?? RATIO_REFS["default"];
+  const series = useMonthlyRevenue();
+
+  const months = series.filter(m => m.revenue > 0);
+  const ttmRev     = months.reduce((s, m) => s + m.revenue, 0);
+  const ttmCost    = months.reduce((s, m) => s + m.cost, 0);
+  const ttmPayroll = months.reduce((s, m) => s + m.payroll, 0);
+  const balance    = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const openAR     = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const emiMonthly = (store.activeLoans ?? []).reduce((s, l) => s + l.monthlyEmi, 0);
+  const interestY  = emiMonthly * 12 * 0.4; // rough: ~40% of EMI is interest early in tenure
+
+  const netProfit  = ttmRev - ttmCost - ttmPayroll - interestY;
+  const ebit       = ttmRev - ttmCost - ttmPayroll;
+
+  const yoursOf = (key: string): number | null => {
+    if (ttmRev <= 0 && key !== "current") return null;
+    switch (key) {
+      case "current":   return emiMonthly > 0 ? +((balance + openAR) / (emiMonthly * 3)).toFixed(2) : (balance + openAR > 0 ? 3 : null);
+      case "netmargin": return +((netProfit / ttmRev) * 100).toFixed(1);
+      case "opex":      return +((ttmCost / ttmRev) * 100).toFixed(1);
+      case "interest":  return interestY > 0 ? +(ebit / interestY).toFixed(2) : (ebit > 0 ? 12 : null);
+      case "assetturn": return balance > 0 ? +(ttmRev / balance).toFixed(2) : null;
+      default:          return null;
+    }
+  };
+
+  const rows = refs.map(r => {
+    const yours = yoursOf(r.key);
+    const pct = yours !== null ? bandPercentile(yours, r.low, r.mid, r.high, r.higherIsBetter) : null;
+    return { ...r, yours, pct };
+  });
+  const scored = rows.filter(r => r.pct !== null);
+  const overall = scored.length ? Math.round(scored.reduce((s, r) => s + (r.pct ?? 0), 0) / scored.length) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Industry Ratio Benchmarking</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your key financial ratios — computed live from the last 12 months of transactions, bank balances, open invoices and loans — placed against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
+        {ttmRev <= 0 && <p className="text-xs text-yellow-400 mt-2">No revenue transactions found in the last 12 months — add data to compute your ratios.</p>}
+      </div>
+
+      {overall !== null && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Composite percentile</p>
+            <p className={`text-xl font-bold tabular-nums ${bandLabel(overall).color}`}>{overall}<span className="text-sm">th</span></p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">TTM revenue</p>
+            <p className="text-xl font-bold tabular-nums">{fc(ttmRev)}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">TTM net profit</p>
+            <p className={`text-xl font-bold tabular-nums ${netProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(netProfit)}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Ratios benchmarked</p>
+            <p className="text-xl font-bold tabular-nums">{scored.length}/{rows.length}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[620px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Ratio", "You", "Sector low", "Median", "Sector high", "Position"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => {
+              const lbl = r.pct !== null ? bandLabel(r.pct) : null;
+              return (
+                <tr key={r.key} className="hover:bg-white/2 align-top">
+                  <td className="px-3 py-2.5">
+                    <p className="text-xs font-medium">{r.label}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{r.desc}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-sm font-bold tabular-nums">{r.yours !== null ? `${r.yours}${r.unit}` : <span className="text-[var(--color-muted)]">—</span>}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.low}{r.unit}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.mid}{r.unit}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.high}{r.unit}</td>
+                  <td className="px-3 py-2.5">
+                    {lbl ? (
+                      <div className="min-w-[120px]">
+                        <div className="h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: (r.pct ?? 0) >= 50 ? "#1A6B55" : (r.pct ?? 0) >= 30 ? "#eab308" : "#ef4444" }} />
+                        </div>
+                        <p className={`text-[10px] mt-0.5 font-medium ${lbl.color}`}>{lbl.label} · {r.pct}th</p>
+                      </div>
+                    ) : <span className="text-xs text-[var(--color-muted)]">No data</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Ratios are derived approximations: interest is estimated at ~40% of EMI, current liabilities proxied by 3× monthly EMI. Reference bands are directional guides for typical Indian SMBs, not live peer data. Confirm with your CA before acting.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #144 Peer Salary / Cost Benchmark — your opex structure vs comparable firms
+// ─────────────────────────────────────────────────────────────────────────────
+// Each value is the typical % of revenue a comparable firm in the sector spends.
+type CostMix = { key: string; label: string; pct: number };
+const COST_REFS: Record<string, CostMix[]> = {
+  default:             [{ key: "payroll", label: "Payroll", pct: 32 }, { key: "cogs", label: "Direct / COGS", pct: 38 }, { key: "rent", label: "Rent & utilities", pct: 8 }, { key: "marketing", label: "Sales & marketing", pct: 7 }, { key: "admin", label: "Admin & other", pct: 9 }],
+  "Manufacturing (SMB)": [{ key: "payroll", label: "Payroll", pct: 22 }, { key: "cogs", label: "Direct / COGS", pct: 55 }, { key: "rent", label: "Rent & utilities", pct: 6 }, { key: "marketing", label: "Sales & marketing", pct: 4 }, { key: "admin", label: "Admin & other", pct: 7 }],
+  "IT Services":         [{ key: "payroll", label: "Payroll", pct: 48 }, { key: "cogs", label: "Direct / COGS", pct: 14 }, { key: "rent", label: "Rent & utilities", pct: 7 }, { key: "marketing", label: "Sales & marketing", pct: 10 }, { key: "admin", label: "Admin & other", pct: 9 }],
+};
+
+function CostStructureBenchmark({ sector }: { sector: string }) {
+  const { store } = useApp();
+  const refs = COST_REFS[sector] ?? COST_REFS["default"];
+  const series = useMonthlyRevenue();
+  const months = series.filter(m => m.revenue > 0);
+  const ttmRev     = months.reduce((s, m) => s + m.revenue, 0);
+  const ttmCost    = months.reduce((s, m) => s + m.cost, 0);
+  const ttmPayroll = months.reduce((s, m) => s + m.payroll, 0);
+
+  // Your live structure: payroll and "other opex" are real; the rest of opex is
+  // shown as one "operating spend" line since transactions aren't sub-categorised.
+  const yoursPct: Record<string, number | null> = ttmRev > 0 ? {
+    payroll: +((ttmPayroll / ttmRev) * 100).toFixed(1),
+    opex:    +((ttmCost / ttmRev) * 100).toFixed(1),
+  } : { payroll: null, opex: null };
+
+  const peerPayroll = refs.find(r => r.key === "payroll")?.pct ?? 0;
+  const peerOpex    = refs.filter(r => r.key !== "payroll").reduce((s, r) => s + r.pct, 0);
+
+  const compare = [
+    { label: "Payroll", yours: yoursPct.payroll, peer: peerPayroll },
+    { label: "Operating spend (ex-payroll)", yours: yoursPct.opex, peer: peerOpex },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Peer Cost-Structure Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">How your cost base — as a % of revenue — compares to a typical <span className="text-[var(--color-text)]">{sector}</span> firm. Your payroll and operating-spend ratios are computed live from the last 12 months; the peer breakdown is a sector reference mix.</p>
+      </div>
+
+      {/* Your vs peer headline bars */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Your structure vs peers</h3>
+        {ttmRev <= 0 && <p className="text-xs text-yellow-400">Add 12 months of transactions to compute your cost ratios.</p>}
+        {compare.map(c => {
+          const yours = c.yours ?? 0;
+          const max = Math.max(yours, c.peer, 1);
+          const over = c.yours !== null && c.yours > c.peer;
+          return (
+            <div key={c.label}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium">{c.label}</span>
+                <span className="tabular-nums">
+                  {c.yours !== null ? <span className={over ? "text-yellow-400 font-semibold" : "text-green-400 font-semibold"}>{c.yours}%</span> : <span className="text-[var(--color-muted)]">—</span>}
+                  <span className="text-[var(--color-muted)]"> vs peer {c.peer}%</span>
+                </span>
+              </div>
+              <div className="relative h-3 rounded-full bg-[var(--color-border)] overflow-hidden">
+                <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(yours / max) * 100}%`, background: over ? "#eab308" : "#1A6B55" }} />
+                <div className="absolute inset-y-0 w-0.5 bg-[var(--color-text)]" style={{ left: `${(c.peer / max) * 100}%` }} title={`Peer ${c.peer}%`} />
+              </div>
+              {over && <p className="text-[10px] text-yellow-400 mt-0.5">{(yours - c.peer).toFixed(1)}pp above the peer benchmark — a cost-efficiency opportunity.</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Peer reference mix */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Typical {sector} cost mix (% of revenue)</h3>
+        <div className="flex h-4 w-full rounded-full overflow-hidden mb-3">
+          {refs.map((r, i) => (
+            <div key={r.key} style={{ width: `${r.pct}%`, background: ["#1A6B55", "#2d8a6f", "#7D8590", "#eab308", "#475569"][i % 5] }} title={`${r.label} ${r.pct}%`} />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {refs.map((r, i) => (
+            <div key={r.key} className="flex items-center gap-2 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: ["#1A6B55", "#2d8a6f", "#7D8590", "#eab308", "#475569"][i % 5] }} />
+              <span className="text-[var(--color-muted)] flex-1">{r.label}</span>
+              <span className="tabular-nums font-medium">{r.pct}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Transactions aren't sub-categorised into rent/marketing/admin, so your live figures collapse non-payroll spend into a single operating-spend line. The peer mix is a directional sector reference, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #145 Growth-Rate Percentile — where you rank on growth in your segment
+// ─────────────────────────────────────────────────────────────────────────────
+// Distribution of monthly revenue growth (MoM %) across firms in the segment.
+const GROWTH_DIST: Record<string, { p10: number; p25: number; p50: number; p75: number; p90: number }> = {
+  default:               { p10: -3, p25: 1,  p50: 4,  p75: 9,  p90: 16 },
+  "Manufacturing (SMB)": { p10: -4, p25: 0,  p50: 3,  p75: 7,  p90: 12 },
+  "IT Services":         { p10: -2, p25: 2,  p50: 6,  p75: 13, p90: 22 },
+};
+
+function GrowthRatePercentile({ sector }: { sector: string }) {
+  const dist = GROWTH_DIST[sector] ?? GROWTH_DIST["default"];
+  const series = useMonthlyRevenue();
+  const revSeries = series.map(m => m.revenue);
+
+  // Live compound monthly growth from the trailing series.
+  const cmgrVal = cmgr(revSeries);
+  // Latest MoM growth (last two non-zero months).
+  const nz = series.filter(m => m.revenue > 0);
+  const momLatest = nz.length >= 2 && nz[nz.length - 2].revenue > 0
+    ? +(((nz[nz.length - 1].revenue - nz[nz.length - 2].revenue) / nz[nz.length - 2].revenue) * 100).toFixed(1)
+    : null;
+
+  // Percentile of CMGR within the segment distribution (piecewise-linear).
+  const rankOf = (g: number): number => {
+    const pts: [number, number][] = [[dist.p10, 10], [dist.p25, 25], [dist.p50, 50], [dist.p75, 75], [dist.p90, 90]];
+    if (g <= pts[0][0]) return 8;
+    if (g >= pts[pts.length - 1][0]) return 95;
+    for (let i = 1; i < pts.length; i++) {
+      const [v0, r0] = pts[i - 1], [v1, r1] = pts[i];
+      if (g <= v1) return Math.round(r0 + (r1 - r0) * (v1 === v0 ? 0 : (g - v0) / (v1 - v0)));
+    }
+    return 50;
+  };
+  const pct = cmgrVal !== null ? rankOf(cmgrVal) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+
+  const distBars = [
+    { bucket: "P10", value: dist.p10 }, { bucket: "P25", value: dist.p25 },
+    { bucket: "P50", value: dist.p50 }, { bucket: "P75", value: dist.p75 }, { bucket: "P90", value: dist.p90 },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Growth-Rate Percentile</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your compound monthly revenue growth (CMGR) over the trailing 12 months, ranked against the growth distribution of typical <span className="text-[var(--color-text)]">{sector}</span> firms.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Your CMGR (12-mo)</p>
+          <p className={`text-2xl font-bold tabular-nums ${cmgrVal === null ? "text-[var(--color-muted)]" : cmgrVal >= 0 ? "text-green-400" : "text-red-400"}`}>{cmgrVal !== null ? `${cmgrVal.toFixed(1)}%` : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Latest MoM</p>
+          <p className={`text-2xl font-bold tabular-nums ${momLatest === null ? "text-[var(--color-muted)]" : momLatest >= 0 ? "text-green-400" : "text-red-400"}`}>{momLatest !== null ? `${momLatest}%` : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Segment percentile</p>
+          <p className={`text-2xl font-bold tabular-nums ${lbl ? lbl.color : "text-[var(--color-muted)]"}`}>{pct !== null ? `${pct}th` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-1">Where you sit in the {sector} growth curve</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Bars show segment growth percentiles (MoM %). The line marks your CMGR.</p>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={distBars} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+            <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} unit="%" />
+            <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 4, fontSize: 10 }} formatter={(v: number) => [`${v}%`, "Growth"]} />
+            <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+              {distBars.map((d, i) => <Cell key={i} fill={cmgrVal !== null && cmgrVal >= d.value ? "#1A6B55" : "#7D859055"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        {cmgrVal !== null && (
+          <p className="text-xs text-[var(--color-muted)] mt-2">
+            Your {cmgrVal.toFixed(1)}% CMGR is{" "}
+            <span className={lbl?.color}>{cmgrVal >= dist.p50 ? "ahead of" : "behind"} the segment median of {dist.p50}%</span>
+            {cmgrVal >= dist.p90 ? " — top-decile growth." : cmgrVal < dist.p25 ? " — lagging the bottom quartile." : "."}
+          </p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">CMGR needs ≥2 positive months. Segment distributions are directional reference curves for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #146 Working-Capital Benchmark — your CCC vs industry norms
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector norms for the cash-conversion cycle components (days). CCC = DIO+DSO−DPO.
+const CCC_NORMS: Record<string, { dio: number; dso: number; dpo: number }> = {
+  default:               { dio: 45, dso: 42, dpo: 35 },
+  "Manufacturing (SMB)": { dio: 70, dso: 52, dpo: 45 },
+  "IT Services":         { dio: 5,  dso: 38, dpo: 30 },
+};
+
+function WorkingCapitalBenchmark({ sector }: { sector: string }) {
+  const { store } = useApp();
+  const norm = CCC_NORMS[sector] ?? CCC_NORMS["default"];
+
+  const yDso = dso(store.invoices ?? []);
+  const yDio = dio(store.inventory ?? [], store.procurement ?? []);
+  const yDpo = dpo(store.procurement ?? []);
+  const yCcc = yDio + yDso - yDpo;
+  const normCcc = norm.dio + norm.dso - norm.dpo;
+  const gap = yCcc - normCcc;
+
+  const comps = [
+    { key: "dio", label: "Days Inventory (DIO)", yours: yDio, norm: norm.dio, higherIsBetter: false, hint: "release cash by trimming slow-moving stock" },
+    { key: "dso", label: "Days Sales (DSO)",     yours: yDso, norm: norm.dso, higherIsBetter: false, hint: "tighten credit terms and chase overdue invoices" },
+    { key: "dpo", label: "Days Payables (DPO)",  yours: yDpo, norm: norm.dpo, higherIsBetter: true,  hint: "negotiate longer terms without souring vendors" },
+  ];
+
+  // Rough cash impact of closing the CCC gap: gap-days × daily spend run rate.
+  const txns = store.transactions ?? [];
+  const annualSpend = Math.abs(txns.filter(t => t.amount < 0 && t.category !== "loan").reduce((s, t) => s + t.amount, 0));
+  const months = Math.max(new Set(txns.map(t => t.date.slice(0, 7))).size, 1);
+  const dailyRunRate = (annualSpend / months) / 30;
+  const cashLockedVsNorm = Math.round(gap * dailyRunRate);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Recycle size={14} className="text-[var(--color-primary)]" /> Working-Capital Benchmark (CCC)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your cash-conversion cycle — DIO + DSO − DPO — computed live from invoices, inventory and procurement, against typical <span className="text-[var(--color-text)]">{sector}</span> norms. A shorter CCC frees up cash.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Your CCC</p>
+          <p className={`text-2xl font-bold tabular-nums ${yCcc <= normCcc ? "text-green-400" : "text-yellow-400"}`}>{yCcc}<span className="text-sm"> days</span></p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector norm CCC</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{normCcc}<span className="text-sm"> days</span></p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Gap vs norm</p>
+          <p className={`text-2xl font-bold tabular-nums ${gap <= 0 ? "text-green-400" : "text-red-400"}`}>{gap > 0 ? "+" : ""}{gap}<span className="text-sm"> days</span></p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">{gap > 0 ? "Cash locked vs norm" : "Cash freed vs norm"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${gap > 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.abs(cashLockedVsNorm))}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Component breakdown</h3>
+        {comps.map(c => {
+          const max = Math.max(c.yours, c.norm, 1);
+          const worse = c.higherIsBetter ? c.yours < c.norm : c.yours > c.norm;
+          return (
+            <div key={c.key}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium">{c.label}</span>
+                <span className="tabular-nums">
+                  <span className={worse ? "text-yellow-400 font-semibold" : "text-green-400 font-semibold"}>{c.yours}d</span>
+                  <span className="text-[var(--color-muted)]"> vs norm {c.norm}d</span>
+                </span>
+              </div>
+              <div className="relative h-3 rounded-full bg-[var(--color-border)] overflow-hidden">
+                <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(c.yours / max) * 100}%`, background: worse ? "#eab308" : "#1A6B55" }} />
+                <div className="absolute inset-y-0 w-0.5 bg-[var(--color-text)]" style={{ left: `${(c.norm / max) * 100}%` }} title={`Norm ${c.norm}d`} />
+              </div>
+              {worse && (
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-yellow-400">
+                  <AlertTriangle size={9} className="shrink-0" /> {c.higherIsBetter ? `${c.norm - c.yours}d shorter than norm` : `${c.yours - c.norm}d longer than norm`} — {c.hint}.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">DIO/DSO/DPO are computed from a 90-day proxy of recent activity; with thin data the engine applies conservative defaults. Cash-impact uses your average daily spend run-rate. Sector norms are directional guides, not live peer data.</p>
     </div>
   );
 }
