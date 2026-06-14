@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import {
   Package, ShoppingCart, Truck, BarChart2, Plus, X, MessageCircle,
   Mail, FileSpreadsheet, Phone, CheckCircle2, Clock, AlertTriangle,
+  Radar, Copy, TrendingUp, ArrowUpRight, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data/types";
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence";
 
@@ -37,14 +39,28 @@ const PO_STATUS_COLOR: Record<string, string> = {
   cancelled: "text-red-400",
 };
 
-// Bullwhip effect data — demonstrates supply chain intelligence value
-const BULLWHIP_WITHOUT = [2,4,8,18,40,80,160,80,40,18,8,4].map((v, i) => ({ week: `W${i+1}`, consumer: 10, retailer: v * 0.8, wholesaler: v * 1.1, manufacturer: v }));
-const BULLWHIP_WITH    = [2,4,6,8,10,12,13,12,11,10,8,6].map((v, i) => ({ week: `W${i+1}`, consumer: 10, retailer: v * 1.1, wholesaler: v * 1.2, manufacturer: v * 1.3 }));
+const ANOMALY_META: Record<Anomaly["type"], { Icon: React.ElementType; label: string }> = {
+  duplicate:          { Icon: Copy,        label: "Duplicate" },
+  spike:              { Icon: TrendingUp,  label: "Spike" },
+  subscription_creep: { Icon: ArrowUpRight, label: "Creep" },
+  new_vendor:         { Icon: UserPlus,    label: "New payee" },
+};
+const SEV_STYLE: Record<Anomaly["severity"], string> = {
+  high:   "border-red-700/50 bg-red-950/15",
+  medium: "border-orange-700/40 bg-orange-950/10",
+  low:    "border-[var(--color-border)]",
+};
+const SEV_DOT: Record<Anomaly["severity"], string> = {
+  high: "bg-red-400", medium: "bg-orange-400", low: "bg-[var(--color-muted)]",
+};
 
 export default function OperationsPage() {
   const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, updateInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
-  const { orders, inventory, procurement } = store;
+  const { orders, inventory, procurement, transactions } = store;
   const [tab, setTab] = useState<Tab>("overview");
+
+  // Real anomaly radar over the tenant's transactions (see src/lib/anomalies.ts).
+  const anomalies = useMemo(() => detectAnomalies(transactions), [transactions]);
 
   // Order form state
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -71,8 +87,6 @@ export default function OperationsPage() {
   const [poItemName,    setPoItemName]    = useState("");
   const [poItemQty,     setPoItemQty]     = useState("1");
   const [poItemCost,    setPoItemCost]    = useState("");
-
-  const [bullwhip, setBullwhip] = useState<"without" | "with">("without");
 
   const totalOrderValue  = orders.filter(o => o.status !== "cancelled").reduce((s, o) => s + o.totalValue, 0);
   const pendingOrders    = orders.filter(o => o.status === "pending").length;
@@ -122,7 +136,7 @@ export default function OperationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Operations Hub</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">Orders · Inventory · Procurement · Supply Chain Intelligence</p>
+          <p className="text-sm text-[var(--color-muted)] mt-0.5">Orders · Inventory · Procurement · Anomaly Radar</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-900/20 border border-green-800/30 px-2.5 py-1.5 rounded-lg">
@@ -138,7 +152,7 @@ export default function OperationsPage() {
           ["orders",        "Orders",       pendingOrders > 0 ? pendingOrders : null],
           ["inventory",     "Inventory",    lowStockItems.length > 0 ? lowStockItems.length : null],
           ["procurement",   "Procurement",  null],
-          ["intelligence",  "Intelligence", null],
+          ["intelligence",  "Anomaly Radar", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -480,102 +494,69 @@ export default function OperationsPage() {
 
       {/* ── INTELLIGENCE ── */}
       {tab === "intelligence" && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-base font-bold mb-1">Supply Chain Intelligence</h2>
-            <p className="text-sm text-[var(--color-muted)]">Headroom's intelligent data sharing layer reduces the bullwhip effect — keeping your inventory and forecasting decisions within 15% of real demand.</p>
-          </div>
-
-          {/* Bullwhip toggle */}
-          <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-            {(["without","with"] as const).map(v => (
-              <button key={v} onClick={() => setBullwhip(v)}
-                className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${bullwhip === v ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-                {v === "without" ? "Without Headroom" : "With Headroom"}
-              </button>
-            ))}
-          </div>
-
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-semibold">Demand Signal Propagation</h3>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                  {bullwhip === "without"
-                    ? "Without real-time data sharing — demand variance amplifies 14× up the supply chain"
-                    : "With Headroom's intelligent data layer — variance stays within 15% across all tiers"}
-                </p>
-              </div>
-              <span className={`text-sm font-bold ${bullwhip === "without" ? "text-red-400" : "text-green-400"}`}>
-                {bullwhip === "without" ? "14× amplification" : "Within 15%"}
-              </span>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={bullwhip === "without" ? BULLWHIP_WITHOUT : BULLWHIP_WITH}>
-                <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#8a8060" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#1e1e14", border: "1px solid #2e2e1a", borderRadius: 8, fontSize: 11 }} />
-                <Area type="monotone" dataKey="consumer"     stroke="#C9A227" strokeWidth={2} fill="#C9A22710" />
-                <Area type="monotone" dataKey="retailer"     stroke="#4A9CE8" strokeWidth={1.5} fill="#4A9CE810" />
-                <Area type="monotone" dataKey="wholesaler"   stroke="#9C4AE8" strokeWidth={1.5} fill="#9C4AE810" />
-                <Area type="monotone" dataKey="manufacturer" stroke="#E84A4A" strokeWidth={1.5} fill="#E84A4A10" />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-4 mt-3">
-              {[
-                { color: "#C9A227", label: "Consumer demand" },
-                { color: "#4A9CE8", label: "Retailer orders" },
-                { color: "#9C4AE8", label: "Wholesaler orders" },
-                { color: "#E84A4A", label: "Manufacturer orders" },
-              ].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
-                  <span className="text-[11px] text-[var(--color-muted)]">{label}</span>
-                </div>
-              ))}
+        <div className="space-y-5">
+          <div className="flex items-center gap-2">
+            <Radar size={18} className="text-[var(--color-primary)]" />
+            <div>
+              <h2 className="text-base font-bold">Anomaly Radar</h2>
+              <p className="text-sm text-[var(--color-muted)]">Scans your transactions for duplicate payments, spend spikes, creeping subscriptions, and large new payees — every flag links to the underlying transactions.</p>
             </div>
           </div>
 
-          {/* Value props */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {[
-              { icon: "📡", title: "Live signals", desc: "Orders, inventory, and payments flow into a single real-time view across your supply chain." },
-              { icon: "🔮", title: "Demand forecasting", desc: "ML model spots pattern shifts 4–6 weeks early and drafts procurement before shelves go dry." },
-              { icon: "🤝", title: "Shared intelligence", desc: "Every partner in your chain sees demand signals simultaneously — eliminating the bullwhip." },
-            ].map(({ icon, title, desc }) => (
-              <div key={title} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-                <span className="text-2xl">{icon}</span>
-                <h3 className="text-sm font-semibold mt-2 mb-1">{title}</h3>
-                <p className="text-xs text-[var(--color-muted)] leading-relaxed">{desc}</p>
+          {/* Severity summary */}
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              ["high",   "Needs attention", "text-red-400"],
+              ["medium", "Worth a look",    "text-orange-400"],
+              ["low",    "Heads up",        "text-[var(--color-muted)]"],
+            ] as const).map(([sev, label, color]) => (
+              <div key={sev} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
+                <p className={`text-xl font-bold ${color}`}>{anomalies.filter(a => a.severity === sev).length}</p>
               </div>
             ))}
           </div>
 
-          {/* Supply chain flow */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-            <h3 className="text-sm font-semibold mb-4">Intelligent Data Sharing Layer</h3>
-            <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
-              {["Supplier", "Manufacturer", "Distributor", "Wholesaler", "Retailer", "Consumer"].map((tier, i, arr) => (
-                <div key={tier} className="flex items-center gap-2 shrink-0">
-                  <div className="text-center">
-                    <div className="w-14 h-14 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg flex items-center justify-center text-xs font-semibold">
-                      {tier.slice(0, 4)}
+          {anomalies.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+              <CheckCircle2 size={26} className="mx-auto mb-3 text-green-400 opacity-60" />
+              <p className="text-sm font-semibold mb-1">No anomalies detected</p>
+              <p className="text-sm text-[var(--color-muted)] max-w-sm mx-auto">
+                {transactions.length === 0
+                  ? "Import or add transactions and the radar will watch for duplicate payments, spend spikes and subscription creep."
+                  : "Your recent spend looks clean — no duplicate payments, spikes, or unusual new payees."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {anomalies.map(a => {
+                const { Icon, label } = ANOMALY_META[a.type];
+                return (
+                  <div key={a.id} className={`rounded-lg border p-4 ${SEV_STYLE[a.severity]}`}>
+                    <div className="flex items-start gap-3">
+                      <Icon size={16} className="text-[var(--color-primary)] shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`w-1.5 h-1.5 rounded-full ${SEV_DOT[a.severity]}`} />
+                          <p className="text-sm font-semibold">{a.title}</p>
+                          <span className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] border border-[var(--color-border)] rounded-full px-1.5 py-0.5">{label}</span>
+                        </div>
+                        <p className="text-xs text-[var(--color-muted)] mt-1">{a.detail}</p>
+                        <p className="text-[11px] text-[var(--color-muted)] mt-1">
+                          {new Date(a.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          {" · "}{a.txnIds.length} transaction{a.txnIds.length > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold tabular-nums">{formatCurrency(a.amount)}</p>
+                        <Link to="/transactions" className="text-[10px] text-[var(--color-primary)] hover:underline">Review →</Link>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-[var(--color-muted)] mt-1">{tier}</p>
                   </div>
-                  {i < arr.length - 1 && (
-                    <div className="flex flex-col gap-0.5">
-                      <div className="w-6 h-0.5 bg-[var(--color-primary)]/40 rounded" />
-                      <div className="w-6 h-0.5 bg-[var(--color-primary)]/20 rounded" />
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <p className="text-xs text-[var(--color-muted)] mt-4 text-center">
-              All tiers share real-time demand signals through Headroom — reducing planning errors from 14× to within 15%.
-            </p>
-          </div>
+          )}
         </div>
       )}
     </div>
