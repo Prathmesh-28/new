@@ -112,13 +112,14 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
 
 export default function PayrollPage() {
   const now = new Date();
+  const { store } = useApp();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [runs, setRuns]           = useState<PayrollRun[]>([]);
   const [loading, setLoading]     = useState(true);
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -221,7 +222,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -952,6 +953,8 @@ export default function PayrollPage() {
       {tab === "variance" && <PayrollVarianceTab />}
       {tab === "pt" && <PtCalculatorTab employees={employees} />}
       {tab === "flexi" && <FlexiBenefitTab employees={employees} />}
+      {tab === "lwf" && <LwfCalculatorTab employees={employees} />}
+      {tab === "offer" && <OfferLetterTab employees={employees} firmName={store.firm?.name ?? "Your Company"} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1446,6 +1449,234 @@ function FlexiBenefitTab({ employees }: { employees: { id: string; name: string;
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">HRA exemption simplified as 80% (metro). LTA exempt for 2 journeys/block. Food coupons capped ₹2,200/mo. NPS via Sec 80CCD(2) — above ₹1.5L 80C limit. Always verify with your CA.</p>
+    </div>
+  );
+}
+
+function LwfCalculatorTab({ employees }: { employees: { id: string; name: string; gross_salary: number }[] }) {
+  const [state, setState] = useState("Maharashtra");
+
+  type LwfSlab = { employee: number; employer: number; freq: string; note: string };
+  const LWF_STATES: Record<string, LwfSlab> = {
+    Maharashtra:   { employee: 6,    employer: 12,   freq: "Jun & Dec", note: "₹6 + ₹12 per employee" },
+    Karnataka:     { employee: 20,   employer: 40,   freq: "Jun & Dec", note: "₹20 + ₹40 per employee" },
+    "Tamil Nadu":  { employee: 10,   employer: 20,   freq: "Annual",    note: "₹10 + ₹20 per employee" },
+    "Andhra Pradesh": { employee: 30, employer: 70,  freq: "Annual",    note: "₹30 + ₹70 per employee" },
+    Telangana:     { employee: 30,   employer: 70,   freq: "Annual",    note: "₹30 + ₹70 per employee" },
+    Gujarat:       { employee: 6,    employer: 12,   freq: "Jun & Dec", note: "₹6 + ₹12 per employee" },
+    "West Bengal": { employee: 3,    employer: 6,    freq: "Monthly",   note: "₹3 + ₹6 per employee/mo" },
+    "Madhya Pradesh": { employee: 10, employer: 20,  freq: "Annual",    note: "₹10 + ₹20 per employee" },
+    Punjab:        { employee: 5,    employer: 20,   freq: "Annual",    note: "₹5 + ₹20 per employee" },
+    Kerala:        { employee: 4,    employer: 8,    freq: "Jun & Dec", note: "₹4 + ₹8 per employee" },
+    Delhi:         { employee: 0,    employer: 0,    freq: "N/A",       note: "LWF not applicable in Delhi" },
+    Rajasthan:     { employee: 0,    employer: 0,    freq: "N/A",       note: "LWF not applicable in Rajasthan" },
+  };
+
+  const slab = LWF_STATES[state] ?? { employee: 0, employer: 0, freq: "N/A", note: "State not configured" };
+  const count = employees.length || 10;
+  const annualMultiplier = slab.freq === "Monthly" ? 12 : slab.freq === "Jun & Dec" ? 2 : 1;
+  const totalEmployee = slab.employee * count * annualMultiplier;
+  const totalEmployer = slab.employer * count * annualMultiplier;
+  const fc = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Labour Welfare Fund Calculator</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">State</label>
+            <select value={state} onChange={e => setState(e.target.value)}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+              {Object.keys(LWF_STATES).map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="bg-[var(--color-accent)] rounded-lg p-3 text-xs space-y-1">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Frequency</span><span className="font-semibold">{slab.freq}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Employee contrib</span><span className="font-semibold">₹{slab.employee}/employee</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Employer contrib</span><span className="font-semibold">₹{slab.employer}/employee</span></div>
+            <p className="text-[var(--color-muted)] pt-1">{slab.note}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Employees",            value: count.toString(),         color: "text-[var(--color-primary)]" },
+          { label: "Annual Employee Share", value: fc(totalEmployee),       color: "text-blue-400" },
+          { label: "Annual Employer Share", value: fc(totalEmployer),       color: "text-orange-400" },
+          { label: "Total Annual Outflow",  value: fc(totalEmployee + totalEmployer), color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Per-Employee LWF Deductions</span>
+        </div>
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Employee","Employee Contrib","Employer Contrib","Total"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(employees.length > 0 ? employees : [{ id: "demo", name: "Sample Employee", gross_salary: 30000 }]).map(e => (
+              <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-4 py-3 font-medium">{e.name}</td>
+                <td className="px-4 py-3 tabular-nums">₹{slab.employee * annualMultiplier}</td>
+                <td className="px-4 py-3 tabular-nums text-orange-400">₹{slab.employer * annualMultiplier}</td>
+                <td className="px-4 py-3 tabular-nums font-semibold">₹{(slab.employee + slab.employer) * annualMultiplier}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">LWF rates are state-specific and change annually. Deduct from employee salary and remit to respective State Labour Welfare Board. Not applicable in Delhi, Rajasthan, and some UTs.</p>
+    </div>
+  );
+}
+
+function OfferLetterTab({ employees, firmName }: { employees: { id: string; name: string; gross_salary: number }[]; firmName: string }) {
+  const [candidateName, setCandidateName] = useState("");
+  const [designation,   setDesignation]   = useState("");
+  const [department,    setDepartment]    = useState("");
+  const [joiningDate,   setJoiningDate]   = useState("");
+  const [grossSalary,   setGrossSalary]   = useState("");
+  const [probation,     setProbation]     = useState("6");
+  const [workLocation,  setWorkLocation]  = useState("");
+  const [reportingTo,   setReportingTo]   = useState("");
+  const [copied,        setCopied]        = useState(false);
+
+  const gross = parseFloat(grossSalary) || 0;
+  const basic = Math.round(gross * 0.5);
+  const hra   = Math.round(gross * 0.2);
+  const special = gross - basic - hra;
+  const fc = formatCurrency;
+
+  const letter = `OFFER LETTER
+
+${firmName}
+
+Date: ${joiningDate ? new Date(joiningDate).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : "[Date]"}
+
+To,
+${candidateName || "[Candidate Name]"}
+
+Subject: Offer of Employment — ${designation || "[Designation]"}
+
+Dear ${candidateName || "[Candidate Name]"},
+
+We are pleased to offer you the position of ${designation || "[Designation]"} in the ${department || "[Department]"} department at ${firmName}.
+
+EMPLOYMENT DETAILS
+• Designation:   ${designation || "—"}
+• Department:    ${department || "—"}
+• Reporting to:  ${reportingTo || "—"}
+• Work Location: ${workLocation || "—"}
+• Joining Date:  ${joiningDate || "—"}
+• Probation:     ${probation} months
+
+COMPENSATION (Monthly)
+• Basic Salary:        ${fc(basic)}
+• HRA:                 ${fc(hra)}
+• Special Allowance:   ${fc(special)}
+• Gross Monthly CTC:   ${fc(gross)}
+• Annual CTC:          ${fc(gross * 12)}
+
+TERMS & CONDITIONS
+1. This offer is subject to satisfactory verification of your documents and references.
+2. During probation, either party may terminate with 7 days' notice.
+3. Post-confirmation, notice period is 30 days from either side.
+4. You will be governed by the company's policies, code of conduct, and applicable labour laws.
+5. This offer is valid for 7 days from the date above.
+
+Please sign and return one copy of this letter as your acceptance.
+
+Congratulations and welcome to the team!
+
+Yours sincerely,
+
+_______________________
+Authorised Signatory
+${firmName}
+
+
+ACCEPTANCE
+
+I, ${candidateName || "[Name]"}, accept the above offer and agree to join on ${joiningDate || "[date]"}.
+
+Signature: _______________________   Date: ___________`;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(letter).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Offer Letter Generator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Candidate Name *</label>
+            <input value={candidateName} onChange={e => setCandidateName(e.target.value)} placeholder="Rahul Sharma" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Designation *</label>
+            <input value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Senior Accountant" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Department</label>
+            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Finance" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross Monthly Salary (₹) *</label>
+            <input type="number" value={grossSalary} onChange={e => setGrossSalary(e.target.value)} placeholder="35000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date of Joining</label>
+            <input type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Probation (months)</label>
+            <select value={probation} onChange={e => setProbation(e.target.value)} className={inp}>
+              {["1","2","3","6","12"].map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Work Location</label>
+            <input value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder="Mumbai" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reporting To</label>
+            <input value={reportingTo} onChange={e => setReportingTo(e.target.value)} placeholder="CFO / Manager" className={inp} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Preview</span>
+          <button onClick={copyToClipboard}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+            <FileText size={11} /> {copied ? "Copied!" : "Copy to Clipboard"}
+          </button>
+        </div>
+        <pre className="p-4 text-xs font-mono text-[var(--color-muted)] whitespace-pre-wrap leading-relaxed overflow-x-auto">
+          {letter}
+        </pre>
+      </div>
+      {employees.length > 0 && (
+        <p className="text-[10px] text-[var(--color-muted)]">Tip: Select an existing employee to pre-fill — or type a new candidate's details above.</p>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom";
+type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -155,6 +155,8 @@ export default function OperationsPage() {
           ["intelligence",  "Anomaly Radar", null],
           ["prices",        "Price List",    null],
           ["bom",           "BOM Costing",   null],
+          ["leadtime",      "Lead Time",     null],
+          ["reorder",       "Reorder Alert", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -703,6 +705,8 @@ export default function OperationsPage() {
 
       {tab === "prices" && <PriceListTab />}
       {tab === "bom" && <BomCostingTab />}
+      {tab === "leadtime" && <LeadTimeScorecardTab />}
+      {tab === "reorder" && <ReorderAlertTab />}
     </div>
   );
 }
@@ -870,6 +874,156 @@ function PriceListTab() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Price list auto-populates from your inventory. Click any base price to edit it inline. Export as CSV to share with customers or dealers.
       </div>
+    </div>
+  );
+}
+
+function LeadTimeScorecardTab() {
+  type Delivery = { id: string; vendor: string; item: string; orderedDate: string; promisedDate: string; actualDate: string };
+
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [vendor,   setVendor]   = useState("");
+  const [item,     setItem]     = useState("");
+  const [ordered,  setOrdered]  = useState(() => new Date().toISOString().split("T")[0]);
+  const [promised, setPromised] = useState(() => new Date().toISOString().split("T")[0]);
+  const [actual,   setActual]   = useState(() => new Date().toISOString().split("T")[0]);
+
+  const addDelivery = () => {
+    if (!vendor || !item) return;
+    setDeliveries(prev => [...prev, { id: Math.random().toString(36).slice(2), vendor, item, orderedDate: ordered, promisedDate: promised, actualDate: actual }]);
+    setVendor(""); setItem("");
+  };
+
+  const daysDiff = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+
+  const vendorMap: Record<string, { promised: number[]; actual: number[]; onTime: number; total: number }> = {};
+  deliveries.forEach(d => {
+    if (!vendorMap[d.vendor]) vendorMap[d.vendor] = { promised: [], actual: [], onTime: 0, total: 0 };
+    const p = daysDiff(d.orderedDate, d.promisedDate);
+    const a = daysDiff(d.orderedDate, d.actualDate);
+    vendorMap[d.vendor].promised.push(p);
+    vendorMap[d.vendor].actual.push(a);
+    vendorMap[d.vendor].total++;
+    if (a <= p) vendorMap[d.vendor].onTime++;
+  });
+
+  const vendorScores = Object.entries(vendorMap).map(([name, v]) => {
+    const avgPromised = v.promised.reduce((s,x)=>s+x,0) / v.promised.length;
+    const avgActual   = v.actual.reduce((s,x)=>s+x,0) / v.actual.length;
+    const onTimePct   = Math.round((v.onTime / v.total) * 100);
+    const avgDelay    = Math.round(avgActual - avgPromised);
+    const grade       = onTimePct >= 90 ? "A" : onTimePct >= 70 ? "B" : "C";
+    return { name, avgPromised: Math.round(avgPromised), avgActual: Math.round(avgActual), onTimePct, avgDelay, grade, total: v.total };
+  }).sort((a,b) => b.onTimePct - a.onTimePct);
+
+  const GRADE_STYLE = { A: "bg-green-900/30 text-green-400 border-green-800/40", B: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", C: "bg-red-900/30 text-red-400 border-red-800/40" };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1">Vendor Lead Time Scorecard</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track promised vs actual delivery dates per vendor. Grades: A = ≥90% on-time, B = 70-89%, C = below 70%.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e=>setVendor(e.target.value)} placeholder="Vendor name *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={item} onChange={e=>setItem(e.target.value)} placeholder="Item / PO reference *"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <div className="grid grid-cols-3 gap-1">
+            {[["Ordered", ordered, setOrdered], ["Promised", promised, setPromised], ["Actual", actual, setActual]].map(([label, val, set]) => (
+              <div key={label as string}>
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{label as string}</p>
+                <input type="date" value={val as string} onChange={e=>(set as (v:string)=>void)(e.target.value)}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <button onClick={addDelivery} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record delivery</button>
+      </div>
+
+      {vendorScores.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Vendor Scorecard</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Vendor","Grade","Deliveries","On-Time %","Avg Lead Time","Avg Delay"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {vendorScores.map(v => (
+                  <tr key={v.name} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium">{v.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${GRADE_STYLE[v.grade as keyof typeof GRADE_STYLE]}`}>{v.grade}</span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{v.total}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${v.onTimePct}%`, background: v.onTimePct >= 90 ? "#22c55e" : v.onTimePct >= 70 ? "#f97316" : "#ef4444" }} />
+                        </div>
+                        <span className={`text-xs font-semibold tabular-nums ${v.onTimePct >= 90 ? "text-green-400" : v.onTimePct >= 70 ? "text-orange-400" : "text-red-400"}`}>{v.onTimePct}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-xs">{v.avgActual}d actual / {v.avgPromised}d promised</td>
+                    <td className={`px-4 py-3 tabular-nums font-semibold text-xs ${v.avgDelay > 0 ? "text-red-400" : "text-green-400"}`}>
+                      {v.avgDelay > 0 ? `+${v.avgDelay}d late` : v.avgDelay < 0 ? `${Math.abs(v.avgDelay)}d early` : "On time"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {deliveries.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <p className="text-sm font-semibold">All Deliveries ({deliveries.length})</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Vendor","Item","Ordered","Promised","Actual","Variance",""].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {deliveries.slice().reverse().map(d => {
+                  const delay = daysDiff(d.promisedDate, d.actualDate);
+                  return (
+                    <tr key={d.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium text-xs">{d.vendor}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.item}</td>
+                      <td className="px-4 py-2.5 text-xs tabular-nums">{d.orderedDate}</td>
+                      <td className="px-4 py-2.5 text-xs tabular-nums">{d.promisedDate}</td>
+                      <td className="px-4 py-2.5 text-xs tabular-nums">{d.actualDate}</td>
+                      <td className={`px-4 py-2.5 text-xs font-semibold tabular-nums ${delay > 0 ? "text-red-400" : delay < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>
+                        {delay > 0 ? `+${delay}d` : delay < 0 ? `${delay}d` : "On time"}
+                      </td>
+                      <td className="px-4 py-2.5"><button onClick={()=>setDeliveries(prev=>prev.filter(x=>x.id!==d.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12}/></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {deliveries.length === 0 && (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Truck size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No deliveries recorded. Log promised and actual delivery dates to score your vendors.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1047,6 +1201,165 @@ function BomCostingTab() {
           <p className="text-sm text-[var(--color-muted)]">No BOMs yet. Create a Bill of Materials to cost your manufactured or assembled products.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function ReorderAlertTab() {
+  const { store } = useApp();
+  type ReorderItem = {
+    id: string; name: string; currentStock: number; reorderPoint: number;
+    reorderQty: number; leadTimeDays: number; unitCost: number; supplier: string;
+  };
+
+  const fromInventory: ReorderItem[] = useMemo(() =>
+    (store.inventory ?? []).map(item => ({
+      id: item.id,
+      name: item.productName,
+      currentStock: item.quantity ?? 0,
+      reorderPoint: item.reorderLevel ?? Math.ceil((item.quantity ?? 0) * 0.3),
+      reorderQty: Math.ceil((item.quantity ?? 0) * 0.5),
+      leadTimeDays: 7,
+      unitCost: item.unitCost ?? 0,
+      supplier: "",
+    })),
+  [store.inventory]);
+
+  const [items, setItems] = useState<ReorderItem[]>([]);
+  const allItems = useMemo(() => {
+    const ids = new Set(items.map(i => i.id));
+    return [...items, ...fromInventory.filter(i => !ids.has(i.id))];
+  }, [items, fromInventory]);
+
+  const [showForm, setShowForm] = useState(false);
+  const [fName, setFName]     = useState("");
+  const [fStock, setFStock]   = useState("");
+  const [fRop,   setFRop]     = useState("");
+  const [fQty,   setFQty]     = useState("");
+  const [fLead,  setFLead]    = useState("7");
+  const [fCost,  setFCost]    = useState("");
+  const [fSupp,  setFSupp]    = useState("");
+
+  const addItem = () => {
+    if (!fName) return;
+    setItems(prev => [...prev, {
+      id: generateId(), name: fName,
+      currentStock: parseFloat(fStock) || 0, reorderPoint: parseFloat(fRop) || 0,
+      reorderQty: parseFloat(fQty) || 0, leadTimeDays: parseFloat(fLead) || 7,
+      unitCost: parseFloat(fCost) || 0, supplier: fSupp,
+    }]);
+    setFName(""); setFStock(""); setFRop(""); setFQty(""); setFLead("7"); setFCost(""); setFSupp("");
+    setShowForm(false);
+  };
+
+  const updateField = (id: string, field: keyof ReorderItem, val: string) =>
+    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: field === "name" || field === "supplier" ? val : parseFloat(val) || 0 } : i));
+
+  const needsReorder  = allItems.filter(i => i.currentStock <= i.reorderPoint);
+  const orderValue    = needsReorder.reduce((s, i) => s + i.reorderQty * i.unitCost, 0);
+  const fc = formatCurrency;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total SKUs",      value: allItems.length.toString(),       color: "text-[var(--color-primary)]" },
+          { label: "Need Reorder",    value: needsReorder.length.toString(),   color: needsReorder.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Est. Order Value",value: fc(orderValue),                   color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Reorder Point Monitor</span>
+            {needsReorder.length > 0 && (
+              <span className="text-xs bg-red-950/30 text-red-400 font-semibold px-2 py-0.5 rounded-full">{needsReorder.length} items below ROP</span>
+            )}
+          </div>
+          <button onClick={() => setShowForm(f => !f)}
+            className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <Plus size={11} /> Add SKU
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Item name *" className={inp} />
+              <input type="number" value={fStock} onChange={e => setFStock(e.target.value)} placeholder="Current stock" className={inp} />
+              <input type="number" value={fRop}   onChange={e => setFRop(e.target.value)}   placeholder="Reorder point" className={inp} />
+              <input type="number" value={fQty}   onChange={e => setFQty(e.target.value)}   placeholder="Reorder qty" className={inp} />
+              <input type="number" value={fLead}  onChange={e => setFLead(e.target.value)}  placeholder="Lead time (days)" className={inp} />
+              <input type="number" value={fCost}  onChange={e => setFCost(e.target.value)}  placeholder="Unit cost (₹)" className={inp} />
+              <input value={fSupp} onChange={e => setFSupp(e.target.value)} placeholder="Supplier name" className={`${inp} md:col-span-2`} />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button onClick={addItem} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+              <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {allItems.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No SKUs configured. Items auto-populate from your inventory. Add custom SKUs to set reorder points.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Item","Stock","ROP","Status","Reorder Qty","Lead Time","Order Value","Supplier",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allItems.sort((a, b) => (a.currentStock - a.reorderPoint) - (b.currentStock - b.reorderPoint)).map(item => {
+                  const below = item.currentStock <= item.reorderPoint;
+                  const critical = item.currentStock <= item.reorderPoint * 0.5;
+                  const stockPct = item.reorderPoint > 0 ? Math.min(100, (item.currentStock / (item.reorderPoint * 2)) * 100) : 100;
+                  return (
+                    <tr key={item.id} className={`border-b border-[var(--color-border)] last:border-0 ${below ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                      <td className="px-3 py-2.5 font-medium">{item.name}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-14 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${critical ? "bg-red-500" : below ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${stockPct}%` }} />
+                          </div>
+                          <span className="tabular-nums text-xs">{item.currentStock}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{item.reorderPoint}</td>
+                      <td className="px-3 py-2.5">
+                        {critical ? <span className="text-xs font-bold text-red-400 bg-red-950/30 px-2 py-0.5 rounded-full">Critical</span>
+                          : below  ? <span className="text-xs font-bold text-yellow-400 bg-yellow-950/30 px-2 py-0.5 rounded-full">Reorder</span>
+                          : <span className="text-xs font-semibold text-green-400">OK</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <input type="number" value={item.reorderQty} onChange={e => updateField(item.id, "reorderQty", e.target.value)} className="w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none" />
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{item.leadTimeDays}d</td>
+                      <td className="px-3 py-2.5 tabular-nums">{item.unitCost > 0 ? fc(item.reorderQty * item.unitCost) : "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{item.supplier || "—"}</td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => setItems(prev => prev.filter(x => x.id !== item.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">ROP = Reorder Point. Items auto-populated from inventory at 30% of current stock. Edit inline to set precise safety stock levels. Critical = stock &lt;50% of ROP.</p>
     </div>
   );
 }

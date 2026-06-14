@@ -7,7 +7,7 @@ import {
   TrendingUp, FileText, Plus, ArrowRight, Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
-import { addDays, format, differenceInCalendarDays, startOfYear } from "date-fns";
+import { format, differenceInCalendarDays, startOfYear } from "date-fns";
 
 interface TaxDeadline {
   label: string;
@@ -63,7 +63,7 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat">("overview");
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -137,7 +137,7 @@ export default function TaxPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -750,6 +750,10 @@ export default function TaxPage() {
       {taxTab === "mat" && (() => {
         return <MatChecker />;
       })()}
+
+      {taxTab === "angel" && (() => {
+        return <AngelTaxChecker />;
+      })()}
     </div>
   );
 }
@@ -847,6 +851,119 @@ function MatChecker() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">MAT: Sec 115JB — companies pay higher of normal tax or 15% of adjusted book profit. AMT: Sec 115JC — LLPs/individuals claiming profit-linked deductions. MAT credit under Sec 115JAA. Consult CA for full computation.</p>
+    </div>
+  );
+}
+
+function AngelTaxChecker() {
+  const [issuePrice,    setIssuePrice]    = useState("");
+  const [fmv,           setFmv]           = useState("");
+  const [sharesIssued,  setSharesIssued]  = useState("");
+  const [investorType,  setInvestorType]  = useState<"resident" | "foreign">("resident");
+  const [dpiitReg,      setDpiitReg]      = useState(false);
+  const [aifCat1,       setAifCat1]       = useState(false);
+
+  const ip   = parseFloat(issuePrice)   || 0;
+  const fv   = parseFloat(fmv)          || 0;
+  const qty  = parseFloat(sharesIssued) || 0;
+
+  const totalPremium  = ip * qty;
+  const fmvTotal      = fv * qty;
+  const excessPremium = Math.max(0, totalPremium - fmvTotal);
+
+  const exempt = dpiitReg || aifCat1 || investorType === "foreign";
+  const taxLiability = exempt ? 0 : excessPremium * 0.30;
+  const surcharge    = taxLiability > 10000000 ? taxLiability * 0.12 : taxLiability > 1000000 ? taxLiability * 0.07 : 0;
+  const totalTax     = taxLiability + surcharge;
+
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const EXEMPTIONS = [
+    { key: "dpiit",   label: "DPIIT-recognised startup (Form 2)",        active: dpiitReg,    set: setDpiitReg },
+    { key: "aif",     label: "Investment from Cat-I/II AIF registered with SEBI", active: aifCat1, set: setAifCat1 },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <h3 className="text-sm font-semibold">Angel Tax Exposure (Sec 56(2)(viib))</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Issue Price per Share (₹)</label>
+            <input type="number" value={issuePrice} onChange={e => setIssuePrice(e.target.value)} placeholder="e.g. 100" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">FMV per Share (₹)</label>
+            <input type="number" value={fmv} onChange={e => setFmv(e.target.value)} placeholder="e.g. 80" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Shares Issued</label>
+            <input type="number" value={sharesIssued} onChange={e => setSharesIssued(e.target.value)} placeholder="e.g. 10000" className={inp} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-2">Investor Type</label>
+          <div className="flex gap-2">
+            {(["resident","foreign"] as const).map(t => (
+              <button key={t} onClick={() => setInvestorType(t)}
+                className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-colors ${investorType === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                {t === "resident" ? "Resident Indian" : "Foreign Investor (FEMA)"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs text-[var(--color-muted)] block">Exemptions available</label>
+          {EXEMPTIONS.map(ex => (
+            <label key={ex.key} className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={ex.active} onChange={e => ex.set(e.target.checked)} className="accent-[var(--color-primary)]" />
+              <span className="text-xs">{ex.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Premium Received", value: fc(totalPremium),  color: "text-[var(--color-primary)]" },
+          { label: "FMV of Shares",          value: fc(fmvTotal),      color: "text-blue-400" },
+          { label: "Excess Premium (Taxable)",value: fc(excessPremium), color: excessPremium > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Tax Liability (30%+SC)", value: fc(totalTax),      color: totalTax > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${exempt ? "border-green-800/40 bg-green-950/20" : excessPremium > 0 ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold ${exempt ? "text-green-400" : excessPremium > 0 ? "text-red-400" : "text-green-400"}`}>
+          {exempt
+            ? `✓ Exempt from Angel Tax — ${dpiitReg ? "DPIIT recognition" : aifCat1 ? "Cat-I/II AIF exemption" : "Foreign investor (FEMA route)"}`
+            : excessPremium > 0
+              ? `⚠ Angel Tax applies — ${fc(excessPremium)} excess premium is taxable as 'Income from Other Sources' in the company's hands`
+              : "✓ No excess premium — issue price ≤ FMV. No angel tax liability."}
+        </p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Key Exemption Routes</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          {[
+            { title: "DPIIT Registration", detail: "File Form 2 with DPIIT. Entire premium exempt irrespective of FMV. Fastest route for startups." },
+            { title: "Cat-I / II AIF", detail: "Investment from SEBI-registered Category I or II Alternative Investment Fund is exempt." },
+            { title: "Foreign Investor", detail: "Sec 56(2)(viib) applies only to resident investors. FDI/FEMA route avoids angel tax entirely." },
+          ].map(r => (
+            <div key={r.title} className="bg-[var(--color-accent)] rounded-lg p-3">
+              <p className="font-semibold text-[var(--color-primary)] mb-1">{r.title}</p>
+              <p className="text-[var(--color-muted)]">{r.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 56(2)(viib): if a closely-held company issues shares at a premium exceeding FMV, the excess is taxed as IFOS in the company. FMV via DCF or NAV method (Rule 11UA). DPIIT notification S.O. 1131(E) provides full exemption.</p>
     </div>
   );
 }

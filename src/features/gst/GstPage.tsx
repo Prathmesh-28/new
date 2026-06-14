@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -240,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1420,6 +1420,14 @@ export default function GstPage() {
       {tab === "qrmp" && (() => {
         return <QrmpChecker />;
       })()}
+
+      {tab === "tdsgst" && (() => {
+        return <TdsUnderGst />;
+      })()}
+
+      {tab === "einvoice" && (() => {
+        return <EInvoiceReadiness />;
+      })()}
     </div>
   );
 }
@@ -1761,6 +1769,233 @@ function QrmpChecker() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">QRMP opt-in via GST portal between 1st–31st of first month of each quarter. Category I taxpayers: 20th; Category II: 22nd/24th for GSTR-3B.</p>
+    </div>
+  );
+}
+
+function TdsUnderGst() {
+  type TdsEntry = { id: string; deductor: string; contract: string; amount: number; tdsAmt: number; month: string; credited: boolean };
+  const [entries,  setEntries]  = useState<TdsEntry[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [fDeduct,  setFDeduct]  = useState("");
+  const [fContract,setFContract]= useState("");
+  const [fAmount,  setFAmount]  = useState("");
+  const [fMonth,   setFMonth]   = useState("");
+
+  const TDS_RATE = 0.02; // 2% (1% CGST + 1% SGST) or 2% IGST
+
+  const addEntry = () => {
+    if (!fDeduct || !fAmount) return;
+    const amt = parseFloat(fAmount) || 0;
+    setEntries(prev => [...prev, { id: Math.random().toString(36).slice(2), deductor: fDeduct, contract: fContract, amount: amt, tdsAmt: Math.round(amt * TDS_RATE), month: fMonth, credited: false }]);
+    setFDeduct(""); setFContract(""); setFAmount(""); setFMonth(""); setShowForm(false);
+  };
+
+  const toggle = (id: string) => setEntries(prev => prev.map(e => e.id === id ? { ...e, credited: !e.credited } : e));
+
+  const totalTds    = entries.reduce((s, e) => s + e.tdsAmt, 0);
+  const pendingTds  = entries.filter(e => !e.credited).reduce((s, e) => s + e.tdsAmt, 0);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total TDS Deducted", value: fc(totalTds),   color: "text-[var(--color-primary)]" },
+          { label: "Pending Credit",     value: fc(pendingTds), color: pendingTds > 0 ? "text-red-400" : "text-green-400" },
+          { label: "TDS Rate",           value: "2%",           color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2">
+            <FileText size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">TDS under GST (Sec 51)</span>
+          </div>
+          <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <X size={11} className={showForm ? "" : "rotate-45"} /> {showForm ? "Cancel" : "Add entry"}
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <input value={fDeduct} onChange={e => setFDeduct(e.target.value)} placeholder="Deductor name *" className={inp} />
+              <input value={fContract} onChange={e => setFContract(e.target.value)} placeholder="Contract / PO ref" className={inp} />
+              <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Contract value (₹) *" className={inp} />
+              <input value={fMonth} onChange={e => setFMonth(e.target.value)} placeholder="Month (e.g. Apr 2024)" className={inp} />
+            </div>
+            {fAmount && <p className="text-xs text-[var(--color-muted)] mt-2">TDS = {fc(Math.round((parseFloat(fAmount)||0) * TDS_RATE))} (2% of {fc(parseFloat(fAmount)||0)})</p>}
+            <button onClick={addEntry} className="mt-2 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+          </div>
+        )}
+
+        {entries.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No TDS entries. Government departments/PSUs/local authorities deduct 2% GST TDS on contracts &gt; ₹2.5L. Track credit here.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Deductor","Contract","Month","Contract Value","TDS (2%)","Status",""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(e => (
+                  <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-3 font-semibold">{e.deductor}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.contract || "—"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.month || "—"}</td>
+                    <td className="px-4 py-3 tabular-nums">{fc(e.amount)}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-orange-400">{fc(e.tdsAmt)}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggle(e.id)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${e.credited ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>
+                        {e.credited ? "Credited in GSTR-2B" : "Pending"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-xs space-y-2">
+        <p className="font-semibold text-[var(--color-muted)]">Who deducts? When does it apply?</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[
+            { title: "Who must deduct",  body: "Govt departments, PSUs, local authorities, Panchayats, Municipalities — when total contract value > ₹2.5 lakh" },
+            { title: "Rate",             body: "2% of taxable value (1% CGST + 1% SGST for intra-state; 2% IGST for inter-state)" },
+            { title: "GSTR-7",          body: "Deductor files GSTR-7 by 10th of next month. TDS reflected in your GSTR-2B." },
+            { title: "Claim credit",     body: "Claim TDS credit in GSTR-3B (Table 8C). If unaccepted in 2B, follow up with deductor." },
+          ].map(r => (
+            <div key={r.title} className="bg-[var(--color-accent)] rounded-lg p-3">
+              <p className="font-semibold text-[var(--color-primary)] mb-1">{r.title}</p>
+              <p className="text-[var(--color-muted)]">{r.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 51 CGST Act. TDS not applicable on exempt supplies, transactions between govt entities, or if supplier's GSTIN is not furnished. TDS ≠ TCS — TCS under Sec 52 is by e-commerce operators.</p>
+    </div>
+  );
+}
+
+function EInvoiceReadiness() {
+  const { store } = useApp();
+  const [customTurnover, setCustomTurnover] = useState("");
+
+  const annualRevenue = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const months = Math.max(txns.length / 30, 1);
+    return rev * 12 / months;
+  }, [store.transactions]);
+
+  const turnover = parseFloat(customTurnover) || annualRevenue;
+  const threshold = 50000000; // ₹5 Cr — current mandatory threshold
+  const mandatory = turnover >= threshold;
+  const fc = formatCurrency;
+
+  const CHECKLIST = [
+    { id: "gstin",   label: "Valid GSTIN and e-invoice registration on IRP",             critical: true },
+    { id: "api",     label: "ERP/billing software supports IRN generation via IRP API",  critical: true },
+    { id: "qr",      label: "QR code printing on invoice",                               critical: true },
+    { id: "irn",     label: "IRN (Invoice Reference Number) generated before supply",    critical: true },
+    { id: "cancel",  label: "Cancellation process within 24 hours of IRN generation",    critical: true },
+    { id: "b2b",     label: "e-Invoice required only for B2B, exports, and SEZ — not B2C", critical: false },
+    { id: "eway",    label: "e-Way Bill auto-generated from e-Invoice for consignments > ₹50K", critical: false },
+    { id: "archive", label: "IRN records archived for 8 years (CGST Rule 56)",           critical: false },
+    { id: "test",    label: "Tested on sandbox IRP before go-live",                      critical: false },
+  ];
+
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const critical  = CHECKLIST.filter(c => c.critical);
+  const criticalDone = critical.filter(c => checked.has(c.id)).length;
+  const totalDone    = CHECKLIST.filter(c => checked.has(c.id)).length;
+  const ready = criticalDone === critical.length;
+
+  const IRP_PORTALS = ["NIC (einvoice1.gst.gov.in)", "IRIS Business", "Clear (Defmacro)", "EY", "Deloitte", "GSTN (NIC2)"];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">e-Invoice Readiness (Sec 68 / Rule 48(4))</h3>
+        <div className="max-w-sm">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Aggregate Turnover (₹)</label>
+          <input type="number" value={customTurnover} onChange={e => setCustomTurnover(e.target.value)}
+            placeholder={`Auto: ${fc(annualRevenue)}`}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className={`rounded-lg p-4 border ${mandatory ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+          <p className={`text-sm font-bold ${mandatory ? "text-orange-400" : "text-green-400"}`}>
+            {mandatory
+              ? `⚠ e-Invoice is MANDATORY — turnover ${fc(turnover)} ≥ ₹5 Cr threshold`
+              : `✓ e-Invoice not yet mandatory — turnover ${fc(turnover)} below ₹5 Cr threshold`}
+          </p>
+          {!mandatory && (
+            <p className="text-xs text-[var(--color-muted)] mt-1">Prepare anyway — threshold has been dropping every 2 years (₹500Cr → ₹100Cr → ₹50Cr → ₹20Cr → ₹10Cr → ₹5Cr).</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Checklist Done",    value: `${totalDone}/${CHECKLIST.length}`, color: "text-[var(--color-primary)]" },
+          { label: "Critical Items",    value: `${criticalDone}/${critical.length}`, color: criticalDone === critical.length ? "text-green-400" : "text-red-400" },
+          { label: "Status",            value: ready ? "Ready" : "Not Ready",       color: ready ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+          <span className="text-sm font-semibold">Implementation Checklist</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {CHECKLIST.map(item => (
+            <label key={item.id} className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[var(--color-accent)]">
+              <input type="checkbox" checked={checked.has(item.id)} onChange={() => toggle(item.id)} className="accent-[var(--color-primary)] mt-0.5" />
+              <span className={`text-sm ${checked.has(item.id) ? "line-through text-[var(--color-muted)]" : ""}`}>
+                {item.label}
+                {item.critical && <span className="ml-2 text-[10px] bg-red-950/30 text-red-400 px-1.5 py-0.5 rounded font-semibold">Critical</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        {ready && (
+          <div className="px-4 py-3 bg-green-950/20 border-t border-green-800/40 text-sm text-green-400 flex items-center gap-2">
+            <CheckCircle2 size={14} /> All critical items complete — your system is e-Invoice ready!
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Approved IRP Portals</p>
+        <div className="flex flex-wrap gap-2">
+          {IRP_PORTALS.map(p => <span key={p} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-2 py-1 rounded">{p}</span>)}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">e-Invoice mandatory for B2B + export + SEZ supplies. Not for B2C, nil-rated, exempt, or RCM inward. IRN valid for 30 days from generation. Failure: invalid invoice = ITC blocked for buyer.</p>
     </div>
   );
 }
