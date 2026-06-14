@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data/types";
-import { callNumber, whatsappTo } from "@/lib/nativeFeatures";
+import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence";
@@ -300,6 +300,8 @@ export default function OperationsPage() {
                                 className="p-1 text-[var(--color-muted)] hover:text-[var(--color-primary)] rounded"><Phone size={13} /></button>
                               <button onClick={() => whatsappTo(o.buyerPhone, `Hi ${o.buyerName}, regarding your order ${o.orderNumber} (${formatCurrency(o.totalValue)}).`)} title="WhatsApp buyer"
                                 className="p-1 text-[var(--color-muted)] hover:text-green-400 rounded"><MessageCircle size={13} /></button>
+                              <button onClick={() => smsNumber(o.buyerPhone, `Hi ${o.buyerName}, regarding order ${o.orderNumber} (${formatCurrency(o.totalValue)}).`)} title="SMS buyer"
+                                className="p-1 text-[var(--color-muted)] hover:text-blue-400 rounded"><Mail size={13} /></button>
                             </>
                           )}
                           {o.status === "pending"   && <button onClick={() => handleStatusChange(o, "confirmed")}  className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-0.5 rounded hover:bg-blue-900/50">Confirm</button>}

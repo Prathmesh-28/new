@@ -70,7 +70,6 @@ app.use("/api/ai",                 require("./routes/ai"));
 // New domain routes
 app.use("/api/accounts",           require("./routes/accounts"));
 app.use("/api/transactions",       require("./routes/transactions"));
-app.use("/api/forecast",           require("./routes/forecast"));
 app.use("/api/alerts",             require("./routes/alerts"));
 app.use("/api/credit",             require("./routes/credit"));
 app.use("/api/capital",            require("./routes/capital"));

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { runForecast, generateForecast } from "@/lib/forecastEngine";
+import { scheduleReminders, cancelReminders } from "@/lib/nativeFeatures";
+import { isNative } from "@/lib/mobile";
 import { Plus, Trash2, Eye, EyeOff, TrendingUp, RefreshCw, Sparkles, X } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -113,6 +115,16 @@ export default function ForecastPage() {
     setShowOblForm(false); setOblName(""); setOblAmount(""); setOblDate("");
   };
 
+  // Schedule on-device reminders 1 day before each upcoming obligation (native).
+  const handleRemindMe = async () => {
+    const reminders = obligations
+      .map((o, i) => ({ id: 7100 + i, title: `${o.name} due tomorrow`, body: `${formatCurrency(o.amount)} · ${o.type}`, at: new Date(new Date(o.dueDate).getTime() - 86_400_000) }))
+      .filter(r => r.at.getTime() > Date.now());
+    await cancelReminders(reminders.map(r => r.id));
+    const n = await scheduleReminders(reminders);
+    toast.success(n > 0 ? `${n} on-device reminder${n > 1 ? "s" : ""} set` : "No upcoming obligations to remind about");
+  };
+
   const handleAiExplain = async () => {
     setAiOpen(true);
     setAiLoading(true);
@@ -143,6 +155,12 @@ export default function ForecastPage() {
             <button onClick={handleAiExplain}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg font-medium hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
               <Sparkles size={12} /> Ask AI
+            </button>
+          )}
+          {isNative() && obligations.length > 0 && (
+            <button onClick={handleRemindMe}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg font-medium hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
+              🔔 Remind me
             </button>
           )}
           <button onClick={handleGenerate} disabled={generating || isReadOnly}

@@ -1,7 +1,5 @@
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
-import { Share } from "@capacitor/share";
-import { Browser } from "@capacitor/browser";
 import { Network } from "@capacitor/network";
 import { App as CapApp } from "@capacitor/app";
 
@@ -21,45 +19,6 @@ export async function haptic(kind: Haptic = "light"): Promise<void> {
     const style = kind === "heavy" ? ImpactStyle.Heavy : kind === "medium" ? ImpactStyle.Medium : ImpactStyle.Light;
     await Haptics.impact({ style });
   } catch { /* haptics unavailable — ignore */ }
-}
-
-// ── External links / payment pages ──────────────────────────────────────────
-// On native, open inside an in-app browser (the user stays in the app and
-// returns on close); on web, a new tab. onClose fires when the in-app browser
-// is dismissed — used to refresh state after a Stripe Checkout.
-export async function openUrl(url: string, onClose?: () => void): Promise<void> {
-  if (!isNative()) { window.open(url, "_blank", "noopener"); return; }
-  try {
-    if (onClose) {
-      const handle = await Browser.addListener("browserFinished", () => {
-        handle.remove();
-        onClose();
-      });
-    }
-    await Browser.open({ url, presentationStyle: "popover" });
-  } catch {
-    window.location.href = url;
-  }
-}
-
-// Full-page redirect on web (Stripe Checkout); in-app browser on native.
-export async function openCheckout(url: string, onClose?: () => void): Promise<void> {
-  if (!isNative()) { window.location.href = url; return; }
-  await openUrl(url, onClose);
-}
-
-// ── Native share sheet ──────────────────────────────────────────────────────
-export async function shareContent(opts: { title?: string; text?: string; url?: string; dialogTitle?: string }): Promise<"shared" | "copied" | "unsupported"> {
-  if (isNative()) {
-    try { await Share.share(opts); return "shared"; } catch { return "unsupported"; }
-  }
-  const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
-  if (nav.share) {
-    try { await nav.share({ title: opts.title, text: opts.text, url: opts.url }); return "shared"; }
-    catch { /* user cancelled or unsupported — fall through to clipboard */ }
-  }
-  const text = [opts.text, opts.url].filter(Boolean).join(" ");
-  try { await navigator.clipboard.writeText(text); return "copied"; } catch { return "unsupported"; }
 }
 
 // ── Connectivity ────────────────────────────────────────────────────────────

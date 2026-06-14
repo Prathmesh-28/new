@@ -20,10 +20,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
-/* Fire-and-forget ping so the server is warm before the user clicks Sign in */
-export function warmupServer() {
-  fetch(`${BASE}/health`, { method: "GET" }).catch(() => {});
-}
 
 interface AuthCtx {
   user: AuthUser | null;
