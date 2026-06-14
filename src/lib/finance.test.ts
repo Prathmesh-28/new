@@ -4,9 +4,10 @@ import {
   earlyPayAnnualizedReturn, effectiveAnnualRate, monthlyAggregates, cmgr,
   dso, agingBuckets, hhi, gstSummary, advanceTaxSchedule, gstLatePenalty,
   dcfValuation, dilution, financingOptions, computeFinancialSnapshot,
+  paymentTermsSuggestions,
 } from "./finance";
 import { defaultConfig } from "@/data/defaultConfig";
-import type { AppStore } from "@/data/types";
+import type { AppStore, Invoice, Transaction } from "@/data/types";
 
 describe("loan math", () => {
   it("computes the standard EMI", () => {
@@ -191,5 +192,41 @@ describe("computeFinancialSnapshot", () => {
     expect(snap.health.score).toBeLessThanOrEqual(100);
     expect(snap.health.components.reduce((s, c) => s + c.weight, 0)).toBe(100);
     expect(snap.gstThisMonth.netPayable).toBeGreaterThan(0);
+  });
+});
+
+describe("payment-terms negotiator", () => {
+  const recent = (daysAgo: number) => {
+    const d = new Date(); d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().split("T")[0];
+  };
+  const inv = (id: string, customer: string, amount: number, dueDaysAgo: number): Invoice => ({
+    id, customer, amount, invoiceDate: recent(dueDaysAgo + 30), dueDate: recent(dueDaysAgo),
+    description: "", status: dueDaysAgo > 0 ? "overdue" : "pending",
+  });
+  const txn = (id: string, counterparty: string, amount: number, daysAgo: number): Transaction => ({
+    id, date: recent(daysAgo), amount, description: counterparty, category: "expense",
+    counterparty, isRecurring: false, bankAccountId: "b1",
+  });
+
+  it("suggests pulling in a large overdue customer and freeing a big vendor", () => {
+    const store: AppStore = {
+      ...defaultConfig,
+      invoices: [inv("i1", "Big Customer", 500_000, 40), inv("i2", "Small", 5_000, 2)],
+      transactions: [txn("t1", "Major Vendor", -150_000, 10), txn("t2", "Major Vendor", -150_000, 40)],
+    };
+    const s = paymentTermsSuggestions(store);
+    const cust = s.find(x => x.party === "Big Customer");
+    const vend = s.find(x => x.party === "Major Vendor");
+    expect(cust?.side).toBe("customer");
+    expect(cust?.cashImpact).toBe(500_000);
+    expect(vend?.side).toBe("vendor");
+    expect(vend!.cashImpact).toBeGreaterThan(0);
+  });
+
+  it("ignores trivial vendors and returns nothing on an empty store", () => {
+    expect(paymentTermsSuggestions(defaultConfig)).toHaveLength(0);
+    const tiny: AppStore = { ...defaultConfig, transactions: [txn("t1", "Tiny", -1000, 5)] };
+    expect(paymentTermsSuggestions(tiny).some(x => x.side === "vendor")).toBe(false);
   });
 });

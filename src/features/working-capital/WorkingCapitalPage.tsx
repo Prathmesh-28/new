@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
-import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn } from "@/lib/finance";
+import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn, paymentTermsSuggestions } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle } from "lucide-react";
+import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
@@ -17,6 +17,8 @@ export default function WorkingCapitalPage() {
     () => financingOptions(snap.workingCapitalGap, snap.accountsReceivable),
     [snap.workingCapitalGap, snap.accountsReceivable],
   );
+  const termSuggestions = useMemo(() => paymentTermsSuggestions(store), [store]);
+  const totalTermsImpact = termSuggestions.reduce((s, t) => s + t.cashImpact, 0);
 
   const cycleSegments = [
     { label: "DSO — money stuck with customers", days: snap.dsoDays, color: "bg-yellow-500", path: "/receivables", icon: Receipt, hint: "Collect faster: auto-reminders, early-pay discounts" },
@@ -247,6 +249,53 @@ export default function WorkingCapitalPage() {
             {formatAmount(Math.round(((15 + 10 + 10) / 30) * snap.monthlyExpense))} unlocked
           </p>
         </div>
+      </div>
+
+      {/* Payment-terms negotiator */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Handshake size={16} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Terms Negotiator</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          Specific asks for your biggest customers and vendors, with the cash impact quantified from your own receivables and payables.
+        </p>
+
+        {termSuggestions.length === 0 ? (
+          <div className="border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center">
+            <Handshake size={22} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+            <p className="text-sm text-[var(--color-muted)]">
+              Add invoices and vendor payments and we'll surface concrete term changes — early-pay discounts to pull cash in, longer payables to hold it.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {termSuggestions.map(t => (
+                <div key={t.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${t.side === "customer" ? "bg-blue-950/40 text-blue-400 border border-blue-800/30" : "bg-green-950/40 text-green-400 border border-green-800/30"}`}>
+                      {t.side === "customer" ? "Pull in" : "Hold"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">{t.party} — <span className="font-normal">{t.action}</span></p>
+                      <p className="text-xs text-[var(--color-muted)] mt-0.5">{t.rationale}</p>
+                      {t.costNote && <p className="text-[11px] text-[var(--color-muted)] mt-1">{t.costNote}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold tabular-nums text-green-400">{formatAmount(t.cashImpact)}</p>
+                      <p className="text-[10px] text-[var(--color-muted)]">{t.side === "customer" ? "pulled forward" : "freed"}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-[var(--color-border)] flex items-center justify-between">
+              <p className="text-xs text-[var(--color-muted)]">Total cash these moves could unlock</p>
+              <p className="text-sm font-bold text-green-400">{formatAmount(totalTermsImpact)}</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Working Capital Ratios */}

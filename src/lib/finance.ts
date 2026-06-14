@@ -561,6 +561,94 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
   return opts.sort((a, b) => a.effectiveAnnualCostPct - b.effectiveAnnualCostPct);
 }
 
+// ── Payment-terms negotiator ──────────────────────────────────────────────────
+// Concrete, named per-counterparty term changes with the cash impact quantified
+// against the business's own receivables/payables — turns the generic DSO/DPO
+// levers into specific asks ("offer Customer X 2/10 net-30", "ask Vendor Y for
+// net-45"). All figures are estimates derived from real transactions/invoices.
+export interface TermSuggestion {
+  id: string;
+  side: "customer" | "vendor";
+  party: string;
+  action: string;
+  rationale: string;
+  cashImpact: number;   // rupees pulled forward (customers) or freed (vendors)
+  costNote?: string;
+}
+
+export function paymentTermsSuggestions(store: AppStore, today = new Date()): TermSuggestion[] {
+  const out: TermSuggestion[] = [];
+  const now = +today;
+
+  // ── Customers: accelerate slow-paying receivables with an early-pay discount ──
+  const byCustomer = new Map<string, { outstanding: number; maxOverdue: number }>();
+  for (const inv of store.invoices) {
+    if (inv.status === "paid") continue;
+    const overdue = Math.max(0, Math.round((now - +new Date(inv.dueDate)) / 86400000));
+    const c = byCustomer.get(inv.customer) ?? { outstanding: 0, maxOverdue: 0 };
+    c.outstanding += inv.amount;
+    c.maxOverdue = Math.max(c.maxOverdue, overdue);
+    byCustomer.set(inv.customer, c);
+  }
+  [...byCustomer.entries()]
+    .filter(([, c]) => c.outstanding > 0)
+    .sort((a, b) => b[1].outstanding - a[1].outstanding)
+    .slice(0, 4)
+    .forEach(([party, c], i) => {
+      const discountCost = Math.round(c.outstanding * 0.02);
+      const apr = earlyPayAnnualizedReturn(2, 20); // 2% to get paid ~20 days early
+      out.push({
+        id: `cust-${i}`,
+        side: "customer",
+        party,
+        action: c.maxOverdue > 15 ? "Offer 2/10 net-30 (early-pay discount)" : "Offer 2% early-pay discount",
+        rationale: c.maxOverdue > 0
+          ? `${formatINR(c.outstanding)} outstanding, up to ${c.maxOverdue}d overdue. A small discount pulls it in now.`
+          : `${formatINR(c.outstanding)} outstanding. An early-pay discount accelerates the cash.`,
+        cashImpact: c.outstanding,
+        costNote: `Cost: 2% = ${formatINR(discountCost)} (≈${Math.round(apr)}% APR of giving the discount)`,
+      });
+    });
+
+  // ── Vendors: extend payables to free working capital ──
+  const cutoff = now - 90 * 86400000;
+  const byVendor = new Map<string, number>();
+  for (const t of store.transactions) {
+    if (t.amount >= 0) continue;
+    if (+new Date(t.date) < cutoff) continue;
+    const name = (t.counterparty || t.description || "").trim();
+    if (!name) continue;
+    byVendor.set(name, (byVendor.get(name) ?? 0) + Math.abs(t.amount));
+  }
+  [...byVendor.entries()]
+    .map(([party, spend90]) => ({ party, monthly: spend90 / 3 }))
+    .filter(v => v.monthly >= 20000) // only material vendors
+    .sort((a, b) => b.monthly - a.monthly)
+    .slice(0, 4)
+    .forEach((v, i) => {
+      const extraDays = 15; // net-30 → net-45 assumption
+      const freed = Math.round((extraDays / 30) * v.monthly);
+      out.push({
+        id: `vend-${i}`,
+        side: "vendor",
+        party: v.party,
+        action: "Ask for net-45 terms (from ~net-30)",
+        rationale: `You pay ~${formatINR(v.monthly)}/mo to ${v.party}. Extra 15 days of terms holds cash longer.`,
+        cashImpact: freed,
+        costNote: "Offer a volume commitment or on-time track record as leverage.",
+      });
+    });
+
+  return out.sort((a, b) => b.cashImpact - a.cashImpact);
+}
+
+function formatINR(n: number): string {
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)}Cr`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)}L`;
+  if (n >= 1e3) return `₹${(n / 1e3).toFixed(0)}k`;
+  return `₹${Math.round(n)}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Derived financial statements
 // Headroom is bank/cash-centric (no general ledger), so we derive the three
