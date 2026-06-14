@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
@@ -644,7 +645,7 @@ export default function TaxPage() {
           { goods: "Sale of goods >₹50L (Sec 206C(1H))", rate: 0.1 },
         ];
 
-        const [entries, setEntries] = useState<TcsEntry[]>([]);
+        const [entries, setEntries] = useFeatureState<TcsEntry[]>("tcs-entries", []);
         const [buyer,   setBuyer]   = useState("");
         const [goods,   setGoods]   = useState(TCS_RATES[0].goods);
         const [saleAmt, setSaleAmt] = useState("");

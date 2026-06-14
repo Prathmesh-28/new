@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -1685,12 +1686,12 @@ Signature: _______________________   Date: ___________`;
 function EsopTab({ employees }: { employees: { id: string; name: string; gross_salary: number }[] }) {
   type Grant = { id: string; name: string; options: number; grantDate: string; vestingYears: number; cliffMonths: number };
 
-  const [poolSize, setPoolSize] = useState(100000);
-  const [fmv,      setFmv]      = useState(150);   // current FMV / share price (₹)
-  const [strike,   setStrike]   = useState(10);    // exercise / strike price (₹)
+  const [poolSize, setPoolSize] = useFeatureState<number>("esop-pool-size", 100000);
+  const [fmv,      setFmv]      = useFeatureState<number>("esop-fmv", 150);   // current FMV / share price (₹)
+  const [strike,   setStrike]   = useFeatureState<number>("esop-strike", 10);    // exercise / strike price (₹)
 
   const today = new Date().toISOString().split("T")[0];
-  const [grants, setGrants] = useState<Grant[]>([]);
+  const [grants, setGrants] = useFeatureState<Grant[]>("esop-grants", []);
   const [form, setForm] = useState<{ name: string; options: string; grantDate: string; vestingYears: string; cliffMonths: string }>({
     name: employees[0]?.name ?? "",
     options: "",

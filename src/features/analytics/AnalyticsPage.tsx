@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2 } from "lucide-react";
 import { totalNetBookValue, totalGrossCost, totalAccumulatedDepreciation } from "@/lib/depreciation";
@@ -1061,7 +1062,8 @@ export default function AnalyticsPage() {
 
 function SalesVsTarget({ monthlyData }: { monthlyData: { month: string; revenue: number; expense: number; net: number; margin: number }[] }) {
   type TargetRow = { month: string; target: number };
-  const [targets, setTargets] = useState<TargetRow[]>(() =>
+  const [targets, setTargets] = useFeatureState<TargetRow[]>(
+    "sales-targets",
     monthlyData.map(m => ({ month: m.month, target: 0 }))
   );
   const [globalTarget, setGlobalTarget] = useState("");
@@ -1745,14 +1747,14 @@ function TrialBalanceTab() {
 function CommissionTab() {
   type Tier = { id: string; upTo: number; rate: number };
   type Person = { id: string; name: string; sales: number };
-  const [mode, setMode] = useState<"tiered" | "flat">("tiered");
-  const [flatRate, setFlatRate] = useState(3);
-  const [tiers, setTiers] = useState<Tier[]>([
+  const [mode, setMode] = useFeatureState<"tiered" | "flat">("commission-mode", "tiered");
+  const [flatRate, setFlatRate] = useFeatureState("commission-flat-rate", 3);
+  const [tiers, setTiers] = useFeatureState<Tier[]>("commission-tiers", [
     { id: "t1", upTo: 500000, rate: 2 },
     { id: "t2", upTo: 1000000, rate: 3 },
     { id: "t3", upTo: Infinity, rate: 5 },
   ]);
-  const [people, setPeople] = useState<Person[]>([]);
+  const [people, setPeople] = useFeatureState<Person[]>("commission-people", []);
   const [pName, setPName] = useState("");
   const [pSales, setPSales] = useState("");
 

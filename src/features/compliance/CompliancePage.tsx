@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, gstLatePenalty } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
@@ -31,7 +32,7 @@ export default function CompliancePage() {
   const [lateDays, setLateDays] = useState(15);
 
   type Contract = { id: string; name: string; party: string; kind: string; expiry: string; value: number; notes: string };
-  const [contracts, setContracts]     = useState<Contract[]>([]);
+  const [contracts, setContracts]     = useFeatureState<Contract[]>("contracts", []);
   const [showContractForm, setShowContractForm] = useState(false);
   const [cName,    setCName]    = useState("");
   const [cParty,   setCParty]   = useState("");
@@ -617,7 +618,7 @@ type InsurancePolicy = {
 };
 
 function InsuranceCalendar() {
-  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [policies, setPolicies] = useFeatureState<InsurancePolicy[]>("insurance-policies", []);
   const [showForm, setShowForm]  = useState(false);
   const [iName,  setIName]  = useState("");
   const [iType,  setIType]  = useState("Fire & Burglary");

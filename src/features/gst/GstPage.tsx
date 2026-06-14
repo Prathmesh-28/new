@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
@@ -1312,7 +1313,7 @@ export default function GstPage() {
         type Lut = { id: string; refNo: string; fy: string; filedDate: string; exportType: "goods" | "services" | "both"; status: "active" | "expired" | "pending" };
 
         const currentFy = (() => { const y = new Date().getFullYear(); return new Date().getMonth() >= 3 ? `${y}-${y+1}` : `${y-1}-${y}`; })();
-        const [luts, setLuts]       = useState<Lut[]>([]);
+        const [luts, setLuts]       = useFeatureState<Lut[]>("lut-register", []);
         const [refNo, setRefNo]     = useState("");
         const [fy,    setFy]        = useState(currentFy);
         const [filed, setFiled]     = useState(() => new Date().toISOString().split("T")[0]);
@@ -1441,7 +1442,7 @@ function GstRefundTracker() {
   type RefundType   = "Export (LUT)" | "Inverted Duty" | "Excess Cash Ledger" | "IGST on Export" | "Deemed Export" | "Other";
   type RefundEntry  = { id: string; refNo: string; type: RefundType; period: string; claimed: number; status: RefundStatus; filedDate: string; notes: string };
 
-  const [entries,   setEntries]   = useState<RefundEntry[]>([]);
+  const [entries,   setEntries]   = useFeatureState<RefundEntry[]>("gst-refunds", []);
   const [showForm,  setShowForm]  = useState(false);
   const [rType,     setRType]     = useState<RefundType>("Export (LUT)");
   const [rPeriod,   setRPeriod]   = useState("");
@@ -1779,7 +1780,7 @@ function QrmpChecker() {
 
 function TdsUnderGst() {
   type TdsEntry = { id: string; deductor: string; contract: string; amount: number; tdsAmt: number; month: string; credited: boolean };
-  const [entries,  setEntries]  = useState<TdsEntry[]>([]);
+  const [entries,  setEntries]  = useFeatureState<TdsEntry[]>("tds-gst-entries", []);
   const [showForm, setShowForm] = useState(false);
   const [fDeduct,  setFDeduct]  = useState("");
   const [fContract,setFContract]= useState("");

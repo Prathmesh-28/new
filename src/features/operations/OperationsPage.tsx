@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import {
@@ -726,7 +727,7 @@ function PriceListTab() {
     { label: "Distributor",discountPct: 20 },
   ];
 
-  const [items,     setItems]     = useState<PriceItem[]>(() =>
+  const [items,     setItems]     = useFeatureState<PriceItem[]>("price-overrides",
     store.inventory.slice(0, 20).map(p => ({
       id: p.id, sku: p.sku ?? p.id.slice(0, 6).toUpperCase(), name: p.productName,
       basePrice: p.unitCost, unit: p.unit ?? "piece", gstRate: 18, tiers: DISCOUNT_TIERS,
@@ -884,7 +885,7 @@ function PriceListTab() {
 function LeadTimeScorecardTab() {
   type Delivery = { id: string; vendor: string; item: string; orderedDate: string; promisedDate: string; actualDate: string };
 
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [deliveries, setDeliveries] = useFeatureState<Delivery[]>("lead-time-deliveries", []);
   const [vendor,   setVendor]   = useState("");
   const [item,     setItem]     = useState("");
   const [ordered,  setOrdered]  = useState(() => new Date().toISOString().split("T")[0]);
@@ -1035,7 +1036,7 @@ function BomCostingTab() {
   type BomLine = { id: string; material: string; qty: number; unit: string; unitCost: number };
   type Bom = { id: string; product: string; outputQty: number; outputUnit: string; overheadPct: number; sellingPrice: number; lines: BomLine[] };
 
-  const [boms, setBoms]     = useState<Bom[]>([]);
+  const [boms, setBoms]     = useFeatureState<Bom[]>("boms", []);
   const [activeBom, setActiveBom] = useState<string | null>(null);
   const [product,   setProduct]   = useState("");
   const [outQty,    setOutQty]    = useState("1");
@@ -1228,7 +1229,7 @@ function ReorderAlertTab() {
     })),
   [store.inventory]);
 
-  const [items, setItems] = useState<ReorderItem[]>([]);
+  const [items, setItems] = useFeatureState<ReorderItem[]>("reorder-items", []);
   const allItems = useMemo(() => {
     const ids = new Set(items.map(i => i.id));
     return [...items, ...fromInventory.filter(i => !ids.has(i.id))];
@@ -1369,7 +1370,7 @@ function ReorderAlertTab() {
 
 function AgedPayablesTab() {
   type Bill = { id: string; vendor: string; billNo: string; amount: number; billDate: string; dueDate: string; isMsme: boolean; status: "unpaid" | "paid" };
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [bills, setBills] = useFeatureState<Bill[]>("aged-payables", []);
   const [showForm, setShowForm] = useState(false);
   const [fVendor, setFVendor] = useState("");
   const [fBillNo, setFBillNo] = useState("");

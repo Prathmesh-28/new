@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat } from "lucide-react";
 import { toast } from "sonner";
@@ -544,7 +545,7 @@ export default function TransactionsPage() {
 
 function PDCRegister() {
   type PDC = { id: string; party: string; amount: number; chequeNo: string; bank: string; dueDate: string; type: "receive" | "issue"; status: "pending" | "cleared" | "bounced" };
-  const [cheques, setCheques] = useState<PDC[]>([]);
+  const [cheques, setCheques] = useFeatureState<PDC[]>("pdc-register", []);
   const [party,     setParty]     = useState("");
   const [amount,    setAmount]    = useState("");
   const [chequeNo,  setChequeNo]  = useState("");
@@ -699,7 +700,7 @@ function BounceTracker() {
     other:              "Other",
   };
 
-  const [records, setRecords]     = useState<Bounce[]>([]);
+  const [records, setRecords]     = useFeatureState<Bounce[]>("bounce-cases", []);
   const [party,       setParty]       = useState("");
   const [chequeNo,    setChequeNo]    = useState("");
   const [bank,        setBank]        = useState("");
@@ -1083,7 +1084,7 @@ function BankReconStatement() {
 function RecurringTemplates() {
   type Freq = "monthly" | "quarterly" | "annual";
   type Template = { id: string; description: string; amount: number; direction: "income" | "expense"; category: string; frequency: Freq; nextDate: string; counterparty: string; active: boolean };
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useFeatureState<Template[]>("recurring-templates", []);
   const [showForm, setShowForm] = useState(false);
   const [fDesc, setFDesc] = useState("");
   const [fAmount, setFAmount] = useState("");

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
 import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator } from "lucide-react";
 import { toast } from "sonner";
@@ -961,7 +962,7 @@ function EquipmentFinanceLease() {
 
 function FdRdTab() {
   type Deposit = { id: string; kind: "FD" | "RD"; bank: string; principal: number; rate: number; tenure: number; tenureUnit: "months" | "years"; startDate: string; monthlyRd?: number; tdsApplied: boolean };
-  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [deposits, setDeposits] = useFeatureState<Deposit[]>("fd-rd", []);
   const [kind,        setKind]        = useState<"FD" | "RD">("FD");
   const [bank,        setBank]        = useState("");
   const [principal,   setPrincipal]   = useState("");
@@ -1139,7 +1140,7 @@ function FdRdTab() {
 
 function CcUtilizationTab() {
   type Card = { id: string; name: string; bank: string; limit: number; balance: number; dueDate: string; minDue: number };
-  const [cards, setCards]     = useState<Card[]>([]);
+  const [cards, setCards]     = useFeatureState<Card[]>("credit-cards", []);
   const [name,  setName]      = useState("");
   const [bank,  setBank]      = useState("");
   const [limit, setLimit]     = useState("");
@@ -1408,14 +1409,14 @@ const SHARE_CLASS_BADGE: Record<ShareClass, string> = {
 
 function CapTableTab() {
   const { store } = useApp();
-  const [holders, setHolders] = useState<Shareholder[]>(() => {
+  const [holders, setHolders] = useFeatureState<Shareholder[]>("cap-table", (() => {
     const founder = store.firm?.name ? `${store.firm.name} (Founders)` : "Founders";
     return [
       { id: generateId(), name: founder,      shareClass: "Founder",   sharesHeld: 8000000, amountInvested: 1000000 },
       { id: generateId(), name: "ESOP Pool",   shareClass: "ESOP Pool", sharesHeld: 1000000, amountInvested: 0 },
       { id: generateId(), name: "Angel Round", shareClass: "Angel",     sharesHeld: 1000000, amountInvested: 5000000 },
     ];
-  });
+  })());
 
   const [name,       setName]       = useState("");
   const [shareClass, setShareClass] = useState<ShareClass>("Equity");
