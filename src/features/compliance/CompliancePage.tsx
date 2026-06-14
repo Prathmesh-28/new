@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, gstLatePenalty } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { CalendarCheck, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
+import { CalendarCheck, AlertTriangle, ArrowRight, ShieldCheck, FileText, Plus, X } from "lucide-react";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
 
 interface ComplianceEvent {
@@ -29,6 +29,23 @@ export default function CompliancePage() {
   const navigate = useNavigate();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const [lateDays, setLateDays] = useState(15);
+
+  type Contract = { id: string; name: string; party: string; kind: string; expiry: string; value: number; notes: string };
+  const [contracts, setContracts]     = useState<Contract[]>([]);
+  const [showContractForm, setShowContractForm] = useState(false);
+  const [cName,    setCName]    = useState("");
+  const [cParty,   setCParty]   = useState("");
+  const [cKind,    setCKind]    = useState("Vendor");
+  const [cExpiry,  setCExpiry]  = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().split("T")[0]; });
+  const [cValue,   setCValue]   = useState("");
+  const [cNotes,   setCNotes]   = useState("");
+
+  const addContract = () => {
+    if (!cName || !cExpiry) return;
+    setContracts(prev => [...prev, { id: Math.random().toString(36).slice(2), name: cName, party: cParty, kind: cKind, expiry: cExpiry, value: parseFloat(cValue) || 0, notes: cNotes }]);
+    setCName(""); setCParty(""); setCKind("Vendor"); setCValue(""); setCNotes("");
+    setShowContractForm(false);
+  };
 
   const hasPayroll = store.transactions.some(t => t.category === "payroll");
 
@@ -215,6 +232,87 @@ export default function CompliancePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Contract Expiry Tracker */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText size={14} className="text-[var(--color-primary)]" />
+            <p className="text-sm font-semibold">Contract Expiry Tracker</p>
+            {contracts.filter(c => differenceInDays(new Date(c.expiry), new Date()) <= 30 && differenceInDays(new Date(c.expiry), new Date()) >= 0).length > 0 && (
+              <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">
+                {contracts.filter(c => differenceInDays(new Date(c.expiry), new Date()) <= 30 && differenceInDays(new Date(c.expiry), new Date()) >= 0).length} expiring soon
+              </span>
+            )}
+          </div>
+          <button onClick={() => setShowContractForm(f => !f)}
+            className="flex items-center gap-1 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2.5 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/10">
+            <Plus size={11} /> Add contract
+          </button>
+        </div>
+
+        {showContractForm && (
+          <div className="px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              <input value={cName} onChange={e=>setCName(e.target.value)} placeholder="Contract name *"
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <input value={cParty} onChange={e=>setCParty(e.target.value)} placeholder="Counterparty"
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <select value={cKind} onChange={e=>setCKind(e.target.value)}
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+                {["Vendor","Customer","Employment","Lease/Rent","Service","NDA","Loan","Insurance","Other"].map(k => <option key={k}>{k}</option>)}
+              </select>
+              <input type="date" value={cExpiry} onChange={e=>setCExpiry(e.target.value)}
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <input type="number" value={cValue} onChange={e=>setCValue(e.target.value)} placeholder="Contract value (₹)"
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <input value={cNotes} onChange={e=>setCNotes(e.target.value)} placeholder="Notes (optional)"
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={addContract} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+              <button onClick={() => setShowContractForm(false)} className="text-xs text-[var(--color-muted)] px-4 py-2 rounded-lg border border-[var(--color-border)] hover:text-[var(--color-text)]">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {contracts.length === 0 ? (
+          <p className="p-6 text-sm text-[var(--color-muted)] text-center">No contracts tracked yet. Add vendor agreements, leases, employment contracts, or NDAs to get expiry alerts.</p>
+        ) : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {contracts
+              .slice()
+              .sort((a,b) => a.expiry.localeCompare(b.expiry))
+              .map(c => {
+                const daysLeft = differenceInDays(new Date(c.expiry), new Date());
+                const expired  = daysLeft < 0;
+                const urgent   = !expired && daysLeft <= 30;
+                const warning  = !expired && daysLeft <= 90;
+                return (
+                  <div key={c.id} className={`flex items-center gap-4 px-5 py-3.5 ${urgent ? "bg-red-950/10" : warning ? "bg-orange-950/10" : ""}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium">{c.name}</p>
+                        <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full text-[var(--color-muted)]">{c.kind}</span>
+                        {expired && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">Expired</span>}
+                        {urgent  && <span className="text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800/40 px-1.5 py-0.5 rounded-full font-semibold">Expiring soon</span>}
+                      </div>
+                      <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{c.party && `${c.party} · `}Expires {c.expiry}{c.value > 0 ? ` · ${formatCurrency(c.value)}` : ""}{c.notes ? ` · ${c.notes}` : ""}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${expired ? "text-red-400" : urgent ? "text-orange-400" : warning ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>
+                        {expired ? `${-daysLeft}d overdue` : `${daysLeft}d left`}
+                      </p>
+                    </div>
+                    <button onClick={() => setContracts(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0">
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
     </div>
   );

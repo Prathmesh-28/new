@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
-import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
@@ -45,7 +45,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -186,6 +186,7 @@ export default function CreditPage() {
           ["notyet",   "Not yet"],
           ["wc",       "WC Sizing"],
           ["equip",    "Finance vs Lease"],
+          ["cc",       "CC Utilization"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -703,6 +704,7 @@ export default function CreditPage() {
       {/* ── WC LOAN SIZING ── */}
       {tab === "wc" && <WCSizingTab />}
       {tab === "equip" && <EquipmentFinanceLease />}
+      {tab === "cc" && <CcUtilizationTab />}
     </div>
   );
 }
@@ -944,6 +946,130 @@ function EquipmentFinanceLease() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         Finance tax saving assumes 15% WDV depreciation (Plant & Machinery, IT equipment). Lease tax saving assumes full rent deductible as operating expense. Consult your CA for actual deductibility based on asset class and lease structure.
+      </div>
+    </div>
+  );
+}
+
+function CcUtilizationTab() {
+  type Card = { id: string; name: string; bank: string; limit: number; balance: number; dueDate: string; minDue: number };
+  const [cards, setCards]     = useState<Card[]>([]);
+  const [name,  setName]      = useState("");
+  const [bank,  setBank]      = useState("");
+  const [limit, setLimit]     = useState("");
+  const [bal,   setBal]       = useState("");
+  const [due,   setDue]       = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 15);
+    return d.toISOString().split("T")[0];
+  });
+  const [minDue, setMinDue]   = useState("");
+
+  const addCard = () => {
+    if (!name || !limit) return;
+    const l = parseFloat(limit), b = parseFloat(bal) || 0;
+    setCards(prev => [...prev, { id: Math.random().toString(36).slice(2), name, bank, limit: l, balance: b, dueDate: due, minDue: parseFloat(minDue) || Math.round(b * 0.05) }]);
+    setName(""); setBank(""); setLimit(""); setBal(""); setMinDue("");
+  };
+
+  const updateBalance = (id: string, val: string) => setCards(prev => prev.map(c => c.id === id ? { ...c, balance: parseFloat(val) || 0, minDue: Math.round((parseFloat(val) || 0) * 0.05) } : c));
+  const removeCard    = (id: string) => setCards(prev => prev.filter(c => c.id !== id));
+
+  const totalLimit    = cards.reduce((s,c) => s + c.limit, 0);
+  const totalBalance  = cards.reduce((s,c) => s + c.balance, 0);
+  const totalUtil     = totalLimit > 0 ? Math.round((totalBalance / totalLimit) * 100) : 0;
+  const totalMinDue   = cards.reduce((s,c) => s + c.minDue, 0);
+  const today         = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {cards.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total credit limit",   value: formatCurrency(totalLimit),   color: "text-[var(--color-text)]" },
+            { label: "Total balance used",   value: formatCurrency(totalBalance), color: totalUtil > 70 ? "text-red-400" : totalUtil > 30 ? "text-orange-400" : "text-green-400" },
+            { label: "Overall utilization",  value: `${totalUtil}%`,              color: totalUtil > 70 ? "text-red-400" : totalUtil > 30 ? "text-orange-400" : "text-green-400" },
+            { label: "Total minimum due",    value: formatCurrency(totalMinDue),  color: "text-yellow-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totalUtil > 70 && (
+        <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <span>Overall CC utilization is {totalUtil}% — high utilization lowers your credit score and may signal cash flow stress to lenders. Keep below 30% for optimal credit health.</span>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Add Credit Card</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Card name (e.g. HDFC Regalia)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input value={bank} onChange={e=>setBank(e.target.value)} placeholder="Issuing bank"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={limit} onChange={e=>setLimit(e.target.value)} placeholder="Credit limit (₹)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={bal} onChange={e=>setBal(e.target.value)} placeholder="Current balance (₹)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="date" value={due} onChange={e=>setDue(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" value={minDue} onChange={e=>setMinDue(e.target.value)} placeholder="Min due (₹, auto 5%)"
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={addCard} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          + Add Card
+        </button>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CreditCard size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No credit cards added yet. Track your business credit cards above.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {cards.map(c => {
+            const util     = c.limit > 0 ? Math.round((c.balance / c.limit) * 100) : 0;
+            const available = c.limit - c.balance;
+            const overdue  = c.dueDate < today;
+            return (
+              <div key={c.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${overdue ? "border-red-800/40" : "border-[var(--color-border)]"}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold text-sm">{c.name}</p>
+                    <p className="text-xs text-[var(--color-muted)]">{c.bank || "—"} · Due: <span className={overdue ? "text-red-400 font-semibold" : ""}>{c.dueDate}</span></p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold tabular-nums ${util > 70 ? "text-red-400" : util > 30 ? "text-orange-400" : "text-green-400"}`}>{util}%</span>
+                    <button onClick={() => removeCard(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                </div>
+                <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-3">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(util, 100)}%`, background: util > 70 ? "#ef4444" : util > 30 ? "#f97316" : "#22c55e" }} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <p className="text-[var(--color-muted)]">Balance</p>
+                    <input type="number" value={c.balance || ""} onChange={e => updateBalance(c.id, e.target.value)}
+                      className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 tabular-nums text-xs outline-none focus:border-[var(--color-primary)] mt-0.5" />
+                  </div>
+                  <div><p className="text-[var(--color-muted)]">Limit</p><p className="font-semibold tabular-nums mt-1">{formatCurrency(c.limit)}</p></div>
+                  <div><p className="text-[var(--color-muted)]">Available</p><p className="font-semibold tabular-nums text-green-400 mt-1">{formatCurrency(available)}</p></div>
+                  <div><p className="text-[var(--color-muted)]">Min due</p><p className="font-semibold tabular-nums text-yellow-400 mt-1">{formatCurrency(c.minDue)}</p></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Keep utilization below 30% per card for healthy credit scoring. Always pay the full balance to avoid 36–42% p.a. revolving interest on business credit cards.
       </div>
     </div>
   );

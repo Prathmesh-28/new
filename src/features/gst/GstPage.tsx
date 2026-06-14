@@ -18,7 +18,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -42,6 +42,14 @@ export default function GstPage() {
     const expiry   = format(addDays(new Date(), validity), "d MMM yyyy");
     return { required: true, validity, expiry } as const;
   }, [ewayValue, ewayDist, ewayOdc, ewayCancelled]);
+
+  // ── RCM state ──
+  const [rcmEntries, setRcmEntries] = useState<{ id: string; desc: string; supplier: string; amount: number; rate: number; date: string }[]>([]);
+  const [rcmDesc, setRcmDesc]       = useState("");
+  const [rcmSupplier, setRcmSupplier] = useState("");
+  const [rcmAmount, setRcmAmount]   = useState("");
+  const [rcmRate, setRcmRate]       = useState(18);
+  const [rcmDate, setRcmDate]       = useState(() => new Date().toISOString().split("T")[0]);
 
   // ── HSN Lookup state ──
   const [hsnSearch, setHsnSearch] = useState("");
@@ -232,7 +240,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -725,6 +733,131 @@ export default function GstPage() {
         </div>
       )}
 
+      {/* ── RCM (REVERSE CHARGE MECHANISM) ── */}
+      {tab === "rcm" && (() => {
+        const RCM_SERVICES = [
+          { desc: "Legal services from advocate", rate: 18 },
+          { desc: "Goods Transport Agency (GTA) — road freight", rate: 5 },
+          { desc: "Sponsorship services", rate: 18 },
+          { desc: "Security services (unregistered supplier)", rate: 18 },
+          { desc: "Renting of motor vehicle", rate: 5 },
+          { desc: "Import of services (OIDAR)", rate: 18 },
+          { desc: "Director services to company", rate: 18 },
+          { desc: "Supply from unregistered dealer (notified)", rate: 18 },
+          { desc: "Insurance agent services", rate: 18 },
+          { desc: "Works contract from non-GST body", rate: 12 },
+        ];
+
+        const addEntry = () => {
+          if (!rcmDesc || !rcmAmount) { toast.error("Description and amount required"); return; }
+          const tax = Math.round(parseFloat(rcmAmount) * rcmRate / 100);
+          setRcmEntries(e => [...e, { id: crypto.randomUUID(), desc: rcmDesc, supplier: rcmSupplier, amount: parseFloat(rcmAmount), rate: rcmRate, date: rcmDate }]);
+          setRcmDesc(""); setRcmSupplier(""); setRcmAmount("");
+          toast.success(`RCM entry added — ₹${tax.toLocaleString("en-IN")} tax liability`);
+        };
+
+        const totalRcmTax = rcmEntries.reduce((s, e) => s + Math.round(e.amount * e.rate / 100), 0);
+        const totalRcmItc = totalRcmTax; // RCM tax paid = eligible ITC (for business use)
+
+        const downloadCsv = () => {
+          const rows = [["Date","Description","Supplier","Taxable Amount","GST Rate","RCM Tax","ITC Claimable"],
+            ...rcmEntries.map(e => [e.date, e.desc, e.supplier, e.amount, `${e.rate}%`, Math.round(e.amount * e.rate / 100), Math.round(e.amount * e.rate / 100)])
+          ];
+          const csv = rows.map(r => r.join(",")).join("\n");
+          const blob = new Blob([csv], { type: "text/csv" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+          a.download = "RCM_Register.csv"; a.click();
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+              <strong className="text-orange-300">Reverse Charge Mechanism (RCM)</strong> — You (the recipient) pay GST on behalf of the unregistered/exempt supplier directly to the government. RCM tax paid is eligible for ITC in the same month (for business use).
+            </div>
+
+            {/* Common RCM services quick-fill */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs font-semibold text-[var(--color-muted)] mb-2 uppercase tracking-wide">Common RCM Categories — click to fill</p>
+              <div className="flex flex-wrap gap-2">
+                {RCM_SERVICES.map(s => (
+                  <button key={s.desc} onClick={() => { setRcmDesc(s.desc); setRcmRate(s.rate); }}
+                    className="text-[10px] px-2.5 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)] transition-colors">
+                    {s.desc} · {s.rate}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Add entry form */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-semibold">Add RCM Entry</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <input value={rcmDesc} onChange={e => setRcmDesc(e.target.value)} placeholder="Service description *"
+                  className="col-span-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input value={rcmSupplier} onChange={e => setRcmSupplier(e.target.value)} placeholder="Supplier name"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input value={rcmDate} type="date" onChange={e => setRcmDate(e.target.value)}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <input type="number" value={rcmAmount} onChange={e => setRcmAmount(e.target.value)} placeholder="Taxable amount (₹) *"
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <select value={rcmRate} onChange={e => setRcmRate(Number(e.target.value))}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+                  {[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}
+                </select>
+              </div>
+              {rcmAmount && parseFloat(rcmAmount) > 0 && (
+                <div className="flex items-center gap-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-muted)]">
+                  <span>RCM Tax Payable: <strong className="text-orange-400">₹{Math.round(parseFloat(rcmAmount) * rcmRate / 100).toLocaleString("en-IN")}</strong></span>
+                  <span>ITC Claimable (same month): <strong className="text-green-400">₹{Math.round(parseFloat(rcmAmount) * rcmRate / 100).toLocaleString("en-IN")}</strong></span>
+                </div>
+              )}
+              <button onClick={addEntry} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+                <Receipt size={11} /> Add Entry
+              </button>
+            </div>
+
+            {/* Register */}
+            {rcmEntries.length > 0 && (
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+                  <h3 className="text-sm font-semibold">RCM Register ({rcmEntries.length} entries)</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-orange-400 font-semibold">Tax: {formatCurrency(totalRcmTax)}</span>
+                    <span className="text-xs text-green-400 font-semibold">ITC: {formatCurrency(totalRcmItc)}</span>
+                    <button onClick={downloadCsv} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline ml-2">
+                      <Download size={11} /> CSV
+                    </button>
+                  </div>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {["Date","Description","Supplier","Taxable","Rate","RCM Tax","ITC",""].map(h => (
+                        <th key={h} className="text-left text-[var(--color-muted)] font-semibold px-3 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rcmEntries.map(e => (
+                      <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                        <td className="px-3 py-2.5 text-[var(--color-muted)]">{e.date}</td>
+                        <td className="px-3 py-2.5 font-medium max-w-[180px] truncate">{e.desc}</td>
+                        <td className="px-3 py-2.5 text-[var(--color-muted)]">{e.supplier || "—"}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
+                        <td className="px-3 py-2.5">{e.rate}%</td>
+                        <td className="px-3 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(e.amount * e.rate / 100))}</td>
+                        <td className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(e.amount * e.rate / 100))}</td>
+                        <td className="px-3 py-2.5"><button onClick={() => setRcmEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ── HSN LOOKUP ── */}
       {tab === "hsn" && (() => {
         const q = hsnSearch.trim().toLowerCase();
@@ -897,6 +1030,134 @@ export default function GstPage() {
           </div>
         </div>
       )}
+
+      {tab === "itc" && (() => {
+        const GST_RATES = [5, 12, 18, 28];
+        // Derive ITC from expense transactions: approximate ITC = amount × rate / (100 + rate)
+        const expenseTxns = store.transactions.filter(t => t.amount < 0 && ["expense","payroll","loan","tax"].includes(t.category) === false && t.amount < 0);
+        // Simpler: use all negative-amount transactions as potential ITC sources
+        const purchaseTxns = store.transactions.filter(t => t.amount < 0);
+
+        // Group by month
+        const monthMap: Record<string, { month: string; purchase: number; estimatedItc: number; claimed: number }> = {};
+        purchaseTxns.forEach(t => {
+          const key = t.date.slice(0, 7);
+          const d = new Date(t.date + "-01");
+          const label = d.toLocaleString("en-IN", { month: "short", year: "2-digit" });
+          if (!monthMap[key]) monthMap[key] = { month: label, purchase: 0, estimatedItc: 0, claimed: 0 };
+          const amt = Math.abs(t.amount);
+          monthMap[key].purchase += amt;
+          monthMap[key].estimatedItc += Math.round(amt * 0.18 / 1.18); // assume 18% GST on purchases
+        });
+
+        const months = Object.entries(monthMap).sort((a,b) => a[0].localeCompare(b[0])).map(([,v]) => v);
+        const totalPurchase   = months.reduce((s,m) => s + m.purchase, 0);
+        const totalEstItc     = months.reduce((s,m) => s + m.estimatedItc, 0);
+
+        // ITC aging buckets: current month, 1-3 months, >3 months
+        const now = new Date();
+        const itcAging = months.map(m => {
+          const key = Object.keys(monthMap).find(k => monthMap[k].month === m.month)!;
+          const ageMonths = (now.getFullYear() - 2000) * 12 + now.getMonth() - (parseInt(key.slice(2,4)) * 12 + parseInt(key.slice(5,7)) - 1);
+          const bucket = ageMonths === 0 ? "Current" : ageMonths <= 3 ? "1–3 months" : ageMonths <= 24 ? ">3 months" : "Lapsed (>2yr)";
+          return { ...m, ageMonths, bucket };
+        });
+
+        const lapsedItc = itcAging.filter(m => m.bucket === "Lapsed (>2yr)").reduce((s,m) => s + m.estimatedItc, 0);
+        const urgentItc = itcAging.filter(m => m.bucket === ">3 months").reduce((s,m) => s + m.estimatedItc, 0);
+
+        return (
+          <div className="space-y-5">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1">ITC Optimizer</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Estimated ITC available from your purchase transactions (assumes avg 18% GST). Claim within 2 years of invoice date — after that, ITC lapses under Sec 16(4).</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total purchases (all time)", value: formatAmount(totalPurchase), color: "text-[var(--color-text)]" },
+                  { label: "Estimated ITC available", value: formatAmount(totalEstItc), color: "text-green-400" },
+                  { label: "Urgent (>3 months unclaimed)", value: formatAmount(urgentItc), color: urgentItc > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+                  { label: "Lapsed (>2 years)", value: formatAmount(lapsedItc), color: lapsedItc > 0 ? "text-red-400" : "text-green-400" },
+                ].map(k => (
+                  <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                    <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {urgentItc > 0 && (
+              <div className="bg-orange-950/30 border border-orange-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+                <AlertTriangle size={15} className="text-orange-400 shrink-0" />
+                <p className="text-sm">{formatAmount(urgentItc)} in estimated ITC is older than 3 months — claim it in your next GSTR-3B before the 2-year limit expires.</p>
+              </div>
+            )}
+
+            {lapsedItc > 0 && (
+              <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+                <AlertTriangle size={15} className="text-red-400 shrink-0" />
+                <p className="text-sm">{formatAmount(lapsedItc)} in ITC has likely lapsed (invoices older than 2 years). These credits can no longer be claimed.</p>
+              </div>
+            )}
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--color-border)]">
+                <p className="text-sm font-semibold">Month-wise ITC Summary</p>
+              </div>
+              {months.length === 0 ? (
+                <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transactions found. Add purchase transactions to see ITC estimates.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)]">
+                        {["Month","Total Purchases","Est. ITC @ 18%","Age","Status"].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]">
+                      {itcAging.slice().reverse().map((m, i) => (
+                        <tr key={i} className="hover:bg-white/2">
+                          <td className="px-4 py-3 font-medium">{m.month}</td>
+                          <td className="px-4 py-3 tabular-nums">{formatAmount(m.purchase)}</td>
+                          <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatAmount(m.estimatedItc)}</td>
+                          <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{m.ageMonths === 0 ? "Current" : `${m.ageMonths}mo`}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
+                              m.bucket === "Current" ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                              m.bucket === "1–3 months" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                              m.bucket === ">3 months" ? "bg-orange-900/30 text-orange-400 border-orange-800/40" :
+                              "bg-red-900/30 text-red-400 border-red-800/40"
+                            }`}>{m.bucket}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h3 className="text-sm font-semibold mb-3">ITC Eligibility Quick Reference</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {[
+                  { title: "Blocked credits (Sec 17(5))", items: ["Motor vehicles for personal use", "Food & beverages, outdoor catering", "Club memberships, health services", "Travel for personal purposes"] },
+                  { title: "Eligible credits", items: ["Raw materials & inputs for production", "Capital goods for business use", "Services used in business operations", "Goods/services for further supply (trading)"] },
+                ].map(({ title, items }) => (
+                  <div key={title}>
+                    <p className="font-semibold mb-2 text-[var(--color-text)]">{title}</p>
+                    <ul className="space-y-1">
+                      {items.map(item => <li key={item} className="text-[var(--color-muted)] flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>{item}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

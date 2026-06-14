@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -117,7 +118,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -220,7 +221,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -948,6 +949,7 @@ export default function PayrollPage() {
       })()}
 
       {tab === "fnf" && <FnFTab employees={employees} />}
+      {tab === "variance" && <PayrollVarianceTab />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -1083,6 +1085,114 @@ function FnFTab({ employees }: { employees: { id: string; name: string; gross_sa
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PayrollVarianceTab() {
+  const { store } = useApp();
+
+  const monthlyPayroll = useMemo(() => {
+    const map: Record<string, number> = {};
+    store.transactions
+      .filter(t => t.category === "payroll" && t.amount < 0)
+      .forEach(t => {
+        const key = t.date.slice(0, 7);
+        map[key] = (map[key] ?? 0) + Math.abs(t.amount);
+      });
+    return Object.entries(map)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12)
+      .map(([key, total]) => {
+        const d = new Date(key + "-01");
+        return { key, label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }), total };
+      });
+  }, [store.transactions]);
+
+  const rows = monthlyPayroll.map((m, i) => {
+    const prev = monthlyPayroll[i - 1]?.total ?? null;
+    const change = prev !== null ? m.total - prev : null;
+    const pct    = prev !== null && prev > 0 ? Math.round(((m.total - prev) / prev) * 100) : null;
+    return { ...m, prev, change, pct };
+  });
+
+  const avgMonthly = rows.length > 0 ? Math.round(rows.reduce((s,r) => s + r.total, 0) / rows.length) : 0;
+  const maxMonth   = rows.reduce((a, r) => r.total > (a?.total ?? 0) ? r : a, rows[0] ?? null);
+  const minMonth   = rows.reduce((a, r) => r.total < (a?.total ?? Infinity) ? r : a, rows[0] ?? null);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Avg monthly payroll (12m)", value: formatCurrency(avgMonthly),              color: "text-[var(--color-text)]" },
+          { label: "Highest month",             value: maxMonth ? `${formatCurrency(maxMonth.total)} (${maxMonth.label})` : "—", color: "text-red-400" },
+          { label: "Lowest month",              value: minMonth ? `${formatCurrency(minMonth.total)} (${minMonth.label})` : "—", color: "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Month-over-Month Payroll Variance</p>
+        </div>
+        {rows.length === 0 ? (
+          <div className="p-8 text-center">
+            <Building2 size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No payroll transactions found. Tag transactions as "payroll" category to see variance analysis.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Month","Payroll Cost","vs Prior Month","Change %","Trend"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.slice().reverse().map((r, i) => (
+                  <tr key={r.key} className={`hover:bg-white/2 ${i === 0 ? "bg-[var(--color-primary)]/5" : ""}`}>
+                    <td className="px-4 py-3 font-medium">{r.label}{i === 0 ? <span className="ml-1.5 text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] px-1.5 py-0.5 rounded-full">Latest</span> : ""}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(r.total)}</td>
+                    <td className={`px-4 py-3 tabular-nums ${r.change !== null ? (r.change > 0 ? "text-red-400" : r.change < 0 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
+                      {r.change !== null ? `${r.change >= 0 ? "+" : ""}${formatCurrency(r.change)}` : "—"}
+                    </td>
+                    <td className={`px-4 py-3 tabular-nums font-semibold ${r.pct !== null ? (r.pct > 5 ? "text-red-400" : r.pct < -5 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
+                      {r.pct !== null ? `${r.pct >= 0 ? "+" : ""}${r.pct}%` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.pct !== null && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
+                          r.pct > 10  ? "bg-red-900/30 text-red-400 border-red-800/40" :
+                          r.pct > 0   ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                          r.pct < -5  ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                                        "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"
+                        }`}>{r.pct > 10 ? "Spike" : r.pct > 0 ? "Up" : r.pct < -5 ? "Down" : "Flat"}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {rows.some(r => r.pct !== null && r.pct > 15) && (
+        <div className="bg-orange-950/30 border border-orange-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <AlertTriangle size={14} className="text-orange-400 shrink-0" />
+          <span>One or more months show &gt;15% payroll spike. Review for off-cycle bonuses, increments, or new hires driving the jump.</span>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Data sourced from transactions tagged as "payroll" category. For per-employee breakdown, use the Payroll Runs tab to run monthly payroll cycles.
+      </div>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence";
+type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -153,6 +153,7 @@ export default function OperationsPage() {
           ["inventory",     "Inventory",    lowStockItems.length > 0 ? lowStockItems.length : null],
           ["procurement",   "Procurement",  null],
           ["intelligence",  "Anomaly Radar", null],
+          ["prices",        "Price List",    null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -698,6 +699,175 @@ export default function OperationsPage() {
           )}
         </div>
       )}
+
+      {tab === "prices" && <PriceListTab />}
+    </div>
+  );
+}
+
+function PriceListTab() {
+  const { store } = useApp();
+
+  type Tier = { label: string; discountPct: number };
+  type PriceItem = { id: string; sku: string; name: string; basePrice: number; unit: string; gstRate: number; tiers: Tier[] };
+
+  const DISCOUNT_TIERS: Tier[] = [
+    { label: "Retail",     discountPct: 0  },
+    { label: "Dealer",     discountPct: 10 },
+    { label: "Distributor",discountPct: 20 },
+  ];
+
+  const [items,     setItems]     = useState<PriceItem[]>(() =>
+    store.inventory.slice(0, 20).map(p => ({
+      id: p.id, sku: p.sku ?? p.id.slice(0, 6).toUpperCase(), name: p.productName,
+      basePrice: p.unitCost, unit: p.unit ?? "piece", gstRate: 18, tiers: DISCOUNT_TIERS,
+    }))
+  );
+  const [search,    setSearch]    = useState("");
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [nSku,      setNSku]      = useState("");
+  const [nName,     setNName]     = useState("");
+  const [nPrice,    setNPrice]    = useState("");
+  const [nUnit,     setNUnit]     = useState("piece");
+  const [nGst,      setNGst]      = useState(18);
+  const [editId,    setEditId]    = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+
+  const addItem = () => {
+    if (!nName || !nPrice) return;
+    setItems(prev => [...prev, { id: generateId(), sku: nSku || nName.slice(0,6).toUpperCase(), name: nName, basePrice: parseFloat(nPrice), unit: nUnit, gstRate: nGst, tiers: DISCOUNT_TIERS }]);
+    setNSku(""); setNName(""); setNPrice(""); setNUnit("piece"); setNGst(18); setShowAdd(false);
+  };
+
+  const savePrice = (id: string) => {
+    const p = parseFloat(editPrice);
+    if (!p) return;
+    setItems(prev => prev.map(it => it.id === id ? { ...it, basePrice: p } : it));
+    setEditId(null);
+  };
+
+  const downloadCsv = () => {
+    const headers = ["SKU", "Product", "Unit", "Base Price (₹)", "GST %", ...DISCOUNT_TIERS.map(t => `${t.label} Price`), ...DISCOUNT_TIERS.map(t => `${t.label} Price (incl. GST)`)];
+    const rows = filtered.map(it => [
+      it.sku, it.name, it.unit, it.basePrice, it.gstRate,
+      ...it.tiers.map(t => Math.round(it.basePrice * (1 - t.discountPct / 100))),
+      ...it.tiers.map(t => Math.round(it.basePrice * (1 - t.discountPct / 100) * (1 + it.gstRate / 100))),
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "price-list.csv"; a.click();
+  };
+
+  const filtered = items.filter(it => !search || it.name.toLowerCase().includes(search.toLowerCase()) || it.sku.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Package size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products…"
+            className="w-full pl-8 pr-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={() => setShowAdd(s => !s)}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Plus size={12} /> Add item
+        </button>
+        <button onClick={downloadCsv}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)]">
+          <TrendingUp size={12} /> Export CSV
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+            <input value={nSku} onChange={e=>setNSku(e.target.value)} placeholder="SKU (optional)"
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={nName} onChange={e=>setNName(e.target.value)} placeholder="Product name *"
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input type="number" value={nPrice} onChange={e=>setNPrice(e.target.value)} placeholder="Base price (₹) *"
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={nUnit} onChange={e=>setNUnit(e.target.value)} placeholder="Unit (kg, piece, box…)"
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <select value={nGst} onChange={e=>setNGst(Number(e.target.value))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+              {[0,5,12,18,28].map(r => <option key={r} value={r}>GST {r}%</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addItem} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowAdd(false)} className="text-xs text-[var(--color-muted)] px-4 py-2 rounded-lg border border-[var(--color-border)] hover:text-[var(--color-text)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">{items.length === 0 ? "No products yet. Add a product above or go to Inventory to stock up." : "No products match your search."}</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">SKU</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Product</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">Base Price</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">GST</th>
+                  {DISCOUNT_TIERS.map(t => (
+                    <th key={t.label} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">
+                      {t.label} {t.discountPct > 0 ? `(−${t.discountPct}%)` : ""}
+                    </th>
+                  ))}
+                  <th className="px-4 py-2.5 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {filtered.map(it => (
+                  <tr key={it.id} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{it.sku}</td>
+                    <td className="px-4 py-3 font-medium">{it.name}<span className="ml-1 text-[10px] text-[var(--color-muted)]">/{it.unit}</span></td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {editId === it.id ? (
+                        <div className="flex items-center gap-1">
+                          <input type="number" value={editPrice} onChange={e=>setEditPrice(e.target.value)} autoFocus
+                            className="w-24 bg-[var(--color-bg)] border border-[var(--color-primary)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
+                          <button onClick={() => savePrice(it.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">✓</button>
+                          <button onClick={() => setEditId(null)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setEditId(it.id); setEditPrice(String(it.basePrice)); }}
+                          className="tabular-nums hover:text-[var(--color-primary)] transition-colors">{formatCurrency(it.basePrice)}</button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{it.gstRate}%</td>
+                    {it.tiers.map(t => {
+                      const discounted    = Math.round(it.basePrice * (1 - t.discountPct / 100));
+                      const withGst       = Math.round(discounted * (1 + it.gstRate / 100));
+                      return (
+                        <td key={t.label} className="px-4 py-3">
+                          <p className="tabular-nums text-xs font-semibold">{formatCurrency(discounted)}</p>
+                          <p className="tabular-nums text-[10px] text-[var(--color-muted)]">+GST {formatCurrency(withGst)}</p>
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3">
+                      <button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))}
+                        className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Price list auto-populates from your inventory. Click any base price to edit it inline. Export as CSV to share with customers or dealers.
+      </div>
     </div>
   );
 }

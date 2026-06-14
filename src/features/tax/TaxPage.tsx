@@ -63,10 +63,15 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad">("overview");
+  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
+  // Capital Gains state
+  const [cgAsset,      setCgAsset]      = useState<"equity" | "debt" | "property">("equity");
+  const [cgBuy,        setCgBuy]        = useState("");
+  const [cgSell,       setCgSell]       = useState("");
+  const [cgHoldMonths, setCgHoldMonths] = useState("");
 
   const deadlines = useMemo(() => computeTaxCalendar(today), []);
 
@@ -132,7 +137,7 @@ export default function TaxPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", ShieldCheck], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -242,6 +247,115 @@ export default function TaxPage() {
             <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
               <AlertTriangle size={12} className="shrink-0 mt-px" />
               44AD: businesses with turnover ≤₹3 crore (digital-only receipts). 44ADA: specified professions (doctors, lawyers, engineers, CAs, architects) with gross receipts ≤₹75 lakh. Consult your CA before opting in.
+            </div>
+          </div>
+        );
+      })()}
+
+      {taxTab === "cg" && (() => {
+        const buyPrice  = parseFloat(cgBuy)  || 0;
+        const sellPrice = parseFloat(cgSell) || 0;
+        const months    = parseInt(cgHoldMonths) || 0;
+        const gain      = sellPrice - buyPrice;
+
+        // Determine if LTCG or STCG
+        const ltcgThreshold = cgAsset === "equity" ? 12 : cgAsset === "property" ? 24 : 36;
+        const isLtcg = months >= ltcgThreshold;
+
+        // Tax rates
+        const RATES: Record<string, { stcg: number; ltcg: number; ltcgExempt?: number }> = {
+          equity:   { stcg: 20, ltcg: 12.5, ltcgExempt: 125000 }, // post-Budget 2024
+          debt:     { stcg: 30, ltcg: 20 },   // debt MF/bonds taxed at slab/20% post-2023
+          property: { stcg: 30, ltcg: 12.5 }, // LTCG 12.5% without indexation (Budget 2024)
+        };
+        const rates = RATES[cgAsset];
+        const taxableGain = isLtcg && cgAsset === "equity"
+          ? Math.max(0, gain - (rates.ltcgExempt ?? 0))
+          : Math.max(0, gain);
+        const rate = isLtcg ? rates.ltcg : rates.stcg;
+        const tax  = gain > 0 ? Math.round(taxableGain * rate / 100) : 0;
+        const cess = Math.round(tax * 0.04);
+        const totalTax = tax + cess;
+
+        const ASSET_THRESHOLDS: Record<string, string> = {
+          equity:   "12 months (listed equity/equity MF)",
+          debt:     "36 months (debt MF/bonds)",
+          property: "24 months (land/building)",
+        };
+
+        return (
+          <div className="space-y-4 max-w-xl">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                <TrendingUp size={14} className="text-[var(--color-primary)]" /> Capital Gains Tax Calculator
+              </h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Rates as per Finance Act 2024 (Budget July 2024). Equity LTCG: 12.5% above ₹1.25L exemption. Debt: taxed at slab/20%.</p>
+
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  {(["equity", "debt", "property"] as const).map(a => (
+                    <button key={a} onClick={() => setCgAsset(a)}
+                      className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all capitalize ${cgAsset === a ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                      {a === "equity" ? "Equity / MF" : a === "debt" ? "Debt / Bonds" : "Property"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)]">LTCG threshold: {ASSET_THRESHOLDS[cgAsset]}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-[var(--color-muted)] mb-1">Purchase price (₹)</label>
+                    <input type="number" min={0} value={cgBuy} onChange={e => setCgBuy(e.target.value)}
+                      placeholder="e.g. 500000"
+                      className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--color-muted)] mb-1">Sale price (₹)</label>
+                    <input type="number" min={0} value={cgSell} onChange={e => setCgSell(e.target.value)}
+                      placeholder="e.g. 800000"
+                      className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--color-muted)] mb-1">Holding period (months)</label>
+                  <input type="number" min={0} value={cgHoldMonths} onChange={e => setCgHoldMonths(e.target.value)}
+                    placeholder="e.g. 18"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                </div>
+              </div>
+            </div>
+
+            {buyPrice > 0 && sellPrice > 0 && months > 0 && (
+              <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${gain < 0 ? "border-green-700/40" : "border-orange-700/40"}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded border ${isLtcg ? "bg-blue-950/30 text-blue-400 border-blue-800/30" : "bg-orange-950/30 text-orange-400 border-orange-800/30"}`}>
+                    {isLtcg ? "LTCG" : "STCG"} — {months}mo holding
+                  </span>
+                  <span className="text-xs text-[var(--color-muted)]">{rate}% rate applies</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { label: "Capital Gain / (Loss)", value: formatCurrency(gain), color: gain >= 0 ? "text-orange-400" : "text-green-400" },
+                    ...(isLtcg && cgAsset === "equity" && gain > 0 ? [{ label: `LTCG Exemption (₹1.25L)`, value: `(${formatCurrency(Math.min(gain, 125000))})`, color: "text-green-400" }] : []),
+                    { label: "Taxable Gain", value: formatCurrency(taxableGain), color: "text-[var(--color-text)]" },
+                    { label: `Income Tax @ ${rate}%`, value: formatCurrency(tax), color: "text-orange-400" },
+                    { label: "Health & Education Cess (4%)", value: formatCurrency(cess), color: "text-orange-400" },
+                    { label: "Total Tax Payable", value: formatCurrency(totalTax), color: "text-red-400 font-bold" },
+                  ].map(r => (
+                    <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                      <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                      <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {gain < 0 && (
+                  <p className="text-xs text-green-400 mt-3 pt-2 border-t border-[var(--color-border)]">Capital loss of {formatCurrency(Math.abs(gain))} — can be set off against capital gains of the same year (STCL vs LTCL rules apply). Carry forward for 8 years.</p>
+                )}
+              </div>
+            )}
+
+            <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+              <AlertTriangle size={12} className="shrink-0 mt-px" />
+              Debt MF gains post-Apr 2023 are taxed at slab rates (no LTCG benefit). Property sold after Jul 2024: LTCG is 12.5% without indexation. Surcharge applies for gains &gt;₹50L. Consult a CA.
             </div>
           </div>
         );
@@ -415,6 +529,106 @@ export default function TaxPage() {
         </div>
       )}
       </>}
+
+      {taxTab === "audit" && (() => {
+        const annualRevenue  = store.transactions.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0);
+
+        const THRESHOLD_BUSINESS      = 1_00_00_000;  // ₹1 crore
+        const THRESHOLD_BUSINESS_DIG  = 10_00_00_000; // ₹10 crore (95%+ digital)
+        const THRESHOLD_PROFESSIONAL  = 50_00_000;    // ₹50 lakh
+
+        const [mode, setMode]         = useState<"business" | "professional">("business");
+        const [manualTurnover, setManualTurnover] = useState("");
+        const [digitalPct, setDigitalPct]         = useState(80);
+
+        const turnover    = parseFloat(manualTurnover) || annualRevenue;
+        const threshold   = mode === "professional" ? THRESHOLD_PROFESSIONAL :
+                            digitalPct >= 95        ? THRESHOLD_BUSINESS_DIG : THRESHOLD_BUSINESS;
+        const auditReqd   = turnover >= threshold;
+        const headroom    = Math.max(0, threshold - turnover);
+        const pct         = threshold > 0 ? Math.min(100, Math.round((turnover / threshold) * 100)) : 0;
+
+        return (
+          <div className="space-y-5 max-w-xl">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h2 className="text-sm font-semibold mb-1">Tax Audit Threshold — Sec 44AB</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Audit by a CA is mandatory if turnover/receipts cross the threshold. Penalty for non-compliance: 0.5% of turnover (max ₹1.5L).</p>
+
+              <div className="flex gap-2 mb-4">
+                {(["business", "professional"] as const).map(m => (
+                  <button key={m} onClick={() => setMode(m)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${mode === m ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                    {m === "business" ? "Business / Trading" : "Professional"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-[var(--color-muted)] mb-1">Annual turnover / gross receipts (₹) — auto-filled from transactions</label>
+                  <input type="number" value={manualTurnover} onChange={e => setManualTurnover(e.target.value)}
+                    placeholder={`${Math.round(annualRevenue)} (from transactions)`}
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                </div>
+                {mode === "business" && (
+                  <div>
+                    <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1">
+                      <span>Digital / banking receipts %</span>
+                      <span className="font-semibold text-[var(--color-text)]">{digitalPct}%</span>
+                    </label>
+                    <input type="range" min={0} max={100} value={digitalPct} onChange={e => setDigitalPct(Number(e.target.value))}
+                      className="w-full accent-[var(--color-primary)]" />
+                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">≥95% digital → threshold rises to ₹10 Cr (Finance Act 2020)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`rounded-lg border p-5 ${auditReqd ? "bg-red-950/30 border-red-800/40" : "bg-green-950/30 border-green-800/40"}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className={auditReqd ? "text-red-400" : "text-green-400"} />
+                  <p className="font-semibold text-sm">{auditReqd ? "Tax Audit REQUIRED" : "Tax Audit NOT required"}</p>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${auditReqd ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>
+                  {auditReqd ? "44AB applies" : "Below threshold"}
+                </span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-xs text-[var(--color-muted)]">Your turnover</span><span className="tabular-nums font-semibold">{formatCurrency(Math.round(turnover))}</span></div>
+                <div className="flex justify-between"><span className="text-xs text-[var(--color-muted)]">Applicable threshold</span><span className="tabular-nums">{formatCurrency(threshold)}</span></div>
+                {!auditReqd && <div className="flex justify-between"><span className="text-xs text-[var(--color-muted)]">Headroom remaining</span><span className="tabular-nums text-green-400 font-semibold">{formatCurrency(Math.round(headroom))}</span></div>}
+              </div>
+              <div className="mt-3">
+                <div className="flex justify-between text-[10px] text-[var(--color-muted)] mb-1"><span>0</span><span>{pct}%</span><span>{formatCurrency(threshold)}</span></div>
+                <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: auditReqd ? "#ef4444" : pct > 80 ? "#f97316" : "#22c55e" }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+              <h3 className="text-sm font-semibold mb-3">Quick Reference — 44AB Thresholds</h3>
+              <div className="space-y-2.5 text-xs">
+                {[
+                  { who: "Business (default)",                 limit: "₹1 crore",  note: "Standard threshold for all business entities" },
+                  { who: "Business (≥95% digital receipts)",   limit: "₹10 crore", note: "Raised by Finance Act 2020 to promote digital transactions" },
+                  { who: "Professionals (doctors, CAs, etc.)", limit: "₹50 lakh",  note: "Gross receipts from professional services" },
+                  { who: "Presumptive scheme (44AD/44ADA)",    limit: "N/A",        note: "Audit not required even if above threshold, if opting for presumptive" },
+                ].map(r => (
+                  <div key={r.who} className="flex items-start gap-3 pb-2.5 border-b border-[var(--color-border)] last:border-0 last:pb-0">
+                    <div className="flex-1">
+                      <p className="font-medium text-[var(--color-text)]">{r.who}</p>
+                      <p className="text-[var(--color-muted)] mt-0.5">{r.note}</p>
+                    </div>
+                    <span className="font-bold tabular-nums text-[var(--color-primary)] shrink-0">{r.limit}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
