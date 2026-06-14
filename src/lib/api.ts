@@ -1,5 +1,16 @@
 import { API_BASE as BASE } from "./apiBase";
 
+// Stable per-tab id. Sent as X-Client-Id on every write so the live-sync stream
+// can tell this client which events are its own echo (and skip refetching them).
+const CLIENT_ID =
+  (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+export function clientId() {
+  return CLIENT_ID;
+}
+
 function getToken() {
   return localStorage.getItem("hr_access");
 }
@@ -13,6 +24,7 @@ export async function authFetch<T = unknown>(
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "X-Client-Id": CLIENT_ID,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers as Record<string, string> ?? {}),
     },

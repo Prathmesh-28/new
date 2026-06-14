@@ -5,7 +5,8 @@ import type { AppStore, UserRole, RoleConfig } from "@/data/types";
 import { FIELD_NAMESPACE, ROLE_NAMESPACES } from "@/data/types";
 import { isReadOnlyRole } from "@/data/roles";
 import { defaultConfig } from "@/data/defaultConfig";
-import { api } from "@/lib/api";
+import { api, clientId } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 
@@ -241,6 +242,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, POLL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [user, currentRole]);
+
+  // Live sync via Server-Sent Events — pushes cross-device changes instantly
+  // (sub-second) instead of waiting for the 5s poll. Best-effort enhancement: if
+  // the stream can't connect (e.g. native WebView CORS), the poll above still
+  // keeps every device in sync. On an event from ANOTHER client we refetch only
+  // the affected namespace and merge it.
+  useEffect(() => {
+    if (!user) return;
+    let es: EventSource | null = null;
+    let reconnect: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+
+    const refetchNs = async (ns: string) => {
+      const tenantId = clientIdRef.current;
+      try {
+        const r = await api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, tenantId));
+        const payload = r?.value;
+        if (payload && typeof payload === "object") _setStore(prev => ({ ...prev, ...payload }));
+      } catch { /* poll will reconcile */ }
+    };
+
+    const connect = () => {
+      if (stopped) return;
+      const token = localStorage.getItem("hr_access");
+      if (!token) return;
+      const tenantId = clientIdRef.current;
+      const url = `${API_BASE}/api/kv/stream?token=${encodeURIComponent(token)}`
+        + (tenantId ? `&tenant_id=${encodeURIComponent(tenantId)}` : "");
+      es = new EventSource(url);
+      es.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data) as { ns?: string; clientId?: string };
+          if (!msg?.ns) return;
+          if (msg.clientId && msg.clientId === clientId()) return; // ignore our own echo
+          const owned = clientIdRef.current ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
+          if (owned.includes(msg.ns)) refetchNs(msg.ns);
+        } catch { /* ignore malformed */ }
+      };
+      es.onerror = () => {
+        es?.close(); es = null;
+        // Retry with a possibly-refreshed token (the poll refreshes hr_access on 401).
+        if (!stopped) reconnect = setTimeout(connect, 8000);
+      };
+    };
+    connect();
+
+    return () => {
+      stopped = true;
+      if (reconnect) clearTimeout(reconnect);
+      es?.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, currentRole, selectedClientTenantId]);
 
   // Resolve a role's config: an owner-CUSTOMISED config (custom:true) is
   // authoritative; otherwise fall back to the latest shipped defaults so roles

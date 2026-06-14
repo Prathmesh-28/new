@@ -329,6 +329,12 @@ export interface AppStore {
   procurement: ProcurementOrder[];
   budgets: Budget[];
   whatsappPreferences: WhatsAppPreferences;
+  // Generic synced bag for the record-keeping feature tools (cap table, ESOP,
+  // payables, recurring templates, insurance, GST refunds, etc.). Each tool owns
+  // a unique key inside this object via the useFeatureState hook, so its records
+  // persist + sync across devices through the normal KV machinery without needing
+  // a dedicated top-level field per feature.
+  featureData: Record<string, unknown>;
 }
 
 // ── KV namespace map ──────────────────────────────────────────────────────────
@@ -354,6 +360,7 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   procurement:         "operations",
   budgets:             "app",
   whatsappPreferences: "app",
+  featureData:         "app",
 };
 
 export const ROLE_NAMESPACES: Record<UserRole, string[]> = {

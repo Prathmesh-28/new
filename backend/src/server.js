@@ -46,6 +46,9 @@ app.use(cors({
     if (!origin) return cb(null, true);
     // Allow any *.vercel.app for preview deployments
     if (origin.endsWith(".vercel.app")) return cb(null, true);
+    // Capacitor native WebView origins — needed for the live-sync EventSource,
+    // which (unlike fetch) is NOT proxied through CapacitorHttp.
+    if (origin === "capacitor://localhost" || origin === "https://localhost" || origin === "http://localhost") return cb(null, true);
     if (ALLOWED_ORIGINS.has(origin) || /^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     cb(new Error("CORS origin not allowed"));
   },

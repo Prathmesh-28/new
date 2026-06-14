@@ -118,4 +118,5 @@ export const defaultConfig: AppStore = {
     { id: "loan",    category: "loan",    label: "Loan EMIs",  monthlyLimit: 150000, color: "#a855f7" },
   ],
   whatsappPreferences: { ...DEFAULT_WA_PREFS },
+  featureData: {},
 };
