@@ -73,6 +73,12 @@ const InsurancePage      = lazy(() => import("@/features/insurance/InsurancePage
 const TreasuryPage       = lazy(() => import("@/features/treasury/TreasuryPage"));
 const EsgPage            = lazy(() => import("@/features/esg/EsgPage"));
 const GlobalPage         = lazy(() => import("@/features/global/GlobalPage"));
+const MarketplacePage    = lazy(() => import("@/features/marketplace/MarketplacePage"));
+const NetworkPage        = lazy(() => import("@/features/network/NetworkPage"));
+const AutomationPage     = lazy(() => import("@/features/automation/AutomationPage"));
+const CopilotPage        = lazy(() => import("@/features/copilot/CopilotPage"));
+const SecurityPage       = lazy(() => import("@/features/security/SecurityPage"));
+const PrivacyPage        = lazy(() => import("@/features/privacy/PrivacyPage"));
 
 function PageLoader() {
   return (
@@ -102,6 +108,7 @@ const GUARDED_TABS = new Set([
   "tax", "health", "working-capital", "debt", "valuation", "compliance", "spend", "whatsapp",
   "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
   "sales", "payments", "insurance", "treasury", "esg", "global",
+  "marketplace", "network", "automation", "copilot", "security", "privacy",
 ]);
 
 function landingFor(role: string): string {
@@ -238,6 +245,12 @@ function AppShell() {
                 <Route path="/treasury"      element={<TreasuryPage />} />
                 <Route path="/esg"           element={<EsgPage />} />
                 <Route path="/global"        element={<GlobalPage />} />
+                <Route path="/marketplace"   element={<MarketplacePage />} />
+                <Route path="/network"       element={<NetworkPage />} />
+                <Route path="/automation"    element={<AutomationPage />} />
+                <Route path="/copilot"       element={<CopilotPage />} />
+                <Route path="/security"      element={<SecurityPage />} />
+                <Route path="/privacy"       element={<PrivacyPage />} />
                 <Route path="/data"          element={<DataPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />

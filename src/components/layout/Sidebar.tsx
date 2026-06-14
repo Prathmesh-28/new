@@ -12,6 +12,7 @@ import {
   PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
+  ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -69,6 +70,12 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
       { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
       { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
+      { to: "/marketplace",  label: "Marketplace",  icon: ShoppingCart,    tab: "marketplace"  },
+      { to: "/network",      label: "B2B Network",  icon: Network,         tab: "network"      },
+      { to: "/automation",   label: "Automation",   icon: Workflow,        tab: "automation"   },
+      { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
+      { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
+      { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
     ]},
   ],
   owner: [
@@ -120,6 +127,12 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
       { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
       { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
+      { to: "/marketplace",  label: "Marketplace",  icon: ShoppingCart,    tab: "marketplace"  },
+      { to: "/network",      label: "B2B Network",  icon: Network,         tab: "network"      },
+      { to: "/automation",   label: "Automation",   icon: Workflow,        tab: "automation"   },
+      { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
+      { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
+      { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
     ]},
   ],
   finance_manager: [
