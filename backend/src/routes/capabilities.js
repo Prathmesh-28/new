@@ -11,7 +11,7 @@ function capabilities() {
     payments:            has("RAZORPAY_KEY_ID"),       // subscription + collections
     ai:                  has("ANTHROPIC_API_KEY"),     // categorise + receipt scan
     whatsapp:            has("TWILIO_ACCOUNT_SID"),     // digests + chase
-    push:                has("FCM_SERVER_KEY"),         // mobile push delivery
+    push:                has("FCM_SERVICE_ACCOUNT"),    // mobile push delivery (FCM v1)
     email:               has("SMTP_USER"),
 
     // Money-movement & data rails — each needs a partner contract + keys

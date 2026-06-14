@@ -60,67 +60,97 @@ export default function CreditPage() {
   const bestScore = Math.max(0, ...creditApplications.map(a => a.underwritingScore));
   const declined  = creditApplications.filter(a => a.status === "rejected");
 
-  // Build 3-tier offers from approved amount
-  const tierOffers = useMemo(() => {
-    if (!bestApp || bestApp.approvedAmount <= 0) return null;
-    const rate = 14.5;
-    const months = bestApp.termMonths;
-    return [
-      { tier: "Conservative", pct: 0.60, label: "60% of max", color: "border-blue-800/40 bg-blue-950/10",     badge: "text-blue-400",   rate, months },
-      { tier: "Standard",     pct: 0.80, label: "80% of max — recommended", color: "border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5", badge: "text-[var(--color-primary)]", rate, months, recommended: true },
-      { tier: "Full access",  pct: 1.00, label: "100% of max", color: "border-purple-800/40 bg-purple-950/10", badge: "text-purple-400",  rate, months },
-    ].map(t => {
-      const principal = Math.round(bestApp.approvedAmount * t.pct);
-      const monthlyEmi = emi(principal, rate, months);
-      const interest   = totalInterest(principal, rate, months);
-      return { ...t, principal, monthlyEmi, interest, total: principal + interest };
-    });
-  }, [bestApp]);
+  // Real lender offers returned by the underwriting backend for this application
+  // (persisted in the store with their server-side offer ids so "Accept" can hit
+  // POST /api/credit/accept/:offerId and create a durable loan).
+  const realOffers = useMemo(() => {
+    if (!bestApp) return [];
+    const offers = creditOffers
+      .filter(o => o.applicationId === bestApp.id && o.status === "pending")
+      .map(o => {
+        const monthlyEmi = emi(o.amount, o.rate, o.termMonths);
+        const interest   = totalInterest(o.amount, o.rate, o.termMonths);
+        return { ...o, monthlyEmi, interest, total: o.amount + interest };
+      })
+      .sort((a, b) => b.amount - a.amount);
+    return offers;
+  }, [bestApp, creditOffers]);
+  const topOfferId = realOffers[0]?.id;
 
   const handleSubmit = async () => {
     if (!amount || !purpose) { toast.error("Enter loan amount and purpose"); return; }
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid amount"); return; }
     setSubmitting(true);
-    const id = generateId();
-    const app = { id, status: "submitted" as const, loanAmount: amt, termMonths: Number(term), purpose, underwritingScore: 0, approvedAmount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    addCreditApplication(app);
     try {
-      const result = await api.post<{ score: number; approved_amount: number; offers?: { lender: string; amount: number; rate: number; termMonths: number }[] }>("/api/credit/apply", { amount: amt, termMonths: Number(term), purpose });
-      const approved = result.score >= 50;
-      updateCreditApplication({ ...app, underwritingScore: result.score, approvedAmount: result.approved_amount, status: approved ? "approved" : "rejected" });
+      // Backend contract: { requested_amount, term_months, purpose } →
+      // { application, offers[], underwriting:{ score, approved_amount } }.
+      const result = await api.post<{
+        application: { id: string; status: string; underwriting_score: number };
+        offers: { id: string; lender_partner: string; offer_amount: number | string; apr_equivalent: number | string; term_months: number }[];
+        underwriting: { score: number; approved_amount: number };
+      }>("/api/credit/apply", { requested_amount: amt, term_months: Number(term), purpose });
+
+      const score = Number(result.underwriting?.score ?? result.application?.underwriting_score ?? 0);
+      const approvedAmount = Number(result.underwriting?.approved_amount ?? 0);
+      const offers = result.offers ?? [];
+      const approved = offers.length > 0;
+      const id = generateId();
+      const now = new Date().toISOString();
+      addCreditApplication({ id, status: approved ? "approved" : "rejected", loanAmount: amt, termMonths: Number(term), purpose, underwritingScore: score, approvedAmount, createdAt: now, updatedAt: now });
+      // Persist the REAL lender offers, keyed by their server offer id.
+      offers.forEach(o => addCreditOffer({
+        id: o.id,
+        applicationId: id,
+        lender: o.lender_partner,
+        amount: Number(o.offer_amount),
+        rate: Math.round((Number(o.apr_equivalent) || 0) * 1000) / 10, // 0.28 → 28.0%
+        termMonths: o.term_months,
+        status: "pending",
+      }));
       if (approved) {
-        (result.offers ?? [{ lender: "Lendingkart", amount: result.approved_amount, rate: 14.5, termMonths: Number(term) }])
-          .forEach(o => addCreditOffer({ id: generateId(), applicationId: id, lender: o.lender, amount: o.amount, rate: o.rate, termMonths: o.termMonths, status: "pending" }));
-        toast.success(`Score: ${result.score}/100 — ₹${(result.approved_amount / 100000).toFixed(0)}L approved`);
+        toast.success(`Score ${score}/100 — ${offers.length} offer${offers.length > 1 ? "s" : ""} up to ₹${(approvedAmount / 100000).toFixed(1)}L`);
         setTab("overview");
       } else {
-        toast.error(`Score: ${result.score}/100 — Not approved yet. See the "Not yet" tab.`);
+        toast.error(`Score ${score}/100 — no offers yet. See the "Not yet" tab.`);
         setTab("notyet");
       }
-    } catch {
-      updateCreditApplication({ ...app, underwritingScore: 62, approvedAmount: amt * 0.8, status: "approved" });
-      toast.success("Score: 62/100 — ₹" + ((amt * 0.8) / 100000).toFixed(0) + "L approved (demo mode)");
-      setTab("overview");
+      setAmount(""); setPurpose("");
+    } catch (err) {
+      // Honest failure — never fabricate an approval.
+      const status = Number(String((err as Error)?.message || "").match(/^(\d{3})/)?.[1] || 0);
+      if (status === 429)      toast.error("You can submit only one credit application every 90 days.");
+      else if (status === 409) toast.error("You already have an application in progress.");
+      else                     toast.error("Couldn't reach the underwriting service. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
-    setAmount(""); setPurpose("");
   };
 
-  const handleAcceptTier = (tier: NonNullable<typeof tierOffers>[0]) => {
+  const handleAccept = async (offer: NonNullable<typeof realOffers>[number]) => {
     if (!bestApp) return;
-    const loan: ActiveLoan = {
-      id: generateId(), lender: "Lendingkart", principal: tier.principal, outstanding: tier.principal,
-      rate: tier.rate, termMonths: tier.months, monthlyEmi: tier.monthlyEmi,
-      startDate: new Date().toISOString().split("T")[0],
-      nextPaymentDate: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-      nextPaymentAmount: tier.monthlyEmi, applicationId: bestApp.id,
-    };
-    addActiveLoan(loan);
-    updateCreditApplication({ ...bestApp, status: "funded" });
-    toast.success(`${tier.tier} loan accepted — ₹${(tier.principal / 100000).toFixed(0)}L disbursed`);
     setShowKfs(null);
-    setTab("loans");
+    try {
+      const { loan } = await api.post<{ loan: { id: string; disbursed_amount: number | string; outstanding_balance: number | string; next_payment_at: string } }>(
+        `/api/credit/accept/${offer.id}`, {}
+      );
+      const principal = Number(loan.disbursed_amount);
+      const monthlyEmi = emi(principal, offer.rate, offer.termMonths);
+      const newLoan: ActiveLoan = {
+        id: loan.id, lender: offer.lender, principal, outstanding: Number(loan.outstanding_balance ?? principal),
+        rate: offer.rate, termMonths: offer.termMonths, monthlyEmi,
+        startDate: new Date().toISOString().split("T")[0],
+        nextPaymentDate: (loan.next_payment_at || new Date(Date.now() + 30 * 86400000).toISOString()).split("T")[0],
+        nextPaymentAmount: monthlyEmi, applicationId: bestApp.id,
+      };
+      addActiveLoan(newLoan);
+      updateCreditApplication({ ...bestApp, status: "funded", updatedAt: new Date().toISOString() });
+      toast.success(`${offer.lender} — ₹${(principal / 100000).toFixed(1)}L disbursed`);
+      setTab("loans");
+    } catch (err) {
+      const status = Number(String((err as Error)?.message || "").match(/^(\d{3})/)?.[1] || 0);
+      toast.error(status === 409 ? "This offer is no longer active." : "Couldn't accept the offer. Please try again.");
+    }
   };
 
   return (
@@ -179,29 +209,28 @@ export default function CreditPage() {
             ))}
           </div>
 
-          {/* 3-tier offers */}
-          {tierOffers ? (
+          {/* Real lender offers from the underwriting backend */}
+          {realOffers.length > 0 ? (
             <div>
               <h2 className="text-sm font-semibold mb-3">Your Pre-Qualified Offers</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {tierOffers.map(t => (
-                  <div key={t.tier} className={`rounded-lg border p-4 relative ${t.color}`}>
-                    {t.recommended && (
+                {realOffers.map(o => (
+                  <div key={o.id} className={`rounded-lg border p-4 relative ${o.id === topOfferId ? "border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5" : "border-[var(--color-border)]"}`}>
+                    {o.id === topOfferId && (
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-[var(--color-primary)] text-[var(--color-bg)] px-2 py-0.5 rounded-full uppercase tracking-wide">
-                        Recommended
+                        Best offer
                       </span>
                     )}
-                    <p className={`text-xs font-bold uppercase tracking-wide ${t.badge} mb-1`}>{t.tier}</p>
-                    <p className="text-[10px] text-[var(--color-muted)] mb-3">{t.label}</p>
-                    <p className="text-2xl font-bold mb-1">{formatCurrency(t.principal)}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-primary)] mb-3">{o.lender}</p>
+                    <p className="text-2xl font-bold mb-1">{formatCurrency(o.amount)}</p>
                     <div className="space-y-1 text-xs text-[var(--color-muted)] mb-4">
-                      <div className="flex justify-between"><span>APR</span><span className="font-semibold text-[var(--color-text)]">{t.rate}%</span></div>
-                      <div className="flex justify-between"><span>Monthly EMI</span><span className="font-semibold text-[var(--color-text)]">{formatCurrency(t.monthlyEmi)}</span></div>
-                      <div className="flex justify-between"><span>Total interest</span><span>{formatCurrency(t.interest)}</span></div>
-                      <div className="flex justify-between"><span>Total repayment</span><span>{formatCurrency(t.total)}</span></div>
-                      <div className="flex justify-between"><span>Term</span><span>{t.months} months</span></div>
+                      <div className="flex justify-between"><span>APR</span><span className="font-semibold text-[var(--color-text)]">{o.rate}%</span></div>
+                      <div className="flex justify-between"><span>Monthly EMI</span><span className="font-semibold text-[var(--color-text)]">{formatCurrency(o.monthlyEmi)}</span></div>
+                      <div className="flex justify-between"><span>Total interest</span><span>{formatCurrency(o.interest)}</span></div>
+                      <div className="flex justify-between"><span>Total repayment</span><span>{formatCurrency(o.total)}</span></div>
+                      <div className="flex justify-between"><span>Term</span><span>{o.termMonths} months</span></div>
                     </div>
-                    <button onClick={() => setShowKfs(t.tier)}
+                    <button onClick={() => setShowKfs(o.id)}
                       className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90">
                       Accept — View KFS
                     </button>
@@ -633,44 +662,41 @@ export default function CreditPage() {
       })()}
 
       {/* KFS modal */}
-      {showKfs && tierOffers && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
-            {(() => {
-              const t = tierOffers.find(x => x.tier === showKfs)!;
-              return (
-                <>
-                  <h2 className="text-base font-bold mb-1">Key Facts Statement (KFS)</h2>
-                  <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 — mandatory disclosure</p>
-                  <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)] mb-4">
-                    {[
-                      ["Lender",               "Lendingkart Finance Ltd"],
-                      ["Loan amount",          formatCurrency(t.principal)],
-                      ["APR",                  `${t.rate}%`],
-                      ["Term",                 `${t.months} months`],
-                      ["Monthly EMI",          formatCurrency(t.monthlyEmi)],
-                      ["Total interest",       formatCurrency(t.interest)],
-                      ["Total repayment",      formatCurrency(t.total)],
-                      ["Processing fee",       "₹999 (deducted at disbursement)"],
-                      ["Prepayment",           "No penalty after 6 EMIs"],
-                      ["Cooling-off period",   "3 calendar days"],
-                      ["Grievance contact",    "grievance@lendingkart.com"],
-                    ].map(([k, v]) => (
-                      <div key={k} className="flex justify-between text-xs"><span className="text-[var(--color-muted)]">{k}</span><span className="font-medium text-right">{v}</span></div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAcceptTier(t)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
-                      I acknowledge — Accept Loan
-                    </button>
-                    <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
-                  </div>
-                </>
-              );
-            })()}
+      {showKfs && (() => {
+        const o = realOffers.find(x => x.id === showKfs);
+        if (!o) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-base font-bold mb-1">Key Facts Statement (KFS)</h2>
+              <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 — mandatory disclosure</p>
+              <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)] mb-4">
+                {[
+                  ["Lender",               o.lender],
+                  ["Loan amount",          formatCurrency(o.amount)],
+                  ["APR",                  `${o.rate}%`],
+                  ["Term",                 `${o.termMonths} months`],
+                  ["Monthly EMI",          formatCurrency(o.monthlyEmi)],
+                  ["Total interest",       formatCurrency(o.interest)],
+                  ["Total repayment",      formatCurrency(o.total)],
+                  ["Processing fee",       "₹999 (deducted at disbursement)"],
+                  ["Prepayment",           "No penalty after 6 EMIs"],
+                  ["Cooling-off period",   "3 calendar days"],
+                  ["Grievance contact",    "grievance@headroom.app"],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between text-xs"><span className="text-[var(--color-muted)]">{k}</span><span className="font-medium text-right">{v}</span></div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handleAccept(o)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
+                  I acknowledge — Accept Loan
+                </button>
+                <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

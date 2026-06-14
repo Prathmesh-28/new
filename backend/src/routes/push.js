@@ -29,6 +29,10 @@ router.post("/test", authenticate, async (req, res) => {
     title: "Headroom", body: "🔔 Push notifications are working — you'll get cash-pressure alerts here.",
     data: { path: "/forecast" },
   });
+  // Drop tokens FCM reported as unregistered/invalid so we stop sending to dead devices.
+  if (result.stale?.length) {
+    await pool.query("DELETE FROM push_tokens WHERE token = ANY($1::text[])", [result.stale]).catch(() => {});
+  }
   res.json(result);
 });
 

@@ -8,10 +8,18 @@ actually deliver, do the steps below once. Until then push is inert — nothing 
 1. https://console.firebase.google.com → **Add project** (e.g. "Headroom").
 2. Project settings → **Cloud Messaging**.
 
-## 2. Server key (Render)
-- Copy the **Cloud Messaging API (legacy) → Server key** (enable legacy API if prompted).
-- Render → `headroom-api` → Environment → set **`FCM_SERVER_KEY`** = that key → save (redeploys).
-- Now `/api/push/test` and the digest will deliver to registered devices.
+## 2. Service account (Render) — FCM HTTP v1
+> The old "Cloud Messaging legacy server key" was shut down by Google in 2024.
+> The backend now uses the **FCM HTTP v1 API**, which authenticates with a Google
+> service account (no extra npm dependency — it signs the OAuth JWT with the
+> already-installed `jsonwebtoken`).
+- Firebase → Project settings → **Service accounts** → **Generate new private key**
+  → downloads a JSON file.
+- Render → `headroom-backend` → Environment → set **`FCM_SERVICE_ACCOUNT`** to that
+  JSON. Paste it as a single line, or base64-encode it (`base64 -i key.json`) and
+  paste that — the backend accepts either. Save (redeploys).
+- Now `/api/push/test` and the digest deliver to registered devices, and tokens
+  FCM reports as unregistered are pruned automatically.
 
 ## 3. Android
 1. Firebase → Add app → **Android**, package name **`in.headroom.app`**.
@@ -31,7 +39,7 @@ actually deliver, do the steps below once. Until then push is inert — nothing 
 ## Test
 Settings → **Push Notifications → Send test**. You'll get a toast: sent to N devices,
 "no devices yet" (open the app on a phone + allow notifications first), or
-"not enabled" (set `FCM_SERVER_KEY`).
+"not enabled" (set `FCM_SERVICE_ACCOUNT`).
 
 > Note: iOS routes APNs through FCM, so iOS devices also need the Firebase iOS SDK to
 > return an FCM token. If you prefer pure APNs (no Firebase on iOS), tell me and I'll

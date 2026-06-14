@@ -47,7 +47,7 @@ services:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
-      - key: FCM_SERVER_KEY
+      - key: FCM_SERVICE_ACCOUNT
         sync: false
 
 databases:
