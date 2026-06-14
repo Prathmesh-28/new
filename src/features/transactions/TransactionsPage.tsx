@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
+import ReconcileModal from "./ReconcileModal";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
 const PAGE_SIZE  = 50;
@@ -73,6 +74,7 @@ export default function TransactionsPage() {
   const { transactions, bankAccounts } = store;
 
   const [scanning, setScanning] = useState(false);
+  const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
   // drop a prefilled transaction in for review.
   const handleScanReceipt = useCallback(async () => {
@@ -236,6 +238,10 @@ export default function TransactionsPage() {
               <ScanLine size={12} /> {scanning ? "Scanning…" : "Scan receipt"}
             </button>
           )}
+          <button onClick={() => setShowReconcile(true)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+            <CheckCheck size={12} /> Reconcile
+          </button>
           {canExport() && (
             <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
@@ -244,6 +250,8 @@ export default function TransactionsPage() {
           )}
         </div>
       </div>
+
+      {showReconcile && <ReconcileModal onClose={() => setShowReconcile(false)} />}
 
       {/* Financial Intelligence Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
