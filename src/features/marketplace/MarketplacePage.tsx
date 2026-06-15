@@ -7,6 +7,7 @@ import {
   Plus, AlertTriangle, CheckCircle2, TrendingDown, TrendingUp,
   Crosshair, Boxes, Warehouse, PieChart, RefreshCw, Star,
   FileCheck, RotateCcw, ListChecks, Wallet,
+  Trophy, Lock, ShieldAlert, Package, Scale, PartyPopper, Hourglass,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,7 +19,8 @@ type MktTab =
   | "overview" | "settlement" | "commission" | "rto" | "consolidate"
   | "payout-cycle" | "tcs52" | "sku-pnl" | "channel-compare" | "ondc-ready" | "roas"
   | "target-price" | "inventory-sync" | "fba-fees" | "ppc-budget" | "repricer"
-  | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix";
+  | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix"
+  | "buy-box" | "reserve" | "chargeback" | "bundle" | "break-even" | "festival" | "holding-cost";
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
@@ -60,6 +62,13 @@ export default function MarketplacePage() {
             ["refund-cost", "Refund Cost", RotateCcw],
             ["listing-quality", "Listing Quality", ListChecks],
             ["cod-mix", "COD vs Prepaid", Wallet],
+            ["buy-box", "Buy-Box Win Rate", Trophy],
+            ["reserve", "Reserve Release", Lock],
+            ["chargeback", "Chargeback Ledger", ShieldAlert],
+            ["bundle", "Bundle COGS", Package],
+            ["break-even", "Break-even Price", Scale],
+            ["festival", "Festival Planner", PartyPopper],
+            ["holding-cost", "Cash-Cycle Cost", Hourglass],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -90,6 +99,13 @@ export default function MarketplacePage() {
       {tab === "refund-cost" && <RefundCostTracker />}
       {tab === "listing-quality" && <ListingQuality />}
       {tab === "cod-mix" && <CodMixAnalyzer />}
+      {tab === "buy-box" && <BuyBoxTracker />}
+      {tab === "reserve" && <ReserveReleaseTracker />}
+      {tab === "chargeback" && <ChargebackLedger />}
+      {tab === "bundle" && <BundleCogsSplitter />}
+      {tab === "break-even" && <BreakEvenCalculator />}
+      {tab === "festival" && <FestivalPlanner />}
+      {tab === "holding-cost" && <HoldingCostCalculator />}
     </div>
   );
 }
@@ -1813,6 +1829,588 @@ function CodMixAnalyzer() {
       <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
         <p className="text-sm font-bold text-blue-400 flex items-center gap-2"><TrendingUp size={14} /> Total net margin {formatCurrency(Math.round(totalNet))} across {orders} orders. Prepaid nets {formatCurrency(Math.round(ppNetPerOrder))}/order vs COD {formatCurrency(Math.round(codNetPerOrder))}/order — a prepaid discount under that gap still leaves you ahead.</p>
       </div>
+    </div>
+  );
+}
+
+// ── #21 Buy-Box / win-rate tracker ─────────────────────────────────────────────
+type BuyBoxRow = { id: string; sku: string; channel: Channel; impressions: number; buyBoxWins: number; yourPrice: number; lowestPrice: number };
+
+function BuyBoxTracker() {
+  const [rows, setRows] = useFeatureState<BuyBoxRow[]>("mkt-buybox-rows", []);
+  const [sku, setSku] = useState("");
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [impr, setImpr] = useState("");
+  const [wins, setWins] = useState("");
+  const [yourPrice, setYourPrice] = useState("");
+  const [lowest, setLowest] = useState("");
+
+  const add = () => {
+    const i = Math.round(parseFloat(impr) || 0);
+    if (!sku.trim() || i <= 0) { toast.error("Enter a SKU and listing views"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), sku: sku.trim(), channel, impressions: i,
+      buyBoxWins: Math.min(i, Math.round(parseFloat(wins) || 0)),
+      yourPrice: parseFloat(yourPrice) || 0, lowestPrice: parseFloat(lowest) || 0,
+    }]);
+    setSku(""); setImpr(""); setWins(""); setYourPrice(""); setLowest("");
+    toast.success("Buy-box entry added");
+  };
+
+  const totImpr = rows.reduce((s, r) => s + r.impressions, 0);
+  const totWins = rows.reduce((s, r) => s + r.buyBoxWins, 0);
+  const blendedRate = totImpr > 0 ? (totWins / totImpr) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Trophy size={14} className="text-[var(--color-primary)]" /> Buy-Box Win-Rate Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">On Amazon/Flipkart the Buy Box (default "Add to Cart" seller) wins the vast majority of sales. Log listing views, wins won and your price vs the lowest competitor to see where you're losing the box and by how much.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="TSHIRT-BLK-M" className={INP} /></div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Listing views</label><input type="number" value={impr} onChange={e => setImpr(e.target.value)} placeholder="4000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Buy-box wins</label><input type="number" value={wins} onChange={e => setWins(e.target.value)} placeholder="2600" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Your price (₹)</label><input type="number" value={yourPrice} onChange={e => setYourPrice(e.target.value)} placeholder="599" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Lowest price (₹)</label><input type="number" value={lowest} onChange={e => setLowest(e.target.value)} placeholder="549" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add SKU</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Blended buy-box win rate</p><p className={`text-xl font-bold tabular-nums ${blendedRate >= 80 ? "text-green-400" : blendedRate >= 50 ? "text-yellow-400" : "text-red-400"}`}>{blendedRate.toFixed(1)}%</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total listing views</p><p className="text-xl font-bold tabular-nums">{totImpr.toLocaleString("en-IN")}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">SKUs tracked</p><p className="text-xl font-bold tabular-nums">{rows.length}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["SKU", "Channel", "Views", "Wins", "Win %", "Your ₹ vs lowest", "Gap", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const rate = r.impressions > 0 ? (r.buyBoxWins / r.impressions) * 100 : 0;
+                    const gap = r.yourPrice - r.lowestPrice;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.impressions.toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.buyBoxWins.toLocaleString("en-IN")}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${rate >= 80 ? "text-green-400" : rate >= 50 ? "text-yellow-400" : "text-red-400"}`}>{rate.toFixed(0)}%</td>
+                        <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(r.yourPrice)} / {formatCurrency(r.lowestPrice)}</td>
+                        <td className={`px-4 py-2.5 tabular-nums ${gap > 0 ? "text-red-400" : "text-green-400"}`}>{gap > 0 ? `+${formatCurrency(gap)}` : formatCurrency(gap)}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">A low win % with a positive price gap means you're being undercut — close the gap or improve fulfilment/rating. A low win % at price parity points to account-health or stock issues, not price.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #22 Reserve balance / release tracker ──────────────────────────────────────
+type ReserveRow = { id: string; channel: Channel; amount: number; heldOn: string; releaseDays: number };
+
+function ReserveReleaseTracker() {
+  const [rows, setRows] = useFeatureState<ReserveRow[]>("mkt-reserve-rows", []);
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [amount, setAmount] = useState("");
+  const [heldOn, setHeldOn] = useState(() => new Date().toISOString().split("T")[0]);
+  const [releaseDays, setReleaseDays] = useState("7");
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const add = () => {
+    const a = parseFloat(amount) || 0;
+    if (a <= 0) { toast.error("Enter the held reserve amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), channel, amount: a, heldOn, releaseDays: Math.round(parseFloat(releaseDays) || 0) }]);
+    setAmount("");
+    toast.success("Reserve entry added");
+  };
+
+  const projected = rows.map(r => {
+    const release = addDaysISO(r.heldOn, r.releaseDays);
+    const daysAway = Math.ceil((new Date(release).getTime() - new Date(today).getTime()) / 86400000);
+    return { ...r, release, daysAway };
+  }).sort((a, b) => a.daysAway - b.daysAway);
+
+  const totalHeld = rows.reduce((s, r) => s + r.amount, 0);
+  const releasingSoon = projected.filter(r => r.daysAway >= 0 && r.daysAway <= 7).reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Lock size={14} className="text-[var(--color-primary)]" /> Reserve Balance & Release Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Marketplaces hold a rolling reserve (often 7 days of payouts) against returns and chargebacks. Log each held amount and its release window so you know exactly how much cash is trapped and when it frees up.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Held amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="120000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Held on</label><input type="date" value={heldOn} onChange={e => setHeldOn(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Release in (days)</label><input type="number" value={releaseDays} onChange={e => setReleaseDays(e.target.value)} placeholder="7" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add reserve</button>
+      </div>
+
+      {projected.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total reserve held</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(totalHeld))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Releasing within 7 days</p><p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(releasingSoon))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Channel", "Held", "Held on", "Release date", "When", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {projected.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.heldOn}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.release}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.daysAway <= 0 ? "bg-green-950/30 text-green-400" : r.daysAway <= 3 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                          {r.daysAway <= 0 ? "Released" : r.daysAway === 1 ? "Tomorrow" : `${r.daysAway}d`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #23 Chargeback / A-to-z dispute ledger ─────────────────────────────────────
+type ChargebackRow = { id: string; orderId: string; channel: Channel; reason: string; amount: number; raisedOn: string; status: "open" | "won" | "lost" };
+
+function ChargebackLedger() {
+  const [rows, setRows] = useFeatureState<ChargebackRow[]>("mkt-chargeback-rows", []);
+  const [orderId, setOrderId] = useState("");
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [reason, setReason] = useState("Item not received");
+  const [amount, setAmount] = useState("");
+  const [raisedOn, setRaisedOn] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const REASONS = ["Item not received", "Not as described", "Damaged", "Fraudulent", "Late delivery", "Other"];
+
+  const add = () => {
+    const a = parseFloat(amount) || 0;
+    if (!orderId.trim() || a <= 0) { toast.error("Enter an order ID and disputed amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), orderId: orderId.trim(), channel, reason, amount: a, raisedOn, status: "open" }]);
+    setOrderId(""); setAmount("");
+    toast.success("Chargeback logged");
+  };
+
+  const setStatus = (id: string, status: ChargebackRow["status"]) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+
+  const open = rows.filter(r => r.status === "open");
+  const atRisk = open.reduce((s, r) => s + r.amount, 0);
+  const lost = rows.filter(r => r.status === "lost").reduce((s, r) => s + r.amount, 0);
+  const settled = rows.filter(r => r.status !== "open").length;
+  const winRate = settled > 0 ? (rows.filter(r => r.status === "won").length / settled) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Chargeback / A-to-z Dispute Ledger</h2>
+        <p className="text-xs text-[var(--color-muted)]">Track every A-to-z guarantee claim, payment chargeback and dispute against revenue. Watch open exposure, decide which to contest, and measure your win rate so you can spot abuse patterns.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Order ID</label><input value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="403-1234567" className={INP} /></div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Reason</label>
+            <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1499" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><input type="date" value={raisedOn} onChange={e => setRaisedOn(e.target.value)} className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Log chargeback</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Open exposure</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(atRisk))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{open.length} open</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Lost (written off)</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(lost))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Dispute win rate</p><p className={`text-xl font-bold tabular-nums ${winRate >= 50 ? "text-green-400" : "text-orange-400"}`}>{settled > 0 ? `${winRate.toFixed(0)}%` : "—"}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Order", "Channel", "Reason", "Amount", "Raised", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium text-xs">{r.orderId}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td className="px-4 py-2.5 text-xs">{r.reason}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.raisedOn}</td>
+                      <td className="px-4 py-2.5">
+                        <select value={r.status} onChange={e => setStatus(r.id, e.target.value as ChargebackRow["status"])}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border bg-[var(--color-bg)] ${r.status === "won" ? "text-green-400 border-green-800/40" : r.status === "lost" ? "text-red-400 border-red-800/40" : "text-yellow-400 border-yellow-800/40"}`}>
+                          <option value="open">Open</option>
+                          <option value="won">Won</option>
+                          <option value="lost">Lost</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #24 Bundle / combo COGS splitter ───────────────────────────────────────────
+type BundleComponent = { id: string; name: string; cogs: number; qty: number };
+
+function BundleCogsSplitter() {
+  const [components, setComponents] = useState<BundleComponent[]>([]);
+  const [name, setName] = useState("");
+  const [cogs, setCogs] = useState("");
+  const [qty, setQty] = useState("1");
+  const [bundlePrice, setBundlePrice] = useState("");
+  const [feesPct, setFeesPct] = useState("18");
+  const [shipping, setShipping] = useState("80");
+
+  const add = () => {
+    const c = parseFloat(cogs) || 0;
+    if (!name.trim() || c <= 0) { toast.error("Enter a component name and cost"); return; }
+    setComponents(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), cogs: c, qty: Math.max(1, Math.round(parseFloat(qty) || 1)) }]);
+    setName(""); setCogs(""); setQty("1");
+  };
+
+  const totalCogs = components.reduce((s, c) => s + c.cogs * c.qty, 0);
+  const price = parseFloat(bundlePrice) || 0;
+  const fees = price * (parseFloat(feesPct) || 0) / 100;
+  const ship = parseFloat(shipping) || 0;
+  const netMargin = price - totalCogs - fees - ship;
+  const marginPct = price > 0 ? (netMargin / price) * 100 : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Package size={14} className="text-[var(--color-primary)]" /> Bundle / Combo COGS Splitter</h2>
+        <p className="text-xs text-[var(--color-muted)]">A combo listing has one price but many component costs. Add each item and its cost to roll up true bundle COGS, then layer fees and shipping to see whether the combo is actually carrying margin or quietly clearing stock at a loss.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Component</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Face wash 100ml" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Unit COGS (₹)</label><input type="number" value={cogs} onChange={e => setCogs(e.target.value)} placeholder="85" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Qty in combo</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="1" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2.5 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {components.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {components.map(c => (
+            <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-sm">{c.name} <span className="text-[var(--color-muted)] text-xs">× {c.qty}</span></span>
+              <span className="flex items-center gap-3">
+                <span className="tabular-nums text-sm">{formatCurrency(c.cogs * c.qty)}</span>
+                <button onClick={() => setComponents(components.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+              </span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-accent)]/30">
+            <span className="text-sm font-semibold">Bundle COGS</span>
+            <span className="tabular-nums text-sm font-semibold">{formatCurrency(Math.round(totalCogs))}</span>
+          </div>
+        </div>
+      )}
+
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Bundle price (₹)</label><input type="number" value={bundlePrice} onChange={e => setBundlePrice(e.target.value)} placeholder="499" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Fees %</label><input type="number" value={feesPct} onChange={e => setFeesPct(e.target.value)} placeholder="18" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Shipping (₹)</label><input type="number" value={shipping} onChange={e => setShipping(e.target.value)} placeholder="80" className={INP} /></div>
+        </div>
+        {price > 0 && (
+          <div className="space-y-2 pt-1">
+            {[
+              { label: "Bundle price", value: formatCurrency(Math.round(price)), color: "text-[var(--color-text)]" },
+              { label: "Components COGS", value: `(${formatCurrency(Math.round(totalCogs))})`, color: "text-red-400" },
+              { label: `Platform fees (${feesPct || 0}%)`, value: `(${formatCurrency(Math.round(fees))})`, color: "text-red-400" },
+              { label: "Shipping", value: `(${formatCurrency(Math.round(ship))})`, color: "text-red-400" },
+              { label: "Net margin", value: `${formatCurrency(Math.round(netMargin))} (${marginPct.toFixed(1)}%)`, color: netMargin >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #25 SKU break-even price calculator ────────────────────────────────────────
+function BreakEvenCalculator() {
+  const [cogs, setCogs] = useState("");
+  const [feesPct, setFeesPct] = useState("18");
+  const [shipping, setShipping] = useState("70");
+  const [adPerUnit, setAdPerUnit] = useState("0");
+  const [returnPct, setReturnPct] = useState("5");
+  const [targetMarginPct, setTargetMarginPct] = useState("15");
+
+  const c = parseFloat(cogs) || 0;
+  const f = (parseFloat(feesPct) || 0) / 100;
+  const ship = parseFloat(shipping) || 0;
+  const ad = parseFloat(adPerUnit) || 0;
+  const ret = (parseFloat(returnPct) || 0) / 100;
+  const tgt = (parseFloat(targetMarginPct) || 0) / 100;
+
+  // price * (1 - f) - cogs - ship - ad - price*ret*0.5 = targetMargin * price  → solve for price
+  // price * (1 - f - ret*0.5 - tgt) = cogs + ship + ad
+  const denomBE = 1 - f - ret * 0.5;
+  const denomTgt = 1 - f - ret * 0.5 - tgt;
+  const fixed = c + ship + ad;
+  const breakEven = denomBE > 0 ? fixed / denomBE : 0;
+  const targetPrice = denomTgt > 0 ? fixed / denomTgt : 0;
+
+  const valid = c > 0 && denomTgt > 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> SKU Break-even Price Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Find the minimum price that recovers cost after fees, shipping, ads and a return-loss provision — and the price needed to hit a target net margin. Anything below break-even is selling at a loss.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {([
+            ["COGS (₹)", cogs, setCogs, "300"],
+            ["Fees %", feesPct, setFeesPct, "18"],
+            ["Shipping (₹)", shipping, setShipping, "70"],
+            ["Ad / unit (₹)", adPerUnit, setAdPerUnit, "0"],
+            ["Return %", returnPct, setReturnPct, "5"],
+            ["Target margin %", targetMarginPct, setTargetMarginPct, "15"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {valid ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className={`${CARD} p-5`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Break-even price</p>
+            <p className="text-2xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(breakEven))}</p>
+            <p className="text-[11px] text-[var(--color-muted)] mt-1">Recovers all costs; zero profit. Never list below this.</p>
+          </div>
+          <div className={`${CARD} p-5`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Price for {targetMarginPct || 0}% net margin</p>
+            <p className="text-2xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(targetPrice))}</p>
+            <p className="text-[11px] text-[var(--color-muted)] mt-1">List at or above this to hit your target margin.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+          <AlertTriangle size={12} className="shrink-0 mt-px" /> Enter a COGS. If fees + half the return rate + target margin exceed 100%, no price can hit that margin — lower the target or the fee load.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #26 Festival / sale event planner ──────────────────────────────────────────
+type FestivalTask = { id: string; label: string; dueOffset: number; done: boolean };
+
+const FESTIVAL_TEMPLATE: { label: string; dueOffset: number }[] = [
+  { label: "Confirm stock cover for projected event volume", dueOffset: -21 },
+  { label: "Send FBA/warehouse inbound (account for inbound SLA)", dueOffset: -14 },
+  { label: "Set event prices with margin floor after deeper discounts", dueOffset: -10 },
+  { label: "Lock ad budget & lightning-deal slots", dueOffset: -7 },
+  { label: "Arrange working capital for the payout gap", dueOffset: -7 },
+  { label: "Brief logistics partner on RTO / pickup surge", dueOffset: -3 },
+  { label: "Reconcile event payouts & event fees after sale", dueOffset: 7 },
+];
+
+function FestivalPlanner() {
+  const [eventName, setEventName] = useFeatureState<string>("mkt-festival-name", "Big Billion Days");
+  const [eventDate, setEventDate] = useFeatureState<string>("mkt-festival-date", addDaysISO(new Date().toISOString().split("T")[0], 30));
+  const [tasks, setTasks] = useFeatureState<FestivalTask[]>("mkt-festival-tasks",
+    FESTIVAL_TEMPLATE.map(t => ({ id: `ft-${t.dueOffset}`, label: t.label, dueOffset: t.dueOffset, done: false })));
+  const [projUnits, setProjUnits] = useState("2000");
+  const [aov, setAov] = useState("700");
+  const [discountPct, setDiscountPct] = useState("15");
+
+  const today = new Date().toISOString().split("T")[0];
+  const toggle = (id: string) => setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const reset = () => { setTasks(FESTIVAL_TEMPLATE.map(t => ({ id: crypto.randomUUID(), label: t.label, dueOffset: t.dueOffset, done: false }))); toast.success("Checklist reset"); };
+
+  const completed = tasks.filter(t => t.done).length;
+  const pct = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+
+  const units = Math.max(0, Math.round(parseFloat(projUnits) || 0));
+  const av = parseFloat(aov) || 0;
+  const disc = (parseFloat(discountPct) || 0) / 100;
+  const projGmv = units * av * (1 - disc);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> Festival / Sale Event Planner</h2>
+        <p className="text-xs text-[var(--color-muted)]">Big Billion Days, Great Indian Festival and Diwali sales make or break the quarter. Set the event date and the checklist auto-dates each prep task backwards from it — so stock, pricing, ads and cash are ready in time.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div className="md:col-span-2"><label className="block text-xs text-[var(--color-muted)] mb-1">Event</label><input value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Big Billion Days" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label><input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Proj. units</label><input type="number" value={projUnits} onChange={e => setProjUnits(e.target.value)} placeholder="2000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">AOV (₹)</label><input type="number" value={aov} onChange={e => setAov(e.target.value)} placeholder="700" className={INP} /></div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Event discount %</label><input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="15" className={INP} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Projected event GMV</p><p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(projGmv))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{units} units after {discountPct || 0}% off</p></div>
+        <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Prep readiness</p><p className={`text-xl font-bold tabular-nums ${pct === 100 ? "text-green-400" : pct >= 60 ? "text-blue-400" : "text-yellow-400"}`}>{pct}%</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{completed}/{tasks.length} done</p></div>
+        <div className={`${CARD} p-4 flex items-end`}><button onClick={reset} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Reset checklist</button></div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {tasks.map(t => {
+          const due = addDaysISO(eventDate, t.dueOffset);
+          const daysAway = Math.ceil((new Date(due).getTime() - new Date(today).getTime()) / 86400000);
+          return (
+            <button key={t.id} onClick={() => toggle(t.id)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/2">
+              <span className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center ${t.done ? "bg-green-500 border-green-500" : "border-[var(--color-border)]"}`}>
+                {t.done && <CheckCircle2 size={12} className="text-[var(--color-bg)]" />}
+              </span>
+              <span className={`flex-1 text-sm font-medium ${t.done ? "line-through text-[var(--color-muted)]" : ""}`}>{t.label}</span>
+              <span className="text-[11px] text-[var(--color-muted)] tabular-nums">{due}</span>
+              {!t.done && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${daysAway < 0 ? "bg-red-950/30 text-red-400" : daysAway <= 3 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                  {daysAway < 0 ? `${Math.abs(daysAway)}d late` : daysAway === 0 ? "Today" : `${daysAway}d`}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── #27 Holding-period / cash-cycle cost calculator ────────────────────────────
+function HoldingCostCalculator() {
+  const [rows, setRows] = useFeatureState<{ id: string; channel: Channel; monthlyGmv: number; payoutDays: number }[]>("mkt-holding-rows", []);
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [monthlyGmv, setMonthlyGmv] = useState("");
+  const [payoutDays, setPayoutDays] = useState("7");
+  const [apr, setApr] = useState("18");
+
+  const add = () => {
+    const g = parseFloat(monthlyGmv) || 0;
+    if (g <= 0) { toast.error("Enter the channel's monthly GMV"); return; }
+    setRows(prev => [...prev.filter(r => r.channel !== channel), { id: crypto.randomUUID(), channel, monthlyGmv: g, payoutDays: Math.round(parseFloat(payoutDays) || 0) }]);
+    setMonthlyGmv("");
+    toast.success(`${channel} saved`);
+  };
+
+  const aprPct = (parseFloat(apr) || 0) / 100;
+  const enriched = rows.map(r => {
+    const dailyGmv = r.monthlyGmv / 30;
+    const lockedCapital = dailyGmv * r.payoutDays; // avg cash tied up between sale and payout
+    const annualCost = lockedCapital * aprPct;
+    return { ...r, lockedCapital, annualCost };
+  });
+  const totalLocked = enriched.reduce((s, r) => s + r.lockedCapital, 0);
+  const totalAnnualCost = enriched.reduce((s, r) => s + r.annualCost, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Cash-Cycle / Holding-Period Cost</h2>
+        <p className="text-xs text-[var(--color-muted)]">Every day between a sale and its payout, your money is locked at the marketplace — and if you fund operations on credit, that wait has a real interest cost. Estimate the working capital tied up per channel and what it costs you a year at your borrowing rate.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Monthly GMV (₹)</label><input type="number" value={monthlyGmv} onChange={e => setMonthlyGmv(e.target.value)} placeholder="450000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Payout lag (days)</label><input type="number" value={payoutDays} onChange={e => setPayoutDays(e.target.value)} placeholder="7" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Borrowing APR %</label><input type="number" value={apr} onChange={e => setApr(e.target.value)} placeholder="18" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Avg capital locked in transit</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(totalLocked))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Annual cost of the wait @ {apr || 0}%</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(totalAnnualCost))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Channel", "Monthly GMV", "Payout lag", "Capital locked", "Annual cost", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthlyGmv)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.payoutDays}d</td>
+                      <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(Math.round(r.lockedCapital))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.annualCost))}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Capital locked ≈ daily GMV × payout-lag days. Faster payouts or settlement financing cut this carry cost — compare it against any financing fee before deciding.</p>
+        </>
+      )}
     </div>
   );
 }

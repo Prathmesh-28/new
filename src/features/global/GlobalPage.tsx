@@ -7,6 +7,7 @@ import {
   Ship, Send, GitCompareArrows, Calculator, Receipt, BadgePercent,
   Plus, CheckCircle2, AlertTriangle, Trash2,
   Layers, Smartphone, Wallet, PiggyBank, Scale, ClipboardList, Map, BadgeCheck, Percent,
+  FileCode2, CalendarClock, CalendarCheck, Building2, ShieldAlert, Building, Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -24,7 +25,8 @@ type TabId =
   | "overview" | "fx-convert" | "fx-gainloss" | "export-invoice" | "firc-brc"
   | "lc-tracker" | "customs" | "payment-fees" | "transfer-pricing" | "gst-export" | "rodtep"
   | "fx-forward" | "bank-consolidate" | "swift-upi" | "packing-credit" | "eefc-tracker"
-  | "dtaa-lookup" | "advance-auth" | "country-sales" | "iec-adcode" | "tcs-lrs";
+  | "dtaa-lookup" | "advance-auth" | "country-sales" | "iec-adcode" | "tcs-lrs"
+  | "softex" | "lut-renewal" | "fema-calendar" | "odi-fdi" | "country-risk" | "gift-city" | "incoterms";
 
 export default function GlobalPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -63,6 +65,13 @@ export default function GlobalPage() {
             ["country-sales", "Country Sales", Map],
             ["iec-adcode", "IEC / AD Code", BadgeCheck],
             ["tcs-lrs", "LRS / TCS", Percent],
+            ["softex", "SOFTEX Tracker", FileCode2],
+            ["lut-renewal", "LUT Renewal", CalendarCheck],
+            ["fema-calendar", "FEMA Calendar", CalendarClock],
+            ["odi-fdi", "ODI / FDI", Building2],
+            ["country-risk", "Country Risk", ShieldAlert],
+            ["gift-city", "GIFT City", Building],
+            ["incoterms", "Incoterms Split", Boxes],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -93,6 +102,13 @@ export default function GlobalPage() {
       {tab === "country-sales" && <CountrySalesSummary />}
       {tab === "iec-adcode" && <IecAdCodeTracker />}
       {tab === "tcs-lrs" && <LrsTcsCalculator />}
+      {tab === "softex" && <SoftexTracker />}
+      {tab === "lut-renewal" && <LutRenewalTracker />}
+      {tab === "fema-calendar" && <FemaComplianceCalendar />}
+      {tab === "odi-fdi" && <OdiFdiTracker />}
+      {tab === "country-risk" && <CountryRiskScorecard />}
+      {tab === "gift-city" && <GiftCityEstimator />}
+      {tab === "incoterms" && <IncotermsSplitter />}
     </div>
   );
 }
@@ -1840,6 +1856,537 @@ function LrsTcsCalculator() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Rates and the ₹10L threshold reflect the post-Oct-2023 LRS framework; overseas tour packages follow separate slabs. Confirm the current Finance-Act rates with your CA before remitting.</p>
+    </div>
+  );
+}
+
+// ── #22 SOFTEX Filing Tracker (software / service exports) ──────────────────────
+type SoftexRow = { id: string; invoice: string; client: string; ccy: string; amount: number; invoiceDate: string; filed: boolean };
+function SoftexTracker() {
+  const [rows, setRows] = useFeatureState<SoftexRow[]>("glb-softex", []);
+  const [invoice, setInvoice] = useState("");
+  const [client, setClient] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const today = new Date();
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!invoice.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter an invoice ref and a valid amount"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), invoice: invoice.trim(), client: client.trim(), ccy, amount: amt, invoiceDate, filed: false }]);
+    setInvoice(""); setClient(""); setAmount("");
+    toast.success("Software export logged");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, filed: !r.filed } : r));
+  // SOFTEX is to be filed within 30 days of the invoice / last day of the month of the invoice.
+  const dueBy = (d: string) => { const x = new Date(d); x.setDate(x.getDate() + 30); return x; };
+  const pending = rows.filter(r => !r.filed).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileCode2 size={14} className="text-[var(--color-primary)]" /> SOFTEX Filing Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Software and IT/ITeS exporters must file a SOFTEX form for each export invoice (via STPI / RBI EDPMS), generally within 30 days of invoicing.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Invoice ref</label>
+            <input value={invoice} onChange={e => setInvoice(e.target.value)} placeholder="EXP-001" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Client</label>
+            <input value={client} onChange={e => setClient(e.target.value)} placeholder="Client" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="5000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Invoice date</label>
+            <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No software exports logged. Add invoices to track their SOFTEX filing deadlines.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Invoice", "Client", "Amount", "File by", "Status", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const due = dueBy(r.invoiceDate);
+                  const days = differenceInCalendarDays(due, today);
+                  const overdue = !r.filed && days < 0;
+                  return (
+                    <tr key={r.id} className={`hover:bg-white/2 ${overdue ? "bg-red-950/20" : ""}`}>
+                      <td className="px-3 py-2.5 font-medium">{r.invoice}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.client || "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{format(due, "d MMM yyyy")}</td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.filed ? "bg-green-900/30 text-green-400 border-green-800/40" : overdue ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                          {r.filed ? "Filed" : overdue ? `${Math.abs(days)}d overdue` : `${days}d left`}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">{pending} filing(s) pending. SOFTEX certifies the value of software/service exports for FEMA realisation and is needed to close EDPMS entries. Verify the current STPI / RBI timeline with your CA.</p>
+    </div>
+  );
+}
+
+// ── #23 LUT Renewal Tracker ─────────────────────────────────────────────────────
+function LutRenewalTracker() {
+  const [lutNo, setLutNo] = useFeatureState<string>("glb-lut-no", "");
+  const [filedFor, setFiledFor] = useFeatureState<string>("glb-lut-fy", "");
+  const today = new Date();
+
+  // Indian FY runs 1 Apr – 31 Mar. LUT (RFD-11) is filed per FY and expires 31 Mar of that FY.
+  const fyStartYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+  const currentFy = `${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
+  const fyEnd = new Date(fyStartYear + 1, 2, 31);
+  const daysToExpiry = differenceInCalendarDays(fyEnd, today);
+  const covered = filedFor === currentFy;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarCheck size={14} className="text-[var(--color-primary)]" /> LUT Renewal Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">A Letter of Undertaking (Form GST RFD-11) lets you export without paying IGST. It must be filed afresh for each financial year — a lapsed LUT can trigger an IGST demand on your exports.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">LUT / ARN reference</label>
+            <input value={lutNo} onChange={e => setLutNo(e.target.value)} placeholder="AD0712..." className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Filed for FY</label>
+            <input value={filedFor} onChange={e => setFiledFor(e.target.value)} placeholder={currentFy} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">Current financial year</span><span className="tabular-nums font-semibold">FY {currentFy}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">LUT on record</span><span className="tabular-nums">{lutNo || "—"}{filedFor ? ` (FY ${filedFor})` : ""}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">Validity ends</span><span className="tabular-nums">{format(fyEnd, "d MMM yyyy")} ({daysToExpiry < 0 ? `${Math.abs(daysToExpiry)}d ago` : `${daysToExpiry}d left`})</span></div>
+        </div>
+        <div className={`mt-3 rounded-lg px-3 py-2.5 text-xs flex items-start gap-2 border ${covered ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-yellow-800/40 bg-yellow-950/20 text-yellow-400"}`}>
+          {covered ? <CheckCircle2 size={13} className="shrink-0 mt-px" /> : <AlertTriangle size={13} className="shrink-0 mt-px" />}
+          {covered
+            ? `LUT is current for FY ${currentFy}. File the next one at the start of FY ${fyStartYear + 1}-${String((fyStartYear + 2) % 100).padStart(2, "0")}.`
+            : `No LUT recorded for FY ${currentFy}. File Form GST RFD-11 on the GST portal before your next export to keep it zero-rated without IGST.`}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">File RFD-11 online (no physical submission). Eligibility excludes those prosecuted for tax evasion above ₹2.5 crore. Confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ── #24 FEMA Compliance Calendar ────────────────────────────────────────────────
+type FemaTaskRow = { id: string; form: string; about: string; dueDate: string; done: boolean };
+const FEMA_TEMPLATES = [
+  { form: "FLA Return", about: "Foreign Liabilities & Assets — annual, by 15 Jul" },
+  { form: "APR (ODI)", about: "Annual Performance Report for overseas JV/WOS, by 31 Dec" },
+  { form: "FC-GPR", about: "Allotment of shares to a non-resident, within 30 days" },
+  { form: "FC-TRS", about: "Transfer of shares resident↔non-resident, within 60 days" },
+  { form: "Form ODI", about: "Overseas direct investment reporting" },
+  { form: "ECB-2 Return", about: "Monthly external commercial borrowing return, by 7th" },
+];
+function FemaComplianceCalendar() {
+  const [rows, setRows] = useFeatureState<FemaTaskRow[]>("glb-fema-cal", []);
+  const [form, setForm] = useState(FEMA_TEMPLATES[0].form);
+  const [about, setAbout] = useState(FEMA_TEMPLATES[0].about);
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const today = new Date();
+
+  const pickTemplate = (f: string) => {
+    setForm(f);
+    const t = FEMA_TEMPLATES.find(x => x.form === f);
+    if (t) setAbout(t.about);
+  };
+  const add = () => {
+    if (!form.trim()) { toast.error("Pick or name a form"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), form: form.trim(), about: about.trim(), dueDate, done: false }]);
+    toast.success("Deadline added");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, done: !r.done } : r));
+  const sorted = useMemo(() => [...rows].sort((a, b) => a.dueDate.localeCompare(b.dueDate)), [rows]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> FEMA Compliance Calendar</h2>
+        <p className="text-xs text-[var(--color-muted)]">Track recurring RBI / FEMA filing deadlines — FLA, APR, FC-GPR, FC-TRS, ODI and ECB returns — so none slip past their due date.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Form</label>
+            <select value={form} onChange={e => pickTemplate(e.target.value)} className={INP}>
+              {FEMA_TEMPLATES.map(t => <option key={t.form} value={t.form}>{t.form}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Note</label>
+            <input value={about} onChange={e => setAbout(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Due</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {sorted.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No deadlines added. Pick a form above to start your FEMA calendar.</p>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map(r => {
+            const days = differenceInCalendarDays(new Date(r.dueDate), today);
+            const overdue = !r.done && days < 0;
+            return (
+              <div key={r.id} className={`${CARD} p-4 flex items-center justify-between gap-3 ${overdue ? "border-red-800/40" : ""}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <input type="checkbox" checked={r.done} onChange={() => toggle(r.id)} className="accent-[var(--color-primary)] shrink-0" />
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium ${r.done ? "line-through text-[var(--color-muted)]" : ""}`}>{r.form}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] truncate">{r.about}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <p className="text-xs tabular-nums">{format(new Date(r.dueDate), "d MMM yyyy")}</p>
+                    <p className={`text-[10px] tabular-nums font-semibold ${r.done ? "text-green-400" : overdue ? "text-red-400" : days < 15 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>
+                      {r.done ? "Done" : overdue ? `${Math.abs(days)}d overdue` : `${days}d left`}
+                    </p>
+                  </div>
+                  <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Templated due-dates are typical statutory deadlines — adjust per your facts. Late FEMA filing can attract compounding penalties; confirm dates with your CA.</p>
+    </div>
+  );
+}
+
+// ── #25 ODI / FDI Reporting Tracker ─────────────────────────────────────────────
+type FlowRow = { id: string; kind: "odi" | "fdi"; entity: string; ccy: string; amount: number; eventDate: string; reported: boolean };
+function OdiFdiTracker() {
+  const [rows, setRows] = useFeatureState<FlowRow[]>("glb-odi-fdi", []);
+  const [kind, setKind] = useState<"odi" | "fdi">("odi");
+  const [entity, setEntity] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [eventDate, setEventDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const today = new Date();
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!entity.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter an entity and a valid amount"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), kind, entity: entity.trim(), ccy, amount: amt, eventDate, reported: false }]);
+    setEntity(""); setAmount("");
+    toast.success("Investment flow logged");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, reported: !r.reported } : r));
+  // FDI (FC-GPR) reporting within 30 days of allotment; ODI reporting at the time of remittance/Form ODI.
+  const dueBy = (k: "odi" | "fdi", d: string) => { const x = new Date(d); x.setDate(x.getDate() + (k === "fdi" ? 30 : 30)); return x; };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> ODI / FDI Reporting Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Log outbound investments (ODI — into overseas JV/WOS) and inbound foreign investment (FDI — FC-GPR on share allotment), and track the RBI reporting deadline for each.</p>
+        <div className="flex gap-2 mb-1">
+          {([["odi", "ODI (money out)"], ["fdi", "FDI (money in)"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setKind(id)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${kind === id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Entity / investee</label>
+            <input value={entity} onChange={e => setEntity(e.target.value)} placeholder="Overseas Co." className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label>
+              <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={INP} />
+            </div>
+          </div>
+          <button onClick={add} className="md:col-span-5 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add flow</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No flows logged. Add an ODI or FDI event to track its reporting deadline.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Type", "Entity", "Amount", "Report by", "Status", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const due = dueBy(r.kind, r.eventDate);
+                  const days = differenceInCalendarDays(due, today);
+                  const overdue = !r.reported && days < 0;
+                  return (
+                    <tr key={r.id} className={`hover:bg-white/2 ${overdue ? "bg-red-950/20" : ""}`}>
+                      <td className="px-3 py-2.5 font-medium uppercase text-xs">{r.kind}</td>
+                      <td className="px-3 py-2.5">{r.entity}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{format(due, "d MMM yyyy")}</td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.reported ? "bg-green-900/30 text-green-400 border-green-800/40" : overdue ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                          {r.reported ? "Reported" : overdue ? `${Math.abs(days)}d overdue` : `${days}d left`}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">FDI share allotment is reported on Form FC-GPR within 30 days; ODI is reported via Form ODI at remittance, with an annual APR thereafter. Timelines are indicative — confirm with your AD bank / CA.</p>
+    </div>
+  );
+}
+
+// ── #26 Country Risk Scorecard ──────────────────────────────────────────────────
+type RiskRow = { id: string; country: string; payment: number; political: number; fx: number; legal: number };
+function CountryRiskScorecard() {
+  const [rows, setRows] = useFeatureState<RiskRow[]>("glb-country-risk", []);
+  const [country, setCountry] = useState("");
+
+  const add = () => {
+    if (!country.trim()) { toast.error("Enter a country"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), country: country.trim(), payment: 3, political: 3, fx: 3, legal: 3 }]);
+    setCountry("");
+  };
+  const setScore = (id: string, k: "payment" | "political" | "fx" | "legal", v: number) =>
+    setRows(rows.map(r => r.id === id ? { ...r, [k]: v } : r));
+
+  // Lower score = lower risk. Weighted composite out of 10.
+  const composite = (r: RiskRow) => +(r.payment * 0.4 + r.political * 0.2 + r.fx * 0.25 + r.legal * 0.15).toFixed(1);
+  const band = (c: number) => c <= 2 ? { label: "Low", cls: "text-green-400" } : c <= 3.5 ? { label: "Medium", cls: "text-yellow-400" } : { label: "High", cls: "text-red-400" };
+  const FACTORS: { k: "payment" | "political" | "fx" | "legal"; label: string }[] = [
+    { k: "payment", label: "Buyer payment risk" }, { k: "political", label: "Political / sanctions" },
+    { k: "fx", label: "FX / convertibility" }, { k: "legal", label: "Legal enforceability" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Country Risk Scorecard</h2>
+        <p className="text-xs text-[var(--color-muted)]">Score each export destination 1 (best) to 5 (worst) across four factors to get a weighted risk band before extending open-account terms. Payment risk is weighted heaviest.</p>
+        <div className="flex gap-2 items-end max-w-md">
+          <div className="flex-1">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Country</label>
+            <input value={country} onChange={e => setCountry(e.target.value)} placeholder="e.g. Nigeria" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No countries scored yet. Add a destination to assess its risk band.</p>
+      ) : rows.map(r => {
+        const c = composite(r);
+        const b = band(c);
+        return (
+          <div key={r.id} className={`${CARD} p-5`}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-sm font-semibold">{r.country}</p>
+                <p className="text-xs">Composite risk <span className={`font-bold tabular-nums ${b.cls}`}>{c} / 5 · {b.label}</span></p>
+              </div>
+              <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {FACTORS.map(f => (
+                <div key={f.k} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[var(--color-muted)]">{f.label}</span>
+                    <span className="text-xs font-semibold tabular-nums">{r[f.k]}</span>
+                  </div>
+                  <input type="range" min={1} max={5} step={1} value={r[f.k]} onChange={e => setScore(r.id, f.k, parseInt(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">A subjective scorecard for your own due diligence — not a credit rating. For high-risk destinations consider ECGC cover, an LC, or advance payment.</p>
+    </div>
+  );
+}
+
+// ── #27 GIFT-City Unit Benefit Estimator ────────────────────────────────────────
+function GiftCityEstimator() {
+  const [profit, setProfit] = useState("");
+  const [taxRate, setTaxRate] = useState("25");
+  const [holidayYears, setHolidayYears] = useState("10");
+  const [outOf, setOutOf] = useState("15");
+
+  const p = parseFloat(profit) || 0;
+  const rate = parseFloat(taxRate) || 0;
+  const hy = Math.max(0, Math.min(parseFloat(holidayYears) || 0, parseFloat(outOf) || 0));
+  const window = parseFloat(outOf) || 0;
+  // IFSC units get 100% profit deduction for 10 consecutive years out of a 15-year block (Sec 80LA).
+  const annualTaxOnMainland = p * rate / 100;
+  const totalSaved = annualTaxOnMainland * hy;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Building size={14} className="text-[var(--color-primary)]" /> GIFT-City Unit Benefit Estimator</h2>
+        <p className="text-xs text-[var(--color-muted)]">An IFSC unit in GIFT City can claim a 100% deduction on business profits for 10 consecutive years out of a 15-year block (Sec 80LA). Estimate the headline income-tax saved versus operating on the mainland.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Annual profit (₹)</label>
+            <input type="number" value={profit} onChange={e => setProfit(e.target.value)} placeholder="10000000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Mainland tax %</label>
+            <input type="number" value={taxRate} onChange={e => setTaxRate(e.target.value)} placeholder="25" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Holiday years</label>
+            <input type="number" value={holidayYears} onChange={e => setHolidayYears(e.target.value)} placeholder="10" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Out of block</label>
+            <input type="number" value={outOf} onChange={e => setOutOf(e.target.value)} placeholder="15" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {p > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Tax if on mainland (per year)</span><span className="tabular-nums text-orange-400">{formatCurrency(Math.round(annualTaxOnMainland))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Tax in IFSC during holiday (per year)</span><span className="tabular-nums text-green-400">₹0</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Holiday claimed</span><span className="tabular-nums">{hy} of {window} year block</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">Headline income-tax saved over holiday</span>
+              <span className="font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalSaved))}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative only. IFSC units also enjoy GST and stamp-duty concessions, but MAT/AMT, surcharge, cess and conditions apply. GIFT City suits IT/ITeS, fund management, fintech and aircraft/ship leasing. Confirm eligibility with your CA.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #28 Freight / Incoterms Cost Splitter ───────────────────────────────────────
+const INCOTERMS = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"] as const;
+type Incoterm = typeof INCOTERMS[number];
+// Which cost legs the SELLER bears under each Incoterm (true = seller pays).
+const SELLER_BEARS: Record<Incoterm, { origin: boolean; mainFreight: boolean; insurance: boolean; destination: boolean; importDuty: boolean }> = {
+  EXW: { origin: false, mainFreight: false, insurance: false, destination: false, importDuty: false },
+  FCA: { origin: true, mainFreight: false, insurance: false, destination: false, importDuty: false },
+  FOB: { origin: true, mainFreight: false, insurance: false, destination: false, importDuty: false },
+  CFR: { origin: true, mainFreight: true, insurance: false, destination: false, importDuty: false },
+  CIF: { origin: true, mainFreight: true, insurance: true, destination: false, importDuty: false },
+  CPT: { origin: true, mainFreight: true, insurance: false, destination: false, importDuty: false },
+  CIP: { origin: true, mainFreight: true, insurance: true, destination: false, importDuty: false },
+  DAP: { origin: true, mainFreight: true, insurance: true, destination: true, importDuty: false },
+  DPU: { origin: true, mainFreight: true, insurance: true, destination: true, importDuty: false },
+  DDP: { origin: true, mainFreight: true, insurance: true, destination: true, importDuty: true },
+};
+function IncotermsSplitter() {
+  const [term, setTerm] = useState<Incoterm>("FOB");
+  const [origin, setOrigin] = useState("");
+  const [mainFreight, setMainFreight] = useState("");
+  const [insurance, setInsurance] = useState("");
+  const [destination, setDestination] = useState("");
+  const [importDuty, setImportDuty] = useState("");
+
+  const legs = [
+    { k: "origin" as const, label: "Origin charges (haulage, export clearance, THC)", val: parseFloat(origin) || 0, set: setOrigin, raw: origin },
+    { k: "mainFreight" as const, label: "Main carriage / ocean-air freight", val: parseFloat(mainFreight) || 0, set: setMainFreight, raw: mainFreight },
+    { k: "insurance" as const, label: "Cargo insurance", val: parseFloat(insurance) || 0, set: setInsurance, raw: insurance },
+    { k: "destination" as const, label: "Destination charges (THC, delivery, import clearance)", val: parseFloat(destination) || 0, set: setDestination, raw: destination },
+    { k: "importDuty" as const, label: "Import duty / taxes at destination", val: parseFloat(importDuty) || 0, set: setImportDuty, raw: importDuty },
+  ];
+  const bears = SELLER_BEARS[term];
+  const sellerCost = legs.reduce((s, l) => s + (bears[l.k] ? l.val : 0), 0);
+  const buyerCost = legs.reduce((s, l) => s + (bears[l.k] ? 0 : l.val), 0);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Freight / Incoterms Cost Splitter</h2>
+        <p className="text-xs text-[var(--color-muted)]">Enter each shipping cost leg (₹), pick the Incoterm, and see who bears what. Higher terms (CIF, DDP) push more cost onto the seller — price them into your quote.</p>
+        <div>
+          <label className="block text-xs text-[var(--color-muted)] mb-1">Incoterm 2020</label>
+          <select value={term} onChange={e => setTerm(e.target.value as Incoterm)} className={INP}>
+            {INCOTERMS.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="space-y-2">
+          {legs.map(l => (
+            <div key={l.k} className="flex items-center gap-3">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold shrink-0 w-14 text-center ${bears[l.k] ? "bg-orange-900/30 text-orange-400 border-orange-800/40" : "bg-blue-900/30 text-blue-400 border-blue-800/40"}`}>{bears[l.k] ? "Seller" : "Buyer"}</span>
+              <label className="text-xs flex-1 text-[var(--color-muted)]">{l.label}</label>
+              <input type="number" value={l.raw} onChange={e => l.set(e.target.value)} placeholder="0" className={`${INP} w-32`} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Seller bears ({term})</p>
+            <p className="text-2xl font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(sellerCost))}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Buyer bears</p>
+            <p className="text-2xl font-bold tabular-nums text-blue-400">{formatCurrency(Math.round(buyerCost))}</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-3">Risk transfers to the buyer at the named point for each term (e.g. on board the vessel under FOB/CFR/CIF). Cost allocation here follows Incoterms 2020 norms — your contract terms prevail. Insurance is mandatory only under CIF and CIP.</p>
+      </div>
     </div>
   );
 }

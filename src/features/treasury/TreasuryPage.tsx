@@ -7,6 +7,7 @@ import {
   Target, Users, Percent, CalendarClock, Droplets, Plus, TrendingUp,
   AlertTriangle, CheckCircle2, Repeat, Scale, ShieldCheck, Building2,
   Coins, CreditCard, Gift, Receipt, Scale3d, LineChart, Waves,
+  Gem, Building, Activity, ShieldAlert, FileText, Clock, ArrowLeftRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
@@ -19,7 +20,8 @@ type Tab =
   | "overview" | "sweep" | "ladder" | "compare" | "allocate" | "yield"
   | "tbill" | "goal" | "split" | "posttax" | "maturity"
   | "sip" | "debteq" | "emergency" | "sweepfd" | "corpfd" | "smallsave"
-  | "swod" | "income" | "capgain" | "rebalance" | "xirr" | "waterfall";
+  | "swod" | "income" | "capgain" | "rebalance" | "xirr" | "waterfall"
+  | "gold" | "reit" | "mtm" | "dicgc" | "policy" | "accrued" | "almatch";
 
 export default function TreasuryPage() {
   const { store } = useApp();
@@ -65,6 +67,13 @@ export default function TreasuryPage() {
             ["rebalance", "Rebalancer", LineChart],
             ["xirr", "Portfolio XIRR", TrendingUp],
             ["waterfall", "Deploy Waterfall", Gift],
+            ["gold", "Gold / SGB Planner", Gem],
+            ["reit", "REIT / InvIT Income", Building],
+            ["mtm", "Mark-to-Market", Activity],
+            ["dicgc", "Bank Exposure (DICGC)", ShieldAlert],
+            ["policy", "Treasury Policy", FileText],
+            ["accrued", "Accrued Interest", Clock],
+            ["almatch", "Asset-Liability Match", ArrowLeftRight],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -97,6 +106,13 @@ export default function TreasuryPage() {
       {tab === "rebalance" && <PortfolioRebalancer />}
       {tab === "xirr" && <XirrCalculator />}
       {tab === "waterfall" && <SurplusWaterfall totalBalance={totalBalance} />}
+      {tab === "gold" && <GoldSgbPlanner />}
+      {tab === "reit" && <ReitInvitEstimator />}
+      {tab === "mtm" && <MarkToMarketTracker />}
+      {tab === "dicgc" && <BankExposureLimits />}
+      {tab === "policy" && <TreasuryPolicyConfig />}
+      {tab === "accrued" && <AccruedInterestCalculator />}
+      {tab === "almatch" && <AssetLiabilityMatcher />}
     </div>
   );
 }
@@ -2076,6 +2092,634 @@ function SurplusWaterfall({ totalBalance }: { totalBalance: number }) {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Tiers fill top-down: each claim is fully met before the next gets a rupee. If surplus runs out before the yield tier, nothing is invested — exactly the point. Set high-cost debt to 0 if you have none. Estimates, not advice.</p>
+    </div>
+  );
+}
+
+// ── #24 Gold / SGB Allocation Planner ──────────────────────────────────────────
+function GoldSgbPlanner() {
+  const [portfolio, setPortfolio] = useState("");
+  const [goldPct, setGoldPct] = useState(10);
+  const [years, setYears] = useState("5");
+  const [goldCagr, setGoldCagr] = useState("9");
+  const [sgbCoupon, setSgbCoupon] = useState("2.5");
+
+  const P = parseFloat(portfolio) || 0;
+  const t = parseFloat(years) || 0;
+  const goldAlloc = Math.round(P * goldPct / 100);
+  const cagr = (parseFloat(goldCagr) || 0) / 100;
+  const coupon = (parseFloat(sgbCoupon) || 0) / 100;
+  // SGB: 2.5% p.a. coupon (taxable) on issue price + price appreciation (LTCG-exempt if held to 8y maturity).
+  const priceGrowth = goldAlloc * (Math.pow(1 + cagr, t) - 1);
+  const couponIncome = goldAlloc * coupon * t;
+  const sgbTotal = priceGrowth + couponIncome;
+  // Physical/ETF gold: only price growth, no coupon; LTCG taxed.
+  const ready = P > 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gem size={14} className="text-[var(--color-primary)]" /> Gold / SGB Allocation Planner</h3>
+        <p className="text-xs text-[var(--color-muted)]">Park a sliver of long-horizon reserve in Sovereign Gold Bonds — you earn a 2.5% p.a. coupon on top of gold price moves, and capital gains are tax-free if held to the 8-year maturity. Keep gold a small inflation hedge, not a core holding.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Investable portfolio (₹)</label>
+            <input type="number" value={portfolio} onChange={e => setPortfolio(e.target.value)} placeholder="2000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Horizon (years)</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gold CAGR (% p.a.)</label>
+            <input type="number" value={goldCagr} onChange={e => setGoldCagr(e.target.value)} placeholder="9" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">SGB coupon (% p.a.)</label>
+            <input type="number" value={sgbCoupon} onChange={e => setSgbCoupon(e.target.value)} placeholder="2.5" className={INP} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Gold allocation: <strong className="text-[var(--color-text)]">{goldPct}%</strong> of portfolio</label>
+          <input type="range" min={0} max={25} step={1} value={goldPct} onChange={e => setGoldPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Allocated to gold", value: formatCurrency(goldAlloc), color: "text-[var(--color-text)]", sub: `${goldPct}% of portfolio` },
+              { label: "Coupon income", value: formatCurrency(Math.round(couponIncome)), color: "text-green-400", sub: `${sgbCoupon || 0}% × ${years || 0}y (taxable)` },
+              { label: "Price appreciation", value: formatCurrency(Math.round(priceGrowth)), color: "text-green-400", sub: "LTCG-free at maturity" },
+              { label: "Total gain (SGB)", value: formatCurrency(Math.round(sgbTotal)), color: "text-[var(--color-primary)]", sub: `over ${years || 0} years` },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)] text-sm">
+            <p className="text-[var(--color-muted)]">SGBs beat physical gold and gold ETFs by the extra <strong className="text-green-400">{formatCurrency(Math.round(couponIncome))}</strong> coupon over {years || 0} years, with no making charges or storage risk. The trade-off: SGBs have an 8-year tenor (early exit only via the exchange, often at a discount), so size the allocation to cash you truly won't touch.</p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Gold CAGR is an assumption, not a guarantee — gold can fall for years. SGB coupon is taxed at your slab; capital gains are exempt only if held to the 8-year maturity (gains on exchange exit before that are taxable). Fresh SGB tranches depend on RBI issuance.</p>
+    </div>
+  );
+}
+
+// ── #25 REIT / InvIT Income Estimator ──────────────────────────────────────────
+function ReitInvitEstimator() {
+  const [amount, setAmount] = useState("");
+  const [distYield, setDistYield] = useState("6.5");
+  const [interestShare, setInterestShare] = useState(60);
+  const [dividendShare, setDividendShare] = useState(25);
+  const [slab, setSlab] = useState("30");
+
+  const P = parseFloat(amount) || 0;
+  const gross = P * (parseFloat(distYield) || 0) / 100;
+  const slabRate = (parseFloat(slab) || 0) / 100;
+  // REIT/InvIT payout splits: interest (taxed at slab), dividend (taxable at slab if SPV opted concessional regime),
+  // and return-of-capital / amortisation (reduces cost, effectively tax-deferred). Remainder = RoC.
+  const intPart = gross * interestShare / 100;
+  const divPart = gross * dividendShare / 100;
+  const rocPart = Math.max(0, gross - intPart - divPart);
+  const tax = (intPart + divPart) * slabRate;
+  const netIncome = gross - tax;
+  const postTaxYield = P > 0 ? (netIncome / P) * 100 : 0;
+  const ready = P > 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Building size={14} className="text-[var(--color-primary)]" /> REIT / InvIT Income Estimator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Listed REITs (Embassy, Mindspace, Brookfield) and InvITs distribute rent/toll income quarterly. The payout is a mix of interest, dividend and return-of-capital, each taxed differently — so the headline distribution yield overstates what you keep.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount invested (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Distribution yield (% p.a.)</label>
+            <input type="number" value={distYield} onChange={e => setDistYield(e.target.value)} placeholder="6.5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your tax slab (%)</label>
+            <input type="number" value={slab} onChange={e => setSlab(e.target.value)} placeholder="30" className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Interest portion: <strong className="text-[var(--color-text)]">{interestShare}%</strong></label>
+            <input type="range" min={0} max={100} step={5} value={interestShare} onChange={e => setInterestShare(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Dividend portion: <strong className="text-[var(--color-text)]">{dividendShare}%</strong></label>
+            <input type="range" min={0} max={100} step={5} value={dividendShare} onChange={e => setDividendShare(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Gross distribution / yr", value: formatCurrency(Math.round(gross)), color: "text-[var(--color-text)]", sub: `${distYield || 0}% of capital` },
+              { label: "Taxable (int + div)", value: formatCurrency(Math.round(intPart + divPart)), color: "text-yellow-400", sub: `${interestShare + dividendShare}% of payout` },
+              { label: "Return-of-capital", value: formatCurrency(Math.round(rocPart)), color: "text-blue-400", sub: "Tax-deferred (cuts cost base)" },
+              { label: "Post-tax yield", value: `${postTaxYield.toFixed(2)}%`, color: "text-green-400", sub: formatCurrency(Math.round(netIncome)) + "/yr net" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)] text-sm">
+            <p className="text-[var(--color-muted)]">The return-of-capital slice isn't taxed now but reduces your cost base, so it surfaces as capital gains when you sell. REITs/InvITs are market-traded — unit prices move with interest rates and occupancy, so treat this as long-horizon income, not a parking spot for buffer cash.</p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Payout components vary every quarter and per trust — check the actual distribution breakup in the trust's filing. Dividend taxability depends on whether the SPV opted for the concessional tax regime. Unit prices fluctuate; capital is at risk. Not advice.</p>
+    </div>
+  );
+}
+
+// ── #26 Mark-to-Market Tracker ─────────────────────────────────────────────────
+type MtmHolding = { id: string; name: string; units: string; cost: string; price: string };
+function MarkToMarketTracker() {
+  const [rows, setRows] = useFeatureState<MtmHolding[]>("trez-mtm", []);
+  const [name, setName] = useState("");
+  const [units, setUnits] = useState("");
+  const [cost, setCost] = useState("");
+  const [price, setPrice] = useState("");
+
+  const add = () => {
+    const u = parseFloat(units), c = parseFloat(cost);
+    if (!name.trim() || isNaN(u) || u <= 0 || isNaN(c) || c <= 0) { toast.error("Enter holding, units and avg cost"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), name: name.trim(), units, cost, price: price || cost }]);
+    setName(""); setUnits(""); setCost(""); setPrice("");
+    toast.success("Holding added");
+  };
+  const setPx = (id: string, px: string) => setRows(rows.map(r => r.id === id ? { ...r, price: px } : r));
+
+  const calc = (r: MtmHolding) => {
+    const u = parseFloat(r.units) || 0, c = parseFloat(r.cost) || 0, p = parseFloat(r.price) || 0;
+    const invested = u * c, value = u * p, pnl = value - invested;
+    const pct = invested > 0 ? (pnl / invested) * 100 : 0;
+    return { invested, value, pnl, pct };
+  };
+  const totInvested = rows.reduce((s, r) => s + calc(r).invested, 0);
+  const totValue = rows.reduce((s, r) => s + calc(r).value, 0);
+  const totPnl = totValue - totInvested;
+  const totPct = totInvested > 0 ? (totPnl / totInvested) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Mark-to-Market Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Enter current NAV/price for each treasury holding to see live unrealised gain/loss across the book — the number your CA marks at year-end and lenders look at for net worth.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Holding</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Liquid fund" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Units</label>
+            <input type="number" value={units} onChange={e => setUnits(e.target.value)} placeholder="1000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Avg cost / unit (₹)</label>
+            <input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="100" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current price (₹)</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="105" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No holdings yet. Add funds, bonds or deposits to mark to market.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Invested", value: formatCurrency(Math.round(totInvested)), color: "text-[var(--color-text)]" },
+              { label: "Market value", value: formatCurrency(Math.round(totValue)), color: "text-[var(--color-text)]" },
+              { label: "Unrealised P&L", value: formatCurrency(Math.round(totPnl)), color: totPnl >= 0 ? "text-green-400" : "text-red-400" },
+              { label: "Return", value: `${totPct >= 0 ? "+" : ""}${totPct.toFixed(2)}%`, color: totPct >= 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Holding", "Units", "Cost", "Price", "Value", "P&L", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const c = calc(r);
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{parseFloat(r.units).toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(parseFloat(r.cost) || 0)}</td>
+                        <td className="px-4 py-2.5">
+                          <input type="number" value={r.price} onChange={e => setPx(r.id, e.target.value)} className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(c.value))}</td>
+                        <td className={`px-4 py-2.5 tabular-nums ${c.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(c.pnl))} <span className="text-[10px]">({c.pct >= 0 ? "+" : ""}{c.pct.toFixed(1)}%)</span></td>
+                        <td className="px-4 py-2.5"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Unrealised gains aren't taxed until you redeem; this is a position snapshot, not a realised-gains statement. Update prices/NAVs manually from your fund or broker. FDs hold at face value (no MTM).</p>
+    </div>
+  );
+}
+
+// ── #27 Counterparty / Bank Exposure (DICGC) Limits ────────────────────────────
+type BankExp = { id: string; bank: string; amount: string };
+function BankExposureLimits() {
+  const [rows, setRows] = useFeatureState<BankExp[]>("trez-dicgc", []);
+  const [bank, setBank] = useState("");
+  const [amount, setAmount] = useState("");
+  const COVER = 500000; // DICGC deposit insurance: ₹5L per depositor per bank.
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!bank.trim() || isNaN(a) || a <= 0) { toast.error("Enter bank and deposit amount"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), bank: bank.trim(), amount }]);
+    setBank(""); setAmount("");
+    toast.success("Bank added");
+  };
+
+  const totDeposit = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const totInsured = rows.reduce((s, r) => s + Math.min(parseFloat(r.amount) || 0, COVER), 0);
+  const totUninsured = totDeposit - totInsured;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Counterparty / Bank Exposure (DICGC)</h3>
+        <p className="text-xs text-[var(--color-muted)]">DICGC insures only ₹5,00,000 per depositor per bank (principal + interest, across all branches). Spread large deposits across banks so a single bank failure can't take more than the cover. This flags every bank where you're over the limit.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
+            <input value={bank} onChange={e => setBank(e.target.value)} placeholder="HDFC Bank" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total deposit (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1200000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No banks added. Enter your deposit per bank to check DICGC coverage.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total deposits", value: formatCurrency(Math.round(totDeposit)), color: "text-[var(--color-text)]" },
+              { label: "Insured (DICGC)", value: formatCurrency(Math.round(totInsured)), color: "text-green-400" },
+              { label: "Uninsured", value: formatCurrency(Math.round(totUninsured)), color: totUninsured > 0 ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2.5">
+            {rows.map(r => {
+              const amt = parseFloat(r.amount) || 0;
+              const over = Math.max(0, amt - COVER);
+              const pct = amt > 0 ? Math.min(100, (COVER / amt) * 100) : 100;
+              return (
+                <div key={r.id} className={`${CARD} p-4`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div>
+                      <p className="text-sm font-semibold flex items-center gap-1.5">{r.bank}{over > 0 && <span className="text-[9px] text-red-400 font-bold flex items-center gap-0.5"><AlertTriangle size={10} /> OVER COVER</span>}</p>
+                      <p className="text-[11px] text-[var(--color-muted)]">{formatCurrency(amt)} deposited · {over > 0 ? `${formatCurrency(Math.round(over))} uninsured` : "fully insured"}</p>
+                    </div>
+                    <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                  </div>
+                  <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${over > 0 ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {totUninsured > 0 && (
+            <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+              <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {formatCurrency(Math.round(totUninsured))} sits above DICGC cover. Move the excess to other banks (₹5L each), or to T-bills/G-Secs which carry sovereign rather than bank risk.</p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">DICGC cover is ₹5,00,000 per depositor per bank (same PAN, across branches), including principal and interest. Deposits in different banks are separately insured. Current accounts also count toward the limit. Cover is per bank, not per account.</p>
+    </div>
+  );
+}
+
+// ── #28 Treasury Policy Config ─────────────────────────────────────────────────
+type TreasuryPolicy = {
+  bufferWeeks: number; minRating: string; maxIssuerPct: number; maxSingleBankPct: number;
+  allowEquity: boolean; dualApprovalAbove: string; allowedInstruments: string[];
+};
+const ALL_INSTRUMENTS = ["Liquid funds", "Overnight funds", "Short-duration debt", "Bank FD", "Corporate FD (AAA)", "T-Bills / G-Secs", "SGB", "Index ETF"];
+function TreasuryPolicyConfig() {
+  const [policy, setPolicy] = useFeatureState<TreasuryPolicy>("trez-policy", {
+    bufferWeeks: 6, minRating: "AAA", maxIssuerPct: 20, maxSingleBankPct: 25,
+    allowEquity: false, dualApprovalAbove: "1000000", allowedInstruments: ["Liquid funds", "Overnight funds", "Bank FD", "T-Bills / G-Secs"],
+  });
+  const set = <K extends keyof TreasuryPolicy>(k: K, v: TreasuryPolicy[K]) => setPolicy({ ...policy, [k]: v });
+  const toggleInst = (i: string) => set("allowedInstruments", policy.allowedInstruments.includes(i)
+    ? policy.allowedInstruments.filter(x => x !== i) : [...policy.allowedInstruments, i]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Treasury Policy &amp; Limits</h3>
+        <p className="text-xs text-[var(--color-muted)]">A board-ready written policy is what separates disciplined treasury from cash kept on vibes. Set the rules once — buffer, credit floor, concentration caps, approval threshold — and use it as the mandate any sweep or investment must obey.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Min runway buffer (weeks)</label>
+            <input type="number" value={policy.bufferWeeks} onChange={e => set("bufferWeeks", Number(e.target.value) || 0)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Min credit rating</label>
+            <select value={policy.minRating} onChange={e => set("minRating", e.target.value)} className={INP}>
+              {["AAA", "AA+", "AA", "A+", "Sovereign only"].map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Max per issuer (%)</label>
+            <input type="number" value={policy.maxIssuerPct} onChange={e => set("maxIssuerPct", Number(e.target.value) || 0)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Max per bank (%)</label>
+            <input type="number" value={policy.maxSingleBankPct} onChange={e => set("maxSingleBankPct", Number(e.target.value) || 0)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Dual approval above (₹)</label>
+            <input type="number" value={policy.dualApprovalAbove} onChange={e => set("dualApprovalAbove", e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={() => set("allowEquity", !policy.allowEquity)}
+              className={`w-full py-2 text-xs font-semibold rounded-lg border transition-all ${policy.allowEquity ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              Equity {policy.allowEquity ? "allowed" : "blocked"}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-2">Permitted instruments</label>
+          <div className="flex flex-wrap gap-2">
+            {ALL_INSTRUMENTS.map(i => {
+              const on = policy.allowedInstruments.includes(i);
+              return (
+                <button key={i} onClick={() => toggleInst(i)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-all ${on ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                  {on ? "✓ " : ""}{i}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Generated policy statement</p>
+        <ul className="text-sm text-[var(--color-muted)] space-y-2 list-disc pl-5">
+          <li>Maintain a minimum operating buffer of <strong className="text-[var(--color-text)]">{policy.bufferWeeks} weeks</strong> of operating expenses in liquid form before any surplus is invested.</li>
+          <li>Invest only in instruments rated <strong className="text-[var(--color-text)]">{policy.minRating}</strong> or higher.</li>
+          <li>No single issuer may exceed <strong className="text-[var(--color-text)]">{policy.maxIssuerPct}%</strong> of the treasury, and no single bank more than <strong className="text-[var(--color-text)]">{policy.maxSingleBankPct}%</strong>.</li>
+          <li>Equity / index exposure is <strong className="text-[var(--color-text)]">{policy.allowEquity ? "permitted for long-horizon surplus only" : "not permitted"}</strong>.</li>
+          <li>Any single transaction above <strong className="text-[var(--color-text)]">{formatCurrency(parseFloat(policy.dualApprovalAbove) || 0)}</strong> requires dual sign-off (owner + finance).</li>
+          <li>Permitted instruments: <strong className="text-[var(--color-text)]">{policy.allowedInstruments.length ? policy.allowedInstruments.join(", ") : "none selected"}</strong>.</li>
+        </ul>
+        <button onClick={() => { navigator.clipboard?.writeText(
+          `TREASURY INVESTMENT POLICY\n\n` +
+          `1. Maintain a minimum operating buffer of ${policy.bufferWeeks} weeks of opex in liquid form before investing surplus.\n` +
+          `2. Invest only in instruments rated ${policy.minRating} or higher.\n` +
+          `3. Max ${policy.maxIssuerPct}% per issuer; max ${policy.maxSingleBankPct}% per bank.\n` +
+          `4. Equity/index exposure: ${policy.allowEquity ? "permitted for long-horizon surplus only" : "not permitted"}.\n` +
+          `5. Transactions above ${formatCurrency(parseFloat(policy.dualApprovalAbove) || 0)} require dual sign-off (owner + finance).\n` +
+          `6. Permitted instruments: ${policy.allowedInstruments.join(", ") || "none"}.`
+        ); toast.success("Policy copied to clipboard"); }}
+          className="mt-4 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-xs font-medium">
+          <FileText size={12} /> Copy policy text
+        </button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A template, not legal/financial advice — adapt limits to your size and risk appetite, and have your CA or board ratify it. Settings are saved on this device.</p>
+    </div>
+  );
+}
+
+// ── #29 Accrued-Interest Calculator ────────────────────────────────────────────
+function AccruedInterestCalculator() {
+  const [principal, setPrincipal] = useState("");
+  const [rate, setRate] = useState("7.25");
+  const [start, setStart] = useState(() => format(addDays(new Date(), -90), "yyyy-MM-dd"));
+  const [asOf, setAsOf] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [basis, setBasis] = useState<"365" | "360">("365");
+
+  const P = parseFloat(principal) || 0;
+  const r = (parseFloat(rate) || 0) / 100;
+  const days = Math.max(0, differenceInCalendarDays(new Date(asOf), new Date(start)));
+  const dayBasis = parseInt(basis);
+  // Simple accrual: P × r × days / basis.
+  const accrued = P * r * days / dayBasis;
+  const perDay = P * r / dayBasis;
+  const ready = P > 0 && days >= 0;
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Accrued-Interest Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Interest earned but not yet credited — needed to value an FD/bond mid-tenure, book a month-end accrual entry, or settle a deposit transfer between dates.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Principal / face (₹)</label>
+            <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Coupon / rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="7.25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last paid / start date</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">As-of date</label>
+            <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={INP} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {(["365", "360"] as const).map(b => (
+            <button key={b} onClick={() => setBasis(b)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${basis === b ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              Actual/{b} {b === "365" ? "(FD/bond)" : "(money mkt)"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {ready && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Days accrued", value: `${days}`, color: "text-[var(--color-text)]" },
+            { label: "Interest / day", value: formatCurrency(Math.round(perDay)), color: "text-[var(--color-muted)]" },
+            { label: "Accrued interest", value: formatCurrency(Math.round(accrued)), color: "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Simple (non-compounded) accrual on a day-count basis — fine for FD/bond mid-period valuation and accounting accruals. Banks typically use Actual/365; money-market conventions use Actual/360. Actual credited interest may compound and differ slightly.</p>
+    </div>
+  );
+}
+
+// ── #30 Asset-Liability (Cash-Flow) Matcher ────────────────────────────────────
+type AlItem = { id: string; kind: "asset" | "liability"; name: string; amount: string; date: string };
+function AssetLiabilityMatcher() {
+  const [items, setItems] = useFeatureState<AlItem[]>("trez-almatch", []);
+  const [kind, setKind] = useState<"asset" | "liability">("liability");
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => format(addDays(new Date(), 30), "yyyy-MM-dd"));
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!name.trim() || isNaN(a) || a <= 0) { toast.error("Enter a name and amount"); return; }
+    setItems([...items, { id: crypto.randomUUID(), kind, name: name.trim(), amount, date }]);
+    setName(""); setAmount("");
+    toast.success(`${kind === "asset" ? "Inflow" : "Outflow"} added`);
+  };
+
+  const today = new Date();
+  const buckets = useMemo(() => {
+    const ranges = [
+      { label: "0–30 days", lo: 0, hi: 30 },
+      { label: "31–90 days", lo: 31, hi: 90 },
+      { label: "91–180 days", lo: 91, hi: 180 },
+      { label: "180+ days", lo: 181, hi: Infinity },
+    ];
+    return ranges.map(rg => {
+      const inSlice = items.filter(it => {
+        const d = differenceInCalendarDays(new Date(it.date), today);
+        return d >= rg.lo && d <= rg.hi;
+      });
+      const assets = inSlice.filter(i => i.kind === "asset").reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      const liabs = inSlice.filter(i => i.kind === "liability").reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      return { ...rg, assets, liabs, gap: assets - liabs };
+    });
+  }, [items, today]);
+
+  const sorted = [...items].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Asset-Liability (Cash-Flow) Matcher</h3>
+        <p className="text-xs text-[var(--color-muted)]">Line up maturing investments (inflows) against known outflows — GST, advance-tax, payroll, vendor dues — by time bucket. A negative gap means you'll have to break a deposit or borrow; match maturities to dues so cash lands just in time.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={kind} onChange={e => setKind(e.target.value as "asset" | "liability")} className={INP}>
+              <option value="liability">Outflow (due)</option>
+              <option value="asset">Inflow (matures)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="GST payment" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="300000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No flows yet. Add maturing investments and upcoming dues to check the match.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {buckets.map(b => (
+              <div key={b.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{b.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${b.gap >= 0 ? "text-green-400" : "text-red-400"}`}>{b.gap >= 0 ? "+" : ""}{formatCurrency(Math.round(b.gap))}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">in {formatCurrency(Math.round(b.assets))} · out {formatCurrency(Math.round(b.liabs))}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Date", "Type", "Item", "Amount", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {sorted.map(it => (
+                    <tr key={it.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5">{format(new Date(it.date), "d MMM yyyy")}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] font-bold ${it.kind === "asset" ? "text-green-400" : "text-red-400"}`}>{it.kind === "asset" ? "INFLOW" : "OUTFLOW"}</span>
+                      </td>
+                      <td className="px-4 py-2.5 font-medium">{it.name}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${it.kind === "asset" ? "text-green-400" : "text-red-400"}`}>{it.kind === "asset" ? "+" : "-"}{formatCurrency(parseFloat(it.amount) || 0)}</td>
+                      <td className="px-4 py-2.5"><button onClick={() => setItems(items.filter(x => x.id !== it.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Gaps are within-bucket only and don't carry surplus forward between buckets — read them as timing warnings, not a full liquidity forecast. A negative near-term gap means plan a maturity or credit line before that bucket.</p>
     </div>
   );
 }

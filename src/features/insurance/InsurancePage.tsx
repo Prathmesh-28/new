@@ -8,6 +8,7 @@ import {
   CheckCircle2, CalendarClock, ShieldAlert, TrendingDown,
   CalendarDays, Trophy, Award, SlidersHorizontal, PauseCircle, Ship,
   Briefcase, Bug, Truck, HardHat, Receipt,
+  Layers, Stethoscope, Activity, GitMerge, Coins, PiggyBank, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -17,7 +18,8 @@ type Tab =
   | "assetcover" | "tradecredit" | "claims" | "premvscover" | "keyman" | "riskscore"
   | "duecal" | "csrcompare" | "ncbtracker" | "deductibleopt" | "bicover"
   | "marinecover" | "piestimator" | "cyberscore" | "fleettracker" | "wcestimator"
-  | "premiumemi" | "itcchecker";
+  | "premiumemi" | "itcchecker"
+  | "tophealth" | "opdwellness" | "lifestage" | "riders" | "tco" | "surrender" | "groupvsindiv";
 
 // shared styles (reused from Tax/Debt pattern)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -62,6 +64,13 @@ export default function InsurancePage() {
             ["wcestimator", "Workmen Comp", HardHat],
             ["premiumemi", "Premium EMI", Wallet],
             ["itcchecker", "GST ITC Checker", Receipt],
+            ["tophealth", "Top-Up Optimizer", Layers],
+            ["opdwellness", "OPD & Wellness", Stethoscope],
+            ["lifestage", "Life-Stage Adequacy", Activity],
+            ["riders", "Riders Comparator", GitMerge],
+            ["tco", "Insurance TCO", Coins],
+            ["surrender", "Surrender Value", PiggyBank],
+            ["groupvsindiv", "Group vs Individual", Users],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -94,6 +103,13 @@ export default function InsurancePage() {
       {tab === "wcestimator" && <WorkmenCompEstimator />}
       {tab === "premiumemi" && <PremiumEMICalculator />}
       {tab === "itcchecker" && <GSTITCChecker />}
+      {tab === "tophealth" && <TopUpOptimizer />}
+      {tab === "opdwellness" && <OPDWellnessTracker />}
+      {tab === "lifestage" && <LifeStageAdequacy />}
+      {tab === "riders" && <RidersComparator />}
+      {tab === "tco" && <InsuranceTCO />}
+      {tab === "surrender" && <SurrenderValueEstimator />}
+      {tab === "groupvsindiv" && <GroupVsIndividual />}
     </div>
   );
 }
@@ -2159,6 +2175,706 @@ function GSTITCChecker() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">General guidance, not tax advice. ITC needs a valid tax invoice with your GSTIN, the supply must be for business, and the credit must not be blocked under s.17(5). Group-health and most personal-vehicle covers are commonly blocked unless obligatory under another law. Confirm each claim with your CA and GSTR-2B.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. Health Top-Up / Super-Top-Up Optimizer
+// ─────────────────────────────────────────────────────────────────────────────
+function TopUpOptimizer() {
+  const [target, setTarget] = useState("2500000");
+  const [base, setBase] = useState("500000");
+  const [age, setAge] = useState("40");
+  const [superTopUp, setSuperTopUp] = useState(true);
+
+  const tgt = parseFloat(target) || 0;
+  const baseCover = parseFloat(base) || 0;
+  const a = parseFloat(age) || 40;
+  // Deductible on a top-up = the base cover (claims above the threshold are paid).
+  const deductible = baseCover;
+  const topUpCover = Math.max(0, tgt - baseCover);
+
+  const result = useMemo(() => {
+    if (tgt <= 0 || baseCover <= 0 || topUpCover <= 0) return null;
+    // Indicative annual rates per ₹1L of cover (incl. GST), age-loaded.
+    const ageLoad = a < 30 ? 0.75 : a < 45 ? 1.0 : a < 60 ? 1.6 : 2.6;
+    // Buying full SI directly is far costlier than base + top-up over a deductible.
+    const directRatePer1L = 1900 * ageLoad;
+    const baseRatePer1L = 2100 * ageLoad;       // first-rupee cover is pricey
+    // Super-top-up (aggregate deductible) is cheaper than a regular top-up (per-claim deductible).
+    const topUpRatePer1L = (superTopUp ? 320 : 480) * ageLoad;
+
+    const directPremium = (tgt / 100000) * directRatePer1L;
+    const basePremium = (baseCover / 100000) * baseRatePer1L;
+    const topUpPremium = (topUpCover / 100000) * topUpRatePer1L;
+    const stackedPremium = basePremium + topUpPremium;
+    const saving = directPremium - stackedPremium;
+    const savingPct = directPremium > 0 ? (saving / directPremium) * 100 : 0;
+    return { directPremium, basePremium, topUpPremium, stackedPremium, saving, savingPct };
+  }, [tgt, baseCover, topUpCover, a, superTopUp]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Health Top-Up / Super-Top-Up Optimizer</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reaching a high health cover by stacking a top-up over a smaller base policy is usually far cheaper than buying the full sum insured outright. A super-top-up applies one aggregate deductible across the year, so it beats a regular per-claim top-up.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target total cover (₹)</label>
+            <input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="2500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Base cover / deductible (₹)</label>
+            <input type="number" value={base} onChange={e => setBase(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Eldest insured age</label>
+            <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="40" className={INP} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={superTopUp} onChange={e => setSuperTopUp(e.target.checked)} className="accent-[var(--color-primary)]" />
+              Super-top-up (aggregate deductible)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter a target cover above your base, and a base that is smaller than the target.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Deductible (kicks in above)", value: formatAmount(Math.round(deductible)), color: "text-[var(--color-text)]" },
+              { label: "Top-up cover bought", value: formatAmount(Math.round(topUpCover)), color: "text-blue-400" },
+              { label: "Buy full SI directly", value: formatAmount(Math.round(result.directPremium)), color: "text-red-400" },
+              { label: "Base + top-up stacked", value: formatAmount(Math.round(result.stackedPremium)), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          {result.saving > 0 && (
+            <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+              <p className="text-sm text-green-400 flex items-center gap-2"><TrendingDown size={14} /> Stacking saves roughly <strong>{formatCurrency(Math.round(result.saving))}</strong> a year ({result.savingPct.toFixed(0)}% cheaper) versus buying the full {formatAmount(Math.round(tgt))} as a single policy.</p>
+            </div>
+          )}
+          <div className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold mb-2">Premium breakdown (incl. 18% GST)</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between border-b border-[var(--color-border)] pb-2"><span className="text-xs text-[var(--color-muted)]">Base policy ({formatAmount(Math.round(baseCover))})</span><span className="tabular-nums">{formatCurrency(Math.round(result.basePremium))}</span></div>
+              <div className="flex justify-between border-b border-[var(--color-border)] pb-2"><span className="text-xs text-[var(--color-muted)]">{superTopUp ? "Super-top-up" : "Top-up"} ({formatAmount(Math.round(topUpCover))})</span><span className="tabular-nums">{formatCurrency(Math.round(result.topUpPremium))}</span></div>
+              <div className="flex justify-between pt-1 font-semibold"><span>Total stacked premium</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(result.stackedPremium))}</span></div>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative only — real top-up pricing depends on insurer, waiting periods, room-rent limits and pre-existing conditions. A regular top-up resets its deductible per claim; a super-top-up applies it once for the policy year, so a person with several smaller bills is usually better off with super-top-up. GST on health premium is 18%.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 25. OPD & Wellness Benefit Tracker
+// ─────────────────────────────────────────────────────────────────────────────
+interface WellnessClaim { id: string; head: string; amount: number; date: string }
+const OPD_HEADS = ["Doctor consultation", "Diagnostics / lab", "Pharmacy", "Dental", "Vision / spectacles", "Teleconsult", "Health check-up", "Physiotherapy", "Other"] as const;
+function OPDWellnessTracker() {
+  const [claims, setClaims] = useFeatureState<WellnessClaim[]>("ins-opd-claims", []);
+  const [annualLimit, setAnnualLimit] = useFeatureState<number>("ins-opd-limit", 25000);
+  const [head, setHead] = useState<string>(OPD_HEADS[0]);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { toast.error("Enter a claim amount"); return; }
+    setClaims([...claims, { id: crypto.randomUUID(), head, amount: amt, date }]);
+    setAmount("");
+    toast.success("Benefit usage logged");
+  };
+
+  const used = claims.reduce((s, c) => s + c.amount, 0);
+  const remaining = Math.max(0, annualLimit - used);
+  const usedPct = annualLimit > 0 ? Math.min(100, (used / annualLimit) * 100) : 0;
+  const byHead = useMemo(() => {
+    const m: Record<string, number> = {};
+    claims.forEach(c => { m[c.head] = (m[c.head] || 0) + c.amount; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [claims]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Stethoscope size={14} className="text-[var(--color-primary)]" /> OPD & Wellness Benefit Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">OPD and wellness riders reimburse outpatient bills — consultations, diagnostics, pharmacy, dental — up to an annual sub-limit. Log spend so you actually exhaust the benefit you paid for.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual OPD limit (₹)</label>
+            <input type="number" value={annualLimit || ""} onChange={e => setAnnualLimit(parseFloat(e.target.value) || 0)} placeholder="25000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Benefit head</label>
+            <select value={head} onChange={e => setHead(e.target.value)} className={INP}>
+              {OPD_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1500" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Log
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual limit", value: formatAmount(Math.round(annualLimit)), color: "text-[var(--color-text)]" },
+          { label: "Used", value: formatAmount(Math.round(used)), color: "text-orange-400" },
+          { label: "Remaining", value: formatAmount(Math.round(remaining)), color: remaining > 0 ? "text-green-400" : "text-red-400" },
+          { label: "Utilisation", value: `${usedPct.toFixed(0)}%`, color: usedPct > 90 ? "text-red-400" : "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <div className="h-2 w-full bg-[var(--color-bg)] rounded-full overflow-hidden mb-3">
+          <div className={`h-full ${usedPct > 90 ? "bg-red-400" : usedPct > 60 ? "bg-yellow-400" : "bg-green-400"}`} style={{ width: `${usedPct}%` }} />
+        </div>
+        {byHead.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)]">No usage logged yet. Track outpatient spend so the wellness rider doesn't go to waste at year-end.</p>
+        ) : (
+          <div className="space-y-2">
+            {byHead.map(([h, v]) => (
+              <div key={h} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{h}</span>
+                <span className="tabular-nums">{formatCurrency(Math.round(v))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {claims.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Date", "Head", "Amount", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {[...claims].reverse().map(c => (
+                  <tr key={c.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs">{c.date}</td>
+                    <td className="px-3 py-2.5">{c.head}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{formatCurrency(c.amount)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <button onClick={() => setClaims(claims.filter(x => x.id !== c.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">OPD/wellness sub-limits, eligible heads and reimbursement rules vary by insurer — keep bills and prescriptions for every entry. Unused benefit typically does not carry forward, so plan check-ups before the policy year ends.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 26. Coverage Adequacy by Life-Stage
+// ─────────────────────────────────────────────────────────────────────────────
+function LifeStageAdequacy() {
+  const [age, setAge] = useState("38");
+  const [income, setIncome] = useState("1200000");
+  const [dependents, setDependents] = useState("2");
+  const [loans, setLoans] = useState("3000000");
+  const [savings, setSavings] = useState("1500000");
+  const [existingLife, setExistingLife] = useState("2000000");
+  const [existingHealth, setExistingHealth] = useState("500000");
+
+  const a = parseFloat(age) || 0;
+  const inc = parseFloat(income) || 0;
+  const deps = parseFloat(dependents) || 0;
+  const ln = parseFloat(loans) || 0;
+  const sav = parseFloat(savings) || 0;
+  const haveLife = parseFloat(existingLife) || 0;
+  const haveHealth = parseFloat(existingHealth) || 0;
+
+  const result = useMemo(() => {
+    if (inc <= 0) return null;
+    // Term life: income-replacement multiple shrinks with age (fewer earning years left).
+    const multiple = a < 30 ? 20 : a < 40 ? 18 : a < 50 ? 14 : a < 60 ? 10 : 6;
+    const depLoad = 1 + deps * 0.15;
+    const lifeNeed = Math.round(inc * multiple * depLoad + ln - sav);
+    const recLife = Math.max(0, lifeNeed);
+    const lifeGap = Math.max(0, recLife - haveLife);
+
+    // Health: scales with age band (older = pricier care, more cover needed).
+    const healthNeed = a < 35 ? 500000 : a < 45 ? 1000000 : a < 55 ? 1500000 : 2500000;
+    const recHealth = healthNeed * (deps > 0 ? 1.5 : 1);
+    const healthGap = Math.max(0, recHealth - haveHealth);
+
+    const stage = a < 30 ? "Early career" : a < 40 ? "Family-building" : a < 50 ? "Peak responsibility" : a < 60 ? "Pre-retirement" : "Retirement";
+    return { recLife, lifeGap, recHealth, healthGap, stage, multiple };
+  }, [a, inc, deps, ln, sav, haveLife, haveHealth]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Coverage Adequacy by Life-Stage</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Your protection need changes with age, dependents and debt. This sizes term-life and health cover for your stage and flags the shortfall against what you already hold.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Age</label>
+            <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="38" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual income (₹)</label>
+            <input type="number" value={income} onChange={e => setIncome(e.target.value)} placeholder="1200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Dependents</label>
+            <input type="number" value={dependents} onChange={e => setDependents(e.target.value)} placeholder="2" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Outstanding loans (₹)</label>
+            <input type="number" value={loans} onChange={e => setLoans(e.target.value)} placeholder="3000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Liquid savings (₹)</label>
+            <input type="number" value={savings} onChange={e => setSavings(e.target.value)} placeholder="1500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Existing term-life cover (₹)</label>
+            <input type="number" value={existingLife} onChange={e => setExistingLife(e.target.value)} placeholder="2000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Existing health cover (₹)</label>
+            <input type="number" value={existingHealth} onChange={e => setExistingHealth(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter your annual income to size the cover you need.</p>
+      ) : (
+        <>
+          <div className={`${CARD} p-4`}>
+            <p className="text-sm">Life-stage: <strong className="text-[var(--color-primary)]">{result.stage}</strong> — term cover sized at <strong>{result.multiple}×</strong> income (income-replacement years fall as you age).</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">Recommended term-life cover</p>
+              <p className="text-lg font-bold tabular-nums text-blue-400">{formatAmount(result.recLife)}</p>
+              <p className={`text-xs mt-1 ${result.lifeGap > 0 ? "text-red-400" : "text-green-400"}`}>{result.lifeGap > 0 ? `Shortfall ${formatAmount(result.lifeGap)}` : "Adequately covered"}</p>
+            </div>
+            <div className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">Recommended health cover</p>
+              <p className="text-lg font-bold tabular-nums text-blue-400">{formatAmount(result.recHealth)}</p>
+              <p className={`text-xs mt-1 ${result.healthGap > 0 ? "text-red-400" : "text-green-400"}`}>{result.healthGap > 0 ? `Shortfall ${formatAmount(result.healthGap)}` : "Adequately covered"}</p>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A rule-of-thumb planner, not financial advice. Term-life need = income × age-based multiple + loans − liquid savings; health need scales with age band and dependents. Review after major life events (marriage, child, new loan). Buy through an IRDAI-licensed insurer.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 27. Riders Comparator
+// ─────────────────────────────────────────────────────────────────────────────
+interface RiderRow { id: string; name: string; premium: number; benefit: number; useful: boolean }
+function RidersComparator() {
+  const SUGGESTED = [
+    "Critical illness", "Accidental death benefit", "Waiver of premium", "Hospital cash daily",
+    "Maternity", "OPD / wellness", "Room-rent waiver", "Restore / refill benefit",
+  ];
+  const [rows, setRows] = useFeatureState<RiderRow[]>("ins-riders", []);
+  const [name, setName] = useState(SUGGESTED[0]);
+  const [premium, setPremium] = useState("");
+  const [benefit, setBenefit] = useState("");
+
+  const add = () => {
+    const pr = parseFloat(premium) || 0;
+    const bn = parseFloat(benefit) || 0;
+    if (!name.trim() || pr <= 0) { toast.error("Enter a rider name and annual premium"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), name: name.trim(), premium: pr, benefit: bn, useful: true }]);
+    setPremium(""); setBenefit("");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, useful: !r.useful } : r));
+
+  const usefulRows = rows.filter(r => r.useful);
+  const totalPremium = usefulRows.reduce((s, r) => s + r.premium, 0);
+  const totalBenefit = usefulRows.reduce((s, r) => s + r.benefit, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><GitMerge size={14} className="text-[var(--color-primary)]" /> Riders Comparator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Riders bolt extra benefits onto a base policy for a small premium. Compare cost-per-rupee-of-cover and toggle off the ones that aren't worth it for you.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rider</label>
+            <input list="rider-suggest" value={name} onChange={e => setName(e.target.value)} placeholder="Critical illness" className={INP} />
+            <datalist id="rider-suggest">{SUGGESTED.map(s => <option key={s} value={s} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual premium (₹)</label>
+            <input type="number" value={premium} onChange={e => setPremium(e.target.value)} placeholder="3000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Benefit / cover (₹)</label>
+            <input type="number" value={benefit} onChange={e => setBenefit(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <Plus size={13} /> Add rider
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Add riders to compare their cost against the cover they provide.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Riders kept", value: `${usefulRows.length} / ${rows.length}`, color: "text-[var(--color-text)]" },
+              { label: "Added premium", value: formatAmount(Math.round(totalPremium)), color: "text-orange-400" },
+              { label: "Added cover", value: formatAmount(Math.round(totalBenefit)), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Rider", "Premium", "Cover", "Cost / ₹1L cover", "Keep", ""].map(h =>
+                    <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const costPer1L = r.benefit > 0 ? r.premium / (r.benefit / 100000) : 0;
+                    return (
+                      <tr key={r.id} className={`hover:bg-white/2 ${!r.useful ? "opacity-50" : ""}`}>
+                        <td className="px-3 py-2.5 font-medium">{r.name}</td>
+                        <td className="px-3 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.premium)}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{r.benefit > 0 ? formatAmount(r.benefit) : "—"}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{costPer1L > 0 ? formatCurrency(Math.round(costPer1L)) : "—"}</td>
+                        <td className="px-3 py-2.5">
+                          <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input type="checkbox" checked={r.useful} onChange={() => toggle(r.id)} className="accent-[var(--color-primary)]" />
+                          </label>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A lower cost-per-₹1L-of-cover means better value, but weigh it against how likely you are to use the rider and its exclusions/waiting periods. Some riders (e.g. critical illness) pay a lump sum on diagnosis rather than reimbursing bills, so the "cover" column isn't directly comparable across types.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 28. Insurance TCO (premium + deductible + co-insurance)
+// ─────────────────────────────────────────────────────────────────────────────
+function InsuranceTCO() {
+  const [premium, setPremium] = useState("60000");
+  const [deductible, setDeductible] = useState("25000");
+  const [coinsurancePct, setCoinsurancePct] = useState("10");
+  const [expectedClaim, setExpectedClaim] = useState("400000");
+  const [claimProb, setClaimProb] = useState("20");
+  const [years, setYears] = useState("3");
+
+  const prem = parseFloat(premium) || 0;
+  const ded = parseFloat(deductible) || 0;
+  const coins = (parseFloat(coinsurancePct) || 0) / 100;
+  const claim = parseFloat(expectedClaim) || 0;
+  const prob = (parseFloat(claimProb) || 0) / 100;
+  const yrs = Math.max(1, parseFloat(years) || 1);
+
+  // Expected out-of-pocket on a claim: deductible + co-insurance share of the amount above the deductible.
+  const aboveDed = Math.max(0, claim - ded);
+  const oopIfClaim = ded + aboveDed * coins;
+  const annualPremium = prem;
+  const expectedAnnualOOP = prob * oopIfClaim;
+  const annualTCO = annualPremium + expectedAnnualOOP;
+  const totalTCO = annualTCO * yrs;
+  const insurerPays = Math.max(0, claim - oopIfClaim);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Insurance Total Cost of Ownership</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">The sticker premium isn't the whole cost. Your true outlay = premium + the deductible and co-insurance you'd bear on a claim. This blends them by your expected claim frequency.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual premium (₹, incl. GST)</label>
+            <input type="number" value={premium} onChange={e => setPremium(e.target.value)} placeholder="60000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deductible / excess (₹)</label>
+            <input type="number" value={deductible} onChange={e => setDeductible(e.target.value)} placeholder="25000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Co-insurance / co-pay (%)</label>
+            <input type="number" value={coinsurancePct} onChange={e => setCoinsurancePct(e.target.value)} placeholder="10" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Typical claim size (₹)</label>
+            <input type="number" value={expectedClaim} onChange={e => setExpectedClaim(e.target.value)} placeholder="400000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Claim probability / year (%)</label>
+            <input type="number" value={claimProb} onChange={e => setClaimProb(e.target.value)} placeholder="20" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Horizon (years)</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="3" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Out-of-pocket if you claim", value: formatAmount(Math.round(oopIfClaim)), color: "text-orange-400" },
+          { label: "Insurer pays on that claim", value: formatAmount(Math.round(insurerPays)), color: "text-green-400" },
+          { label: "Expected annual TCO", value: formatAmount(Math.round(annualTCO)), color: "text-[var(--color-text)]" },
+          { label: `${yrs}-year TCO`, value: formatAmount(Math.round(totalTCO)), color: "text-[var(--color-primary)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-2">How the annual cost splits</p>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between border-b border-[var(--color-border)] pb-2"><span className="text-xs text-[var(--color-muted)]">Premium (certain)</span><span className="tabular-nums">{formatCurrency(Math.round(annualPremium))}</span></div>
+          <div className="flex justify-between border-b border-[var(--color-border)] pb-2"><span className="text-xs text-[var(--color-muted)]">Expected out-of-pocket ({(prob * 100).toFixed(0)}% × {formatAmount(Math.round(oopIfClaim))})</span><span className="tabular-nums">{formatCurrency(Math.round(expectedAnnualOOP))}</span></div>
+          <div className="flex justify-between pt-1 font-semibold"><span>Expected total per year</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(annualTCO))}</span></div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A higher deductible cuts premium but raises what you pay on a claim — use this to find the trade-off that minimises expected total cost at your real claim frequency. Co-insurance/co-pay applies to the amount above the deductible. This is an expected-value model, not a guarantee of any single year's cost.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 29. Surrender-Value Estimator (ULIP / endowment)
+// ─────────────────────────────────────────────────────────────────────────────
+function SurrenderValueEstimator() {
+  const [planType, setPlanType] = useState<"endowment" | "ulip">("endowment");
+  const [annualPremium, setAnnualPremium] = useState("100000");
+  const [policyTerm, setPolicyTerm] = useState("20");
+  const [paidYears, setPaidYears] = useState("4");
+  const [fundValue, setFundValue] = useState("420000");
+
+  const ap = parseFloat(annualPremium) || 0;
+  const term = Math.max(1, parseFloat(policyTerm) || 1);
+  const paid = Math.max(0, parseFloat(paidYears) || 0);
+  const fund = parseFloat(fundValue) || 0;
+
+  const result = useMemo(() => {
+    const totalPaid = ap * paid;
+    if (planType === "ulip") {
+      // ULIPs have a 5-year lock-in; surrender before that moves to a discontinuance fund.
+      const locked = paid < 5;
+      const value = locked ? Math.max(0, fund - Math.min(6000, fund * 0.06)) : fund; // discontinuance charge cap
+      return { totalPaid, surrenderValue: Math.round(value), locked, gsv: 0, factorPct: 0 };
+    }
+    // Traditional endowment: Guaranteed Surrender Value = GSV factor × premiums paid (ex first year & extras).
+    // No GSV until 2 full years' premiums are paid (per IRDAI norms for limited/regular pay).
+    if (paid < 2) return { totalPaid, surrenderValue: 0, locked: true, gsv: 0, factorPct: 0 };
+    const eligiblePremiums = ap * (paid - 1); // first year's premium excluded
+    // GSV factor rises with the proportion of term elapsed: ~30% early, up to ~90% near maturity.
+    const ratio = paid / term;
+    const factorPct = ratio < 0.2 ? 30 : ratio < 0.4 ? 50 : ratio < 0.6 ? 65 : ratio < 0.8 ? 80 : 90;
+    const gsv = Math.round(eligiblePremiums * (factorPct / 100));
+    return { totalPaid, surrenderValue: gsv, locked: false, gsv, factorPct };
+  }, [planType, ap, term, paid, fund]);
+
+  const loss = result.totalPaid - result.surrenderValue;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Surrender-Value Estimator</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Thinking of exiting an endowment or ULIP early? Estimate what you'd get back versus what you've paid in, so you can decide between surrender, paid-up or staying invested.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Plan type</label>
+            <select value={planType} onChange={e => setPlanType(e.target.value as "endowment" | "ulip")} className={INP}>
+              <option value="endowment">Traditional / endowment</option>
+              <option value="ulip">ULIP (market-linked)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual premium (₹)</label>
+            <input type="number" value={annualPremium} onChange={e => setAnnualPremium(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Policy term (years)</label>
+            <input type="number" value={policyTerm} onChange={e => setPolicyTerm(e.target.value)} placeholder="20" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Years premium paid</label>
+            <input type="number" value={paidYears} onChange={e => setPaidYears(e.target.value)} placeholder="4" className={INP} />
+          </div>
+          {planType === "ulip" && (
+            <div className="col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Current fund value (₹)</label>
+              <input type="number" value={fundValue} onChange={e => setFundValue(e.target.value)} placeholder="420000" className={INP} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total premiums paid", value: formatAmount(Math.round(result.totalPaid)), color: "text-[var(--color-text)]" },
+          { label: "Estimated surrender value", value: formatAmount(result.surrenderValue), color: "text-blue-400" },
+          { label: result.surrenderValue >= result.totalPaid ? "Net gain" : "Net loss on exit", value: formatAmount(Math.round(Math.abs(loss))), color: result.surrenderValue >= result.totalPaid ? "text-green-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {result.locked && (
+        <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
+          <p className="text-sm text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} />
+            {planType === "ulip"
+              ? "Within the 5-year ULIP lock-in — surrendering now moves the fund to a discontinuance account (charges apply) and you can't withdraw until lock-in ends."
+              : "No guaranteed surrender value yet — most traditional plans pay nothing if you exit before two full years of premium. Consider making it paid-up instead."}
+          </p>
+        </div>
+      )}
+      {planType === "endowment" && !result.locked && (
+        <p className="text-xs text-[var(--color-muted)] px-1">Guaranteed Surrender Value factor applied: <strong className="text-[var(--color-text)]">{result.factorPct}%</strong> of eligible premiums. Special (insurer-declared) surrender value may be higher — ask for a surrender quote before deciding.</p>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Rough estimate only. Endowment surrender uses indicative IRDAI GSV factors (rising with elapsed term, first year's premium excluded, nil before two years). ULIPs carry a 5-year lock-in and discontinuance charges. Always get the exact surrender/paid-up figures from your insurer before acting.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 30. Group vs Individual Cost Compare (health)
+// ─────────────────────────────────────────────────────────────────────────────
+function GroupVsIndividual() {
+  const [heads, setHeads] = useState("8");
+  const [avgAge, setAvgAge] = useState("38");
+  const [coverPerHead, setCoverPerHead] = useState("500000");
+  const [employerSharePct, setEmployerSharePct] = useState("100");
+
+  const n = Math.max(0, parseInt(heads) || 0);
+  const age = parseFloat(avgAge) || 38;
+  const cover = parseFloat(coverPerHead) || 0;
+  const empShare = (parseFloat(employerSharePct) || 0) / 100;
+
+  const result = useMemo(() => {
+    if (n === 0 || cover <= 0) return null;
+    const ageLoad = age < 30 ? 0.7 : age < 45 ? 1.0 : age < 60 ? 1.6 : 2.6;
+    const per1L = cover / 100000;
+    // Group cover is community-rated and bought wholesale → cheaper per life than retail individual cover.
+    const groupRatePer1L = 900 * ageLoad;
+    const individualRatePer1L = 1450 * ageLoad; // retail loads acquisition + medical underwriting
+    const groupNet = n * per1L * groupRatePer1L;
+    const individualNet = n * per1L * individualRatePer1L;
+    const groupGross = groupNet * 1.18;
+    const individualGross = individualNet * 1.18;
+    const saving = individualGross - groupGross;
+    const savingPct = individualGross > 0 ? (saving / individualGross) * 100 : 0;
+    const employerCost = groupGross * empShare;
+    return { groupGross, individualGross, saving, savingPct, employerCost, perHeadGroup: groupGross / n };
+  }, [n, age, cover, empShare]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Group vs Individual Cost Compare</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Should you put the team on a group mediclaim or let each person buy their own? Group cover is community-rated and usually cheaper per life, with no individual medical underwriting.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lives to cover</label>
+            <input type="number" value={heads} onChange={e => setHeads(e.target.value)} placeholder="8" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Average age</label>
+            <input type="number" value={avgAge} onChange={e => setAvgAge(e.target.value)} placeholder="38" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cover per head (₹ SI)</label>
+            <input type="number" value={coverPerHead} onChange={e => setCoverPerHead(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employer-paid share (%)</label>
+            <input type="number" value={employerSharePct} onChange={e => setEmployerSharePct(e.target.value)} placeholder="100" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the number of lives and cover per head to compare.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Group plan (gross)", value: formatAmount(Math.round(result.groupGross)), color: "text-green-400" },
+              { label: "Individual plans (gross)", value: formatAmount(Math.round(result.individualGross)), color: "text-red-400" },
+              { label: "Per head (group, all-in)", value: formatAmount(Math.round(result.perHeadGroup)), color: "text-[var(--color-text)]" },
+              { label: "Employer outlay", value: formatAmount(Math.round(result.employerCost)), color: "text-orange-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          {result.saving > 0 && (
+            <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+              <p className="text-sm text-green-400 flex items-center gap-2"><TrendingDown size={14} /> Group cover is about <strong>{formatCurrency(Math.round(result.saving))}</strong> cheaper a year ({result.savingPct.toFixed(0)}% less) than everyone buying individual retail policies — plus it skips per-person medical tests.</p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability — many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
     </div>
   );
 }

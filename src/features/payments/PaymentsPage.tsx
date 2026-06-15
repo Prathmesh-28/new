@@ -9,6 +9,7 @@ import {
   Repeat, FileSpreadsheet, BellRing, Grid3x3, ShieldAlert,
   CalendarRange, Coins, Calculator, FileSearch,
   Download, Trash2,
+  FileCheck, Scale, ListOrdered, Boxes, BadgeCheck, Zap, CopyCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
@@ -21,7 +22,8 @@ type Tab =
   | "overview" | "qr" | "links" | "mandates" | "mdr" | "settlement"
   | "refunds" | "split" | "success" | "collect" | "mix"
   | "autopay" | "bulk" | "reminders" | "qrbatch" | "disputes"
-  | "emi" | "convfee" | "forecast" | "tip" | "utr";
+  | "emi" | "convfee" | "forecast" | "tip" | "utr"
+  | "nach" | "gwcompare" | "dunning" | "vaccount" | "verify" | "instant" | "dupe";
 
 async function copy(text: string, label = "Copied") {
   try {
@@ -69,6 +71,13 @@ export default function PaymentsPage() {
             ["forecast", "Settle Forecast", Calculator],
             ["tip", "Tip & Rounding", IndianRupee],
             ["utr", "UTR Recon", FileSearch],
+            ["nach", "NACH Register", FileCheck],
+            ["gwcompare", "Gateway Compare", Scale],
+            ["dunning", "Dunning Ladder", ListOrdered],
+            ["vaccount", "Virtual Accounts", Boxes],
+            ["verify", "Payee Verify", BadgeCheck],
+            ["instant", "Instant Settle", Zap],
+            ["dupe", "Duplicate Guard", CopyCheck],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -99,6 +108,13 @@ export default function PaymentsPage() {
       {tab === "forecast" && <SettlementForecaster />}
       {tab === "tip" && <TipRoundingConfig />}
       {tab === "utr" && <UtrReconciliation />}
+      {tab === "nach" && <NachRegister />}
+      {tab === "gwcompare" && <GatewayComparator />}
+      {tab === "dunning" && <DunningLadder />}
+      {tab === "vaccount" && <VirtualAccountAllocator />}
+      {tab === "verify" && <PayeeVerifyLog />}
+      {tab === "instant" && <InstantSettleCalculator />}
+      {tab === "dupe" && <DuplicateGuard />}
     </div>
   );
 }
@@ -2193,6 +2209,788 @@ function UtrReconciliation() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">UTR (NEFT/RTGS) and RRN (IMPS/UPI) uniquely identify a transfer end-to-end. Missing = expected but not credited yet (chase the gateway); unexpected = a credit you didn't book; mismatch = amount differs (likely a fee or partial reversal).</p>
+    </div>
+  );
+}
+
+// ── NACH / e-NACH mandate register ─────────────────────────────────────────────────
+type NachRow = {
+  id: string; umrn: string; customer: string; amount: number;
+  freq: "monthly" | "quarterly" | "half-yearly" | "yearly" | "adhoc";
+  sponsorBank: string; debitBank: string; mode: "e-mandate" | "physical";
+  start: string; end: string; status: "pending" | "active" | "rejected" | "cancelled";
+};
+function NachRegister() {
+  const [rows, setRows] = useFeatureState<NachRow[]>("pay-nach", []);
+  const [umrn, setUmrn] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [amount, setAmount] = useState("");
+  const [freq, setFreq] = useState<NachRow["freq"]>("monthly");
+  const [sponsorBank, setSponsorBank] = useState("");
+  const [debitBank, setDebitBank] = useState("");
+  const [mode, setMode] = useState<NachRow["mode"]>("e-mandate");
+  const [start, setStart] = useState(() => new Date().toISOString().split("T")[0]);
+  const [end, setEnd] = useState(() => format(addMonths(new Date(), 12), "yyyy-MM-dd"));
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!customer.trim() || isNaN(a) || a <= 0) { toast.error("Enter customer and a valid max debit amount"); return; }
+    setRows([{ id: crypto.randomUUID(), umrn: umrn.trim(), customer: customer.trim(), amount: a, freq, sponsorBank: sponsorBank.trim(), debitBank: debitBank.trim(), mode, start, end, status: "pending" }, ...rows]);
+    setUmrn(""); setCustomer(""); setAmount("");
+    toast.success("Mandate registered");
+  };
+  const setStatus = (id: string, status: NachRow["status"]) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+
+  const active = rows.filter(r => r.status === "active");
+  const monthlyEquiv = active.reduce((s, r) => {
+    const f = r.freq === "monthly" ? 1 : r.freq === "quarterly" ? 1 / 3 : r.freq === "half-yearly" ? 1 / 6 : r.freq === "yearly" ? 1 / 12 : 0;
+    return s + r.amount * f;
+  }, 0);
+  const expiringSoon = active.filter(r => differenceInCalendarDays(new Date(r.end), new Date()) <= 30).length;
+
+  const STATUS_STYLE: Record<NachRow["status"], string> = {
+    pending: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    active: "bg-green-900/30 text-green-400 border-green-800/40",
+    rejected: "bg-red-900/30 text-red-400 border-red-800/40",
+    cancelled: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> NACH / e-NACH Mandate Register</h2>
+        <p className="text-xs text-[var(--color-muted)]">Maintain the formal mandate paperwork — UMRN, sponsor &amp; destination bank, validity window and approval state — for every NACH / e-NACH debit you sponsor. Distinct from the live AutoPay tracker; this is your register of record.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">UMRN</label>
+            <input value={umrn} onChange={e => setUmrn(e.target.value)} placeholder="HDFC68012..." className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Acme Pvt Ltd" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Max debit ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="5000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={freq} onChange={e => setFreq(e.target.value as NachRow["freq"])} className={INP}>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="half-yearly">Half-yearly</option>
+              <option value="yearly">Yearly</option>
+              <option value="adhoc">As &amp; when</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Mode</label>
+            <select value={mode} onChange={e => setMode(e.target.value as NachRow["mode"])} className={INP}>
+              <option value="e-mandate">e-NACH</option>
+              <option value="physical">Physical</option>
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sponsor bank</label>
+            <input value={sponsorBank} onChange={e => setSponsorBank(e.target.value)} placeholder="HDFC Bank" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer's bank</label>
+            <input value={debitBank} onChange={e => setDebitBank(e.target.value)} placeholder="SBI" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Valid from</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Valid until</label>
+            <input type="date" value={end} onChange={e => setEnd(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Active mandates", value: String(active.length), color: "text-green-400" },
+          { label: "Monthly-equiv value", value: formatAmount(Math.round(monthlyEquiv)), color: "text-blue-400" },
+          { label: "Expiring ≤30d", value: String(expiringSoon), color: expiringSoon ? "text-orange-400" : "text-green-400" },
+          { label: "Total registered", value: String(rows.length), color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No mandates registered. Add the UMRN and bank details once the NPCI mandate is approved.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["UMRN", "Customer", "Max debit", "Freq", "Banks", "Validity", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const daysLeft = differenceInCalendarDays(new Date(r.end), new Date());
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-mono text-[11px]">{r.umrn || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium">{r.customer} <span className="text-[9px] text-[var(--color-muted)]">{r.mode === "e-mandate" ? "e-NACH" : "physical"}</span></td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.freq.replace("-", " ")}</td>
+                      <td className="px-4 py-2.5 text-[11px] text-[var(--color-muted)]">{r.sponsorBank || "—"} → {r.debitBank || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[11px]">
+                        {format(new Date(r.start), "MMM yy")}–{format(new Date(r.end), "MMM yy")}
+                        {r.status === "active" && daysLeft <= 30 && <span className="ml-1 text-[9px] text-orange-400">{daysLeft < 0 ? "expired" : `${daysLeft}d`}</span>}
+                      </td>
+                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {r.status === "pending" && (
+                          <>
+                            <button onClick={() => setStatus(r.id, "active")} className="text-[10px] text-green-400 hover:underline mr-2">Approve</button>
+                            <button onClick={() => setStatus(r.id, "rejected")} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 mr-2">Reject</button>
+                          </>
+                        )}
+                        {r.status === "active" && <button onClick={() => setStatus(r.id, "cancelled")} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 mr-2">Cancel</button>}
+                        <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">UMRN (Unique Mandate Reference Number) is issued by NPCI once a NACH mandate is accepted by the destination bank. e-NACH (Aadhaar/net-banking/debit-card auth) activates in ~T+1; physical mandates take longer. Keep this register reconciled with your sponsor bank's mandate file.</p>
+    </div>
+  );
+}
+
+// ── Payment-gateway comparator ──────────────────────────────────────────────────────
+type GwRow = { id: string; name: string; pct: number; flat: number; successPct: number; settleDays: number };
+function GatewayComparator() {
+  const [monthlyVol, setMonthlyVol] = useState("500000");
+  const [txns, setTxns] = useState("400");
+  const [gws, setGws] = useState<GwRow[]>([
+    { id: crypto.randomUUID(), name: "Razorpay", pct: 2.0, flat: 0, successPct: 92, settleDays: 2 },
+    { id: crypto.randomUUID(), name: "Cashfree", pct: 1.9, flat: 0, successPct: 93, settleDays: 1 },
+    { id: crypto.randomUUID(), name: "PhonePe PG", pct: 1.8, flat: 0, successPct: 90, settleDays: 1 },
+  ]);
+
+  const vol = parseFloat(monthlyVol) || 0;
+  const n = parseInt(txns) || 0;
+
+  const update = (id: string, patch: Partial<GwRow>) => setGws(gws.map(g => g.id === id ? { ...g, ...patch } : g));
+  const addGw = () => setGws([...gws, { id: crypto.randomUUID(), name: `Gateway ${gws.length + 1}`, pct: 2.0, flat: 0, successPct: 90, settleDays: 2 }]);
+
+  const evaluated = gws.map(g => {
+    const mdr = vol * g.pct / 100;
+    const flatTotal = g.flat * n;
+    const fee = mdr + flatTotal;
+    const gst = fee * 0.18;
+    const totalCost = fee + gst;
+    // realised GMV factors in success rate — failed attempts are lost / retried elsewhere
+    const realisedGmv = vol * g.successPct / 100;
+    // effective cost as % of realised volume
+    const effPct = realisedGmv > 0 ? totalCost / realisedGmv * 100 : 0;
+    return { ...g, totalCost, realisedGmv, effPct };
+  });
+  const cheapest = evaluated.length ? evaluated.reduce((a, b) => b.totalCost < a.totalCost ? b : a) : null;
+  const bestEff = evaluated.length ? evaluated.reduce((a, b) => b.effPct < a.effPct ? b : a) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Payment-Gateway Comparator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Compare acquirers on true cost — MDR % plus per-txn flat fee plus 18% GST — and weight it by success rate and settlement speed. The lowest sticker rate isn't always the cheapest once declines are priced in.</p>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly volume ₹</label>
+            <input type="number" value={monthlyVol} onChange={e => setMonthlyVol(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Transactions / mo</label>
+            <input type="number" value={txns} onChange={e => setTxns(e.target.value)} placeholder="400" className={INP} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="grid grid-cols-12 gap-2 text-[10px] text-[var(--color-muted)] uppercase tracking-wider px-1">
+            <span className="col-span-3">Gateway</span><span className="col-span-2">MDR %</span><span className="col-span-2">Flat ₹</span><span className="col-span-2">Success %</span><span className="col-span-2">Settle (d)</span><span className="col-span-1"></span>
+          </div>
+          {gws.map(g => (
+            <div key={g.id} className="grid grid-cols-12 gap-2 items-center">
+              <input value={g.name} onChange={e => update(g.id, { name: e.target.value })} className={`${INP} col-span-3`} />
+              <input type="number" step="0.1" value={g.pct} onChange={e => update(g.id, { pct: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
+              <input type="number" value={g.flat} onChange={e => update(g.id, { flat: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
+              <input type="number" value={g.successPct} onChange={e => update(g.id, { successPct: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
+              <input type="number" value={g.settleDays} onChange={e => update(g.id, { settleDays: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
+              <button onClick={() => setGws(gws.filter(x => x.id !== g.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
+            </div>
+          ))}
+          <button onClick={addGw} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"><Plus size={12} /> Add gateway</button>
+        </div>
+      </div>
+
+      {evaluated.length > 0 && vol > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Gateway", "Total cost/mo", "Realised GMV", "Eff. cost %", "Settle", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {[...evaluated].sort((a, b) => a.effPct - b.effPct).map(g => (
+                  <tr key={g.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{g.name}
+                      {cheapest?.id === g.id && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded-full border border-blue-800/40 bg-blue-900/30 text-blue-400">cheapest</span>}
+                      {bestEff?.id === g.id && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">best value</span>}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(g.totalCost))}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(g.realisedGmv))}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{g.effPct.toFixed(2)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">T+{g.settleDays}</td>
+                    <td className="px-4 py-2.5"></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Effective cost % = (MDR + flat fees + 18% GST) ÷ realised GMV, where realised GMV discounts the volume lost to declines. A gateway with a higher sticker MDR but better success can net out cheaper. Faster settlement (lower T+n) frees working capital — weigh it against cost.</p>
+    </div>
+  );
+}
+
+// ── Subscription dunning retry-ladder ────────────────────────────────────────────────
+type DunStep = { id: string; dayOffset: number; channel: "upi-autopay" | "whatsapp" | "sms" | "email" | "call"; action: string };
+function DunningLadder() {
+  const [steps, setSteps] = useFeatureState<DunStep[]>("pay-dunning", [
+    { id: "d1", dayOffset: 0, channel: "upi-autopay", action: "Auto re-present mandate (T+0)" },
+    { id: "d2", dayOffset: 1, channel: "whatsapp", action: "WhatsApp: 'Payment failed — tap to pay now'" },
+    { id: "d3", dayOffset: 3, channel: "upi-autopay", action: "Second re-presentment after payday window" },
+    { id: "d4", dayOffset: 5, channel: "sms", action: "SMS with fresh payment link" },
+    { id: "d5", dayOffset: 7, channel: "call", action: "Human call + pause/cancel offer" },
+  ]);
+  const [mrr, setMrr] = useState("999");
+  const [failRate, setFailRate] = useState("8");
+  const [subs, setSubs] = useState("300");
+
+  // Per-step incremental recovery assumption (% of still-unpaid recovered at that step)
+  const RECOVERY: Record<DunStep["channel"], number> = {
+    "upi-autopay": 0.35, whatsapp: 0.25, sms: 0.15, email: 0.1, call: 0.4,
+  };
+
+  const sorted = [...steps].sort((a, b) => a.dayOffset - b.dayOffset);
+  const monthlyMrr = parseFloat(mrr) || 0;
+  const subCount = parseInt(subs) || 0;
+  const failed = subCount * (parseFloat(failRate) || 0) / 100;
+  const failedValue = failed * monthlyMrr;
+
+  let remaining = failedValue;
+  const ladder = sorted.map(s => {
+    const rec = remaining * RECOVERY[s.channel];
+    remaining -= rec;
+    return { ...s, recovered: rec, remainingAfter: remaining };
+  });
+  const totalRecovered = failedValue - remaining;
+  const recoveryPct = failedValue > 0 ? totalRecovered / failedValue * 100 : 0;
+
+  const update = (id: string, patch: Partial<DunStep>) => setSteps(steps.map(s => s.id === id ? { ...s, ...patch } : s));
+  const addStep = () => setSteps([...steps, { id: crypto.randomUUID(), dayOffset: (sorted[sorted.length - 1]?.dayOffset ?? 0) + 2, channel: "whatsapp", action: "Follow-up nudge" }]);
+
+  const CH_LABEL: Record<DunStep["channel"], string> = { "upi-autopay": "UPI AutoPay retry", whatsapp: "WhatsApp", sms: "SMS", email: "Email", call: "Call" };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ListOrdered size={14} className="text-[var(--color-primary)]" /> Subscription Dunning Retry-Ladder</h2>
+        <p className="text-xs text-[var(--color-muted)]">Design a multi-channel retry ladder for failed recurring debits and model how much MRR you'd recover. Time re-presentments around payday and escalate channels as days pass.</p>
+        <div className="grid grid-cols-3 gap-3 max-w-lg">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">ARPU / MRR ₹</label>
+            <input type="number" value={mrr} onChange={e => setMrr(e.target.value)} placeholder="999" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Active subs</label>
+            <input type="number" value={subs} onChange={e => setSubs(e.target.value)} placeholder="300" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly fail %</label>
+            <input type="number" value={failRate} onChange={e => setFailRate(e.target.value)} placeholder="8" className={INP} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          {sorted.map((s, i) => (
+            <div key={s.id} className="grid grid-cols-12 gap-2 items-center">
+              <span className="col-span-1 text-[10px] text-[var(--color-muted)] tabular-nums">#{i + 1}</span>
+              <div className="col-span-2 flex items-center gap-1">
+                <span className="text-[10px] text-[var(--color-muted)]">T+</span>
+                <input type="number" value={s.dayOffset} onChange={e => update(s.id, { dayOffset: parseInt(e.target.value) || 0 })} className={INP} />
+              </div>
+              <select value={s.channel} onChange={e => update(s.id, { channel: e.target.value as DunStep["channel"] })} className={`${INP} col-span-3`}>
+                <option value="upi-autopay">UPI AutoPay retry</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="sms">SMS</option>
+                <option value="email">Email</option>
+                <option value="call">Call</option>
+              </select>
+              <input value={s.action} onChange={e => update(s.id, { action: e.target.value })} className={`${INP} col-span-5`} />
+              <button onClick={() => setSteps(steps.filter(x => x.id !== s.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
+            </div>
+          ))}
+          <button onClick={addStep} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"><Plus size={12} /> Add step</button>
+        </div>
+      </div>
+
+      {failedValue > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Failed debits/mo", value: String(Math.round(failed)), color: "text-orange-400" },
+              { label: "At-risk MRR", value: formatAmount(Math.round(failedValue)), color: "text-red-400" },
+              { label: "Recovered (modelled)", value: formatAmount(Math.round(totalRecovered)), color: "text-green-400" },
+              { label: "Recovery rate", value: `${recoveryPct.toFixed(0)}%`, color: "text-blue-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-5 space-y-2`}>
+            <p className="text-sm font-semibold mb-1">Ladder waterfall</p>
+            {ladder.map((s, i) => (
+              <div key={s.id} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs"><span className="text-[var(--color-muted)]">#{i + 1} · T+{s.dayOffset} · {CH_LABEL[s.channel]}</span> — {s.action}</span>
+                <span className="tabular-nums text-green-400 font-semibold whitespace-nowrap">+{formatCurrency(Math.round(s.recovered))}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between text-sm pt-2 text-orange-400">
+              <span className="font-semibold">Still unrecovered (churn risk)</span>
+              <span className="tabular-nums font-bold">{formatCurrency(Math.round(remaining))}</span>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Recovery percentages are planning heuristics — UPI AutoPay re-presentment and a human call typically recover the most. NPCI allows limited re-presentments per mandate cycle; spacing them around the 1st/payday lifts success. Offer pause over cancel to save the relationship.</p>
+    </div>
+  );
+}
+
+// ── Virtual-account allocator ─────────────────────────────────────────────────────────
+type VaRow = { id: string; customer: string; vpaHandle: string; ifsc: string; accountNo: string };
+function VirtualAccountAllocator() {
+  const { store } = useApp();
+  const [rows, setRows] = useFeatureState<VaRow[]>("pay-vaccounts", []);
+  const [customer, setCustomer] = useState("");
+  const base = (store.firm?.name ?? "BIZ").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6) || "BIZ";
+  const handle = base.toLowerCase();
+
+  const add = () => {
+    if (!customer.trim()) { toast.error("Enter a customer / cost-centre name"); return; }
+    const slug = customer.trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8) || "CUST";
+    const seq = (rows.length + 1).toString().padStart(4, "0");
+    const accountNo = `${base}${slug}${seq}`;
+    const vpaHandle = `${handle}.${customer.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 8) || "cust"}@yesbank`;
+    if (rows.some(r => r.accountNo === accountNo)) { toast.error("That virtual account already exists"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), vpaHandle, ifsc: "YESB0CMSNOC", accountNo }, ...rows]);
+    setCustomer("");
+    toast.success("Virtual account allocated");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Virtual-Account Allocator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Mint a unique virtual account number and VPA per customer so every inbound NEFT/IMPS/UPI auto-tags to the right ledger — no more guessing who paid. Share each customer their own deterministic credentials.</p>
+        <div className="flex gap-2 items-end max-w-lg">
+          <div className="flex-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer / cost-centre</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Acme Retail — Pune" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <Plus size={13} /> Allocate
+          </button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Numbers are derived deterministically from your firm name + customer so they're stable and collision-checked. In production these map to a real CMS virtual-account range from your bank/PG.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No virtual accounts yet. Allocate one per customer for hands-free reconciliation.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Virtual A/C", "IFSC", "Collect VPA", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.accountNo}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--color-muted)]">{r.ifsc}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.vpaHandle}</td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <button onClick={() => copy(`A/C ${r.accountNo} · IFSC ${r.ifsc} · UPI ${r.vpaHandle}`, "Account details copied")} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Copy</button>
+                      <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Payee verification log (penny-drop / VPA name check) ─────────────────────────────
+type VerifyRow = { id: string; payee: string; type: "vpa" | "bank"; identifier: string; ifsc: string; nameAtBank: string; checked: string; result: "verified" | "name-mismatch" | "invalid" };
+function PayeeVerifyLog() {
+  const [rows, setRows] = useFeatureState<VerifyRow[]>("pay-verify", []);
+  const [payee, setPayee] = useState("");
+  const [type, setType] = useState<VerifyRow["type"]>("vpa");
+  const [identifier, setIdentifier] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [nameAtBank, setNameAtBank] = useState("");
+
+  const norm = (s: string) => s.toLowerCase().replace(/\b(pvt|private|ltd|limited|llp|the|and|&|co|company)\b/g, "").replace(/[^a-z0-9]/g, "");
+  const idValid = type === "vpa"
+    ? /^[\w.\-]{2,}@[\w.\-]{2,}$/.test(identifier.trim())
+    : /^\d{6,18}$/.test(identifier.trim()) && /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim());
+
+  const add = () => {
+    if (!payee.trim() || !nameAtBank.trim()) { toast.error("Enter the expected payee and the name returned at the bank"); return; }
+    if (!idValid) { toast.error(type === "vpa" ? "Enter a valid VPA" : "Enter a valid account number and IFSC"); return; }
+    const a = norm(payee), b = norm(nameAtBank);
+    const match = a === b || a.includes(b) || b.includes(a);
+    const result: VerifyRow["result"] = match ? "verified" : "name-mismatch";
+    setRows([{ id: crypto.randomUUID(), payee: payee.trim(), type, identifier: identifier.trim(), ifsc: ifsc.trim().toUpperCase(), nameAtBank: nameAtBank.trim(), checked: new Date().toISOString().split("T")[0], result }, ...rows]);
+    setPayee(""); setIdentifier(""); setIfsc(""); setNameAtBank("");
+    if (match) toast.success("Name matches — safe to pay"); else toast.error("Name mismatch — do not pay until resolved");
+  };
+
+  const verified = rows.filter(r => r.result === "verified").length;
+  const flagged = rows.filter(r => r.result !== "verified").length;
+  const STATUS_STYLE: Record<VerifyRow["result"], string> = {
+    verified: "bg-green-900/30 text-green-400 border-green-800/40",
+    "name-mismatch": "bg-orange-900/30 text-orange-400 border-orange-800/40",
+    invalid: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> Payee Verification Log</h2>
+        <p className="text-xs text-[var(--color-muted)]">Before a payout, confirm the beneficiary name at the bank (VPA name-check or ₹1 penny-drop) matches who you intend to pay. Log each check; we fuzzy-match the names and flag mismatches so you never disburse to the wrong account.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expected payee</label>
+            <input value={payee} onChange={e => setPayee(e.target.value)} placeholder="Acme Pvt Ltd" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as VerifyRow["type"])} className={INP}>
+              <option value="vpa">VPA name-check</option>
+              <option value="bank">Penny-drop</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{type === "vpa" ? "VPA" : "Account no."}</label>
+            <input value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder={type === "vpa" ? "acme@okhdfcbank" : "50100123456789"} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC {type === "vpa" && "(n/a)"}</label>
+            <input value={ifsc} onChange={e => setIfsc(e.target.value)} placeholder="HDFC0001234" className={INP} disabled={type === "vpa"} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Name at bank</label>
+            <input value={nameAtBank} onChange={e => setNameAtBank(e.target.value)} placeholder="ACME PRIVATE LIMITED" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <CheckCircle2 size={13} /> Check
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Verified", value: String(verified), color: "text-green-400" },
+          { label: "Flagged", value: String(flagged), color: flagged ? "text-orange-400" : "text-green-400" },
+          { label: "Total checks", value: String(rows.length), color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No verifications logged. Always confirm the beneficiary name before bulk or high-value payouts.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Expected", "Identifier", "Name at bank", "Checked", "Result", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className={`hover:bg-white/2 ${r.result !== "verified" ? "bg-orange-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.identifier}{r.type === "bank" && r.ifsc ? ` · ${r.ifsc}` : ""}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.nameAtBank}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.checked), "d MMM")}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.result]}`}>{r.result.replace("-", " ")}</span></td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Name matching here is a fuzzy check (ignores Pvt/Ltd/LLP and punctuation) — treat a mismatch as a hard stop and re-confirm with the payee. Penny-drop (a ₹1 credit) returns the registered account name; VPA name-check returns the UPI-registered name. Both prevent misdirected funds.</p>
+    </div>
+  );
+}
+
+// ── Instant / same-day settlement accelerator calculator ─────────────────────────────
+function InstantSettleCalculator() {
+  const [amount, setAmount] = useState("100000");
+  const [feePct, setFeePct] = useState("0.20");
+  const [daysSaved, setDaysSaved] = useState("2");
+  const [borrowApr, setBorrowApr] = useState("18");
+
+  const amt = parseFloat(amount) || 0;
+  const fee = amt * (parseFloat(feePct) || 0) / 100;
+  const gstOnFee = fee * 0.18;
+  const totalFee = fee + gstOnFee;
+  const days = parseFloat(daysSaved) || 0;
+  const apr = parseFloat(borrowApr) || 0;
+  // Value of having the cash early = interest you'd otherwise pay to borrow it for `days`
+  const carryValue = amt * apr / 100 * days / 365;
+  const net = carryValue - totalFee;
+  const worthIt = net >= 0;
+  // breakeven APR where carry value == fee
+  const breakevenApr = days > 0 && amt > 0 ? totalFee / (amt * days / 365) * 100 : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> Instant-Settlement Accelerator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Most gateways settle T+1/T+2. Paying a small fee for instant / same-day settlement only pays off if the cost of money you'd otherwise borrow exceeds the fee. This tells you whether to opt in.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Instant-settle fee %</label>
+            <input type="number" step="0.01" value={feePct} onChange={e => setFeePct(e.target.value)} placeholder="0.20" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Days brought forward</label>
+            <input type="number" value={daysSaved} onChange={e => setDaysSaved(e.target.value)} placeholder="2" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your borrowing APR %</label>
+            <input type="number" value={borrowApr} onChange={e => setBorrowApr(e.target.value)} placeholder="18" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {amt > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Instant-settle fee", value: formatCurrency(Math.round(totalFee)), color: "text-orange-400", sub: "incl. 18% GST" },
+              { label: "Value of early cash", value: formatCurrency(Math.round(carryValue)), color: "text-blue-400", sub: `${days}d @ ${apr}% APR` },
+              { label: "Net benefit", value: formatCurrency(Math.round(net)), color: worthIt ? "text-green-400" : "text-red-400", sub: worthIt ? "opt in" : "not worth it" },
+              { label: "Breakeven APR", value: `${breakevenApr.toFixed(1)}%`, color: "text-[var(--color-text)]", sub: "fee pays off above this" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${worthIt ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${worthIt ? "text-green-400" : "text-orange-400"}`}>
+              {worthIt ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {worthIt
+                ? `Opt in — bringing ${formatCurrency(amt)} forward ${days} day(s) is worth ${formatCurrency(Math.round(carryValue))}, more than the ${formatCurrency(Math.round(totalFee))} fee.`
+                : `Skip it — the ${formatCurrency(Math.round(totalFee))} fee exceeds the ${formatCurrency(Math.round(carryValue))} value of the cash arriving ${days} day(s) early. Only worthwhile if your effective cost of capital is above ${breakevenApr.toFixed(1)}%.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Decision rule: opt into instant settlement when your true cost of working capital (overdraft/CC APR, or the discount you'd give to get paid early) exceeds the breakeven APR shown. For idle cash with no borrowing need, the standard T+1 cycle is cheaper.</p>
+    </div>
+  );
+}
+
+// ── Duplicate-payment guard ──────────────────────────────────────────────────────────
+type PayEntry = { id: string; ref: string; customer: string; amount: number; date: string };
+function DuplicateGuard() {
+  const [entries, setEntries] = useFeatureState<PayEntry[]>("pay-dupe-entries", []);
+  const [ref, setRef] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [windowDays, setWindowDays] = useState("3");
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!customer.trim() || isNaN(a) || a <= 0) { toast.error("Enter customer and a valid amount"); return; }
+    setEntries([{ id: crypto.randomUUID(), ref: ref.trim(), customer: customer.trim(), amount: a, date }, ...entries]);
+    setRef(""); setCustomer(""); setAmount("");
+    toast.success("Payment recorded");
+  };
+
+  const win = parseInt(windowDays) || 0;
+  // Group potential duplicates: same customer + same amount within window, or same non-empty ref.
+  const flagged = useMemo(() => {
+    const dupIds = new Set<string>();
+    const groups: PayEntry[][] = [];
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i], b = entries[j];
+        const sameRef = a.ref !== "" && a.ref.toLowerCase() === b.ref.toLowerCase();
+        const sameAmtCust = a.customer.toLowerCase() === b.customer.toLowerCase()
+          && Math.abs(a.amount - b.amount) < 1
+          && Math.abs(differenceInCalendarDays(new Date(a.date), new Date(b.date))) <= win;
+        if (sameRef || sameAmtCust) { dupIds.add(a.id); dupIds.add(b.id); }
+      }
+    }
+    // build display groups keyed by customer+amount (and ref)
+    const map = new Map<string, PayEntry[]>();
+    entries.filter(e => dupIds.has(e.id)).forEach(e => {
+      const key = e.ref ? `ref:${e.ref.toLowerCase()}` : `${e.customer.toLowerCase()}|${e.amount}`;
+      map.set(key, [...(map.get(key) ?? []), e]);
+    });
+    map.forEach(g => { if (g.length > 1) groups.push(g); });
+    return { dupIds, groups };
+  }, [entries, win]);
+
+  const dupValue = entries.filter(e => flagged.dupIds.has(e.id)).reduce((s, e) => s + e.amount, 0);
+  // exposure = value of the *extra* (duplicate) payments beyond the first in each group
+  const exposure = flagged.groups.reduce((s, g) => s + g.slice(1).reduce((x, e) => x + e.amount, 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Guard</h2>
+        <p className="text-xs text-[var(--color-muted)]">Paste or add payments and we flag likely double-charges — same reference, or same customer + same amount within a tolerance window — so you can refund the extra before it becomes a complaint or chargeback.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Ravi Kumar" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="2500" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Order / ref</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="INV-1042" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Window (days)</label>
+            <input type="number" value={windowDays} onChange={e => setWindowDays(e.target.value)} placeholder="3" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Payments tracked", value: String(entries.length), color: "text-[var(--color-text)]" },
+          { label: "Suspected dupes", value: String(flagged.dupIds.size), color: flagged.dupIds.size ? "text-orange-400" : "text-green-400" },
+          { label: "Duplicate exposure", value: formatAmount(Math.round(exposure)), color: exposure ? "text-red-400" : "text-green-400" },
+          { label: "Flagged value", value: formatAmount(Math.round(dupValue)), color: "text-yellow-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {flagged.groups.length > 0 && (
+        <div className="space-y-3">
+          {flagged.groups.map((g, gi) => (
+            <div key={gi} className={`${CARD} p-4 border-orange-800/40`}>
+              <p className="text-xs font-semibold text-orange-400 flex items-center gap-1.5 mb-2"><AlertTriangle size={12} /> Possible duplicate — {g.length} payments of {formatCurrency(g[0].amount)} {g[0].ref ? `· ref ${g[0].ref}` : `to ${g[0].customer}`}</p>
+              <div className="space-y-1">
+                {g.map((e, ei) => (
+                  <div key={e.id} className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--color-muted)]">{ei === 0 ? "Original" : `Duplicate #${ei}`} · {e.customer} · {format(new Date(e.date), "d MMM")} {e.ref && `· ${e.ref}`}</span>
+                    <span className="tabular-nums font-medium">{formatCurrency(e.amount)}{ei > 0 && <span className="ml-2 text-red-400">refund</span>}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Add payments to scan for double-charges. Tip: import a day's settlement and let the guard flag repeats.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Amount", "Ref", "Date", "Flag", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {entries.map(e => (
+                  <tr key={e.id} className={`hover:bg-white/2 ${flagged.dupIds.has(e.id) ? "bg-orange-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium">{e.customer}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.ref || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(e.date), "d MMM")}</td>
+                    <td className="px-4 py-2.5">{flagged.dupIds.has(e.id) ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">dupe?</span> : <span className="text-[10px] text-green-400">ok</span>}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic match: identical non-empty reference, or same customer + same amount within the tolerance window. Genuine repeat purchases can trip this — review each group before refunding. Refund the extra charge to the original instrument and issue a GST credit note if the sale was taxed.</p>
     </div>
   );
 }
