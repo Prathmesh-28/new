@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame, ClipboardCheck, Hammer, Network, ArrowLeftRight, Split } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -19,7 +19,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -241,7 +241,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1455,6 +1455,11 @@ export default function GstPage() {
       {tab === "inverted"           && <InvertedDutyRefundCalculator />}
       {tab === "cdn-register"       && <CreditDebitNoteRegister />}
       {tab === "cess"               && <CompensationCessCalculator />}
+      {tab === "gstr9c"             && <Gstr9cReconciliation />}
+      {tab === "jobwork"            && <JobWorkItc04Tracker />}
+      {tab === "isd"                && <IsdCreditDistributor />}
+      {tab === "branch-transfer"    && <BranchTransferInvoicer />}
+      {tab === "pmt09"              && <Pmt09FundTransfer />}
     </div>
   );
 }
@@ -3719,6 +3724,361 @@ function CompensationCessCalculator() {
           <p className="text-[11px] text-[var(--color-muted)] mt-3">Cess is collected over and above GST and credited to the compensation fund. Rates are indicative — verify the current cess notification for your exact HSN.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── GSTR-9C RECONCILIATION HELPER (audited financials ↔ annual return) ──
+function Gstr9cReconciliation() {
+  const [bookTurnover, setBookTurnover]   = useState("");
+  const [gstr9Turnover, setGstr9Turnover] = useState("");
+  const [bookItc, setBookItc]             = useState("");
+  const [gstr9Itc, setGstr9Itc]           = useState("");
+  const [bookTax, setBookTax]             = useState("");
+  const [gstr9Tax, setGstr9Tax]           = useState("");
+
+  const r = useMemo(() => {
+    const n = (v: string) => parseFloat(v) || 0;
+    const toDiff   = n(bookTurnover) - n(gstr9Turnover);
+    const itcDiff  = n(bookItc) - n(gstr9Itc);
+    const taxDiff  = n(bookTax) - n(gstr9Tax);
+    return { toDiff, itcDiff, taxDiff, anyGap: Math.abs(toDiff) > 1 || Math.abs(itcDiff) > 1 || Math.abs(taxDiff) > 1 };
+  }, [bookTurnover, gstr9Turnover, bookItc, gstr9Itc, bookTax, gstr9Tax]);
+
+  const rows: { label: string; book: string; ret: string; diff: number; note: string }[] = [
+    { label: "Turnover (Table 5/7)", book: bookTurnover, ret: gstr9Turnover, diff: r.toDiff, note: "Un-reconciled turnover may attract demand under Sec 73/74." },
+    { label: "ITC availed (Table 12)", book: bookItc, ret: gstr9Itc, diff: r.itcDiff, note: "Excess book ITC vs return = potential reversal with interest." },
+    { label: "Tax paid (Table 9)", book: bookTax, ret: gstr9Tax, diff: r.taxDiff, note: "Shortfall is payable via DRC-03 with the 9C." },
+  ];
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">GSTR-9C Reconciliation (turnover &gt; ₹5 cr)</strong> — Links your audited books to the annual return (GSTR-9). Enter the figure as per books and as per the filed return for each head; any gap must be explained and any tax shortfall paid via DRC-03.
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-4"><ClipboardCheck size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Reconciliation worksheet</h2></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover as per books (₹)</label><input type="number" value={bookTurnover} onChange={e => setBookTurnover(e.target.value)} placeholder="audited P&L" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover as per GSTR-9 (₹)</label><input type="number" value={gstr9Turnover} onChange={e => setGstr9Turnover(e.target.value)} placeholder="annual return" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">ITC as per books (₹)</label><input type="number" value={bookItc} onChange={e => setBookItc(e.target.value)} placeholder="ledger" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">ITC as per GSTR-9 (₹)</label><input type="number" value={gstr9Itc} onChange={e => setGstr9Itc(e.target.value)} placeholder="Table 12" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Tax paid as per books (₹)</label><input type="number" value={bookTax} onChange={e => setBookTax(e.target.value)} placeholder="provision" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Tax paid as per GSTR-9 (₹)</label><input type="number" value={gstr9Tax} onChange={e => setGstr9Tax(e.target.value)} placeholder="Table 9" className={GST_INPUT} /></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Head", "As per books", "As per return", "Difference", "Note"].map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i >= 1 && i <= 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.label} className="border-t border-[var(--color-border)]">
+                <td className="px-3 py-2 font-medium">{row.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(parseFloat(row.book) || 0)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(parseFloat(row.ret) || 0)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${Math.abs(row.diff) > 1 ? "text-orange-400" : "text-green-400"}`}>{row.diff === 0 ? "—" : (row.diff > 0 ? formatCurrency(row.diff) : `(${formatCurrency(Math.abs(row.diff))})`)}</td>
+                <td className="px-3 py-2 text-[var(--color-muted)]">{Math.abs(row.diff) > 1 ? row.note : "Reconciled"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg px-4 py-3 text-xs border ${r.anyGap ? "bg-orange-950/20 border-orange-800/40 text-orange-300" : "bg-green-950/20 border-green-800/40 text-green-300"}`}>
+        {r.anyGap
+          ? "Differences detected. Provide reasons for each un-reconciled amount in Part II/IV of the 9C, and pay any net tax shortfall through DRC-03 before submitting."
+          : "All heads reconcile within tolerance — your GSTR-9C should sail through with no additional liability."}
+      </div>
+    </div>
+  );
+}
+
+// ── JOB-WORK ITC-04 TRACKER (goods sent to / received from job worker) ──
+function JobWorkItc04Tracker() {
+  type Lot = { id: string; challanNo: string; jobWorker: string; goods: string; sentDate: string; value: number; type: "inputs" | "capital"; received: boolean };
+  const [lots, setLots] = useFeatureState<Lot[]>("gst-jobwork-itc04", []);
+  const [challanNo, setChallanNo] = useState("");
+  const [jobWorker, setJobWorker] = useState("");
+  const [goods, setGoods]         = useState("");
+  const [sentDate, setSentDate]   = useState(() => new Date().toISOString().split("T")[0]);
+  const [value, setValue]         = useState("");
+  const [type, setType]           = useState<"inputs" | "capital">("inputs");
+
+  const add = () => {
+    if (!challanNo || !jobWorker) { toast.error("Challan number and job worker required"); return; }
+    setLots(prev => [...prev, { id: crypto.randomUUID(), challanNo, jobWorker, goods, sentDate, value: parseFloat(value) || 0, type, received: false }]);
+    setChallanNo(""); setJobWorker(""); setGoods(""); setValue("");
+  };
+  const toggleReceived = (id: string) => setLots(prev => prev.map(l => l.id === id ? { ...l, received: !l.received } : l));
+  const remove = (id: string) => setLots(prev => prev.filter(l => l.id !== id));
+
+  const limitDays = (t: Lot["type"]) => t === "inputs" ? 365 : 1095; // 1 yr inputs, 3 yrs capital goods
+  const daysOut = (l: Lot) => Math.floor((Date.now() - new Date(l.sentDate).getTime()) / 86400000);
+  const pending = lots.filter(l => !l.received);
+  const overdue = pending.filter(l => daysOut(l) > limitDays(l.type));
+  const atRiskValue = overdue.reduce((s, l) => s + l.value, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Job-Work Tracker (ITC-04)</strong> — Goods sent to a job worker must return within <strong>1 year (inputs)</strong> or <strong>3 years (capital goods)</strong>, else it is treated as a deemed supply and GST becomes payable. File ITC-04 against delivery challans each period.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Send goods out (delivery challan)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={challanNo} onChange={e => setChallanNo(e.target.value)} placeholder="Challan no *" className={GST_INPUT} />
+          <input value={jobWorker} onChange={e => setJobWorker(e.target.value)} placeholder="Job worker *" className={GST_INPUT} />
+          <input value={goods} onChange={e => setGoods(e.target.value)} placeholder="Goods / description" className={GST_INPUT} />
+          <input type="date" value={sentDate} onChange={e => setSentDate(e.target.value)} className={GST_INPUT} />
+          <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Value (₹)" className={GST_INPUT} />
+          <select value={type} onChange={e => setType(e.target.value as typeof type)} className={GST_INPUT}><option value="inputs">Inputs (1 yr)</option><option value="capital">Capital goods (3 yrs)</option></select>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 md:col-span-2">+ Add challan</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Open with job workers</p><p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{pending.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Past return window</p><p className="text-lg font-bold tabular-nums text-red-400">{overdue.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Deemed-supply value at risk</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(atRiskValue)}</p></div>
+      </div>
+
+      {lots.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Challan", "Job worker", "Goods", "Sent", "Type", "Days out", "Value", "Status", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {lots.slice().reverse().map(l => {
+                const od = !l.received && daysOut(l) > limitDays(l.type);
+                return (
+                  <tr key={l.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-mono">{l.challanNo}</td>
+                    <td className="px-3 py-2">{l.jobWorker}</td>
+                    <td className="px-3 py-2 max-w-[140px] truncate">{l.goods || "—"}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)]">{l.sentDate}</td>
+                    <td className="px-3 py-2">{l.type === "inputs" ? "Inputs" : "Capital"}</td>
+                    <td className={`px-3 py-2 tabular-nums ${od ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{l.received ? "—" : `${daysOut(l)}d`}</td>
+                    <td className="px-3 py-2 tabular-nums">{formatCurrency(l.value)}</td>
+                    <td className="px-3 py-2"><button onClick={() => toggleReceived(l.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${l.received ? "bg-green-950/30 text-green-400" : od ? "bg-red-950/30 text-red-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{l.received ? "Received" : od ? "Overdue" : "Pending"}</button></td>
+                    <td className="px-3 py-2"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── ISD CREDIT DISTRIBUTOR (common input service credit across branches) ──
+function IsdCreditDistributor() {
+  type Branch = { id: string; name: string; turnover: number };
+  const [branches, setBranches] = useFeatureState<Branch[]>("gst-isd-branches", []);
+  const [name, setName]   = useState("");
+  const [to, setTo]       = useState("");
+  const [creditAmt, setCreditAmt] = useState("");
+
+  const addBranch = () => {
+    const t = parseFloat(to) || 0;
+    if (!name) { toast.error("Branch name required"); return; }
+    setBranches(prev => [...prev, { id: crypto.randomUUID(), name, turnover: t }]);
+    setName(""); setTo("");
+  };
+  const remove = (id: string) => setBranches(prev => prev.filter(b => b.id !== id));
+
+  const totalTo = branches.reduce((s, b) => s + b.turnover, 0);
+  const credit = parseFloat(creditAmt) || 0;
+  const distribution = branches.map(b => ({
+    ...b,
+    share: totalTo > 0 ? b.turnover / totalTo : 0,
+    amount: totalTo > 0 ? Math.round(credit * b.turnover / totalTo) : 0,
+  }));
+  const distributed = distribution.reduce((s, d) => s + d.amount, 0);
+  const rounding = credit - distributed; // assign to last branch in display
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">ISD Credit Distributor (Rule 39)</strong> — An Input Service Distributor allocates common input-service ITC (audit, software, head-office costs) to each branch GSTIN in the ratio of that branch's turnover to total turnover, reported via GSTR-6.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add recipient branch</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Branch / unit name *" className={GST_INPUT} />
+          <input type="number" value={to} onChange={e => setTo(e.target.value)} placeholder="Branch turnover (₹)" className={GST_INPUT} />
+          <button onClick={addBranch} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add branch</button>
+        </div>
+        <div>
+          <label className="block text-xs text-[var(--color-muted)] mb-1">Common ITC to distribute (₹)</label>
+          <input type="number" value={creditAmt} onChange={e => setCreditAmt(e.target.value)} placeholder="e.g. 90000" className={`${GST_INPUT} md:max-w-xs`} />
+        </div>
+      </div>
+
+      {branches.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Branch", "Turnover", "Share %", "ITC allocated", ""].map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i >= 1 && i <= 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+            <tbody>
+              {distribution.map((d, i) => (
+                <tr key={d.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2 font-medium">{d.name}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(d.turnover)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[var(--color-muted)]">{(d.share * 100).toFixed(2)}%</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-400">{formatCurrency(d.amount + (i === distribution.length - 1 ? rounding : 0))}</td>
+                  <td className="px-3 py-2 text-right"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                <td className="px-3 py-2 font-bold">Total</td>
+                <td className="px-3 py-2 text-right tabular-nums font-bold">{formatCurrency(totalTo)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-bold">100%</td>
+                <td className="px-3 py-2 text-right tabular-nums font-bold text-green-400">{formatCurrency(credit)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      {branches.length > 0 && rounding !== 0 && (
+        <p className="text-[11px] text-[var(--color-muted)]">A ₹{Math.abs(rounding)} rounding residual is assigned to the last branch so the total distributed equals the credit exactly.</p>
+      )}
+    </div>
+  );
+}
+
+// ── BRANCH-TRANSFER STOCK INVOICING (cross-state stock between own GSTINs) ──
+function BranchTransferInvoicer() {
+  const [fromState, setFromState] = useState("");
+  const [toState, setToState]     = useState("");
+  const [cost, setCost]           = useState("");
+  const [rate, setRate]           = useState(18);
+
+  const r = useMemo(() => {
+    const base = parseFloat(cost) || 0;
+    // Rule 28 (2nd proviso): where recipient is eligible for full ITC, value declared in invoice is deemed open market value.
+    const interState = fromState.trim() !== "" && toState.trim() !== "" && fromState.trim().toLowerCase() !== toState.trim().toLowerCase();
+    const tax = Math.round(base * rate / 100);
+    const half = Math.round(tax / 2);
+    return { base, interState, tax, igst: interState ? tax : 0, cgst: interState ? 0 : half, sgst: interState ? 0 : tax - half, total: base + tax };
+  }, [cost, rate, fromState, toState]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Branch-Transfer Invoicing (Sch. I)</strong> — A stock transfer between two GSTINs of the same PAN in <strong>different states</strong> is a taxable supply even without consideration. Raise a tax invoice; under Rule 28 the invoice value is accepted if the receiving branch can claim full ITC (tax-neutral).
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-4"><ArrowLeftRight size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Transfer valuation</h2></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">From state (sending GSTIN)</label><input value={fromState} onChange={e => setFromState(e.target.value)} placeholder="e.g. Maharashtra" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">To state (receiving GSTIN)</label><input value={toState} onChange={e => setToState(e.target.value)} placeholder="e.g. Karnataka" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Cost / declared value (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="e.g. 250000" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+        </div>
+      </div>
+
+      {r.base > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-[var(--color-muted)]">Supply type</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.interState ? "bg-blue-950/30 text-blue-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.interState ? "Inter-state — IGST" : fromState && toState ? "Intra-state — CGST+SGST" : "Enter both states"}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Taxable value", value: r.base, color: "text-[var(--color-text)]" },
+              ...(r.interState ? [{ label: `IGST @ ${rate}%`, value: r.igst, color: "text-blue-400" }] : [{ label: `CGST @ ${rate / 2}%`, value: r.cgst, color: "text-orange-400" }, { label: `SGST @ ${rate / 2}%`, value: r.sgst, color: "text-orange-400" }]),
+              { label: "Invoice total", value: r.total, color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-base font-bold tabular-nums ${k.color}`}>{formatCurrency(k.value)}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">If the receiving branch claims full ITC, the GST here is fully creditable — the transfer is cash-neutral overall but still requires a compliant tax invoice and e-way bill (value &gt; ₹50,000).</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PMT-09 FUND TRANSFER (move balance between cash-ledger heads) ──
+function Pmt09FundTransfer() {
+  const HEADS = ["IGST", "CGST", "SGST", "Cess"] as const;
+  type Head = typeof HEADS[number];
+  type Xfer = { id: string; from: Head; to: Head; minor: "Tax" | "Interest" | "Penalty" | "Fee" | "Other"; amount: number };
+  const [xfers, setXfers] = useFeatureState<Xfer[]>("gst-pmt09-transfers", []);
+  const [from, setFrom]   = useState<Head>("CGST");
+  const [to, setTo]       = useState<Head>("IGST");
+  const [minor, setMinor] = useState<Xfer["minor"]>("Tax");
+  const [amount, setAmount] = useState("");
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { toast.error("Enter a positive amount"); return; }
+    if (from === to) { toast.error("Source and destination heads must differ"); return; }
+    setXfers(prev => [...prev, { id: crypto.randomUUID(), from, to, minor, amount: amt }]);
+    setAmount("");
+    toast.success(`Staged ₹${amt.toLocaleString("en-IN")} ${from} → ${to}`);
+  };
+  const remove = (id: string) => setXfers(prev => prev.filter(x => x.id !== id));
+
+  const net: Record<Head, number> = { IGST: 0, CGST: 0, SGST: 0, Cess: 0 };
+  for (const x of xfers) { net[x.from] -= x.amount; net[x.to] += x.amount; }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">PMT-09 Fund Transfer</strong> — Form PMT-09 moves an amount wrongly deposited under one head of the <strong>electronic cash ledger</strong> to the correct head (e.g. CGST → IGST), so you don't have to claim a refund. It only reshuffles cash already paid; it cannot touch the credit ledger.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Stage a transfer</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">From head</label><select value={from} onChange={e => setFrom(e.target.value as Head)} className={GST_INPUT}>{HEADS.map(h => <option key={h} value={h}>{h}</option>)}</select></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">To head</label><select value={to} onChange={e => setTo(e.target.value as Head)} className={GST_INPUT}>{HEADS.map(h => <option key={h} value={h}>{h}</option>)}</select></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Minor head</label><select value={minor} onChange={e => setMinor(e.target.value as Xfer["minor"])} className={GST_INPUT}>{["Tax", "Interest", "Penalty", "Fee", "Other"].map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 12000" className={GST_INPUT} /></div>
+          <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Stage</button></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {HEADS.map(h => (
+          <div key={h} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{h} cash net change</p>
+            <p className={`text-lg font-bold tabular-nums ${net[h] > 0 ? "text-green-400" : net[h] < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{net[h] === 0 ? "—" : net[h] > 0 ? `+${formatCurrency(net[h])}` : `(${formatCurrency(Math.abs(net[h]))})`}</p>
+          </div>
+        ))}
+      </div>
+
+      {xfers.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["From", "To", "Minor head", "Amount", ""].map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+            <tbody>
+              {xfers.slice().reverse().map(x => (
+                <tr key={x.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2 font-medium text-red-400">{x.from}</td>
+                  <td className="px-3 py-2 font-medium text-green-400">{x.to}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{x.minor}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatCurrency(x.amount)}</td>
+                  <td className="px-3 py-2 text-right"><button onClick={() => remove(x.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)]">File the actual transfer at gst.gov.in → Services → Ledgers → Electronic Cash Ledger → File PMT-09. Each row above maps to one transfer line.</p>
     </div>
   );
 }

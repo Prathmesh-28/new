@@ -11,7 +11,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
   AreaChart, Area, ComposedChart,
 } from "recharts";
-import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, parseISO, getDay, subYears } from "date-fns";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -69,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags" | "margin-trends" | "expense-ratios" | "ar-ageing" | "break-even" | "working-capital" | "seasonality" | "refund-impact" | "per-employee">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags" | "margin-trends" | "expense-ratios" | "ar-ageing" | "break-even" | "working-capital" | "seasonality" | "refund-impact" | "per-employee" | "yoy-growth" | "new-vs-repeat" | "weekday-pattern" | "aov-trend" | "channel-split">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -198,6 +198,11 @@ export default function AnalyticsPage() {
     { id: "seasonality",      label: "Seasonality" },
     { id: "refund-impact",    label: "Refund Impact" },
     { id: "per-employee",     label: "Per-Employee" },
+    { id: "yoy-growth",       label: "YoY Growth" },
+    { id: "new-vs-repeat",    label: "New vs Repeat" },
+    { id: "weekday-pattern",  label: "Weekday Pattern" },
+    { id: "aov-trend",        label: "AOV Trend" },
+    { id: "channel-split",    label: "Channel Split" },
   ] as const;
 
   const benchmarks = [
@@ -1090,6 +1095,11 @@ export default function AnalyticsPage() {
       {tab === "seasonality" && <SeasonalityTab />}
       {tab === "refund-impact" && <RefundImpactTab />}
       {tab === "per-employee" && <PerEmployeeTab />}
+      {tab === "yoy-growth" && <YoYGrowthTab />}
+      {tab === "new-vs-repeat" && <NewVsRepeatTab />}
+      {tab === "weekday-pattern" && <WeekdayPatternTab />}
+      {tab === "aov-trend" && <AovTrendTab />}
+      {tab === "channel-split" && <ChannelSplitTab />}
     </div>
   );
 }
@@ -3442,6 +3452,434 @@ function PerEmployeeTab() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Per-employee metrics annualise the trailing 12 months and divide by your entered headcount. The benchmark is a reference figure you set, not live peer data. Useful for tracking productivity as you hire. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #100 YEAR-OVER-YEAR GROWTH DECOMPOSITION ────────────────────────────────────
+function YoYGrowthTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: how many trailing months to decompose (3 / 6 / 12).
+  const [yWin, setYWin] = useFeatureState<"3" | "6" | "12">("anl-yoy-window", "6");
+  const winN = Number(yWin);
+
+  const rows = useMemo(() => {
+    return Array.from({ length: winN }, (_, i) => {
+      const d = subMonths(now, winN - 1 - i);
+      const py = subYears(d, 1);
+      const curStart = startOfMonth(d).toISOString().split("T")[0];
+      const curEnd = endOfMonth(d).toISOString().split("T")[0];
+      const pyStart = startOfMonth(py).toISOString().split("T")[0];
+      const pyEnd = endOfMonth(py).toISOString().split("T")[0];
+      const rev = (s: string, e: string) => transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date >= s && t.date <= e).reduce((a, t) => a + t.amount, 0);
+      const cur = rev(curStart, curEnd);
+      const prior = rev(pyStart, pyEnd);
+      const growthPct = prior > 0 ? Math.round(((cur - prior) / prior) * 100) : null;
+      return { month: format(d, "MMM yy"), cur, prior, abs: cur - prior, growthPct };
+    });
+  }, [transactions, winN]);
+
+  const totCur = rows.reduce((s, r) => s + r.cur, 0);
+  const totPrior = rows.reduce((s, r) => s + r.prior, 0);
+  const totGrowthAbs = totCur - totPrior;
+  const totGrowthPct = totPrior > 0 ? Math.round((totGrowthAbs / totPrior) * 100) : null;
+  const hasPrior = totPrior > 0;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Year-over-year revenue growth</p></div>
+          <div className="flex gap-1">
+            {(["3", "6", "12"] as const).map(w => (
+              <button key={w} onClick={() => setYWin(w)} className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${yWin === w ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{w}M</button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Each month compared to the same calendar month one year earlier. Needs at least 13 months of transaction history to be meaningful.</p>
+      </div>
+
+      {!hasPrior ? (
+        <div className={`${ANALYTICS_CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No prior-year revenue in this window. Once you have transactions spanning more than a year, YoY growth appears here.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <MetricCard label="This period revenue" value={formatCurrency(totCur)} color="text-green-400" note={`Trailing ${winN} months`} />
+            <MetricCard label="Same period last year" value={formatCurrency(totPrior)} color="text-[var(--color-muted)]" note="Prior-year baseline" />
+            <MetricCard label="Absolute growth" value={`${totGrowthAbs >= 0 ? "+" : "−"}${formatCurrency(Math.abs(totGrowthAbs))}`} color={totGrowthAbs >= 0 ? "text-green-400" : "text-red-400"} note="YoY rupee change" />
+            <MetricCard label="Growth rate" value={totGrowthPct !== null ? `${totGrowthPct >= 0 ? "+" : ""}${totGrowthPct}%` : "—"} color={totGrowthPct !== null && totGrowthPct >= 0 ? "text-green-400" : "text-red-400"} note="YoY %" />
+          </div>
+
+          <div className={`${ANALYTICS_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-4">This year vs last year · by month</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={rows} barCategoryGap="22%">
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--color-accent)", opacity: 0.4 }} />
+                <Bar dataKey="prior" name="Last year" fill="#6b7280" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="cur" name="This year" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Monthly growth decomposition</p></div>
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Month", "This year", "Last year", "Δ Amount", "Growth"].map((h, i) => <th key={h} className={`px-5 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.month} className="hover:bg-white/2 text-xs">
+                    <td className="px-5 py-2.5 font-medium">{r.month}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-green-400">{formatAmount(r.cur)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(r.prior)}</td>
+                    <td className={`px-5 py-2.5 text-right tabular-nums font-semibold ${r.abs >= 0 ? "text-green-400" : "text-red-400"}`}>{r.abs >= 0 ? "+" : "−"}{formatAmount(Math.abs(r.abs))}</td>
+                    <td className="px-5 py-2.5 text-right">{r.growthPct !== null ? <DeltaBadge pct={r.growthPct} /> : <span className="text-[var(--color-muted)]">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">YoY isolates true growth from seasonal swings by comparing like months. Months with no prior-year data show "—". Computed live from revenue transactions. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #66 NEW vs REPEAT CUSTOMER REVENUE ──────────────────────────────────────────
+function NewVsRepeatTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: lookback window in months for the new/repeat split.
+  const [months, setMonths] = useFeatureState("anl-nvr-months", 6);
+
+  const data = useMemo(() => {
+    const winStart = startOfMonth(subMonths(now, Math.max(1, months) - 1)).toISOString().split("T")[0];
+    // First-ever revenue date per customer across the FULL history defines "new".
+    const firstSeen: Record<string, string> = {};
+    transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer").forEach(t => {
+      if (!firstSeen[t.counterparty] || t.date < firstSeen[t.counterparty]) firstSeen[t.counterparty] = t.date;
+    });
+    let newRev = 0, repeatRev = 0;
+    const newSet = new Set<string>(), repeatSet = new Set<string>();
+    transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer" && t.date >= winStart).forEach(t => {
+      const isNew = firstSeen[t.counterparty] >= winStart;
+      if (isNew) { newRev += t.amount; newSet.add(t.counterparty); }
+      else { repeatRev += t.amount; repeatSet.add(t.counterparty); }
+    });
+    const total = newRev + repeatRev;
+    return {
+      newRev, repeatRev, total,
+      newCount: newSet.size, repeatCount: repeatSet.size,
+      newPct: total > 0 ? Math.round((newRev / total) * 100) : 0,
+      repeatPct: total > 0 ? Math.round((repeatRev / total) * 100) : 0,
+    };
+  }, [transactions, months]);
+
+  const pie = [
+    { name: "New customers", value: data.newRev, color: "#3b82f6" },
+    { name: "Repeat customers", value: data.repeatRev, color: "#22c55e" },
+  ].filter(s => s.value > 0);
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">New vs repeat customer revenue</p></div>
+          <label className="text-xs flex items-center gap-2"><span className="text-[var(--color-muted)]">Window (months)</span>
+            <input type="number" min={1} max={36} value={months} onChange={e => setMonths(Math.min(36, Math.max(1, parseInt(e.target.value) || 1)))} className={`${ANALYTICS_INPUT} w-16`} />
+          </label>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">A customer is "new" if their first-ever revenue transaction falls inside the window; otherwise they are "repeat". Uses counterparty names across full history.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Repeat revenue" value={formatCurrency(data.repeatRev)} color="text-green-400" note={`${data.repeatPct}% of total · ${data.repeatCount} customers`} />
+        <MetricCard label="New revenue" value={formatCurrency(data.newRev)} color="text-blue-400" note={`${data.newPct}% of total · ${data.newCount} customers`} />
+        <MetricCard label="Retention mix" value={`${data.repeatPct}%`} color={data.repeatPct >= 50 ? "text-green-400" : "text-yellow-400"} note="Revenue from existing base" />
+        <MetricCard label="Acquisition mix" value={`${data.newPct}%`} color="text-blue-400" note="Revenue from new logos" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Revenue split</p>
+        {pie.length === 0 ? (
+          <div className="flex items-center justify-center h-[180px] text-sm text-[var(--color-muted)]">No revenue in this window</div>
+        ) : (
+          <div className="flex items-start gap-6 flex-wrap">
+            <ResponsiveContainer width={160} height={160}>
+              <PieChart>
+                <Pie data={pie} cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={3} dataKey="value">
+                  {pie.map((s, i) => <Cell key={i} fill={s.color} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => [formatAmount(v), ""]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex-1 min-w-[180px] space-y-3 pt-2">
+              {pie.map(s => (
+                <div key={s.name}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />{s.name}</span>
+                    <span className="tabular-nums font-semibold">{formatCurrency(s.value)}</span>
+                  </div>
+                  <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${data.total > 0 ? Math.round((s.value / data.total) * 100) : 0}%`, background: s.color }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A healthy SMB usually earns the majority of revenue from repeat customers. A heavy "new" tilt means growth depends on constant acquisition. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #67-adjacent WEEKDAY / DAY-OF-WEEK SALES PATTERN ────────────────────────────
+function WeekdayPatternTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const data = useMemo(() => {
+    const acc = DAYS.map(d => ({ day: d, revenue: 0, count: 0 }));
+    transactions.filter(t => t.amount > 0 && t.category !== "transfer").forEach(t => {
+      const idx = getDay(parseISO(t.date));
+      if (idx >= 0 && idx < 7) { acc[idx].revenue += t.amount; acc[idx].count += 1; }
+    });
+    return acc.map(d => ({ ...d, avg: d.count > 0 ? d.revenue / d.count : 0 }));
+  }, [transactions]);
+
+  const totalRev = data.reduce((s, d) => s + d.revenue, 0);
+  const sorted = [...data].filter(d => d.count > 0).sort((a, b) => b.revenue - a.revenue);
+  const best = sorted[0];
+  const worst = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+  const weekendRev = data[0].revenue + data[6].revenue;
+  const weekendPct = totalRev > 0 ? Math.round((weekendRev / totalRev) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2"><CalendarDays size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Weekday sales pattern</p></div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Revenue grouped by the day of week each transaction landed. Helps plan staffing, promos and cash-collection timing.</p>
+      </div>
+
+      {totalRev === 0 ? (
+        <div className={`${ANALYTICS_CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No revenue transactions to analyse yet.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <MetricCard label="Strongest day" value={best ? best.day : "—"} color="text-green-400" note={best ? `${formatCurrency(best.revenue)} total` : ""} />
+            <MetricCard label="Weakest day" value={worst ? worst.day : "—"} color="text-yellow-400" note={worst ? `${formatCurrency(worst.revenue)} total` : "Need more data"} />
+            <MetricCard label="Weekend share" value={`${weekendPct}%`} color={weekendPct >= 40 ? "text-blue-400" : "text-[var(--color-text)]"} note="Sat + Sun of revenue" />
+          </div>
+
+          <div className={`${ANALYTICS_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-4">Revenue by day of week</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data} barCategoryGap="24%">
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--color-accent)", opacity: 0.4 }} />
+                <Bar dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]}>
+                  {data.map((d, i) => <Cell key={i} fill={best && d.day === best.day ? "#22c55e" : "var(--color-primary)"} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Day breakdown</p></div>
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Day", "Revenue", "Transactions", "Avg ticket", "Share"].map((h, i) => <th key={h} className={`px-5 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {data.map(d => (
+                  <tr key={d.day} className="hover:bg-white/2 text-xs">
+                    <td className="px-5 py-2.5 font-medium">{d.day}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-green-400">{formatAmount(d.revenue)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{d.count}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{d.avg > 0 ? formatAmount(d.avg) : "—"}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{totalRev > 0 ? Math.round((d.revenue / totalRev) * 100) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Patterns reflect the booking date of bank/UPI transactions, which may lag the actual sale for credit terms. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #67 AVERAGE ORDER VALUE TREND ───────────────────────────────────────────────
+function AovTrendTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: trailing months to chart AOV over.
+  const [range, setRange] = useFeatureState<"6" | "12">("anl-aov-range", "6");
+  const rangeN = Number(range);
+
+  const rows = useMemo(() => {
+    return Array.from({ length: rangeN }, (_, i) => {
+      const d = subMonths(now, rangeN - 1 - i);
+      const start = startOfMonth(d).toISOString().split("T")[0];
+      const end = endOfMonth(d).toISOString().split("T")[0];
+      const mTxns = transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date >= start && t.date <= end);
+      const revenue = mTxns.reduce((s, t) => s + t.amount, 0);
+      const count = mTxns.length;
+      return { month: format(d, "MMM"), aov: count > 0 ? Math.round(revenue / count) : 0, count, revenue };
+    });
+  }, [transactions, rangeN]);
+
+  const withData = rows.filter(r => r.count > 0);
+  const overallAov = withData.length > 0 ? Math.round(rows.reduce((s, r) => s + r.revenue, 0) / Math.max(1, rows.reduce((s, r) => s + r.count, 0))) : 0;
+  const latest = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const aovDelta = latest && prev ? delta(latest.aov, prev.aov) : null;
+  const peak = withData.length > 0 ? withData.reduce((m, r) => (r.aov > m.aov ? r : m), withData[0]) : null;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Average order value trend</p></div>
+          <div className="flex gap-1">
+            {(["6", "12"] as const).map(r => (
+              <button key={r} onClick={() => setRange(r)} className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${range === r ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{r}M</button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">AOV = revenue ÷ number of revenue transactions in the month. Rising AOV means bigger deals or upsell; falling AOV may signal discounting or smaller baskets.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Overall AOV" value={overallAov > 0 ? formatCurrency(overallAov) : "—"} color="text-[var(--color-primary)]" note={`Trailing ${rangeN} months`} />
+        <MetricCard label="Latest month AOV" value={latest && latest.aov > 0 ? formatCurrency(latest.aov) : "—"} color="text-green-400" note={latest ? latest.month : ""} />
+        <MetricCard label="Peak month" value={peak ? peak.month : "—"} color="text-blue-400" note={peak ? formatCurrency(peak.aov) : ""} />
+        <MetricCard label="MoM change" value={aovDelta !== null ? `${aovDelta >= 0 ? "+" : ""}${aovDelta}%` : "—"} color={aovDelta !== null && aovDelta >= 0 ? "text-green-400" : "text-red-400"} note="vs previous month" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">AOV over time</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={32} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar yAxisId="right" dataKey="count" name="Transactions" fill="var(--color-border)" radius={[3, 3, 0, 0]} />
+            <Line yAxisId="left" type="monotone" dataKey="aov" name="Avg order value" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 3, fill: "var(--color-primary)" }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Bars show transaction count (right axis); line shows AOV (left axis). A rising line on flat bars means each sale is getting larger.</p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Each inbound revenue transaction is treated as one "order". Where one invoice is paid in multiple instalments this slightly understates AOV. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #20 REVENUE BY CHANNEL (ORDER SOURCE) ───────────────────────────────────────
+function ChannelSplitTab() {
+  const { store } = useApp();
+  const { orders } = store;
+  const CHANNEL_LABEL: Record<string, string> = { whatsapp: "WhatsApp", email: "Email", excel: "Excel upload", manual: "Manual entry", phone: "Phone" };
+  const CHANNEL_COLOR: Record<string, string> = { whatsapp: "#22c55e", email: "#3b82f6", excel: "#14b8a6", manual: "#8b5cf6", phone: "#f97316" };
+
+  const rows = useMemo(() => {
+    const acc: Record<string, { value: number; count: number }> = {};
+    orders.filter(o => o.status !== "cancelled").forEach(o => {
+      const k = o.source;
+      if (!acc[k]) acc[k] = { value: 0, count: 0 };
+      acc[k].value += o.totalValue;
+      acc[k].count += 1;
+    });
+    return Object.entries(acc)
+      .map(([source, v]) => ({ source, label: CHANNEL_LABEL[source] ?? source, value: v.value, count: v.count, color: CHANNEL_COLOR[source] ?? "#6b7280" }))
+      .sort((a, b) => b.value - a.value);
+  }, [orders]);
+
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const top = rows.length > 0 ? rows[0] : null;
+  const topPct = top && total > 0 ? Math.round((top.value / total) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Revenue by sales channel</p></div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Order value grouped by the channel each order came in through (WhatsApp, email, phone, etc.). Cancelled orders excluded.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className={`${ANALYTICS_CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No orders recorded yet. Capture orders to see the channel mix.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <MetricCard label="Total order value" value={formatCurrency(total)} color="text-green-400" note={`${rows.reduce((s, r) => s + r.count, 0)} orders · ${rows.length} channels`} />
+            <MetricCard label="Top channel" value={top ? top.label : "—"} color="text-[var(--color-primary)]" note={top ? `${formatCurrency(top.value)} · ${topPct}%` : ""} />
+            <MetricCard label="Channel concentration" value={`${topPct}%`} color={topPct > 70 ? "text-yellow-400" : "text-green-400"} note={topPct > 70 ? "Heavily channel-dependent" : "Reasonably spread"} />
+          </div>
+
+          <div className={`${ANALYTICS_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-4">Channel mix</p>
+            <div className="flex items-start gap-6 flex-wrap">
+              <ResponsiveContainer width={160} height={160}>
+                <PieChart>
+                  <Pie data={rows} cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={3} dataKey="value">
+                    {rows.map((r, i) => <Cell key={i} fill={r.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => [formatAmount(v), ""]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 min-w-[200px] space-y-3 pt-1">
+                {rows.map(r => {
+                  const pct = total > 0 ? Math.round((r.value / total) * 100) : 0;
+                  return (
+                    <div key={r.source}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: r.color }} />{r.label}</span>
+                        <span className="tabular-nums font-semibold">{formatCurrency(r.value)} <span className="text-[var(--color-muted)] font-normal">· {pct}%</span></span>
+                      </div>
+                      <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: r.color }} /></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Channel detail</p></div>
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Channel", "Order value", "Orders", "Avg order", "Share"].map((h, i) => <th key={h} className={`px-5 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.source} className="hover:bg-white/2 text-xs">
+                    <td className="px-5 py-2.5 font-medium"><span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.label}</span></td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-green-400">{formatAmount(r.value)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{r.count}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{r.count > 0 ? formatAmount(r.value / r.count) : "—"}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{total > 0 ? Math.round((r.value / total) * 100) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Based on captured orders, not bank transactions, so totals may differ from booked revenue. Useful for deciding where to invest sales effort. Indicative.</p>
     </div>
   );
 }

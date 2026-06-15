@@ -9,6 +9,7 @@ import {
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
   Palette, Truck, Percent, Trash2, ArrowRight, Copy,
   Layers, UploadCloud, FileSearch, Calculator, MessageSquareWarning, ScrollText, Milestone, PiggyBank,
+  FileJson, BookUser, Wallet, TrendingUp, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -289,6 +290,7 @@ export default function InvoicesPage() {
     | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
     | "multicurrency" | "approval" | "template" | "challan" | "latefee"
     | "ageing" | "bulk" | "pomatch" | "tds" | "dispute" | "terms" | "milestone" | "advance"
+    | "einvoicejson" | "statement" | "partial" | "profit" | "tcs"
   >("all");
 
   // Mirror the backend invoices into the shared store so the analytics engine,
@@ -423,6 +425,11 @@ export default function InvoicesPage() {
           ["terms", "Payment Terms", ScrollText],
           ["milestone", "Milestone Billing", Milestone],
           ["advance", "Advance/Retainer", PiggyBank],
+          ["einvoicejson", "e-Invoice JSON", FileJson],
+          ["statement", "Statement of A/c", BookUser],
+          ["partial", "Partial Payments", Wallet],
+          ["profit", "Invoice Margin", TrendingUp],
+          ["tcs", "TCS u/s 206C", Receipt],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -450,6 +457,11 @@ export default function InvoicesPage() {
        tab === "terms"         ? <PaymentTermsLibrary /> :
        tab === "milestone"     ? <MilestoneBilling /> :
        tab === "advance"       ? <AdvanceAdjustment invoices={invoices} /> :
+       tab === "einvoicejson"  ? <EInvoiceJsonGenerator invoices={invoices} /> :
+       tab === "statement"     ? <StatementOfAccount invoices={invoices} /> :
+       tab === "partial"       ? <PartialPaymentTracker invoices={invoices} /> :
+       tab === "profit"        ? <InvoiceMarginAnalyzer invoices={invoices} /> :
+       tab === "tcs"           ? <TcsCalculator /> :
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
       ) : loading ? (
@@ -2042,6 +2054,375 @@ function AdvanceAdjustment({ invoices }: { invoices: Invoice[] }) {
         </>
       )}
       {NOTE("Advances for services attract GST on receipt (issue a Receipt Voucher). On the final invoice, adjust the advance and pay GST only on the balance to avoid double tax.")}
+    </div>
+  );
+}
+
+// #58 ── e-Invoice JSON (IRP schema) Generator ───────────────────────────────
+// Builds the NIC IRP e-invoice payload (schema 1.1) for any invoice so the CA
+// can upload it to the GST portal / e-invoice API offline tool.
+function EInvoiceJsonGenerator({ invoices }: { invoices: Invoice[] }) {
+  const [supplierGstin, setSupplierGstin] = useFeatureState<string>("invoice-irp-supplier-gstin", "");
+  const [supplierState, setSupplierState] = useFeatureState<string>("invoice-irp-supplier-state", "27");
+  const [selId, setSelId] = useState("");
+
+  const elig = invoices.filter(i => i.status !== "cancelled");
+  const inv = elig.find(i => i.id === selId);
+
+  // CGST+SGST when buyer state == seller state, else IGST (intra vs inter-state).
+  const buyerState = (inv?.customer_gstin || "").slice(0, 2) || supplierState;
+  const intra = buyerState === supplierState;
+
+  const json = useMemo(() => {
+    if (!inv) return "";
+    const sub = parseFloat(String(inv.subtotal)) || 0;
+    const tax = parseFloat(String(inv.gst_amount)) || 0;
+    const tot = parseFloat(String(inv.total_amount)) || 0;
+    const cgst = intra ? Math.round(tax / 2 * 100) / 100 : 0;
+    const sgst = intra ? Math.round((tax - cgst) * 100) / 100 : 0;
+    const igst = intra ? 0 : Math.round(tax * 100) / 100;
+    const payload = {
+      Version: "1.1",
+      TranDtls: { TaxSch: "GST", SupTyp: "B2B", RegRev: "N", IgstOnIntra: "N" },
+      DocDtls: { Typ: "INV", No: inv.invoice_number, Dt: (inv.created_at || "").split("T")[0].split("-").reverse().join("/") },
+      SellerDtls: { Gstin: supplierGstin || "URP", LglNm: "Your Business", Loc: "Mumbai", Pin: 400001, Stcd: supplierState },
+      BuyerDtls: { Gstin: inv.customer_gstin || "URP", LglNm: inv.customer_name, Pos: buyerState, Loc: "—", Pin: 999999, Stcd: buyerState },
+      ItemList: (inv.items && inv.items.length > 0 ? inv.items : [{ description: inv.invoice_number, hsn_sac: "", quantity: 1, unit_price: sub, gst_rate: inv.gst_rate, amount: sub }]).map((it, i) => {
+        const amt = Math.round((parseFloat(String(it.amount)) || (parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.unit_price)) || 0)) * 100) / 100;
+        const rate = parseFloat(String(it.gst_rate)) || 0;
+        const lt = Math.round(amt * rate / 100 * 100) / 100;
+        return {
+          SlNo: String(i + 1), IsServc: it.hsn_sac ? "N" : "Y", HsnCd: it.hsn_sac || "9983",
+          Qty: parseFloat(String(it.quantity)) || 1, Unit: "NOS", UnitPrice: parseFloat(String(it.unit_price)) || amt,
+          TotAmt: amt, AssAmt: amt, GstRt: rate,
+          IgstAmt: intra ? 0 : lt, CgstAmt: intra ? Math.round(lt / 2 * 100) / 100 : 0,
+          SgstAmt: intra ? Math.round((lt - Math.round(lt / 2 * 100) / 100) * 100) / 100 : 0, TotItemVal: Math.round((amt + lt) * 100) / 100,
+        };
+      }),
+      ValDtls: { AssVal: Math.round(sub * 100) / 100, CgstVal: cgst, SgstVal: sgst, IgstVal: igst, TotInvVal: Math.round(tot * 100) / 100 },
+    };
+    return JSON.stringify(payload, null, 2);
+  }, [inv, intra, buyerState, supplierGstin, supplierState]);
+
+  const copy = () => { navigator.clipboard.writeText(json).then(() => toast.success("e-Invoice JSON copied")).catch(() => toast.error("Copy failed")); };
+  const download = () => {
+    if (!inv) return;
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `${inv.invoice_number}-einvoice.json`; a.click();
+    toast.success("JSON downloaded");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileJson size={14} className="text-[var(--color-primary)]" /> e-Invoice JSON (IRP schema 1.1)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Generates the NIC e-invoice payload for upload to the GST portal bulk-generation tool or e-invoice API.</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label className={LBL}>Your GSTIN</label><input value={supplierGstin} onChange={e => setSupplierGstin(e.target.value)} className={INP} placeholder="27AAAAA0000A1Z5" maxLength={15} /></div>
+          <div><label className={LBL}>Your state code</label><input value={supplierState} onChange={e => setSupplierState(e.target.value.replace(/\D/g, "").slice(0, 2))} className={INP} placeholder="27" maxLength={2} /></div>
+          <div>
+            <label className={LBL}>Invoice</label>
+            <select value={selId} onChange={e => setSelId(e.target.value)} className={INP}>
+              <option value="">— select invoice —</option>
+              {elig.map(i => <option key={i.id} value={i.id}>{i.invoice_number} · {i.customer_name}</option>)}
+            </select>
+          </div>
+        </div>
+        {inv && (
+          <>
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`px-2 py-0.5 rounded-full border font-medium ${intra ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-orange-900/30 text-orange-400 border-orange-800/40"}`}>{intra ? "Intra-state: CGST+SGST" : "Inter-state: IGST"}</span>
+              <span className="text-[var(--color-muted)]">Buyer state {buyerState} · Seller state {supplierState}</span>
+            </div>
+            <pre className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-[10px] leading-relaxed font-mono overflow-x-auto max-h-80 overflow-y-auto whitespace-pre">{json}</pre>
+            <div className="flex gap-2">
+              <button onClick={copy} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90"><Copy size={13} /> Copy JSON</button>
+              <button onClick={download} className="flex items-center gap-1.5 border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] py-2 px-4 rounded-lg text-sm"><Download size={13} /> Download .json</button>
+            </div>
+          </>
+        )}
+      </div>
+      {NOTE("Schema mirrors the mandatory IRP fields (Version 1.1). PIN/place are placeholders — fill registered address before upload. e-Invoicing is mandatory for AATO above ₹5 crore.")}
+    </div>
+  );
+}
+
+// #56 ── Customer Statement of Account ───────────────────────────────────────
+function StatementOfAccount({ invoices }: { invoices: Invoice[] }) {
+  const customers = useMemo(() => Array.from(new Set(invoices.filter(i => i.status !== "cancelled").map(i => i.customer_name))).sort(), [invoices]);
+  const [customer, setCustomer] = useState("");
+
+  const rows = useMemo(() => {
+    return invoices
+      .filter(i => i.customer_name === customer && i.status !== "cancelled")
+      .slice()
+      .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+  }, [invoices, customer]);
+
+  let running = 0;
+  const ledger = rows.map(r => {
+    const amt = parseFloat(String(r.total_amount)) || 0;
+    const paid = r.status === "paid";
+    running += paid ? 0 : amt;
+    return { ...r, amt, paid, balance: running };
+  });
+  const billed = rows.reduce((s, r) => s + (parseFloat(String(r.total_amount)) || 0), 0);
+  const received = rows.filter(r => r.status === "paid").reduce((s, r) => s + (parseFloat(String(r.total_amount)) || 0), 0);
+  const outstanding = billed - received;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BookUser size={14} className="text-[var(--color-primary)]" /> Customer Statement of Account</h2>
+        <div className="max-w-sm">
+          <label className={LBL}>Customer</label>
+          <select value={customer} onChange={e => setCustomer(e.target.value)} className={INP}>
+            <option value="">— select customer —</option>
+            {customers.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {customer && (
+          <div className="grid grid-cols-3 gap-3 pt-1">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Billed</p><p className="text-base font-bold tabular-nums">{formatCurrency(billed)}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Received</p><p className="text-base font-bold tabular-nums text-green-400">{formatCurrency(received)}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Outstanding</p><p className={`text-base font-bold tabular-nums ${outstanding > 0 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{formatCurrency(outstanding)}</p></div>
+          </div>
+        )}
+      </div>
+      {customer && ledger.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Invoice", "Debit", "Credit", "Balance"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ledger.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{(r.created_at || "").split("T")[0]}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{r.invoice_number}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amt)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid ? formatCurrency(r.amt) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.balance)}</td>
+                </tr>
+              ))}
+              <tr className="bg-[var(--color-bg)] font-bold">
+                <td className="px-4 py-2.5" colSpan={4}>Closing balance due</td>
+                <td className={`px-4 py-2.5 tabular-nums ${outstanding > 0 ? "text-orange-400" : "text-green-400"}`}>{formatCurrency(outstanding)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {customer && ledger.length === 0 && <p className="text-sm text-[var(--color-muted)] px-1">No invoices for this customer.</p>}
+      {NOTE("A running ledger of all tax invoices and receipts for one buyer. Unpaid invoices add to the debit balance; payments clear it. Share at period-end for reconciliation.")}
+    </div>
+  );
+}
+
+// #28 ── Partial Payment Tracker ─────────────────────────────────────────────
+interface PartPayment { id: string; invoiceId: string; amount: string; mode: string; date: string; }
+function PartialPaymentTracker({ invoices }: { invoices: Invoice[] }) {
+  const [pays, setPays] = useFeatureState<PartPayment[]>("invoice-partial-payments", []);
+  const open = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled");
+  const [invoiceId, setInvoiceId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [mode, setMode] = useState("UPI");
+
+  const paidFor = (id: string) => pays.filter(p => p.invoiceId === id).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+
+  const add = () => {
+    const inv = open.find(i => i.id === invoiceId);
+    if (!inv) { toast.error("Select an open invoice"); return; }
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { toast.error("Enter a valid amount"); return; }
+    const outstanding = (parseFloat(String(inv.total_amount)) || 0) - paidFor(invoiceId);
+    if (amt > outstanding + 0.5) { toast.error(`Amount exceeds outstanding ${formatCurrency(outstanding)}`); return; }
+    setPays(p => [{ id: uid(), invoiceId, amount, mode, date: new Date().toISOString().split("T")[0] }, ...p]);
+    setAmount("");
+    toast.success("Part payment recorded");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Partial Payment Tracker</h2>
+        <div className="grid grid-cols-4 gap-3">
+          <div className="col-span-2">
+            <label className={LBL}>Invoice</label>
+            <select value={invoiceId} onChange={e => setInvoiceId(e.target.value)} className={INP}>
+              <option value="">— select open invoice —</option>
+              {open.map(i => { const out = (parseFloat(String(i.total_amount)) || 0) - paidFor(i.id); return <option key={i.id} value={i.id}>{i.invoice_number} · {formatCurrency(out)} due</option>; })}
+            </select>
+          </div>
+          <div><label className={LBL}>Amount ₹</label><input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className={INP} /></div>
+          <div>
+            <label className={LBL}>Mode</label>
+            <select value={mode} onChange={e => setMode(e.target.value)} className={INP}>{["UPI", "NEFT/RTGS", "Cheque", "Cash", "Card"].map(m => <option key={m} value={m}>{m}</option>)}</select>
+          </div>
+        </div>
+        <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">+ Record part payment</button>
+      </div>
+      {open.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Invoice", "Customer", "Total", "Paid", "Outstanding", "% Paid"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {open.map(i => {
+                const total = parseFloat(String(i.total_amount)) || 0;
+                const paid = paidFor(i.id);
+                const out = total - paid;
+                const pct = total > 0 ? Math.round(paid / total * 100) : 0;
+                return (
+                  <tr key={i.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-mono text-xs">{i.invoice_number}</td>
+                    <td className="px-4 py-2.5 truncate max-w-[160px]">{i.customer_name}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(total)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(paid)}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${out > 0.5 ? "text-orange-400" : "text-green-400"}`}>{formatCurrency(out)}</td>
+                    <td className="px-4 py-2.5"><div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden min-w-[40px]"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} /></div><span className="text-[10px] tabular-nums text-[var(--color-muted)]">{pct}%</span></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pays.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Invoice", "Amount", "Mode", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {pays.map(p => {
+                const inv = invoices.find(i => i.id === p.invoiceId);
+                return (
+                  <tr key={p.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.date}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{inv ? inv.invoice_number : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(parseFloat(p.amount) || 0)}</td>
+                    <td className="px-4 py-2.5 text-xs">{p.mode}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setPays(v => v.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {NOTE("Installments are tracked locally against the invoice's GST-inclusive total. Once cumulative receipts equal the total, mark the invoice paid in the main list.")}
+    </div>
+  );
+}
+
+// ── Invoice Margin / Profitability Analyzer ──────────────────────────────────
+// Margin works on the pre-GST taxable value (GST is a pass-through, not revenue).
+function InvoiceMarginAnalyzer({ invoices }: { invoices: Invoice[] }) {
+  const [costs, setCosts] = useFeatureState<Record<string, string>>("invoice-line-costs", {});
+  const elig = invoices.filter(i => i.status !== "cancelled");
+
+  const rows = elig.map(i => {
+    const revenue = parseFloat(String(i.subtotal)) || 0;
+    const cost = parseFloat(costs[i.id] || "") || 0;
+    const margin = revenue - cost;
+    const marginPct = revenue > 0 && cost > 0 ? Math.round(margin / revenue * 1000) / 10 : null;
+    return { i, revenue, cost, margin, marginPct };
+  });
+  const withCost = rows.filter(r => r.cost > 0);
+  const totalRev = withCost.reduce((s, r) => s + r.revenue, 0);
+  const totalMargin = withCost.reduce((s, r) => s + r.margin, 0);
+  const blendedPct = totalRev > 0 ? Math.round(totalMargin / totalRev * 1000) / 10 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Invoice Margin Analyzer</h2>
+        <p className="text-xs text-[var(--color-muted)]">Enter the cost of goods/services for each invoice to see profit per invoice. Margin is computed on taxable value (GST excluded — it is a pass-through).</p>
+        {withCost.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Revenue (costed)</p><p className="text-base font-bold tabular-nums">{formatCurrency(totalRev)}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Gross margin</p><p className={`text-base font-bold tabular-nums ${totalMargin >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(totalMargin)}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Blended margin %</p><p className={`text-base font-bold tabular-nums ${blendedPct >= 0 ? "text-green-400" : "text-red-400"}`}>{blendedPct}%</p></div>
+          </div>
+        )}
+      </div>
+      {elig.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Invoice", "Customer", "Taxable value", "Cost ₹", "Margin", "Margin %"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(({ i, revenue, margin, marginPct }) => (
+                <tr key={i.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-mono text-xs">{i.invoice_number}</td>
+                  <td className="px-4 py-2.5 truncate max-w-[150px]">{i.customer_name}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(revenue)}</td>
+                  <td className="px-4 py-2.5"><input type="number" min="0" step="0.01" value={costs[i.id] || ""} onChange={e => setCosts(c => ({ ...c, [i.id]: e.target.value }))} className={`${INP} w-28 py-1`} placeholder="0" /></td>
+                  <td className={`px-4 py-2.5 tabular-nums font-semibold ${marginPct === null ? "text-[var(--color-muted)]" : margin >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "—" : formatCurrency(margin)}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${marginPct === null ? "text-[var(--color-muted)]" : marginPct >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "—" : `${marginPct}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="text-sm text-[var(--color-muted)] px-1">No invoices yet.</p>}
+      {NOTE("Costs are stored locally per invoice. Margin = taxable value − cost. A negative or thin margin flags loss-making or under-priced work to renegotiate.")}
+    </div>
+  );
+}
+
+// #31 ── TCS Calculator (Sec 206C / 206C(1H)) ────────────────────────────────
+function TcsCalculator() {
+  const SECTIONS = [
+    { code: "206C(1H)", label: "Sale of goods > ₹50L (1H)", rate: 0.1, panRate: 1, threshold: 5000000 },
+    { code: "206C(1)-scrap", label: "Scrap", rate: 1, panRate: 5, threshold: 0 },
+    { code: "206C(1)-timber", label: "Timber / forest produce", rate: 2.5, panRate: 5, threshold: 0 },
+    { code: "206C(1F)", label: "Motor vehicle > ₹10L", rate: 1, panRate: 1, threshold: 1000000 },
+  ] as const;
+  const [sectionIdx, setSectionIdx] = useState(0);
+  const [saleValue, setSaleValue] = useState("");
+  const [priorReceipts, setPriorReceipts] = useState("0");
+  const [hasPan, setHasPan] = useState(true);
+
+  const sec = SECTIONS[sectionIdx];
+  const sale = parseFloat(saleValue) || 0;
+  const prior = parseFloat(priorReceipts) || 0;
+  // 206C(1H): TCS only on the receipt amount exceeding the ₹50L cumulative threshold.
+  const taxable = sec.code === "206C(1H)"
+    ? Math.max(0, (prior + sale) - sec.threshold) - Math.max(0, prior - sec.threshold)
+    : sec.code === "206C(1F)"
+      ? (sale > sec.threshold ? sale : 0)
+      : sale;
+  const rate = hasPan ? sec.rate : sec.panRate;
+  const tcs = Math.round(taxable * rate / 100 * 100) / 100;
+  const collectTotal = Math.round((sale + tcs) * 100) / 100;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> TCS Calculator (Sec 206C)</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LBL}>TCS section</label>
+            <select value={sectionIdx} onChange={e => setSectionIdx(parseInt(e.target.value, 10))} className={INP}>
+              {SECTIONS.map((s, i) => <option key={s.code} value={i}>{s.label}</option>)}
+            </select>
+          </div>
+          <div><label className={LBL}>This sale / receipt (₹)</label><input type="number" min="0" step="0.01" value={saleValue} onChange={e => setSaleValue(e.target.value)} className={INP} placeholder="100000" /></div>
+          {sec.code === "206C(1H)" && (
+            <div><label className={LBL}>Prior receipts this FY from buyer (₹)</label><input type="number" min="0" step="0.01" value={priorReceipts} onChange={e => setPriorReceipts(e.target.value)} className={INP} /></div>
+          )}
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] cursor-pointer py-2">
+              <input type="checkbox" checked={hasPan} onChange={e => setHasPan(e.target.checked)} className="accent-[var(--color-primary)]" />
+              Buyer has PAN/Aadhaar (else higher rate u/s 206CC)
+            </label>
+          </div>
+        </div>
+        <div className="border-t border-[var(--color-border)] pt-3 space-y-1 text-sm">
+          <div className="flex justify-between text-[var(--color-muted)]"><span>TCS-taxable portion</span><span className="tabular-nums">{formatCurrency(taxable)}</span></div>
+          <div className="flex justify-between text-[var(--color-muted)]"><span>TCS rate applied</span><span className="tabular-nums">{rate}%{!hasPan && " (no-PAN)"}</span></div>
+          <div className="flex justify-between font-semibold text-orange-400"><span>TCS to collect</span><span className="tabular-nums">{formatCurrency(tcs)}</span></div>
+          <div className="flex justify-between font-bold text-base text-[var(--color-primary)]"><span>Total to invoice (sale + TCS)</span><span className="tabular-nums">{formatCurrency(collectTotal)}</span></div>
+        </div>
+      </div>
+      {NOTE("TCS is collected over and above the sale value and shown as a separate line. 206C(1H) applies only to receipts beyond the ₹50L cumulative threshold per buyer per FY. No-PAN buyers attract the higher 206CC rate. Verify current rates before filing.")}
     </div>
   );
 }

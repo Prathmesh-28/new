@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send, Timer, Plane, LogOut, HandCoins, Landmark, Scale, Baby, Target } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send, Timer, Plane, LogOut, HandCoins, Landmark, Scale, Baby, Target, Calculator, UserMinus, Coins, Umbrella, Sun } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -120,7 +120,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi" | "takehome" | "attrition-cost" | "incentive" | "superann" | "gpa">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -223,7 +223,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target], ["takehome", "Take-Home Breakup", Calculator], ["attrition-cost", "Attrition Cost", UserMinus], ["incentive", "Incentive Engine", Coins], ["superann", "Superannuation", Sun], ["gpa", "Group Insurance", Umbrella]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -978,6 +978,11 @@ export default function PayrollPage() {
       {tab === "minwage" && <MinWageCheckTab employees={employees} />}
       {tab === "maternity" && <MaternityBenefitTab employees={employees} />}
       {tab === "roi" && <PeopleRoiTab employees={employees} />}
+      {tab === "takehome" && <TakeHomeBreakupTab employees={employees} />}
+      {tab === "attrition-cost" && <AttritionCostTab employees={employees} />}
+      {tab === "incentive" && <IncentiveEngineTab employees={employees} />}
+      {tab === "superann" && <SuperannuationTab employees={employees} />}
+      {tab === "gpa" && <GroupInsuranceTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -4041,6 +4046,443 @@ function PeopleRoiTab({ employees }: { employees: EmpLite[] }) {
         {ratio > 0 && <div className="flex justify-between"><span className="font-semibold">Assessment</span><span className={`font-bold ${bandColor}`}>{band}</span></div>}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Revenue persists &amp; syncs across devices. Loaded cost excludes variable pay, bonuses, and benefits — add those for a true CTC ratio. Benchmark against your sector's norm.</p>
+    </div>
+  );
+}
+
+// ── 47. CTC → Take-Home Breakup ────────────────────────────────────────────────
+// Annual CTC decomposed into monthly gross, statutory deductions (PF/PT/TDS) and
+// net in-hand. Employer PF + gratuity are carved out of CTC, not from gross.
+function TakeHomeBreakupTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]   = useState(employees[0]?.id ?? "");
+  const [ctcInput, setCtc]  = useState("");
+  const [basicPct, setBasic] = useState(40);
+  const [regime, setRegime] = useState<"new" | "old">("new");
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Calculator} msg={EMPTY_HINT} />;
+
+  const emp = employees.find(e => e.id === empId) ?? employees[0];
+  const annualCtc = ctcInput ? Math.max(0, Number(ctcInput)) : Math.round(Number(emp.gross_salary) * 12 * 1.12);
+
+  // Carve employer PF (12% of basic, capped at 15k wage) + gratuity (4.81% of basic) out of CTC.
+  const monthlyBasicGuess = Math.round((annualCtc / 12) * (basicPct / 100));
+  const pfWageBasic = Math.min(monthlyBasicGuess, 15000);
+  const erPfAnnual  = Math.round(pfWageBasic * 0.12 * 12);
+  const gratuityAnnual = Math.round(monthlyBasicGuess * 12 * 0.0481);
+  const annualGross = Math.max(0, annualCtc - erPfAnnual - gratuityAnnual);
+  const monthlyGross = Math.round(annualGross / 12);
+  const monthlyBasic = Math.round(monthlyGross * (basicPct / 100));
+
+  // Monthly statutory: employee PF, PT (₹200), TDS averaged over 12.
+  const eePf = Math.round(Math.min(monthlyBasic, 15000) * 0.12);
+  const pt   = monthlyGross > 0 ? 200 : 0;
+  const stdDed = regime === "new" ? 75000 : 50000;
+  const taxable = Math.max(0, annualGross - stdDed - eePf * 12);
+  const slabTax = computeSlabTax(taxable, regime === "new" ? NEW_SLAB_BANDS : OLD_SLAB_BANDS);
+  const rebateLimit = regime === "new" ? 700000 : 500000;
+  const afterRebate = taxable <= rebateLimit ? 0 : slabTax;
+  const annualTax = Math.round(afterRebate * 1.04); // + 4% cess
+  const tds = Math.round(annualTax / 12);
+  const netMonthly = Math.max(0, monthlyGross - eePf - pt - tds);
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  const rows: { label: string; value: number; sign: "+" | "−"; color: string }[] = [
+    { label: "Monthly gross", value: monthlyGross, sign: "+", color: "text-[var(--color-text)]" },
+    { label: "Employee PF (12% of basic)", value: eePf, sign: "−", color: "text-red-400" },
+    { label: "Professional tax", value: pt, sign: "−", color: "text-red-400" },
+    { label: "TDS (averaged)", value: tds, sign: "−", color: "text-red-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} /> CTC → Take-Home Breakup</h3>
+        <p className="text-xs text-[var(--color-muted)]">Employer PF and gratuity sit inside CTC but never reach the payslip. We carve them out to reveal monthly gross, then net employee PF, PT and averaged TDS to show real in-hand pay.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Annual CTC (₹)</label><input type="number" min="0" value={ctcInput} onChange={e => setCtc(e.target.value)} className={`${inp} w-full`} placeholder={String(annualCtc)} /></div>
+          <div><label className={lbl}>Basic % of gross</label><input type="number" min="20" max="60" value={basicPct} onChange={e => setBasic(Math.min(60, Math.max(20, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+          <div>
+            <label className={lbl}>Tax regime</label>
+            <select value={regime} onChange={e => setRegime(e.target.value as "new" | "old")} className={`${inp} w-full`}>
+              <option value="new">New regime</option>
+              <option value="old">Old regime</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual CTC", value: fc(annualCtc), color: "text-[var(--color-text)]" },
+          { label: "Monthly gross", value: fc(monthlyGross), color: "text-blue-400" },
+          { label: "Net in-hand / month", value: fc(netMonthly), color: "text-[var(--color-primary)]" },
+          { label: "Take-home % of CTC", value: annualCtc > 0 ? `${((netMonthly * 12 / annualCtc) * 100).toFixed(0)}%` : "—", color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        {rows.map(r => (
+          <div key={r.label} className="flex justify-between">
+            <span className="text-[var(--color-muted)]">{r.sign} {r.label}</span>
+            <span className={`tabular-nums font-semibold ${r.color}`}>{r.sign === "−" ? "−" : ""}{fc(r.value)}</span>
+          </div>
+        ))}
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Net in-hand (monthly)</span><span className="tabular-nums font-bold text-[var(--color-primary)]">{fc(netMonthly)}</span></div>
+        <div className="flex justify-between text-[var(--color-muted)]"><span>Employer PF + gratuity (in CTC, not paid out)</span><span className="tabular-nums">{fc(Math.round((erPfAnnual + gratuityAnnual) / 12))}/mo</span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Estimate only. Ignores ESI (gross ≤ ₹21k), HRA exemption, 80C/80D investments and FBP — those raise take-home further under the old regime. Lock the regime via the optimizer before finalising the offer.</p>
+    </div>
+  );
+}
+
+// ── 48. Attrition / Replacement Cost Calculator ────────────────────────────────
+// Quantifies the cost of an exit: separation payout + recruiting + ramp-up
+// productivity loss. Persists per-role assumptions.
+function AttritionCostTab({ employees }: { employees: EmpLite[] }) {
+  type Assump = { recruitPct: number; rampMonths: number; rampLossPct: number; backfillDays: number };
+  const [a, setA] = useFeatureState<Assump>("payroll-attrition-assumptions", { recruitPct: 8.33, rampMonths: 3, rampLossPct: 50, backfillDays: 45 });
+  const [empId, setEmpId] = useState(employees[0]?.id ?? "");
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={UserMinus} msg={EMPTY_HINT} />;
+
+  const emp = employees.find(e => e.id === empId) ?? employees[0];
+  const monthlyGross = Number(emp.gross_salary);
+  const annualCtc = Math.round(monthlyGross * 12 * 1.12);
+
+  const recruiting = Math.round(annualCtc * (a.recruitPct / 100)); // agency/referral/job-board
+  const rampLoss   = Math.round(monthlyGross * a.rampMonths * (a.rampLossPct / 100)); // sub-par output during ramp
+  const vacancyLoss = Math.round(monthlyGross * (a.backfillDays / 30)); // backfill gap with no output
+  const onboarding = Math.round(monthlyGross * 0.5); // IT setup + training time
+  const totalCost  = recruiting + rampLoss + vacancyLoss + onboarding;
+  const pctOfCtc   = annualCtc > 0 ? (totalCost / annualCtc) * 100 : 0;
+
+  // Org-wide projection: assume same role mix, attrition rate slider via state assumption reused as %.
+  const orgGross = employees.reduce((s, e) => s + Number(e.gross_salary), 0);
+  const orgAnnualCtc = Math.round(orgGross * 12 * 1.12);
+  const blendedPct = annualCtc > 0 ? totalCost / annualCtc : 0;
+
+  const numInp = "w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums";
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const set = (patch: Partial<Assump>) => setA(prev => ({ ...prev, ...patch }));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserMinus size={14} /> Attrition / Replacement Cost</h3>
+        <p className="text-xs text-[var(--color-muted)]">Every exit costs far more than the salary saved — recruiting fees, a vacant seat, and months of sub-par ramp-up output. SHRM pegs total replacement cost at 50–200% of annual salary. Tune the assumptions to your business.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Role / employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-end gap-2"><div><label className="text-xs text-[var(--color-muted)] block mb-1">Recruiting (% of CTC)</label><input type="number" min="0" value={a.recruitPct} onChange={e => set({ recruitPct: Math.max(0, Number(e.target.value)) })} className={numInp} /></div></div>
+          <div className="flex items-end gap-2"><div><label className="text-xs text-[var(--color-muted)] block mb-1">Backfill gap (days)</label><input type="number" min="0" value={a.backfillDays} onChange={e => set({ backfillDays: Math.max(0, Number(e.target.value)) })} className={numInp} /></div></div>
+          <div className="flex items-end gap-2"><div><label className="text-xs text-[var(--color-muted)] block mb-1">Ramp-up (months)</label><input type="number" min="0" value={a.rampMonths} onChange={e => set({ rampMonths: Math.max(0, Number(e.target.value)) })} className={numInp} /></div></div>
+          <div className="flex items-end gap-2"><div><label className="text-xs text-[var(--color-muted)] block mb-1">Ramp productivity loss (%)</label><input type="number" min="0" max="100" value={a.rampLossPct} onChange={e => set({ rampLossPct: Math.min(100, Math.max(0, Number(e.target.value))) })} className={numInp} /></div></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Cost per this exit", value: fc(totalCost), color: "text-red-400" },
+          { label: "% of annual CTC", value: `${pctOfCtc.toFixed(0)}%`, color: pctOfCtc > 100 ? "text-red-400" : "text-orange-400" },
+          { label: "Annual CTC of role", value: fc(annualCtc), color: "text-[var(--color-text)]" },
+          { label: "If 1 in 5 of team exits / yr", value: fc(Math.round(orgAnnualCtc * 0.20 * blendedPct)), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Recruiting &amp; hiring</span><span className="tabular-nums font-semibold">{fc(recruiting)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Vacant-seat output loss ({a.backfillDays}d)</span><span className="tabular-nums font-semibold text-orange-400">{fc(vacancyLoss)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Ramp-up productivity loss</span><span className="tabular-nums font-semibold text-orange-400">{fc(rampLoss)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Onboarding &amp; training</span><span className="tabular-nums font-semibold">{fc(onboarding)}</span></div>
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Total replacement cost</span><span className="tabular-nums font-bold text-red-400">{fc(totalCost)}</span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Assumptions persist &amp; sync across devices. Excludes knowledge-loss, client-relationship and morale costs which can dwarf the direct spend. A strong counter-offer or retention bonus is often far cheaper than replacing.</p>
+    </div>
+  );
+}
+
+// ── 49. Variable Pay / Incentive Engine ────────────────────────────────────────
+// Configure commission/KPI bonuses, see payout per employee, accrue to next run.
+function IncentiveEngineTab({ employees }: { employees: EmpLite[] }) {
+  type Plan = { ratePct: number; capPct: number };
+  const [plan, setPlan] = useFeatureState<Plan>("payroll-incentive-plan", { ratePct: 5, capPct: 30 });
+  const [achieved, setAchieved] = useFeatureState<Record<string, { target: number; actual: number }>>("payroll-incentive-achievement", {});
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Coins} msg={EMPTY_HINT} />;
+
+  const get = (id: string) => achieved[id] ?? { target: 1000000, actual: 0 };
+  const setA = (id: string, patch: Partial<{ target: number; actual: number }>) =>
+    setAchieved(prev => ({ ...prev, [id]: { ...get(id), ...patch } }));
+
+  const computed = employees.map(e => {
+    const r = get(e.id);
+    const monthlyGross = Number(e.gross_salary);
+    const attainment = r.target > 0 ? r.actual / r.target : 0;
+    // Commission on achieved revenue; payout capped at capPct of monthly gross.
+    const raw = Math.round(r.actual * (plan.ratePct / 100));
+    const cap = Math.round(monthlyGross * (plan.capPct / 100));
+    const payout = Math.min(raw, cap);
+    const capped = raw > cap;
+    return { e, attainment, raw, payout, capped };
+  });
+  const totalPayout = computed.reduce((s, c) => s + c.payout, 0);
+  const totalRevenue = computed.reduce((s, c) => s + get(c.e.id).actual, 0);
+
+  const numInp = "w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums";
+  const sInp = "w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Coins size={14} /> Variable Pay / Incentive Engine</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set a commission rate on achieved revenue with a guardrail cap as a percentage of monthly salary. Capped payouts protect margins on outsized deals. Incentives accrue into the next payroll run.</p>
+        <div className="flex flex-wrap gap-4">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Commission rate (% of revenue)</label><input type="number" min="0" step="0.5" value={plan.ratePct} onChange={e => setPlan(p => ({ ...p, ratePct: Math.max(0, Number(e.target.value)) }))} className={sInp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Payout cap (% of monthly gross)</label><input type="number" min="0" value={plan.capPct} onChange={e => setPlan(p => ({ ...p, capPct: Math.max(0, Number(e.target.value)) }))} className={sInp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Revenue achieved", value: fc(totalRevenue), color: "text-[var(--color-text)]" },
+          { label: "Total incentive payout", value: fc(totalPayout), color: "text-[var(--color-primary)]" },
+          { label: "Effective payout rate", value: totalRevenue > 0 ? `${((totalPayout / totalRevenue) * 100).toFixed(2)}%` : "—", color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-xs min-w-[680px]">
+          <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            {["Employee", "Target", "Actual", "Attainment", "Raw commission", "Payout"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {computed.map(({ e, attainment, raw, payout, capped }) => {
+              const r = get(e.id);
+              return (
+                <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.target} onChange={ev => setA(e.id, { target: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.actual} onChange={ev => setA(e.id, { actual: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td className={`px-3 py-2.5 tabular-nums font-semibold ${attainment >= 1 ? "text-green-400" : attainment >= 0.7 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{(attainment * 100).toFixed(0)}%</td>
+                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(raw)}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(payout)}{capped && <span className="ml-1 text-[10px] text-orange-400">capped</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-3 py-2.5 font-bold" colSpan={5}>Total incentive payout</td>
+              <td className="px-3 py-2.5 tabular-nums font-bold text-[var(--color-primary)]">{fc(totalPayout)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Plan &amp; achievement persist &amp; sync across devices. Incentive payouts are fully taxable salary — TDS applies in the month paid. Add clawback clauses for reversed/cancelled deals before disbursing.</p>
+    </div>
+  );
+}
+
+// ── 50. Superannuation Fund Calculator ─────────────────────────────────────────
+// Employer superannuation contribution (up to 15% of salary, ₹7.5L combined
+// annual cap with PF/NPS u/s 17(2)(vii)) and retirement corpus projection.
+function SuperannuationTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]   = useState(employees[0]?.id ?? "");
+  const [ratePct, setRate]  = useState(10);
+  const [years, setYears]   = useState(20);
+  const [rate, setReturn]   = useState(8);
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Sun} msg={EMPTY_HINT} />;
+
+  const emp = employees.find(e => e.id === empId) ?? employees[0];
+  const monthlyGross = Number(emp.gross_salary);
+  const basicDa = Math.round(monthlyGross * 0.50);
+  const annualContrib = Math.round(basicDa * 12 * (ratePct / 100));
+  const exemptCap = 150000; // pre-Budget exemption on superannuation contribution
+  const combinedCap = 750000; // PF + NPS + superannuation aggregate cap u/s 17(2)
+  const perquisite = Math.max(0, annualContrib - exemptCap);
+
+  // Future-value of a growing annuity (contributions rise with assumed appraisals already netted as flat here).
+  const r = rate / 100;
+  const corpus = r > 0
+    ? Math.round(annualContrib * ((Math.pow(1 + r, years) - 1) / r))
+    : annualContrib * years;
+  // Monthly pension at 6% annuity rate on corpus.
+  const monthlyPension = Math.round((corpus * 0.06) / 12);
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Sun size={14} /> Superannuation Fund</h3>
+        <p className="text-xs text-[var(--color-muted)]">Employers may run an approved superannuation fund contributing up to 15% of salary. Contribution is tax-free in the employee's hands up to ₹1.5 lakh; the PF + NPS + superannuation combined annual cap is ₹7.5 lakh u/s 17(2)(vii).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Contribution (% of basic+DA)</label><input type="number" min="0" max="15" value={ratePct} onChange={e => setRate(Math.min(15, Math.max(0, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Years to retirement</label><input type="number" min="1" max="45" value={years} onChange={e => setYears(Math.min(45, Math.max(1, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Assumed return (% p.a.)</label><input type="number" min="0" max="20" value={rate} onChange={e => setReturn(Math.min(20, Math.max(0, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual employer contribution", value: fc(annualContrib), color: "text-[var(--color-text)]" },
+          { label: "Taxable perquisite", value: perquisite > 0 ? fc(perquisite) : "Nil", color: perquisite > 0 ? "text-orange-400" : "text-green-400" },
+          { label: `Corpus at ${years} yrs`, value: fc(corpus), color: "text-[var(--color-primary)]" },
+          { label: "Est. monthly pension", value: fc(monthlyPension), color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Monthly basic + DA (50% of gross)</span><span className="tabular-nums font-semibold">{fc(basicDa)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Annual contribution @ {ratePct}%</span><span className="tabular-nums font-semibold">{fc(annualContrib)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Tax-free up to</span><span className="tabular-nums text-green-400">{fc(exemptCap)}</span></div>
+        {annualContrib > combinedCap && <div className="flex justify-between"><span className="text-orange-400">Exceeds ₹7.5L combined PF+NPS+SAF cap</span><span className="tabular-nums text-orange-400">{fc(annualContrib - combinedCap)}</span></div>}
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Projected retirement corpus</span><span className="tabular-nums font-bold text-[var(--color-primary)]">{fc(corpus)}</span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Projection assumes a flat annual contribution and compounding return — real corpus grows with appraisals. Annuity income is taxable; commutation is partly exempt. Set up an approved fund with a recognised insurer (LIC/insurer group SAF).</p>
+    </div>
+  );
+}
+
+// ── 51. Group Insurance (GMC/GTL/GPA) Premium & Benefits ───────────────────────
+// Group health (GMC), term life (GTL) and personal-accident (GPA) cover sizing
+// and premium estimate, with optional payroll deduction of the employee share.
+function GroupInsuranceTab({ employees }: { employees: EmpLite[] }) {
+  const [sumGmc, setSumGmc]   = useState(500000);
+  const [sumGtlX, setGtlX]    = useState(3); // GTL = multiple of annual CTC
+  const [employeeSharePct, setShare] = useState(0);
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Umbrella} msg={EMPTY_HINT} />;
+
+  const active = employees.filter(e => (e.status ?? "active") === "active");
+  const headcount = active.length;
+
+  // Indicative annual premium rates per lakh / per cover (typical SMB group rates).
+  const gmcRatePerLakh = 4500;  // family floater health, per ₹1L SI per life / yr
+  const gtlRatePerLakh = 120;   // term life, per ₹1L SI / yr
+  const gpaRatePerLakh = 80;    // personal accident, per ₹1L SI / yr
+
+  const rows = active.map(e => {
+    const annualCtc = Math.round(Number(e.gross_salary) * 12 * 1.12);
+    const gtlSi = annualCtc * sumGtlX;
+    const gpaSi = annualCtc * sumGtlX; // GPA usually mirrors GTL multiple
+    const gmcPrem = Math.round((sumGmc / 100000) * gmcRatePerLakh);
+    const gtlPrem = Math.round((gtlSi / 100000) * gtlRatePerLakh);
+    const gpaPrem = Math.round((gpaSi / 100000) * gpaRatePerLakh);
+    const total = gmcPrem + gtlPrem + gpaPrem;
+    return { e, gtlSi, total };
+  });
+  const totalPremium = rows.reduce((s, r) => s + r.total, 0);
+  const gstPremium   = Math.round(totalPremium * 0.18);
+  const grossPremium = totalPremium + gstPremium;
+  const employeeShare = Math.round((totalPremium * (employeeSharePct / 100)));
+  const employerCost  = grossPremium - employeeShare;
+  const perHeadDeduction = headcount > 0 ? Math.round(employeeShare / headcount / 12) : 0;
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Umbrella size={14} /> Group Insurance — GMC · GTL · GPA</h3>
+        <p className="text-xs text-[var(--color-muted)]">Size group health (GMC), term life (GTL) and personal-accident (GPA) cover for the team and estimate the annual premium. Optionally deduct a share of the GMC premium from payroll. Rates are indicative SMB group rates — your insurer's quote will vary.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className={lbl}>GMC sum insured / life (₹)</label>
+            <select value={sumGmc} onChange={e => setSumGmc(Number(e.target.value))} className={`${inp} w-full`}>
+              {[300000, 500000, 750000, 1000000].map(s => <option key={s} value={s}>{fc(s)}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>GTL / GPA cover (× annual CTC)</label><input type="number" min="1" max="10" value={sumGtlX} onChange={e => setGtlX(Math.min(10, Math.max(1, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Employee share of GMC (%)</label><input type="number" min="0" max="100" value={employeeSharePct} onChange={e => setShare(Math.min(100, Math.max(0, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Annual premium (net)", value: fc(totalPremium), color: "text-[var(--color-text)]" },
+          { label: "Premium + 18% GST", value: fc(grossPremium), color: "text-[var(--color-primary)]" },
+          { label: "Employer cost", value: fc(employerCost), color: "text-blue-400" },
+          { label: "Employee deduction / mo", value: perHeadDeduction > 0 ? fc(perHeadDeduction) : "Nil", color: perHeadDeduction > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-xs min-w-[560px]">
+          <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            {["Employee", "GMC SI", "GTL / GPA SI", "Annual premium"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {rows.map(({ e, gtlSi, total }) => (
+              <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-3 py-2.5 font-medium">{e.name}</td>
+                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(sumGmc)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(gtlSi)}</td>
+                <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-3 py-2.5 font-bold" colSpan={3}>Total annual premium (net of GST)</td>
+              <td className="px-3 py-2.5 tabular-nums font-bold text-[var(--color-primary)]">{fc(totalPremium)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative estimate for {headcount} active lives. Actual premium depends on age mix, claim history, family-floater size and waiting-period waivers. Employer-paid group health premium is a deductible business expense; the employee share deducted via payroll is post-tax.</p>
     </div>
   );
 }

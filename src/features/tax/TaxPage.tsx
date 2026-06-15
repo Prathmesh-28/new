@@ -9,6 +9,7 @@ import {
   Receipt, FileSearch, Search, FileCheck, Layers, Repeat,
   FilePlus2, Globe, PiggyBank, ShoppingCart, CalendarClock, Gavel,
   Home, Building2, Percent, Truck, Umbrella, Heart, Coins, Banknote,
+  Landmark, Users, UserPlus, Gift, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -70,7 +71,8 @@ export default function TaxPage() {
   const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax"
     | "tds-return" | "form26as" | "tds-finder" | "ldc-197" | "depreciation" | "loss-setoff"
     | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice"
-    | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234">("overview");
+    | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234"
+    | "115ba" | "partner-remun" | "80jjaa" | "esop-tax" | "buyback">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -146,7 +148,8 @@ export default function TaxPage() {
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
-            ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent]] as const).map(([id, label, Icon]) => (
+            ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent],
+            ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -792,6 +795,11 @@ export default function TaxPage() {
       {taxTab === "donation-80g"    && <Donation80GCalc />}
       {taxTab === "cg-exempt"       && <CapitalGainExemptionPlanner />}
       {taxTab === "interest-234"    && <Interest234Calc />}
+      {taxTab === "115ba"           && <CorporateRate115BA />}
+      {taxTab === "partner-remun"   && <PartnerRemuneration40b />}
+      {taxTab === "80jjaa"          && <NewEmployee80JJAA />}
+      {taxTab === "esop-tax"        && <EsopTaxPlanner />}
+      {taxTab === "buyback"         && <BuybackTax115QA />}
     </div>
   );
 }
@@ -3044,6 +3052,419 @@ function Interest234Calc() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">All sections charge 1% per month (simple). 234A runs from the ITR due date to the date of filing; 234B from 1 April of the AY; 234C is on each installment shortfall. 234C months are 3/3/3/1 for the four instalments. A part of a month counts as a full month. Indicative only — consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Concessional Corporate Rate Optimizer (Sec 115BAA / 115BAB) ──────────────
+function CorporateRate115BA() {
+  const [profit,    setProfit]    = useState("");          // taxable business income (₹)
+  const [incentives, setIncentives] = useState("");        // deductions foregone if opting in (₹)
+  const [isNewMfg,  setIsNewMfg]  = useState(false);       // eligible new manufacturer (115BAB)
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const pbt = parseFloat(profit)     || 0;
+  const inc = parseFloat(incentives) || 0;
+
+  // Surcharge under concessional regimes is flat 10%; cess 4%.
+  const calc = (rate: number, base: number) => {
+    const t = base * rate / 100;
+    const sur = t * 0.10;
+    const cess = (t + sur) * 0.04;
+    return Math.round(t + sur + cess);
+  };
+
+  // Regular regime (assume turnover ≤ ₹400cr → 25% base) on profit, normal surcharge bands; deductions allowed.
+  const regularBase = Math.max(0, pbt);
+  const regularTaxRaw = regularBase * 0.25;
+  const regSur = regularBase > 100000000 ? regularTaxRaw * 0.12 : regularBase > 10000000 ? regularTaxRaw * 0.07 : 0;
+  const regularTax = Math.round(regularTaxRaw + regSur + (regularTaxRaw + regSur) * 0.04);
+
+  // 115BAA: 22% on income WITHOUT specified deductions/incentives (so add them back).
+  const baaBase = Math.max(0, pbt + inc);
+  const baaTax  = calc(22, baaBase);
+
+  // 115BAB: 15% for eligible new manufacturing companies (incorporated/began before cut-off).
+  const babBase = Math.max(0, pbt + inc);
+  const babTax  = isNewMfg ? calc(15, babBase) : null;
+
+  const options: { key: string; label: string; rate: string; tax: number; note: string }[] = [
+    { key: "reg", label: "Regular Regime", rate: "25% + sur + 4% cess", tax: regularTax, note: "All deductions/incentives retained; MAT @15% applies." },
+    { key: "baa", label: "Sec 115BAA", rate: "22% + 10% sur + 4% cess (eff. 25.17%)", tax: baaTax, note: "No MAT. Foregoes specified deductions (80-IA/IB, add'l depreciation, etc.)." },
+    ...(babTax !== null ? [{ key: "bab", label: "Sec 115BAB", rate: "15% + 10% sur + 4% cess (eff. 17.16%)", tax: babTax, note: "New manufacturing cos only — production before the notified cut-off." }] : []),
+  ];
+  const best = pbt > 0 ? options.reduce((a, b) => (b.tax < a.tax ? b : a)) : null;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Concessional Corporate Rate Optimizer (115BAA / 115BAB)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Domestic companies may opt into a lower flat rate by giving up most incentives. This compares your effective tax across regimes for the year.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Taxable business income (₹)</label>
+            <input type="number" min={0} value={profit} onChange={e => setProfit(e.target.value)} placeholder="e.g. 20000000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Incentives/deductions foregone if opting in (₹)</label>
+            <input type="number" min={0} value={incentives} onChange={e => setIncentives(e.target.value)} placeholder="e.g. 1500000" className={inp} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={isNewMfg} onChange={e => setIsNewMfg(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span>Eligible new manufacturing company (qualifies for 115BAB @15%)</span>
+        </label>
+      </div>
+
+      {pbt > 0 && (
+        <>
+          <div className="grid grid-cols-1 gap-3">
+            {options.map(o => (
+              <div key={o.key} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${best && best.key === o.key ? "border-green-700/50" : "border-[var(--color-border)]"}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">{o.label}{best && best.key === o.key && <span className="ml-2 text-[10px] text-green-400">★ lowest</span>}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{o.rate}</p>
+                  </div>
+                  <p className="text-lg font-bold tabular-nums text-orange-400">{fc(o.tax)}</p>
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">{o.note}</p>
+              </div>
+            ))}
+          </div>
+          {best && (
+            <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+              <p className="text-sm font-bold text-green-400">✓ Lowest liability: {best.label} at {fc(best.tax)} — saves {fc(Math.max(...options.map(o => o.tax)) - best.tax)} vs the costliest option this year.</p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Once exercised, the 115BAA/115BAB option is irrevocable for all future years. Surcharge is a flat 10% (no slabs) under both. MAT (115JB) does not apply to companies that opt in. Indicative — confirm eligibility with your CA.</p>
+    </div>
+  );
+}
+
+// ── Partner Remuneration Limit (Sec 40(b)) ───────────────────────────────────
+function PartnerRemuneration40b() {
+  const [bookProfit, setBookProfit] = useState("");        // book profit before partner remuneration (₹)
+  const [paid,       setPaid]       = useState("");        // remuneration actually paid (₹)
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const bp   = parseFloat(bookProfit) || 0;
+  const paidV = parseFloat(paid)      || 0;
+
+  // FY 2024-25 (AY 2025-26) revised 40(b) slabs (Finance (No.2) Act 2024):
+  // up to ₹6,00,000 of book profit (or loss): higher of ₹3,00,000 or 90%
+  // balance above ₹6,00,000: 60%
+  const slab1Cap = 600000;
+  const tier1 = bp <= 0 ? 300000 : Math.max(300000, Math.min(bp, slab1Cap) * 0.90);
+  const tier2 = bp > slab1Cap ? (bp - slab1Cap) * 0.60 : 0;
+  const allowable = Math.round(tier1 + tier2);
+  const disallowed = Math.max(0, Math.round(paidV - allowable));
+  const within = paidV <= allowable;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Partner Remuneration Limit (Sec 40(b))</h2>
+        <p className="text-xs text-[var(--color-muted)]">Working-partner salary deductible by a firm/LLP is capped by book profit. Revised FY25 slabs: higher of ₹3L or 90% on the first ₹6L, plus 60% on the balance.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Book profit (before remuneration) (₹)</label>
+            <input type="number" value={bookProfit} onChange={e => setBookProfit(e.target.value)} placeholder="e.g. 2500000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Remuneration actually paid (₹)</label>
+            <input type="number" min={0} value={paid} onChange={e => setPaid(e.target.value)} placeholder="e.g. 2000000" className={inp} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "On first ₹6L (90% / min ₹3L)", value: fc(Math.round(tier1)), color: "text-blue-400" },
+          { label: "On balance (60%)",             value: fc(Math.round(tier2)), color: "text-blue-400" },
+          { label: "Max allowable u/s 40(b)",       value: fc(allowable),         color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {paidV > 0 && (
+        <div className={`rounded-lg p-4 border ${within ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+          <p className={`text-sm font-bold ${within ? "text-green-400" : "text-red-400"}`}>
+            {within
+              ? `✓ Remuneration of ${fc(paidV)} is within the ₹${(allowable/100000).toFixed(1)}L limit — fully deductible. Headroom: ${fc(allowable - paidV)}.`
+              : `⚠ ${fc(disallowed)} exceeds the 40(b) limit and is disallowed — add it back to the firm's income (the partner is still taxed on the full amount received).`}
+          </p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Applies only to working partners with remuneration authorised by the partnership deed. Interest to partners is separately capped at 12% p.a. Remuneration is taxable as business income in the partner's hands under Sec 28(v). Indicative — verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── New-Employee Deduction (Sec 80JJAA) ──────────────────────────────────────
+function NewEmployee80JJAA() {
+  const [newEmployees, setNewEmployees] = useState("");    // count of additional employees
+  const [monthlyWage,  setMonthlyWage]  = useState("");    // monthly emoluments per employee (₹)
+  const [daysWorked,   setDaysWorked]   = useState("300"); // days employed in the year
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const n    = parseInt(newEmployees) || 0;
+  const wage = parseFloat(monthlyWage) || 0;
+  const days = parseInt(daysWorked)    || 0;
+
+  const wageCapOk = wage <= 25000;       // emolument cap ₹25,000/month
+  const daysOk    = days >= 240;         // ≥240 days (≥150 for apparel/footwear/leather)
+  const eligible  = wageCapOk && daysOk && n > 0;
+
+  const additionalWages = eligible ? n * wage * 12 : 0;
+  const yearDeduction   = Math.round(additionalWages * 0.30); // 30% of additional employee cost
+  const threeYearBenefit = yearDeduction * 3;                 // claimable for 3 consecutive AYs
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> New-Employee Deduction (Sec 80JJAA)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Businesses subject to tax audit get an extra 30% deduction on the cost of additional employees, for three consecutive assessment years.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Additional employees</label>
+            <input type="number" min={0} value={newEmployees} onChange={e => setNewEmployees(e.target.value)} placeholder="e.g. 10" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly emoluments/employee (₹)</label>
+            <input type="number" min={0} value={monthlyWage} onChange={e => setMonthlyWage(e.target.value)} placeholder="e.g. 22000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Days employed in year</label>
+            <input type="number" min={0} value={daysWorked} onChange={e => setDaysWorked(e.target.value)} placeholder="e.g. 300" className={inp} />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className={`text-[11px] flex items-center gap-1.5 ${wageCapOk ? "text-green-400" : "text-red-400"}`}>{wageCapOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Emoluments ≤ ₹25,000/month {wageCapOk ? "" : "— wage exceeds cap, employee ineligible"}</p>
+          <p className={`text-[11px] flex items-center gap-1.5 ${daysOk ? "text-green-400" : "text-red-400"}`}>{daysOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Employed ≥ 240 days {daysOk ? "" : "— short tenure; carry to next year if 240 days met"}</p>
+        </div>
+      </div>
+
+      {n > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { label: "Additional employee cost (yr)", value: fc(additionalWages), color: "text-blue-400" },
+            { label: "Deduction this year (30%)",      value: fc(yearDeduction),   color: "text-[var(--color-primary)]" },
+            { label: "Total over 3 AYs",               value: fc(threeYearBenefit), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {n > 0 && !eligible && (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+          <p className="text-sm font-bold text-red-400">⚠ Not eligible this year — emoluments must be ≤ ₹25,000/month and the employee must work ≥ 240 days (≥ 150 for apparel/footwear/leather). Payments must be via non-cash mode.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Requires Form 10DA from a CA. Employees who join after PF-registration and remain ≥ 240 days count as "additional". Casual employees and those whose full PF is paid by government are excluded. Indicative — confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ── ESOP Perquisite & Capital Gains Tax ──────────────────────────────────────
+function EsopTaxPlanner() {
+  const [shares,    setShares]    = useState("");          // shares exercised
+  const [exercise,  setExercise]  = useState("");          // exercise/strike price per share (₹)
+  const [fmvExer,   setFmvExer]   = useState("");          // FMV per share at exercise (₹)
+  const [salePrice, setSalePrice] = useState("");          // sale price per share (₹), optional
+  const [holdMonths, setHoldMonths] = useState("");        // months held after exercise
+  const [listed,    setListed]    = useState(true);        // listed shares?
+  const [slabRate,  setSlabRate]  = useState("30");        // employee's marginal slab %
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const qty  = parseFloat(shares)    || 0;
+  const ex   = parseFloat(exercise)  || 0;
+  const fmvE = parseFloat(fmvExer)   || 0;
+  const sale = parseFloat(salePrice) || 0;
+  const mo   = parseInt(holdMonths)  || 0;
+  const rate = parseFloat(slabRate)  || 0;
+
+  // Stage 1 — perquisite at exercise = (FMV - exercise) × shares, taxed at slab + 4% cess.
+  const perqPerShare = Math.max(0, fmvE - ex);
+  const perquisite   = perqPerShare * qty;
+  const perqTax      = Math.round(perquisite * rate / 100 * 1.04);
+
+  // Stage 2 — capital gain at sale = (Sale - FMV-at-exercise) × shares.
+  const cgPerShare = sale > 0 ? sale - fmvE : 0;
+  const capGain    = cgPerShare * qty;
+  const ltThreshold = listed ? 12 : 24;
+  const isLong = mo >= ltThreshold;
+  // Listed: STCG 20%, LTCG 12.5% above ₹1.25L. Unlisted: STCG at slab, LTCG 12.5%.
+  let cgTax = 0;
+  if (capGain > 0) {
+    if (listed) {
+      const taxable = isLong ? Math.max(0, capGain - 125000) : capGain;
+      cgTax = Math.round(taxable * (isLong ? 12.5 : 20) / 100 * 1.04);
+    } else {
+      cgTax = Math.round(capGain * (isLong ? 12.5 : rate) / 100 * 1.04);
+    }
+  }
+  const totalTax = perqTax + cgTax;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-[var(--color-primary)]" /> ESOP Tax — Perquisite + Capital Gains</h2>
+        <p className="text-xs text-[var(--color-muted)]">ESOPs are taxed twice: a salary perquisite at exercise (FMV − strike), then capital gains at sale (sale − FMV-at-exercise).</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Shares exercised</label>
+            <input type="number" min={0} value={shares} onChange={e => setShares(e.target.value)} placeholder="e.g. 1000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Exercise/strike price (₹)</label>
+            <input type="number" min={0} value={exercise} onChange={e => setExercise(e.target.value)} placeholder="e.g. 50" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">FMV at exercise (₹)</label>
+            <input type="number" min={0} value={fmvExer} onChange={e => setFmvExer(e.target.value)} placeholder="e.g. 200" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sale price/share (₹, optional)</label>
+            <input type="number" min={0} value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="e.g. 350" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months held after exercise</label>
+            <input type="number" min={0} value={holdMonths} onChange={e => setHoldMonths(e.target.value)} placeholder="e.g. 18" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your marginal slab (%)</label>
+            <input type="number" min={0} max={30} value={slabRate} onChange={e => setSlabRate(e.target.value)} placeholder="30" className={inp} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={listed} onChange={e => setListed(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span>Listed shares (STT paid) — uncheck for unlisted/startup shares</span>
+        </label>
+      </div>
+
+      {qty > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Perquisite at exercise", value: fc(perquisite), color: "text-blue-400" },
+              { label: "Tax on perquisite",      value: fc(perqTax),    color: "text-orange-400" },
+              { label: `Capital gain (${isLong ? "LTCG" : "STCG"})`, value: fc(Math.max(0, capGain)), color: "text-blue-400" },
+              { label: "Tax on capital gain",    value: fc(cgTax),      color: "text-orange-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+            <p className="text-sm font-bold text-red-400">Total ESOP tax: {fc(totalTax)}{sale === 0 && " (perquisite only — enter a sale price to add capital gains)"}.</p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Eligible-startup (Sec 80-IAC / DPIIT) employees may defer the perquisite TDS up to the earliest of 5 years, sale, or leaving. FMV of unlisted shares needs a merchant-banker valuation. Listed LTCG enjoys the ₹1.25L exemption shared across all equity. Indicative — confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ── Share Buyback Tax (Sec 115QA → 194 from Oct 2024) ────────────────────────
+function BuybackTax115QA() {
+  const [regime,    setRegime]    = useState<"new" | "old">("new"); // post / pre 1-Oct-2024
+  const [amount,    setAmount]    = useState("");          // total buyback consideration (₹)
+  const [issuePrice, setIssuePrice] = useState("");        // amount originally received on issue (₹)
+  const [slabRate,  setSlabRate]  = useState("30");        // shareholder marginal slab (%)
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const amt  = parseFloat(amount)     || 0;
+  const issue = parseFloat(issuePrice) || 0;
+  const rate = parseFloat(slabRate)   || 0;
+
+  // OLD regime (until 30-Sep-2024): company pays 20% (115QA) on (buyback − issue proceeds);
+  // proceeds exempt for shareholder under Sec 10(34A).
+  const oldDistributed = Math.max(0, amt - issue);
+  const oldCompanyTax  = Math.round(oldDistributed * 0.20 * 1.12 * 1.04); // 20% + 12% sur + 4% cess
+  // NEW regime (from 1-Oct-2024): full buyback amount is a deemed dividend taxed in the
+  // shareholder's hands at slab; issue cost becomes a capital loss to carry/set off.
+  const newDividend   = amt;
+  const newShareholderTax = Math.round(newDividend * rate / 100 * 1.04);
+  const newCapitalLoss = issue; // available to set off against capital gains
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Share Buyback Tax (115QA → 194)</h2>
+        <p className="text-xs text-[var(--color-muted)]">From 1 Oct 2024 the buyback-tax shifted from the company (20% u/s 115QA) to the shareholder, where the whole consideration is a deemed dividend taxed at slab.</p>
+        <div className="flex gap-2">
+          {([["new","From 1-Oct-2024 (deemed dividend)"],["old","Until 30-Sep-2024 (115QA @20%)"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setRegime(k)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${regime === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total buyback consideration (₹)</label>
+            <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 1000000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received on original issue (₹)</label>
+            <input type="number" min={0} value={issuePrice} onChange={e => setIssuePrice(e.target.value)} placeholder="e.g. 200000" className={inp} />
+          </div>
+          {regime === "new" && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Shareholder marginal slab (%)</label>
+              <input type="number" min={0} max={30} value={slabRate} onChange={e => setSlabRate(e.target.value)} placeholder="30" className={inp} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {amt > 0 && regime === "old" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Distributed income (buyback − issue)</p>
+            <p className="text-lg font-bold tabular-nums text-blue-400">{fc(oldDistributed)}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-red-800/30 rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Company buyback tax (20% + sur + cess)</p>
+            <p className="text-lg font-bold tabular-nums text-red-400">{fc(oldCompanyTax)}</p>
+          </div>
+          <p className="md:col-span-2 text-[11px] text-green-400 flex items-center gap-1.5"><CheckCircle2 size={11} /> Proceeds are exempt in the shareholder's hands under Sec 10(34A).</p>
+        </div>
+      )}
+
+      {amt > 0 && regime === "new" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { label: "Deemed dividend (full amount)", value: fc(newDividend), color: "text-blue-400" },
+            { label: "Shareholder tax at slab",        value: fc(newShareholderTax), color: "text-red-400" },
+            { label: "Capital loss available (c/f)",   value: fc(newCapitalLoss), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative — confirm with your CA.</p>
     </div>
   );
 }

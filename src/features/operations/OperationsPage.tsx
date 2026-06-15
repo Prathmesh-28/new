@@ -10,6 +10,7 @@ import {
   Layers, CalendarClock, Wrench, Factory, Warehouse, ScanLine, Route,
   ArrowDownCircle, ArrowUpCircle,
   PieChart, Calculator, Repeat, Percent, Ship, ClipboardCheck, Trash2, Undo2,
+  Scale, ShieldCheck, Coins, Hourglass, AlertOctagon,
 } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -19,7 +20,8 @@ import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
   | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
-  | "abc" | "eoq" | "turnover" | "skumargin" | "landed" | "grn" | "scrap" | "returns";
+  | "abc" | "eoq" | "turnover" | "skumargin" | "landed" | "grn" | "scrap" | "returns"
+  | "valuation" | "safetystock" | "carrying" | "aging" | "stockout";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -180,6 +182,11 @@ export default function OperationsPage() {
           ["grn",           "GRN vs PO",     null],
           ["scrap",         "Scrap / Wastage", null],
           ["returns",       "Returns / RTV", null],
+          ["valuation",     "Stock Valuation", null],
+          ["safetystock",   "Safety Stock", null],
+          ["carrying",      "Carrying Cost", null],
+          ["aging",         "Stock Aging", null],
+          ["stockout",      "Stockout Cost", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -746,6 +753,11 @@ export default function OperationsPage() {
       {tab === "grn" && <GrnDiscrepancyTab />}
       {tab === "scrap" && <ScrapWastageTab />}
       {tab === "returns" && <ReturnsRegisterTab />}
+      {tab === "valuation" && <StockValuationTab />}
+      {tab === "safetystock" && <SafetyStockTab />}
+      {tab === "carrying" && <CarryingCostTab />}
+      {tab === "aging" && <StockAgingTab />}
+      {tab === "stockout" && <StockoutCostTab />}
     </div>
   );
 }
@@ -3374,6 +3386,531 @@ function ReturnsRegisterTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">RTV (return-to-vendor) defective stock may need an ITC reversal / debit note under GST — consult a CA. Restock returns flow back to sellable inventory; quarantine and scrap do not.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #2/#3/#35 Stock valuation report (FIFO vs Weighted-avg) ───────────────────────── */
+function StockValuationTab() {
+  const { store } = useApp();
+  const { inventory } = store;
+  type Method = "wavg" | "fifo";
+  const [method, setMethod] = useState<Method>("wavg");
+  // Optional per-SKU oldest-lot cost override, persisted (drives the FIFO lower/upper band).
+  const [oldestCost, setOldestCost] = useFeatureState<Record<string, number>>("ops-valuation-oldest-cost", {});
+  const [query, setQuery] = useState("");
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return inventory
+      .filter(i => !q || i.productName.toLowerCase().includes(q) || (i.sku ?? "").toLowerCase().includes(q))
+      .map(i => {
+        const wavg = i.unitCost;
+        const oldest = oldestCost[i.id];
+        // FIFO closing value uses the most-recent (latest) lot cost for the units on hand,
+        // approximated as current unitCost; if an older lot cost is supplied we show the spread.
+        const fifoUnit = method === "fifo" && oldest != null ? oldest : wavg;
+        const unit = method === "fifo" ? fifoUnit : wavg;
+        return {
+          ...i,
+          unit,
+          value: i.quantity * unit,
+          wavgValue: i.quantity * wavg,
+          fifoValue: i.quantity * (oldest != null ? oldest : wavg),
+        };
+      });
+  }, [inventory, method, oldestCost, query]);
+
+  const totalValue = rows.reduce((s, r) => s + r.value, 0);
+  const wavgTotal = rows.reduce((s, r) => s + r.wavgValue, 0);
+  const fifoTotal = rows.reduce((s, r) => s + r.fifoValue, 0);
+  const spread = fifoTotal - wavgTotal;
+
+  const downloadCsv = () => {
+    const headers = ["SKU", "Product", "Qty", "Unit Cost (method)", `Closing Value (${method === "fifo" ? "FIFO" : "Weighted-avg"})`];
+    const lines = rows.map(r => [r.sku || "—", r.productName, r.quantity, Math.round(r.unit), Math.round(r.value)].join(","));
+    const csv = [headers.join(","), ...lines].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = `stock-valuation-${method}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Valuation report exported");
+  };
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Scale size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Stock Valuation Report</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Closing-stock value by costing method — for year-end audit and balance-sheet COGS.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {(["wavg", "fifo"] as const).map(m => (
+            <button key={m} onClick={() => setMethod(m)} className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all ${method === m ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {m === "wavg" ? "Weighted-avg" : "FIFO"}
+            </button>
+          ))}
+          <button onClick={downloadCsv} disabled={rows.length === 0} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <Download size={11} /> CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: `Closing Value (${method === "fifo" ? "FIFO" : "W-Avg"})`, value: formatCurrency(Math.round(totalValue)), color: "text-[var(--color-primary)]" },
+          { label: "Weighted-avg Value", value: formatCurrency(Math.round(wavgTotal)), color: "text-blue-400" },
+          { label: "FIFO Value", value: formatCurrency(Math.round(fifoTotal)), color: "text-emerald-400" },
+          { label: "Method Spread", value: formatCurrency(Math.round(spread)), color: spread >= 0 ? "text-yellow-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter by product / SKU" className={`${inp} flex-1 max-w-xs`} />
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No SKUs match. Add inventory items to value your closing stock.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["SKU", "Product", "Qty", "W-Avg Cost", "FIFO Oldest-Lot Cost", "Closing Value"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{r.sku || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.unitCost)}</td>
+                    <td className="px-4 py-2.5">
+                      <input type="number" value={oldestCost[r.id] ?? ""} placeholder={String(Math.round(r.unitCost))}
+                        onChange={e => setOldestCost(prev => {
+                          const next = { ...prev };
+                          if (e.target.value === "") delete next[r.id]; else next[r.id] = parseFloat(e.target.value) || 0;
+                          return next;
+                        })}
+                        className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs w-24 tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Math.round(r.value))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Weighted-average uses each SKU's stored unit cost. FIFO values on-hand units at the oldest open-lot cost (enter it per row); the spread shows how much the chosen method shifts reported stock value. Lock one method for the full year for audit consistency.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #29 Safety-stock & min/max planner ───────────────────────── */
+function SafetyStockTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+  // Planning inputs (durable so the planner reopens with the owner's assumptions).
+  const [leadTime, setLeadTime] = useFeatureState<number>("ops-ss-lead-time", 7);
+  const [leadVar, setLeadVar] = useFeatureState<number>("ops-ss-lead-variance", 2);
+  const [service, setService] = useFeatureState<number>("ops-ss-service-level", 95);
+  const [reviewDays, setReviewDays] = useFeatureState<number>("ops-ss-review-days", 30);
+
+  // Z-factor for common service levels (one-tailed).
+  const Z: Record<number, number> = { 90: 1.28, 95: 1.65, 97: 1.88, 99: 2.33 };
+  const z = Z[service] ?? 1.65;
+
+  // Daily demand per SKU from fulfilled orders (assume ~90 days of order history).
+  const daysWindow = 90;
+  const soldByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+      o.items.forEach(it => { map[it.productName] = (map[it.productName] ?? 0) + it.quantity; });
+    });
+    return map;
+  }, [orders]);
+
+  const rows = useMemo(() => inventory.map(i => {
+    const sold = soldByProduct[i.productName] ?? 0;
+    const dailyDemand = sold / daysWindow;
+    // Safety stock from demand × lead-time-variability (std-dev proxy) at service level.
+    const safety = Math.ceil(z * dailyDemand * Math.sqrt(Math.max(0, leadVar)));
+    const min = Math.ceil(dailyDemand * leadTime + safety); // reorder point
+    const max = Math.ceil(min + dailyDemand * reviewDays);  // order-up-to level
+    const orderQty = Math.max(0, max - i.quantity);
+    const below = i.quantity <= min;
+    return { ...i, dailyDemand, safety, min, max, orderQty, below };
+  }), [inventory, soldByProduct, z, leadTime, leadVar, reviewDays]);
+
+  const belowCount = rows.filter(r => r.below).length;
+  const totalOrderValue = rows.filter(r => r.below).reduce((s, r) => s + r.orderQty * r.unitCost, 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Safety-Stock &amp; Min/Max Planner</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Set buffer stock from lead-time variability and a target service level — then min/max levels per SKU.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Lead time (days)</label><input type="number" value={leadTime} onChange={e => setLeadTime(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Lead-time variance (days)</label><input type="number" value={leadVar} onChange={e => setLeadVar(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Service level</label>
+            <select value={service} onChange={e => setService(parseInt(e.target.value, 10))} className={inp}>
+              {[90, 95, 97, 99].map(s => <option key={s} value={s}>{s}% (z={Z[s]})</option>)}
+            </select>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Review cycle (days)</label><input type="number" value={reviewDays} onChange={e => setReviewDays(parseFloat(e.target.value) || 0)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "SKUs Below Min", value: belowCount.toString(), color: belowCount > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Suggested Buy Value", value: formatCurrency(Math.round(totalOrderValue)), color: "text-[var(--color-primary)]" },
+          { label: "Service Level", value: `${service}%`, color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add inventory items and capture orders to compute safety stock and min/max levels.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "On Hand", "Daily Demand", "Safety", "Min (ROP)", "Max", "Order Qty"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${r.below ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.below ? "text-red-400" : "text-[var(--color-text)]"}`}>{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dailyDemand > 0 ? `${r.dailyDemand.toFixed(2)}/day` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.safety}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400 font-semibold">{r.min}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-emerald-400 font-semibold">{r.max}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.orderQty > 0 ? <span className="text-[var(--color-primary)] font-bold">{r.orderQty}</span> : <span className="text-[var(--color-muted)]">0</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Safety stock = z × daily demand × √(lead-time variance). Min (reorder point) = demand over lead time + safety; Max = min + demand over the review cycle. Order quantity tops stock back up to Max. Daily demand uses ~90 days of fulfilled-order history.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #52 Carrying-cost calculator ───────────────────────── */
+function CarryingCostTab() {
+  const { store } = useApp();
+  const { inventory } = store;
+  // Annual carrying-cost components as % of average stock value (persisted assumptions).
+  const [capitalPct, setCapitalPct] = useFeatureState<number>("ops-carry-capital-pct", 14);
+  const [storagePct, setStoragePct] = useFeatureState<number>("ops-carry-storage-pct", 4);
+  const [obsoletePct, setObsoletePct] = useFeatureState<number>("ops-carry-obsolete-pct", 3);
+  const [insurancePct, setInsurancePct] = useFeatureState<number>("ops-carry-insurance-pct", 1);
+
+  const totalPct = Math.max(0, capitalPct) + Math.max(0, storagePct) + Math.max(0, obsoletePct) + Math.max(0, insurancePct);
+
+  const rows = useMemo(() => inventory.map(i => {
+    const stockValue = i.quantity * i.unitCost;
+    const annualCarry = stockValue * (totalPct / 100);
+    return { ...i, stockValue, annualCarry, monthlyCarry: annualCarry / 12, carryPerUnit: i.quantity > 0 ? annualCarry / i.quantity : 0 };
+  }).sort((a, b) => b.annualCarry - a.annualCarry), [inventory, totalPct]);
+
+  const totalStock = rows.reduce((s, r) => s + r.stockValue, 0);
+  const totalCarry = rows.reduce((s, r) => s + r.annualCarry, 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Coins size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Carrying-Cost Calculator</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Quantify the true annual cost of holding stock — capital, storage, obsolescence and insurance.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Cost of capital (%/yr)</label><input type="number" value={capitalPct} onChange={e => setCapitalPct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Storage / handling (%/yr)</label><input type="number" value={storagePct} onChange={e => setStoragePct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Obsolescence / shrink (%/yr)</label><input type="number" value={obsoletePct} onChange={e => setObsoletePct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Insurance (%/yr)</label><input type="number" value={insurancePct} onChange={e => setInsurancePct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">Total carrying rate: <span className="font-bold text-[var(--color-primary)]">{totalPct.toFixed(1)}%</span> of average stock value per year.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Stock Value", value: formatCurrency(Math.round(totalStock)), color: "text-blue-400" },
+          { label: "Annual Carrying Cost", value: formatCurrency(Math.round(totalCarry)), color: "text-red-400" },
+          { label: "Monthly Carrying Cost", value: formatCurrency(Math.round(totalCarry / 12)), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add inventory items to estimate what holding them really costs each year.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Stock Value", "Annual Carry", "Monthly Carry", "Carry / Unit"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(Math.round(r.stockValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.annualCarry))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.monthlyCarry))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.carryPerUnit))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost = stock value × total annual rate. Typical SMB carrying rates run 18–30% — the biggest hidden tax on slow stock. Cut it by shrinking dead stock and tightening reorder quantities (see EOQ).</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #19 Stock-aging report ───────────────────────── */
+function StockAgingTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+
+  // Last fulfilled-sale date per product → days held proxy.
+  const lastSale = useMemo(() => {
+    const map: Record<string, string> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+      o.items.forEach(it => {
+        const prev = map[it.productName];
+        if (!prev || o.createdAt > prev) map[it.productName] = o.createdAt;
+      });
+    });
+    return map;
+  }, [orders]);
+
+  const BUCKETS = [
+    { key: "b0", label: "0–30 days", max: 30, color: "text-green-400", bar: "bg-green-500/70" },
+    { key: "b30", label: "31–60 days", max: 60, color: "text-blue-400", bar: "bg-blue-500/70" },
+    { key: "b60", label: "61–90 days", max: 90, color: "text-yellow-400", bar: "bg-yellow-500/70" },
+    { key: "b90", label: "91–180 days", max: 180, color: "text-orange-400", bar: "bg-orange-500/70" },
+    { key: "b180", label: "180+ days", max: Infinity, color: "text-red-400", bar: "bg-red-500/70" },
+  ];
+
+  const rows = useMemo(() => {
+    const today = Date.now();
+    return inventory.map(i => {
+      const ref = lastSale[i.productName] ?? i.updatedAt;
+      const days = ref ? Math.max(0, Math.floor((today - new Date(ref).getTime()) / 86400000)) : null;
+      const value = i.quantity * i.unitCost;
+      const bucket = days === null ? BUCKETS[4] : (BUCKETS.find(b => days <= b.max) ?? BUCKETS[4]);
+      return { ...i, days, value, bucket };
+    });
+  }, [inventory, lastSale]);
+
+  const totalValue = rows.reduce((s, r) => s + r.value, 0);
+  const bucketTotals = BUCKETS.map(b => ({
+    ...b,
+    value: rows.filter(r => r.bucket.key === b.key).reduce((s, r) => s + r.value, 0),
+    count: rows.filter(r => r.bucket.key === b.key).length,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Hourglass size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Stock-Aging Report</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Bucket inventory by days held since last sale to spot obsolescence before the audit does.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-3">Value by Age Bucket · {formatCurrency(Math.round(totalValue))} total</p>
+        <div className="space-y-2">
+          {bucketTotals.map(b => (
+            <div key={b.key} className="flex items-center gap-3">
+              <span className={`text-xs w-28 shrink-0 font-medium ${b.color}`}>{b.label}</span>
+              <div className="flex-1 h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full ${b.bar} rounded-full`} style={{ width: `${totalValue > 0 ? (b.value / totalValue) * 100 : 0}%` }} />
+              </div>
+              <span className="text-[10px] text-[var(--color-muted)] w-10 text-right">{b.count} SKU</span>
+              <span className="text-xs tabular-nums w-24 text-right font-semibold">{formatCurrency(Math.round(b.value))}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add inventory items to age your stock by days held.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Qty", "Value", "Days Held", "Age Bucket"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => (b.days ?? Infinity) - (a.days ?? Infinity)).map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(r.value))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.days === null ? "—" : `${r.days}d`}</td>
+                    <td className={`px-4 py-2.5 text-xs font-semibold ${r.bucket.color}`}>{r.bucket.label}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Days held is measured from the last fulfilled sale (or last stock update if never sold). Stock in the 180+ bucket is a strong write-off / clearance candidate — review provisioning with your CA.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #53 Stockout-cost estimator ───────────────────────── */
+function StockoutCostTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+  // Margin % used to value lost gross profit, and goodwill loss per stockout event.
+  const [marginPct, setMarginPct] = useFeatureState<number>("ops-stockout-margin-pct", 25);
+  const [goodwillPct, setGoodwillPct] = useFeatureState<number>("ops-stockout-goodwill-pct", 10);
+
+  // Daily demand from ~90 days of fulfilled orders.
+  const daysWindow = 90;
+  const soldByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+      o.items.forEach(it => { map[it.productName] = (map[it.productName] ?? 0) + it.quantity; });
+    });
+    return map;
+  }, [orders]);
+
+  // Average selling price per product from order line items (fallback to cost × (1+margin)).
+  const avgPrice = useMemo(() => {
+    const acc: Record<string, { sum: number; qty: number }> = {};
+    orders.forEach(o => o.items.forEach(it => {
+      const a = acc[it.productName] ?? { sum: 0, qty: 0 };
+      a.sum += it.unitPrice * it.quantity; a.qty += it.quantity; acc[it.productName] = a;
+    }));
+    const out: Record<string, number> = {};
+    Object.keys(acc).forEach(k => { out[k] = acc[k].qty > 0 ? acc[k].sum / acc[k].qty : 0; });
+    return out;
+  }, [orders]);
+
+  const m = Math.max(0, marginPct) / 100;
+  const g = Math.max(0, goodwillPct) / 100;
+
+  const rows = useMemo(() => inventory.map(i => {
+    const sold = soldByProduct[i.productName] ?? 0;
+    const dailyDemand = sold / daysWindow;
+    const sellPrice = avgPrice[i.productName] || i.unitCost * (1 + m);
+    const daysToStockout = dailyDemand > 0 ? Math.floor(i.quantity / dailyDemand) : null;
+    // If demand continues and no resupply, units short over a 30-day horizon once stock runs out.
+    const horizon = 30;
+    const coverDays = dailyDemand > 0 ? i.quantity / dailyDemand : horizon;
+    const shortDays = Math.max(0, horizon - coverDays);
+    const unitsShort = dailyDemand * shortDays;
+    const lostMargin = unitsShort * sellPrice * m;
+    const goodwillCost = lostMargin * g;
+    const totalRisk = lostMargin + goodwillCost;
+    return { ...i, dailyDemand, sellPrice, daysToStockout, unitsShort, lostMargin, goodwillCost, totalRisk };
+  }).filter(r => r.dailyDemand > 0).sort((a, b) => b.totalRisk - a.totalRisk), [inventory, soldByProduct, avgPrice, m, g]);
+
+  const totalRisk = rows.reduce((s, r) => s + r.totalRisk, 0);
+  const atRisk = rows.filter(r => r.daysToStockout !== null && r.daysToStockout <= 14).length;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <AlertOctagon size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Stockout-Cost Estimator</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Estimate lost gross profit and goodwill from running out — over a 30-day horizon.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Gross margin (%)</label><input type="number" value={marginPct} onChange={e => setMarginPct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Goodwill loss (% of lost margin)</label><input type="number" value={goodwillPct} onChange={e => setGoodwillPct(parseFloat(e.target.value) || 0)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "30-Day Stockout Risk", value: formatCurrency(Math.round(totalRisk)), color: "text-red-400" },
+          { label: "SKUs Out Within 14d", value: atRisk.toString(), color: atRisk > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "SKUs With Demand", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No sales velocity yet. Capture fulfilled orders so stockout risk can be estimated from real demand.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "On Hand", "Days to Stockout", "Units Short (30d)", "Lost Margin", "Goodwill", "Total Risk"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {r.daysToStockout === null ? <span className="text-[var(--color-muted)]">—</span>
+                        : r.daysToStockout <= 7 ? <span className="text-red-400 font-bold">{r.daysToStockout}d</span>
+                        : r.daysToStockout <= 14 ? <span className="text-orange-400 font-semibold">{r.daysToStockout}d</span>
+                        : <span className="text-[var(--color-muted)]">{r.daysToStockout}d</span>}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.unitsShort > 0 ? Math.round(r.unitsShort) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(r.lostMargin))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.goodwillCost))}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-bold text-[var(--color-primary)]">{formatCurrency(Math.round(r.totalRisk))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Risk assumes demand continues unmet once stock runs out within the 30-day window. Lost margin = units short × selling price × margin %; goodwill adds a fraction of lost margin for damaged customer trust. Use it to prioritise which SKUs to reorder first.</p>
     </div>
   );
 }
