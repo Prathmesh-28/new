@@ -5,6 +5,8 @@ import {
   ShoppingCart, FileSpreadsheet, Calculator, Undo2, Layers, CalendarClock,
   Receipt, Tag, GitCompareArrows, ClipboardCheck, Megaphone,
   Plus, AlertTriangle, CheckCircle2, TrendingDown, TrendingUp,
+  Crosshair, Boxes, Warehouse, PieChart, RefreshCw, Star,
+  FileCheck, RotateCcw, ListChecks, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,7 +16,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type MktTab =
   | "overview" | "settlement" | "commission" | "rto" | "consolidate"
-  | "payout-cycle" | "tcs52" | "sku-pnl" | "channel-compare" | "ondc-ready" | "roas";
+  | "payout-cycle" | "tcs52" | "sku-pnl" | "channel-compare" | "ondc-ready" | "roas"
+  | "target-price" | "inventory-sync" | "fba-fees" | "ppc-budget" | "repricer"
+  | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix";
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
@@ -46,6 +50,16 @@ export default function MarketplacePage() {
             ["channel-compare", "Channel Compare", GitCompareArrows],
             ["ondc-ready", "ONDC Readiness", ClipboardCheck],
             ["roas", "Ad ROAS", Megaphone],
+            ["target-price", "Target-Margin Price", Crosshair],
+            ["inventory-sync", "Inventory Sync", Boxes],
+            ["fba-fees", "FBA Fee Estimator", Warehouse],
+            ["ppc-budget", "PPC Allocator", PieChart],
+            ["repricer", "Repricing Sim", RefreshCw],
+            ["reviews", "Rating Tracker", Star],
+            ["gstr8-recon", "GSTR-8 Recon", FileCheck],
+            ["refund-cost", "Refund Cost", RotateCcw],
+            ["listing-quality", "Listing Quality", ListChecks],
+            ["cod-mix", "COD vs Prepaid", Wallet],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -66,6 +80,16 @@ export default function MarketplacePage() {
       {tab === "channel-compare" && <ChannelCompare />}
       {tab === "ondc-ready" && <OndcReadiness />}
       {tab === "roas" && <RoasCalculator />}
+      {tab === "target-price" && <TargetMarginPricer />}
+      {tab === "inventory-sync" && <InventorySync />}
+      {tab === "fba-fees" && <FbaFeeEstimator />}
+      {tab === "ppc-budget" && <PpcBudgetAllocator />}
+      {tab === "repricer" && <RepricingSimulator />}
+      {tab === "reviews" && <RatingTracker />}
+      {tab === "gstr8-recon" && <Gstr8Recon />}
+      {tab === "refund-cost" && <RefundCostTracker />}
+      {tab === "listing-quality" && <ListingQuality />}
+      {tab === "cod-mix" && <CodMixAnalyzer />}
     </div>
   );
 }
@@ -1004,6 +1028,791 @@ function RoasCalculator() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ── #11 Target-margin pricer (back-solve listing price after commission) ────────
+function TargetMarginPricer() {
+  const [cogs, setCogs] = useState("");
+  const [referralPct, setReferralPct] = useState("15");
+  const [fixedFee, setFixedFee] = useState("25");
+  const [shipping, setShipping] = useState("70");
+  const [targetMarginPct, setTargetMarginPct] = useState("20");
+  const [gstPct, setGstPct] = useState("18");
+
+  const c = parseFloat(cogs) || 0;
+  const ref = (parseFloat(referralPct) || 0) / 100;
+  const fixed = parseFloat(fixedFee) || 0;
+  const ship = parseFloat(shipping) || 0;
+  const margin = (parseFloat(targetMarginPct) || 0) / 100;
+  const gst = (parseFloat(gstPct) || 0) / 100;
+
+  // Solve: price = cogs + ship + fixed + price*ref + price*margin
+  // price*(1 - ref - margin) = cogs + ship + fixed  → price (pre-GST listing net of commission)
+  const denom = 1 - ref - margin;
+  const feasible = c > 0 && denom > 0;
+  const basePrice = feasible ? (c + ship + fixed) / denom : 0; // net listing price before adding output GST
+  const listPrice = basePrice * (1 + gst); // gross MRP the buyer pays (output GST added on top)
+  const referralAmt = basePrice * ref;
+  const profit = basePrice - c - ship - fixed - referralAmt;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Crosshair size={14} className="text-[var(--color-primary)]" /> Target-margin Pricer</h2>
+        <p className="text-xs text-[var(--color-muted)]">Back-solve the listing price that still leaves your target net margin <em>after</em> the marketplace takes its referral cut, fixed fee and shipping. We add output GST on top to give the buyer-facing MRP.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {([
+            ["COGS / landed cost (₹)", cogs, setCogs, "180"],
+            ["Referral commission %", referralPct, setReferralPct, "15"],
+            ["Fixed / closing fee (₹)", fixedFee, setFixedFee, "25"],
+            ["Shipping / weight (₹)", shipping, setShipping, "70"],
+            ["Target net margin %", targetMarginPct, setTargetMarginPct, "20"],
+            ["Output GST %", gstPct, setGstPct, "18"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {c > 0 && !feasible && (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> Referral % + target margin % must be under 100% — at these inputs no price can hit the margin.</p>
+        </div>
+      )}
+
+      {feasible && (
+        <div className={`${CARD} p-5`}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: "List price (pre-GST)", value: formatCurrency(Math.round(basePrice)), color: "text-[var(--color-text)]" },
+              { label: "Buyer MRP (incl. GST)", value: formatCurrency(Math.round(listPrice)), color: "text-[var(--color-primary)]" },
+              { label: "Referral fee", value: formatCurrency(Math.round(referralAmt)), color: "text-red-400" },
+              { label: "Net profit / unit", value: formatCurrency(Math.round(profit)), color: profit >= 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)]">Set your listing at <span className="font-semibold text-[var(--color-text)]">{formatCurrency(Math.round(listPrice))}</span> (GST-inclusive) to net {targetMarginPct || 0}% margin after fees. Round up to a clean price point for better conversion.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #12 Inventory-across-channels sync sheet ───────────────────────────────────
+type InvRow = { id: string; sku: string; warehouse: number; amazon: number; flipkart: number; meesho: number; ondc: number };
+
+function InventorySync() {
+  const [rows, setRows] = useFeatureState<InvRow[]>("mkt-inventory-sync", []);
+  const [sku, setSku] = useState("");
+  const [wh, setWh] = useState("");
+  const [amz, setAmz] = useState("");
+  const [flp, setFlp] = useState("");
+  const [mee, setMee] = useState("");
+  const [ond, setOnd] = useState("");
+
+  const add = () => {
+    if (!sku.trim()) { toast.error("Enter a SKU"); return; }
+    const n = (v: string) => Math.max(0, Math.round(parseFloat(v) || 0));
+    setRows(prev => [...prev.filter(r => r.sku.toLowerCase() !== sku.trim().toLowerCase()), {
+      id: crypto.randomUUID(), sku: sku.trim(), warehouse: n(wh), amazon: n(amz), flipkart: n(flp), meesho: n(mee), ondc: n(ond),
+    }]);
+    setSku(""); setWh(""); setAmz(""); setFlp(""); setMee(""); setOnd("");
+    toast.success("SKU stock saved");
+  };
+
+  const listed = (r: InvRow) => r.amazon + r.flipkart + r.meesho + r.ondc;
+  const totalWh = rows.reduce((s, r) => s + r.warehouse, 0);
+  const totalListed = rows.reduce((s, r) => s + listed(r), 0);
+  const oversold = rows.filter(r => listed(r) > r.warehouse);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Inventory Sync Across Channels</h2>
+        <p className="text-xs text-[var(--color-muted)]">Hold one physical stock count and the quantity you've listed on each channel. When listed exceeds warehouse, you risk overselling and a marketplace penalty — those rows flag red.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Warehouse</label><input type="number" value={wh} onChange={e => setWh(e.target.value)} placeholder="200" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Amazon</label><input type="number" value={amz} onChange={e => setAmz(e.target.value)} placeholder="80" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Flipkart</label><input type="number" value={flp} onChange={e => setFlp(e.target.value)} placeholder="60" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Meesho</label><input type="number" value={mee} onChange={e => setMee(e.target.value)} placeholder="40" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">ONDC</label><input type="number" value={ond} onChange={e => setOnd(e.target.value)} placeholder="20" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update SKU</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total in warehouse</p><p className="text-xl font-bold tabular-nums">{totalWh}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total listed (all channels)</p><p className="text-xl font-bold tabular-nums">{totalListed}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">SKUs at oversell risk</p><p className={`text-xl font-bold tabular-nums ${oversold.length ? "text-red-400" : "text-green-400"}`}>{oversold.length}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["SKU", "Warehouse", "Amazon", "Flipkart", "Meesho", "ONDC", "Listed", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const lst = listed(r);
+                    const over = lst > r.warehouse;
+                    return (
+                      <tr key={r.id} className={`hover:bg-white/2 ${over ? "bg-red-950/15" : ""}`}>
+                        <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.warehouse}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.amazon}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.flipkart}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.meesho}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.ondc}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{lst}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${over ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{over ? `Oversold ${lst - r.warehouse}` : "In sync"}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #13 FBA / warehouse fee estimator ──────────────────────────────────────────
+function FbaFeeEstimator() {
+  const [weight, setWeight] = useState("0.5");
+  const [length, setLength] = useState("25");
+  const [width, setWidth] = useState("18");
+  const [height, setHeight] = useState("5");
+  const [pickPack, setPickPack] = useState("18");
+  const [storageRate, setStorageRate] = useState("45"); // ₹ per cubic foot per month
+  const [monthsStored, setMonthsStored] = useState("1");
+  const [units, setUnits] = useState("100");
+
+  const wt = parseFloat(weight) || 0;
+  const l = parseFloat(length) || 0;
+  const w = parseFloat(width) || 0;
+  const h = parseFloat(height) || 0;
+  const qty = Math.max(0, Math.round(parseFloat(units) || 0));
+
+  // Volumetric weight (kg) ≈ (L×W×H cm) / 5000 — couriers bill the higher of actual vs volumetric.
+  const volWeightKg = (l * w * h) / 5000;
+  const billedWeight = Math.max(wt, volWeightKg);
+  // Weight-handling proxy: ₹40 base for first 0.5kg + ₹20 per additional 0.5kg slab.
+  const slabs = Math.max(0, Math.ceil((billedWeight - 0.5) / 0.5));
+  const weightHandling = 40 + slabs * 20;
+  const pick = parseFloat(pickPack) || 0;
+  // Storage: volume in cubic feet (cm³ → ft³ ÷ 28316.8) × rate × months.
+  const cubicFt = (l * w * h) / 28316.8;
+  const storage = cubicFt * (parseFloat(storageRate) || 0) * (parseFloat(monthsStored) || 0);
+  const perUnit = weightHandling + pick + storage;
+  const totalFee = perUnit * qty;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Warehouse size={14} className="text-[var(--color-primary)]" /> FBA / Warehouse Fee Estimator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Estimate per-unit fulfilment cost: weight-handling (billed on the higher of actual vs volumetric weight), pick-and-pack, and monthly storage by volume. Rates are indicative — match to your latest rate card.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {([
+            ["Actual weight (kg)", weight, setWeight, "0.5"],
+            ["Length (cm)", length, setLength, "25"],
+            ["Width (cm)", width, setWidth, "18"],
+            ["Height (cm)", height, setHeight, "5"],
+            ["Pick & pack (₹)", pickPack, setPickPack, "18"],
+            ["Storage ₹/cu.ft/mo", storageRate, setStorageRate, "45"],
+            ["Months stored", monthsStored, setMonthsStored, "1"],
+            ["Units", units, setUnits, "100"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5 space-y-2`}>
+        {[
+          { label: "Volumetric weight", value: `${volWeightKg.toFixed(2)} kg`, color: "text-[var(--color-muted)]" },
+          { label: "Billed weight (higher of)", value: `${billedWeight.toFixed(2)} kg`, color: "text-[var(--color-text)]" },
+          { label: "Weight handling", value: formatCurrency(Math.round(weightHandling)), color: "text-red-400" },
+          { label: "Pick & pack", value: formatCurrency(Math.round(pick)), color: "text-red-400" },
+          { label: "Storage (per unit)", value: formatCurrency(Math.round(storage)), color: "text-red-400" },
+          { label: "Fulfilment cost / unit", value: formatCurrency(Math.round(perUnit)), color: "text-orange-400 font-bold" },
+          { label: `Total for ${qty} units`, value: formatCurrency(Math.round(totalFee)), color: "text-[var(--color-primary)] font-bold" },
+        ].map(r => (
+          <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+            <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+            <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── #14 Ad / PPC budget allocator ──────────────────────────────────────────────
+type PpcRow = { id: string; campaign: string; weight: number };
+
+function PpcBudgetAllocator() {
+  const [budget, setBudget] = useState("50000");
+  const [rows, setRows] = useFeatureState<PpcRow[]>("mkt-ppc-rows", []);
+  const [name, setName] = useState("");
+  const [weight, setWeight] = useState("");
+
+  const add = () => {
+    const w = parseFloat(weight) || 0;
+    if (!name.trim() || w <= 0) { toast.error("Enter a campaign and weight"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), campaign: name.trim(), weight: w }]);
+    setName(""); setWeight("");
+    toast.success("Campaign added");
+  };
+
+  const total = parseFloat(budget) || 0;
+  const sumWeight = rows.reduce((s, r) => s + r.weight, 0);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> PPC Budget Allocator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Split a total monthly ad budget across campaigns by weight (priority / expected ROI). Weights are relative — a campaign with weight 3 gets thrice the budget of one with weight 1.</p>
+        <div>
+          <label className="block text-xs text-[var(--color-muted)] mb-1">Total monthly ad budget (₹)</label>
+          <input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="50000" className={INP} />
+        </div>
+        <div className="grid grid-cols-2 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Campaign</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Sponsored Products — Mugs" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Weight</label><input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="3" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add campaign</button>
+      </div>
+
+      {rows.length > 0 && (
+        <div className={`${CARD} p-5 space-y-3`}>
+          {rows.map(r => {
+            const share = sumWeight > 0 ? r.weight / sumWeight : 0;
+            const alloc = total * share;
+            return (
+              <div key={r.id}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-medium flex items-center gap-2">{r.campaign}
+                    <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                  </span>
+                  <span className="tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(alloc))} · {(share * 100).toFixed(0)}%</span>
+                </div>
+                <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--color-primary)] transition-all" style={{ width: `${share * 100}%` }} />
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-[var(--color-muted)] pt-1">Allocated {formatCurrency(Math.round(total))} across {rows.length} campaign(s). Re-check after a week and shift weight toward the lowest-ACoS campaigns.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #15 Repricing simulator (margin-floor aware) ───────────────────────────────
+function RepricingSimulator() {
+  const [cogs, setCogs] = useState("180");
+  const [feesPct, setFeesPct] = useState("18");
+  const [currentPrice, setCurrentPrice] = useState("499");
+  const [newPrice, setNewPrice] = useState("449");
+  const [minMarginPct, setMinMarginPct] = useState("10");
+  const [unitsAtCurrent, setUnitsAtCurrent] = useState("100");
+  const [elasticity, setElasticity] = useState("1.5"); // % volume change per % price change
+
+  const c = parseFloat(cogs) || 0;
+  const fp = (parseFloat(feesPct) || 0) / 100;
+  const cur = parseFloat(currentPrice) || 0;
+  const nw = parseFloat(newPrice) || 0;
+  const minM = (parseFloat(minMarginPct) || 0) / 100;
+  const u0 = Math.max(0, Math.round(parseFloat(unitsAtCurrent) || 0));
+  const e = parseFloat(elasticity) || 0;
+
+  const netUnit = (p: number) => p - p * fp - c;
+  const curNet = netUnit(cur);
+  const newNet = netUnit(nw);
+  // Floor price: smallest price where net margin ≥ minMargin% of price. p - p*fp - c ≥ minM*p → p(1-fp-minM) ≥ c
+  const floorDenom = 1 - fp - minM;
+  const floorPrice = floorDenom > 0 ? c / floorDenom : Infinity;
+  const breachesFloor = nw > 0 && nw < floorPrice;
+
+  // Demand response: % price change → % volume change via elasticity.
+  const pricePct = cur > 0 ? (nw - cur) / cur : 0;
+  const newUnits = Math.max(0, Math.round(u0 * (1 - pricePct * e)));
+  const curProfit = curNet * u0;
+  const newProfit = newNet * newUnits;
+  const delta = newProfit - curProfit;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Repricing Simulator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Test a price change before you push it. We compute the margin floor (lowest price that still clears your minimum margin) and project total profit using a simple elasticity (% volume change per 1% price change).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {([
+            ["COGS (₹)", cogs, setCogs, "180"],
+            ["Fees %", feesPct, setFeesPct, "18"],
+            ["Current price (₹)", currentPrice, setCurrentPrice, "499"],
+            ["New price (₹)", newPrice, setNewPrice, "449"],
+            ["Min margin %", minMarginPct, setMinMarginPct, "10"],
+            ["Units @ current", unitsAtCurrent, setUnitsAtCurrent, "100"],
+            ["Elasticity", elasticity, setElasticity, "1.5"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e2 => setter(e2.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${breachesFloor ? "border-red-800/40 bg-red-950/20" : "border-blue-800/40 bg-blue-950/20"}`}>
+        <p className={`text-sm font-bold flex items-center gap-2 ${breachesFloor ? "text-red-400" : "text-blue-400"}`}>
+          {breachesFloor ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          {floorDenom <= 0
+            ? "Fees % + min margin % ≥ 100% — no floor price exists at these inputs."
+            : breachesFloor
+              ? `New price ${formatCurrency(Math.round(nw))} is below the margin floor of ${formatCurrency(Math.round(floorPrice))} — it breaches your ${minMarginPct || 0}% minimum.`
+              : `Margin floor is ${formatCurrency(Math.round(floorPrice))}. The new price stays above it — safe to reprice.`}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Net / unit (current)", value: formatCurrency(Math.round(curNet)), color: curNet >= 0 ? "text-[var(--color-text)]" : "text-red-400" },
+          { label: "Net / unit (new)", value: formatCurrency(Math.round(newNet)), color: newNet >= 0 ? "text-[var(--color-text)]" : "text-red-400" },
+          { label: "Projected units (new)", value: String(newUnits), color: "text-[var(--color-muted)]" },
+          { label: "Profit change", value: `${delta >= 0 ? "+" : ""}${formatCurrency(Math.round(delta))}`, color: delta >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── #16 Review / rating tracker ────────────────────────────────────────────────
+type ReviewRow = { id: string; sku: string; channel: Channel; rating: number; reviews: number };
+
+function RatingTracker() {
+  const [rows, setRows] = useFeatureState<ReviewRow[]>("mkt-review-rows", []);
+  const [sku, setSku] = useState("");
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [rating, setRating] = useState("");
+  const [reviews, setReviews] = useState("");
+
+  const add = () => {
+    const r = parseFloat(rating) || 0;
+    if (!sku.trim() || r <= 0 || r > 5) { toast.error("Enter a SKU and rating (0–5)"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), sku: sku.trim(), channel, rating: r, reviews: Math.max(0, Math.round(parseFloat(reviews) || 0)) }]);
+    setSku(""); setRating(""); setReviews("");
+    toast.success("Listing rating added");
+  };
+
+  const totalReviews = rows.reduce((s, r) => s + r.reviews, 0);
+  // Review-weighted average rating across all listings.
+  const weighted = totalReviews > 0 ? rows.reduce((s, r) => s + r.rating * r.reviews, 0) / totalReviews : 0;
+  const atRisk = rows.filter(r => r.rating < 4).length; // sub-4.0 listings risk buy-box / discoverability loss
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Star size={14} className="text-[var(--color-primary)]" /> Review / Rating Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Log each listing's star rating and review count per channel. A listing under 4.0 stars loses buy-box share and discoverability — those rows flag so you prioritise fixing them.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label><select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Rating (0–5)</label><input type="number" step="0.1" value={rating} onChange={e => setRating(e.target.value)} placeholder="4.2" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1"># Reviews</label><input type="number" value={reviews} onChange={e => setReviews(e.target.value)} placeholder="86" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add listing</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Weighted avg rating</p><p className={`text-xl font-bold tabular-nums ${weighted >= 4 ? "text-green-400" : "text-yellow-400"}`}>{weighted.toFixed(2)} ★</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total reviews</p><p className="text-xl font-bold tabular-nums">{totalReviews}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Listings below 4.0★</p><p className={`text-xl font-bold tabular-nums ${atRisk ? "text-red-400" : "text-green-400"}`}>{atRisk}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["SKU", "Channel", "Rating", "Reviews", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className={`hover:bg-white/2 ${r.rating < 4 ? "bg-red-950/15" : ""}`}>
+                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.rating >= 4 ? "text-green-400" : "text-red-400"}`}>{r.rating.toFixed(1)} ★</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.reviews}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.rating >= 4 ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{r.rating >= 4 ? "Healthy" : "At risk"}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #17 GSTR-8 (TCS) reconciliation — operator-filed vs your books ─────────────
+type Gstr8Row = { id: string; operator: Channel; month: string; tcsAsPerBooks: number; tcsInGstr8: number };
+
+function Gstr8Recon() {
+  const [rows, setRows] = useFeatureState<Gstr8Row[]>("mkt-gstr8-rows", []);
+  const [operator, setOperator] = useState<Channel>("Amazon");
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [books, setBooks] = useState("");
+  const [filed, setFiled] = useState("");
+
+  const add = () => {
+    const b = parseFloat(books) || 0;
+    if (b <= 0) { toast.error("Enter the TCS as per your books"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), operator, month, tcsAsPerBooks: b, tcsInGstr8: parseFloat(filed) || 0 }]);
+    setBooks(""); setFiled("");
+    toast.success("Reconciliation row added");
+  };
+
+  const diffOf = (r: Gstr8Row) => r.tcsInGstr8 - r.tcsAsPerBooks; // operator over/under-reported vs your books
+  const totalBooks = rows.reduce((s, r) => s + r.tcsAsPerBooks, 0);
+  const totalFiled = rows.reduce((s, r) => s + r.tcsInGstr8, 0);
+  const mismatches = rows.filter(r => Math.abs(diffOf(r)) >= 1).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> GSTR-8 (TCS) Reconciliation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Operators file the 1% TCS they collected in GSTR-8, which flows to your GSTR-2B. Compare what each operator <em>filed</em> against the TCS in <em>your</em> books — any gap means a credit you can't claim, or one to chase the operator to correct.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Operator</label><select value={operator} onChange={e => setOperator(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Month</label><input type="month" value={month} onChange={e => setMonth(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">TCS per books (₹)</label><input type="number" value={books} onChange={e => setBooks(e.target.value)} placeholder="5000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">TCS in GSTR-8 (₹)</label><input type="number" value={filed} onChange={e => setFiled(e.target.value)} placeholder="4800" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2.5 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">TCS per your books</p><p className="text-lg font-bold tabular-nums">{formatCurrency(Math.round(totalBooks))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">TCS filed in GSTR-8</p><p className="text-lg font-bold tabular-nums text-purple-400">{formatCurrency(Math.round(totalFiled))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Mismatched periods</p><p className={`text-lg font-bold tabular-nums ${mismatches ? "text-red-400" : "text-green-400"}`}>{mismatches}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Operator", "Month", "Per books", "In GSTR-8", "Gap", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const diff = diffOf(r);
+                    const matched = Math.abs(diff) < 1;
+                    return (
+                      <tr key={r.id} className={`hover:bg-white/2 ${matched ? "" : "bg-red-950/15"}`}>
+                        <td className="px-4 py-2.5 font-medium">{r.operator}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.month}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.tcsAsPerBooks)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-purple-400">{formatCurrency(r.tcsInGstr8)}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${matched ? "text-[var(--color-muted)]" : diff < 0 ? "text-red-400" : "text-yellow-400"}`}>{diff >= 0 ? "+" : ""}{formatCurrency(Math.round(diff))}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${matched ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{matched ? "Matched" : diff < 0 ? "Under-reported" : "Over-reported"}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">A negative gap means the operator under-reported TCS in GSTR-8 — raise it with them so the full credit reflects in your GSTR-2B before you file.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #18 Refund / replacement cost tracker ──────────────────────────────────────
+type RefundRow = { id: string; sku: string; kind: "refund" | "returnless" | "replacement"; orderValue: number; refundAmt: number; replacementCogs: number; count: number };
+
+function refundCostOf(r: RefundRow): number {
+  // Refund: customer returns goods, you refund — net cost is the refunded amount you can't fully recover (proxy: refund - resaleable value handled elsewhere; here refund amount).
+  // Returnless: you refund AND lose the goods → refund + COGS proxy (replacementCogs field doubles as lost-goods cost).
+  // Replacement: you ship a new unit free → COGS of replacement + (any partial refund).
+  const per = r.kind === "returnless"
+    ? r.refundAmt + r.replacementCogs
+    : r.kind === "replacement"
+      ? r.replacementCogs + r.refundAmt
+      : r.refundAmt;
+  return per * r.count;
+}
+
+function RefundCostTracker() {
+  const [rows, setRows] = useFeatureState<RefundRow[]>("mkt-refund-rows", []);
+  const [sku, setSku] = useState("");
+  const [kind, setKind] = useState<RefundRow["kind"]>("refund");
+  const [orderValue, setOrderValue] = useState("");
+  const [refundAmt, setRefundAmt] = useState("");
+  const [replacementCogs, setReplacementCogs] = useState("");
+  const [count, setCount] = useState("1");
+
+  const add = () => {
+    const ov = parseFloat(orderValue) || 0;
+    if (!sku.trim() || ov <= 0) { toast.error("Enter a SKU and order value"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), sku: sku.trim(), kind, orderValue: ov,
+      refundAmt: parseFloat(refundAmt) || 0, replacementCogs: parseFloat(replacementCogs) || 0,
+      count: Math.max(1, Math.round(parseFloat(count) || 1)),
+    }]);
+    setSku(""); setOrderValue(""); setRefundAmt(""); setReplacementCogs("");
+    toast.success("Refund event added");
+  };
+
+  const totalCost = rows.reduce((s, r) => s + refundCostOf(r), 0);
+  const totalEvents = rows.reduce((s, r) => s + r.count, 0);
+  const returnless = rows.filter(r => r.kind === "returnless").reduce((s, r) => s + refundCostOf(r), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><RotateCcw size={14} className="text-[var(--color-primary)]" /> Refund / Replacement Cost Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Separate from RTO freight: this tracks the cash cost of <em>refunds</em>, marketplace <em>returnless refunds</em> (you refund and lose the goods) and free <em>replacements</em> (you ship a new unit's COGS). Returnless refunds are the most abused — watch that total.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Type</label>
+            <select value={kind} onChange={e => setKind(e.target.value as RefundRow["kind"])} className={INP}>
+              <option value="refund">Refund (goods returned)</option>
+              <option value="returnless">Returnless refund</option>
+              <option value="replacement">Free replacement</option>
+            </select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Order value (₹)</label><input type="number" value={orderValue} onChange={e => setOrderValue(e.target.value)} placeholder="499" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Refund amount (₹)</label><input type="number" value={refundAmt} onChange={e => setRefundAmt(e.target.value)} placeholder="499" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Lost-goods / replacement COGS (₹)</label><input type="number" value={replacementCogs} onChange={e => setReplacementCogs(e.target.value)} placeholder="180" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">No. of events</label><input type="number" value={count} onChange={e => setCount(e.target.value)} placeholder="1" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add refund event</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total refund / replacement cost</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(totalCost))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Events</p><p className="text-xl font-bold tabular-nums">{totalEvents}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Returnless-refund cost</p><p className="text-xl font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(returnless))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["SKU", "Type", "Order ₹", "Refund ₹", "Lost/Repl COGS", "Events", "Cost", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td className="px-4 py-2.5 text-xs uppercase">{r.kind}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.orderValue)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.refundAmt)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.replacementCogs)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(refundCostOf(r)))}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #19 Listing-quality checklist (per-SKU score) ──────────────────────────────
+const LISTING_CHECKS: { id: string; label: string; detail: string }[] = [
+  { id: "title", label: "Keyword-rich title", detail: "Brand + product + key attribute, within the channel's character limit." },
+  { id: "images", label: "7+ images incl. lifestyle", detail: "White-background main + lifestyle, infographic and scale shots." },
+  { id: "bullets", label: "5 benefit-led bullet points", detail: "Lead with benefits, not specs; cover top buyer questions." },
+  { id: "aplus", label: "A+ / enhanced content", detail: "A+ content (Amazon) or rich description lifts conversion." },
+  { id: "video", label: "Product video", detail: "A short demo video reduces returns and boosts conversion." },
+  { id: "hsn", label: "Correct HSN & GST rate", detail: "Right HSN avoids wrong tax heads and listing rejection." },
+  { id: "backend", label: "Backend search terms filled", detail: "Hidden keywords improve discoverability without keyword-stuffing the title." },
+  { id: "price", label: "Price within buy-box band", detail: "Competitive enough to win/share the buy box at a safe margin." },
+];
+
+function ListingQuality() {
+  const [done, setDone] = useFeatureState<string[]>("mkt-listing-quality", []);
+  const completed = LISTING_CHECKS.filter(s => done.includes(s.id)).length;
+  const pct = Math.round((completed / LISTING_CHECKS.length) * 100);
+  const toggle = (id: string) => setDone(done.includes(id) ? done.filter(x => x !== id) : [...done, id]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Listing-Quality Checklist</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-1 mb-3">A complete listing converts better and ranks higher. Score a SKU against these eight levers before you spend on ads — a weak listing wastes ad budget.</p>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#22c55e" : pct >= 60 ? "#3b82f6" : "#eab308" }} />
+          </div>
+          <span className={`text-sm font-bold tabular-nums ${pct === 100 ? "text-green-400" : pct >= 60 ? "text-blue-400" : "text-yellow-400"}`}>{pct}%</span>
+        </div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {LISTING_CHECKS.map(s => {
+          const isDone = done.includes(s.id);
+          return (
+            <button key={s.id} onClick={() => toggle(s.id)} className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-white/2">
+              <span className={`mt-0.5 shrink-0 w-4 h-4 rounded border flex items-center justify-center ${isDone ? "bg-green-500 border-green-500" : "border-[var(--color-border)]"}`}>
+                {isDone && <CheckCircle2 size={12} className="text-[var(--color-bg)]" />}
+              </span>
+              <span className="flex-1">
+                <p className={`text-sm font-medium ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{s.label}</p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{s.detail}</p>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {pct < 100 && (
+        <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+          <AlertTriangle size={12} className="shrink-0 mt-px" /> Fix the remaining {LISTING_CHECKS.length - completed} item(s) before scaling ad spend — ads amplify a good listing and burn cash on a weak one.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #20 COD vs prepaid mix analyzer ────────────────────────────────────────────
+function CodMixAnalyzer() {
+  const [totalOrders, setTotalOrders] = useState("1000");
+  const [codSharePct, setCodSharePct] = useState("60");
+  const [aov, setAov] = useState("700");
+  const [marginPct, setMarginPct] = useState("25");
+  const [codRtoPct, setCodRtoPct] = useState("18");
+  const [prepaidRtoPct, setPrepaidRtoPct] = useState("4");
+  const [rtoCostPerOrder, setRtoCostPerOrder] = useState("120"); // forward+reverse freight bled per RTO
+
+  const orders = Math.max(0, Math.round(parseFloat(totalOrders) || 0));
+  const codShare = (parseFloat(codSharePct) || 0) / 100;
+  const av = parseFloat(aov) || 0;
+  const margin = (parseFloat(marginPct) || 0) / 100;
+  const codRto = (parseFloat(codRtoPct) || 0) / 100;
+  const ppRto = (parseFloat(prepaidRtoPct) || 0) / 100;
+  const rtoCost = parseFloat(rtoCostPerOrder) || 0;
+
+  const codOrders = Math.round(orders * codShare);
+  const ppOrders = orders - codOrders;
+  const grossMargin = av * margin;
+
+  const segment = (cnt: number, rtoRate: number) => {
+    const rtos = Math.round(cnt * rtoRate);
+    const delivered = cnt - rtos;
+    const earned = delivered * grossMargin;
+    const bled = rtos * rtoCost; // RTO orders earn nothing and cost freight
+    return { cnt, rtos, delivered, net: earned - bled };
+  };
+
+  const cod = segment(codOrders, codRto);
+  const pp = segment(ppOrders, ppRto);
+  const totalNet = cod.net + pp.net;
+  const codNetPerOrder = cod.cnt > 0 ? cod.net / cod.cnt : 0;
+  const ppNetPerOrder = pp.cnt > 0 ? pp.net / pp.cnt : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> COD vs Prepaid Mix Analyzer</h2>
+        <p className="text-xs text-[var(--color-muted)]">COD orders RTO far more often than prepaid, and each RTO bleeds freight with zero revenue. Model your current mix to see the real net per order of each — then decide how hard to nudge buyers to prepay.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {([
+            ["Total orders", totalOrders, setTotalOrders, "1000"],
+            ["COD share %", codSharePct, setCodSharePct, "60"],
+            ["AOV (₹)", aov, setAov, "700"],
+            ["Gross margin %", marginPct, setMarginPct, "25"],
+            ["COD RTO %", codRtoPct, setCodRtoPct, "18"],
+            ["Prepaid RTO %", prepaidRtoPct, setPrepaidRtoPct, "4"],
+            ["RTO cost / order (₹)", rtoCostPerOrder, setRtoCostPerOrder, "120"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {[
+          { name: "COD", seg: cod, per: codNetPerOrder },
+          { name: "Prepaid", seg: pp, per: ppNetPerOrder },
+        ].map(({ name, seg, per }) => (
+          <div key={name} className={`${CARD} p-5 space-y-2`}>
+            <p className="text-sm font-semibold">{name} segment</p>
+            {[
+              { label: "Orders", value: String(seg.cnt) },
+              { label: "RTO orders", value: String(seg.rtos) },
+              { label: "Delivered", value: String(seg.delivered) },
+              { label: "Net margin", value: formatCurrency(Math.round(seg.net)) },
+              { label: "Net / order", value: formatCurrency(Math.round(per)) },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-1.5 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.label.startsWith("Net") ? (seg.net >= 0 ? "text-green-400 font-semibold" : "text-red-400 font-semibold") : "text-[var(--color-text)]"}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
+        <p className="text-sm font-bold text-blue-400 flex items-center gap-2"><TrendingUp size={14} /> Total net margin {formatCurrency(Math.round(totalNet))} across {orders} orders. Prepaid nets {formatCurrency(Math.round(ppNetPerOrder))}/order vs COD {formatCurrency(Math.round(codNetPerOrder))}/order — a prepaid discount under that gap still leaves you ahead.</p>
+      </div>
     </div>
   );
 }

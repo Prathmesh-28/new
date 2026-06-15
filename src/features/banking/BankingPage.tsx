@@ -6,6 +6,8 @@ import {
   Landmark, Wallet, GitCompareArrows, Hash, Receipt, Route,
   FileCheck2, ShieldAlert, AlertTriangle, Plus, CheckCircle2, ArrowRight,
   Banknote, Coins, Clock,
+  ShieldCheck, Repeat, FileText, Percent, ListChecks, UserCheck,
+  Split, Gauge, PiggyBank, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -16,7 +18,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type Tab =
   | "overview" | "balances" | "reconcile" | "cash-position" | "sweep"
-  | "virtual-accounts" | "fees" | "rail" | "cheques" | "charge-recovery" | "idle-alert";
+  | "virtual-accounts" | "fees" | "rail" | "cheques" | "charge-recovery" | "idle-alert"
+  | "positive-pay" | "mandates" | "guarantees" | "od-interest" | "statement-import"
+  | "beneficiaries" | "transfer-planner" | "min-balance" | "savings-interest" | "payment-date";
 
 export default function BankingPage() {
   const { store } = useApp();
@@ -51,6 +55,16 @@ export default function BankingPage() {
             ["cheques", "Cheque Register", FileCheck2],
             ["charge-recovery", "Charge Recovery", ShieldAlert],
             ["idle-alert", "Idle-Balance Alert", Clock],
+            ["positive-pay", "Positive Pay", ShieldCheck],
+            ["mandates", "NACH Mandates", Repeat],
+            ["guarantees", "BG / LC Limits", FileText],
+            ["od-interest", "OD/CC Interest", Percent],
+            ["statement-import", "Statement Import", ListChecks],
+            ["beneficiaries", "Beneficiaries", UserCheck],
+            ["transfer-planner", "Transfer Planner", Split],
+            ["min-balance", "Min-Balance Check", Gauge],
+            ["savings-interest", "Savings Interest", PiggyBank],
+            ["payment-date", "Payment Date", CalendarClock],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -141,6 +155,16 @@ export default function BankingPage() {
       {tab === "cheques" && <ChequeRegister />}
       {tab === "charge-recovery" && <ChargeRecoveryTracker />}
       {tab === "idle-alert" && <IdleBalanceAlert />}
+      {tab === "positive-pay" && <PositivePayRegister />}
+      {tab === "mandates" && <MandateTracker />}
+      {tab === "guarantees" && <GuaranteeLimitTracker />}
+      {tab === "od-interest" && <OdInterestCalculator />}
+      {tab === "statement-import" && <StatementImporter />}
+      {tab === "beneficiaries" && <BeneficiaryWhitelist />}
+      {tab === "transfer-planner" && <FundTransferPlanner />}
+      {tab === "min-balance" && <MinBalanceChecker />}
+      {tab === "savings-interest" && <SavingsInterestEstimator />}
+      {tab === "payment-date" && <PaymentDatePicker />}
     </div>
   );
 }
@@ -1024,6 +1048,938 @@ function IdleBalanceAlert() {
         <Callout tone="warn" icon={ArrowRight}>
           You could earn about {formatCurrency(totalForegone)} a year by sweeping {formatCurrency(totalIdle)} of idle cash into an FD or liquid fund at {rate}%. Use the Sweep Planner to set this up.
         </Callout>
+      )}
+    </div>
+  );
+}
+
+// ── 11. Positive-pay cheque register (high-value cheque pre-confirmation) ─────────
+type PpCheque = { id: string; number: string; payee: string; amount: number; date: string; confirmed: boolean };
+function PositivePayRegister() {
+  const [items, setItems] = useFeatureState<PpCheque[]>("bank-positive-pay", []);
+  const [threshold, setThreshold] = useFeatureState<number>("bank-positive-pay-threshold", 500000);
+  const [number, setNumber] = useState("");
+  const [payee, setPayee] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!number.trim() || !payee.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter cheque number, payee and amount"); return; }
+    setItems([...items, { id: crypto.randomUUID(), number: number.trim(), payee: payee.trim(), amount: amt, date, confirmed: false }]);
+    setNumber(""); setPayee(""); setAmount("");
+    toast.success("Cheque logged for Positive Pay");
+  };
+
+  const needsPp = items.filter(i => i.amount >= threshold);
+  const unconfirmed = needsPp.filter(i => !i.confirmed);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Positive Pay Register</h3>
+        <p className="text-xs text-[var(--color-muted)]">RBI mandates Positive Pay confirmation for cheques at or above ₹50,000 (banks often set ₹5L). Log issued cheques here, then mark each as confirmed once you submit its details to the bank.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Positive-Pay threshold (₹)</label>
+          <input type="number" value={threshold} onChange={e => setThreshold(Math.max(0, Number(e.target.value) || 0))} className={INP} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cheque no.</label>
+            <input value={number} onChange={e => setNumber(e.target.value)} placeholder="000456" className={INP} />
+          </div>
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payee</label>
+            <input value={payee} onChange={e => setPayee(e.target.value)} placeholder="Supplier name" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="600000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {items.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Cheques logged", value: `${items.length}`, color: "text-blue-400" },
+              { label: "Need Positive Pay", value: `${needsPp.length}`, color: needsPp.length ? "text-yellow-400" : "text-green-400" },
+              { label: "Not yet confirmed", value: `${unconfirmed.length}`, color: unconfirmed.length ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Cheque", "Payee", "Amount", "Date", "Positive Pay", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {items.map(i => {
+                    const due = i.amount >= threshold;
+                    return (
+                      <tr key={i.id} className={`hover:bg-white/2 ${due && !i.confirmed ? "bg-yellow-950/10" : ""}`}>
+                        <td className="px-4 py-2.5 font-mono text-xs">{i.number}</td>
+                        <td className="px-4 py-2.5 font-medium">{i.payee}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.amount)}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{i.date}</td>
+                        <td className="px-4 py-2.5">
+                          {!due ? <span className="text-[10px] text-[var(--color-muted)]">Not required</span>
+                            : <button onClick={() => setItems(items.map(x => x.id === i.id ? { ...x, confirmed: !x.confirmed } : x))}
+                                className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${i.confirmed ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-red-950/30 text-red-400 border-red-800/40"}`}>
+                                {i.confirmed ? "Confirmed" : "Confirm"}
+                              </button>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setItems(items.filter(x => x.id !== i.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {unconfirmed.length > 0 && (
+            <Callout tone="warn" icon={AlertTriangle}>
+              {unconfirmed.length} high-value cheque(s) above {formatCurrency(threshold)} are not yet confirmed under Positive Pay. Submit their details to your bank, or they may be returned at presentation.
+            </Callout>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 12. NACH / eNACH mandate tracker (recurring auto-debits) ──────────────────────
+type Mandate = { id: string; ref: string; party: string; amount: number; frequency: "monthly" | "quarterly" | "yearly"; nextDebit: string; status: "active" | "paused" | "cancelled" };
+function MandateTracker() {
+  const [mandates, setMandates] = useFeatureState<Mandate[]>("bank-nach-mandates", []);
+  const [ref, setRef] = useState("");
+  const [party, setParty] = useState("");
+  const [amount, setAmount] = useState("");
+  const [frequency, setFrequency] = useState<Mandate["frequency"]>("monthly");
+  const [nextDebit, setNextDebit] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!ref.trim() || !party.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter UMRN/ref, party and amount"); return; }
+    setMandates([...mandates, { id: crypto.randomUUID(), ref: ref.trim(), party: party.trim(), amount: amt, frequency, nextDebit, status: "active" }]);
+    setRef(""); setParty(""); setAmount("");
+    toast.success("Mandate added");
+  };
+  const setStatus = (id: string, status: Mandate["status"]) => setMandates(mandates.map(m => m.id === id ? { ...m, status } : m));
+
+  const monthlyOut = mandates.filter(m => m.status === "active").reduce((s, m) => {
+    const factor = m.frequency === "monthly" ? 1 : m.frequency === "quarterly" ? 1 / 3 : 1 / 12;
+    return s + m.amount * factor;
+  }, 0);
+  const active = mandates.filter(m => m.status === "active").length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> NACH / eNACH Mandate Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">One console for every recurring auto-debit — EMIs, SIPs, utility and SaaS subscriptions running on NACH or UPI AutoPay. Pause or cancel a mandate from one place to stop silent leakage.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">UMRN / ref</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="HDFC0001234" className={INP} />
+          </div>
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Party</label>
+            <input value={party} onChange={e => setParty(e.target.value)} placeholder="Bajaj Finance EMI" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="25000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={frequency} onChange={e => setFrequency(e.target.value as Mandate["frequency"])} className={INP}>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Next debit</label>
+            <input type="date" value={nextDebit} onChange={e => setNextDebit(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {mandates.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Active mandates", value: `${active}`, color: "text-blue-400" },
+              { label: "Total mandates", value: `${mandates.length}`, color: "text-[var(--color-text)]" },
+              { label: "Equiv. monthly outflow", value: formatCurrency(Math.round(monthlyOut)), color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["UMRN/ref", "Party", "Amount", "Frequency", "Next debit", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {mandates.map(m => (
+                    <tr key={m.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-mono text-xs">{m.ref}</td>
+                      <td className="px-4 py-2.5 font-medium">{m.party}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(m.amount)}</td>
+                      <td className="px-4 py-2.5 text-xs capitalize text-[var(--color-muted)]">{m.frequency}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m.nextDebit}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize ${
+                          m.status === "active" ? "bg-green-950/30 text-green-400 border-green-800/40" :
+                          m.status === "paused" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" :
+                          "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{m.status}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right flex justify-end gap-2">
+                        {m.status === "active"
+                          ? <button onClick={() => setStatus(m.id, "paused")} className="text-[10px] text-yellow-400 hover:underline">Pause</button>
+                          : m.status === "paused"
+                            ? <button onClick={() => setStatus(m.id, "active")} className="text-[10px] text-green-400 hover:underline">Resume</button>
+                            : null}
+                        <button onClick={() => setStatus(m.id, "cancelled")} className="text-[10px] text-red-400 hover:underline">Cancel</button>
+                        <button onClick={() => setMandates(mandates.filter(x => x.id !== m.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 13. Bank-guarantee / LC limit tracker ─────────────────────────────────────────
+type Facility = { id: string; type: "BG" | "LC"; beneficiary: string; amount: number; expiry: string };
+function GuaranteeLimitTracker() {
+  const [facilities, setFacilities] = useFeatureState<Facility[]>("bank-bg-lc", []);
+  const [sanctioned, setSanctioned] = useFeatureState<number>("bank-bg-lc-limit", 5000000);
+  const [type, setType] = useState<Facility["type"]>("BG");
+  const [beneficiary, setBeneficiary] = useState("");
+  const [amount, setAmount] = useState("");
+  const [expiry, setExpiry] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const today = new Date();
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!beneficiary.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter beneficiary and amount"); return; }
+    setFacilities([...facilities, { id: crypto.randomUUID(), type, beneficiary: beneficiary.trim(), amount: amt, expiry }]);
+    setBeneficiary(""); setAmount("");
+    toast.success(`${type} added`);
+  };
+
+  const utilised = facilities.reduce((s, f) => s + f.amount, 0);
+  const available = Math.max(0, sanctioned - utilised);
+  const utilPct = sanctioned > 0 ? (utilised / sanctioned) * 100 : 0;
+  const expiringSoon = facilities.filter(f => differenceInCalendarDays(parseISO(f.expiry), today) <= 30 && differenceInCalendarDays(parseISO(f.expiry), today) >= 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Bank-Guarantee / LC Limit Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Track outstanding bank guarantees and letters of credit against your sanctioned non-fund limit, and catch expiries before they lapse (a BG left to lapse may still need to be returned to release margin).</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned BG/LC (non-fund) limit (₹)</label>
+          <input type="number" value={sanctioned} onChange={e => setSanctioned(Math.max(0, Number(e.target.value) || 0))} className={INP} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as Facility["type"])} className={INP}>
+              <option value="BG">Bank Guarantee</option>
+              <option value="LC">Letter of Credit</option>
+            </select>
+          </div>
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Beneficiary</label>
+            <input value={beneficiary} onChange={e => setBeneficiary(e.target.value)} placeholder="NHAI / Supplier" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expiry</label>
+            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Sanctioned limit", value: formatCurrency(sanctioned), color: "text-[var(--color-text)]" },
+          { label: "Utilised", value: formatCurrency(utilised), color: utilPct > 90 ? "text-red-400" : "text-yellow-400" },
+          { label: "Available headroom", value: formatCurrency(available), color: "text-green-400" },
+          { label: "Utilisation", value: `${utilPct.toFixed(0)}%`, color: utilPct > 90 ? "text-red-400" : "text-blue-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {facilities.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Type", "Beneficiary", "Amount", "Expiry", "Days left", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {facilities.map(f => {
+                  const days = differenceInCalendarDays(parseISO(f.expiry), today);
+                  return (
+                    <tr key={f.id} className={`hover:bg-white/2 ${days < 0 ? "bg-red-950/10" : days <= 30 ? "bg-yellow-950/10" : ""}`}>
+                      <td className="px-4 py-2.5 font-medium">{f.type}</td>
+                      <td className="px-4 py-2.5">{f.beneficiary}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(f.amount)}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{f.expiry}</td>
+                      <td className={`px-4 py-2.5 tabular-nums text-xs ${days < 0 ? "text-red-400" : days <= 30 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{days < 0 ? "Expired" : `${days}d`}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setFacilities(facilities.filter(x => x.id !== f.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {utilPct > 90 && (
+        <Callout tone="warn" icon={AlertTriangle}>
+          You have used {utilPct.toFixed(0)}% of your sanctioned BG/LC limit. New guarantees may be declined — ask your bank for an enhancement or release a closed BG to free up headroom.
+        </Callout>
+      )}
+      {expiringSoon.length > 0 && (
+        <Callout tone="warn" icon={Clock}>
+          {expiringSoon.length} facility(ies) expire within 30 days. Arrange renewal or return the instrument to release the margin money held against it.
+        </Callout>
+      )}
+    </div>
+  );
+}
+
+// ── 14. OD / CC interest accrual calculator ───────────────────────────────────────
+function OdInterestCalculator() {
+  const [limit, setLimit] = useState("2000000");
+  const [drawn, setDrawn] = useState("1200000");
+  const [rate, setRate] = useState("11.5");
+  const [days, setDays] = useState("30");
+
+  const lim = parseFloat(limit) || 0;
+  const dr = Math.max(0, parseFloat(drawn) || 0);
+  const r = parseFloat(rate) || 0;
+  const d = Math.max(0, parseFloat(days) || 0);
+
+  const utilisation = lim > 0 ? (dr / lim) * 100 : 0;
+  const dailyInterest = dr * (r / 100) / 365;
+  const periodInterest = dailyInterest * d;
+  const monthlyInterest = dailyInterest * 30;
+  const annualInterest = dr * (r / 100);
+  const headroom = Math.max(0, lim - dr);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> OD / CC Interest Accrual</h3>
+        <p className="text-xs text-[var(--color-muted)]">Overdraft and cash-credit interest is charged daily on the amount actually drawn, not the sanctioned limit. Estimate what your drawn balance is costing you and watch utilisation against the limit.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned limit (₹)</label>
+            <input type="number" value={limit} onChange={e => setLimit(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount drawn (₹)</label>
+            <input type="number" value={drawn} onChange={e => setDrawn(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Interest rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Days drawn</label>
+            <input type="number" value={days} onChange={e => setDays(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Utilisation", value: `${utilisation.toFixed(0)}%`, color: utilisation > 90 ? "text-red-400" : "text-blue-400" },
+          { label: "Interest / day", value: formatCurrency(Math.round(dailyInterest)), color: "text-yellow-400" },
+          { label: `Interest for ${d} day(s)`, value: formatCurrency(Math.round(periodInterest)), color: "text-red-400" },
+          { label: "Headroom left", value: formatCurrency(headroom), color: "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-3">If this drawn balance persists</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Cost per month (~30 days)", value: formatCurrency(Math.round(monthlyInterest)) },
+            { label: "Cost per year", value: formatCurrency(Math.round(annualInterest)) },
+          ].map(k => (
+            <div key={k.label}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className="text-lg font-bold tabular-nums text-red-400">{k.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {utilisation > 90 && (
+        <Callout tone="warn" icon={AlertTriangle}>
+          You are using {utilisation.toFixed(0)}% of your OD/CC limit. Repayments slow when you are near the limit, and a breach attracts penal interest. Sweep idle balances in to cut the daily interest.
+        </Callout>
+      )}
+    </div>
+  );
+}
+
+// ── 15. Account-statement importer (paste → categorize → totals) ──────────────────
+type ImportCat = "income" | "vendor" | "salary" | "tax" | "bank-charge" | "transfer" | "other";
+const IMPORT_RULES: { cat: ImportCat; words: string[] }[] = [
+  { cat: "salary", words: ["salary", "payroll", "wages", "stipend"] },
+  { cat: "tax", words: ["gst", "tds", "income tax", "advance tax", "challan", "cbdt"] },
+  { cat: "bank-charge", words: ["charge", "chrg", "fee", "amc", "min bal", "commission", "penal"] },
+  { cat: "transfer", words: ["self", "own a/c", "sweep", "transfer to", "neft self"] },
+  { cat: "vendor", words: ["upi", "vendor", "payment to", "purchase", "supplier", "rtgs", "neft"] },
+];
+function categorize(narration: string, amount: number): ImportCat {
+  const n = narration.toLowerCase();
+  for (const rule of IMPORT_RULES) if (rule.words.some(w => n.includes(w))) return rule.cat;
+  return amount > 0 ? "income" : "other";
+}
+function StatementImporter() {
+  const [raw, setRaw] = useState("");
+  const lines = useMemo(() => parseStatement(raw).map(l => ({ ...l, cat: categorize(l.narration, l.amount) })), [raw]);
+
+  const byCat = useMemo(() => {
+    const map = new Map<ImportCat, { count: number; total: number }>();
+    for (const l of lines) {
+      const e = map.get(l.cat) ?? { count: 0, total: 0 };
+      e.count += 1; e.total += Math.abs(l.amount);
+      map.set(l.cat, e);
+    }
+    return [...map.entries()].sort((a, b) => b[1].total - a[1].total);
+  }, [lines]);
+
+  const credits = lines.filter(l => l.amount > 0).reduce((s, l) => s + l.amount, 0);
+  const debits = lines.filter(l => l.amount < 0).reduce((s, l) => s + Math.abs(l.amount), 0);
+
+  const CAT_CLR: Record<ImportCat, string> = {
+    income: "text-green-400", vendor: "text-blue-400", salary: "text-purple-400",
+    tax: "text-yellow-400", "bank-charge": "text-red-400", transfer: "text-[var(--color-muted)]", other: "text-[var(--color-muted)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Statement Importer &amp; Categorizer</h3>
+        <p className="text-xs text-[var(--color-muted)]">Paste raw statement lines (<code>date, amount, narration</code> — Dr/Cr or minus marks debits). Each line is auto-bucketed into salary, vendor, tax, bank-charge, transfer or income so you get an instant spend breakdown without uploading anything.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={6}
+          placeholder={"2026-06-01, 200000, NEFT CR INFOSYS\n2026-06-02, 45000 Dr, SALARY PAYROLL JUNE\n2026-06-03, 11800 Dr, GST CHALLAN\n2026-06-04, 354 Dr, SMS CHARGE GST"}
+          className={`${INP} font-mono text-xs`} />
+      </div>
+
+      {lines.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Lines parsed", value: `${lines.length}`, color: "text-blue-400" },
+              { label: "Total credits", value: formatCurrency(credits), color: "text-green-400" },
+              { label: "Total debits", value: formatCurrency(debits), color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold mb-3">By category</p>
+            <div className="space-y-2">
+              {byCat.map(([cat, e]) => {
+                const pct = (credits + debits) > 0 ? (e.total / (credits + debits)) * 100 : 0;
+                return (
+                  <div key={cat}>
+                    <div className="flex justify-between text-xs mb-0.5">
+                      <span className={`capitalize font-medium ${CAT_CLR[cat]}`}>{cat.replace("-", " ")} ({e.count})</span>
+                      <span className="tabular-nums">{formatCurrency(Math.round(e.total))}</span>
+                    </div>
+                    <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full bg-[var(--color-primary)]/70 rounded-full" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="max-h-72 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)] sticky top-0 bg-[var(--color-surface)]"><tr>{["Date", "Narration", "Category", "Amount"].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {lines.map((l, i) => (
+                    <tr key={i} className="hover:bg-white/2">
+                      <td className="px-4 py-2 text-xs text-[var(--color-muted)]">{l.date}</td>
+                      <td className="px-4 py-2 text-xs truncate max-w-[240px]">{l.narration || "—"}</td>
+                      <td className={`px-4 py-2 text-xs capitalize font-medium ${CAT_CLR[l.cat]}`}>{l.cat.replace("-", " ")}</td>
+                      <td className={`px-4 py-2 tabular-nums text-xs ${l.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(l.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Categorization is rule-based on the narration text — review before posting to your books. It does not write to the ledger.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 16. Beneficiary whitelist manager (penny-drop verified payees) ────────────────
+type Beneficiary = { id: string; name: string; account: string; ifsc: string; verified: boolean };
+function BeneficiaryWhitelist() {
+  const [payees, setPayees] = useFeatureState<Beneficiary[]>("bank-beneficiaries", []);
+  const [name, setName] = useState("");
+  const [account, setAccount] = useState("");
+  const [ifsc, setIfsc] = useState("");
+
+  const ifscOk = (v: string) => /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.toUpperCase());
+
+  const add = () => {
+    if (!name.trim() || !account.trim()) { toast.error("Enter beneficiary name and account number"); return; }
+    if (ifsc && !ifscOk(ifsc)) { toast.error("IFSC looks invalid (e.g. HDFC0001234)"); return; }
+    if (payees.some(p => p.account === account.trim())) { toast.error("This account is already whitelisted"); return; }
+    setPayees([...payees, { id: crypto.randomUUID(), name: name.trim(), account: account.trim(), ifsc: ifsc.trim().toUpperCase(), verified: false }]);
+    setName(""); setAccount(""); setIfsc("");
+    toast.success("Beneficiary added — verify before first payment");
+  };
+
+  const verified = payees.filter(p => p.verified).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> Beneficiary Whitelist</h3>
+        <p className="text-xs text-[var(--color-muted)]">Keep one verified payee master. Add an account, validate the IFSC format, then mark it verified once a penny-drop name check matches — so you never wire money to a wrong or fraudulent account.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Beneficiary name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Acme Supplies Pvt Ltd" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Account number</label>
+            <input value={account} onChange={e => setAccount(e.target.value)} placeholder="50100123456789" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
+            <input value={ifsc} onChange={e => setIfsc(e.target.value)} placeholder="HDFC0001234" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {payees.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Whitelisted payees", value: `${payees.length}`, color: "text-blue-400" },
+              { label: "Verified", value: `${verified}`, color: "text-green-400" },
+              { label: "Awaiting verification", value: `${payees.length - verified}`, color: payees.length - verified ? "text-yellow-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Name", "Account", "IFSC", "Status", "Action", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {payees.map(p => (
+                    <tr key={p.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs">{p.account}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.ifsc || "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${p.verified ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>{p.verified ? "Verified" : "Unverified"}</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => setPayees(payees.map(x => x.id === p.id ? { ...x, verified: !x.verified } : x))} className="text-[10px] text-[var(--color-primary)] hover:underline">{p.verified ? "Mark unverified" : "Mark verified"}</button>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setPayees(payees.filter(x => x.id !== p.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {payees.length - verified > 0 && (
+            <Callout tone="warn" icon={ShieldAlert}>
+              {payees.length - verified} payee(s) are unverified. Run a penny-drop / name check and confirm the account holder name before releasing any payment to them.
+            </Callout>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 17. Multi-account fund-transfer planner (cover shortfalls from surplus) ───────
+function FundTransferPlanner() {
+  const { store } = useApp();
+  const accounts = store.bankAccounts;
+  const [buffer, setBuffer] = useState("200000");
+
+  const buf = parseFloat(buffer) || 0;
+  const plan = useMemo(() => {
+    const surplus = accounts.map(a => ({ id: a.id, name: a.name, free: a.balance - buf })).filter(a => a.free > 0).sort((x, y) => y.free - x.free);
+    const deficit = accounts.map(a => ({ id: a.id, name: a.name, need: buf - a.balance })).filter(a => a.need > 0).sort((x, y) => y.need - x.need);
+    const moves: { from: string; to: string; amount: number }[] = [];
+    const src = surplus.map(s => ({ ...s }));
+    for (const d of deficit) {
+      let need = d.need;
+      for (const s of src) {
+        if (need <= 0) break;
+        if (s.free <= 0) continue;
+        const move = Math.min(s.free, need);
+        moves.push({ from: s.name, to: d.name, amount: Math.round(move) });
+        s.free -= move; need -= move;
+      }
+    }
+    return { moves, deficit, surplus };
+  }, [accounts, buf]);
+
+  if (accounts.length < 2) return <EmptyHint text="Link at least two bank accounts to plan transfers that top up shortfall accounts from surplus ones." />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Split size={14} className="text-[var(--color-primary)]" /> Fund-Transfer Planner</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set a target balance every account should hold. We work out the fewest transfers to top up accounts below the target using surplus from the others — handy before a payment run.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Target balance per account (₹)</label>
+          <input type="number" value={buffer} onChange={e => setBuffer(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Accounts below target", value: `${plan.deficit.length}`, color: plan.deficit.length ? "text-red-400" : "text-green-400" },
+          { label: "Accounts with surplus", value: `${plan.surplus.length}`, color: "text-green-400" },
+          { label: "Transfers suggested", value: `${plan.moves.length}`, color: "text-blue-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {plan.moves.length > 0 ? (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Suggested transfers</p></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {plan.moves.map((m, i) => (
+              <div key={i} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium truncate">{m.from}</span>
+                  <ArrowRight size={13} className="text-[var(--color-muted)] shrink-0" />
+                  <span className="font-medium truncate">{m.to}</span>
+                </div>
+                <span className="tabular-nums font-semibold text-blue-400 shrink-0">{formatCurrency(m.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Callout tone="ok" icon={CheckCircle2}>
+          {plan.deficit.length === 0 ? "Every account already meets the target balance — no transfers needed." : "No surplus is available to cover the shortfall. Bring in external funds or lower the target."}
+        </Callout>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A plan only — execute transfers via your bank using the right rail (see the Payment-Rail Chooser). Intra-bank transfers are usually instant and free.</p>
+    </div>
+  );
+}
+
+// ── 18. Minimum-balance penalty checker ───────────────────────────────────────────
+type MabAcct = { id: string; name: string; required: number; maintained: number };
+function MinBalanceChecker() {
+  const { store } = useApp();
+  const [rows, setRows] = useFeatureState<MabAcct[]>("bank-mab", []);
+  const [penaltyPer1000, setPenaltyPer1000] = useFeatureState<number>("bank-mab-penalty", 60);
+  const [name, setName] = useState(store.bankAccounts[0]?.name ?? "");
+  const [required, setRequired] = useState("10000");
+  const [maintained, setMaintained] = useState("");
+
+  const add = () => {
+    const req = parseFloat(required); const mab = parseFloat(maintained);
+    if (!name.trim() || isNaN(req) || req < 0 || isNaN(mab) || mab < 0) { toast.error("Enter account, required and maintained balance"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), name: name.trim(), required: req, maintained: mab }]);
+    setMaintained("");
+    toast.success("Account added");
+  };
+
+  const calc = rows.map(r => {
+    const shortfallPct = r.required > 0 ? Math.max(0, (r.required - r.maintained) / r.required) * 100 : 0;
+    const shortfall = Math.max(0, r.required - r.maintained);
+    const penalty = Math.round((shortfall / 1000) * penaltyPer1000);
+    return { ...r, shortfall, shortfallPct, penalty };
+  });
+  const totalPenalty = calc.reduce((s, r) => s + r.penalty, 0);
+  const breaching = calc.filter(r => r.shortfall > 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Minimum-Balance Penalty Checker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Banks charge a non-maintenance penalty (typically a slab per ₹1,000 of shortfall against the average monthly balance). Enter each account&apos;s required vs maintained balance to estimate the hit and decide whether to consolidate.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Penalty per ₹1,000 shortfall (₹)</label>
+          <input type="number" value={penaltyPer1000} onChange={e => setPenaltyPer1000(Math.max(0, Number(e.target.value) || 0))} className={INP} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Account</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Current A/C" className={INP} list="mab-accts" />
+            <datalist id="mab-accts">{store.bankAccounts.map(a => <option key={a.id} value={a.name} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Required AMB (₹)</label>
+            <input type="number" value={required} onChange={e => setRequired(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Maintained AMB (₹)</label>
+            <input type="number" value={maintained} onChange={e => setMaintained(e.target.value)} placeholder="6500" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Accounts breaching MAB", value: `${breaching}`, color: breaching ? "text-red-400" : "text-green-400" },
+              { label: "Estimated penalty / month", value: formatCurrency(totalPenalty), color: totalPenalty ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Account", "Required", "Maintained", "Shortfall", "Est. penalty", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {calc.map(r => (
+                    <tr key={r.id} className={`hover:bg-white/2 ${r.shortfall > 0 ? "bg-red-950/10" : ""}`}>
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.required)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.maintained)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.shortfall > 0 ? "text-red-400" : "text-green-400"}`}>{r.shortfall > 0 ? formatCurrency(r.shortfall) : "—"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.penalty > 0 ? "text-red-400 font-semibold" : "text-green-400"}`}>{r.penalty > 0 ? formatCurrency(r.penalty) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {totalPenalty > 0 && (
+            <Callout tone="warn" icon={AlertTriangle}>
+              You risk about {formatCurrency(totalPenalty)} in non-maintenance charges this month plus GST. Either top up the average balance, switch to a zero-balance current account, or close redundant accounts.
+            </Callout>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 19. Interest-on-savings estimator (quarterly compounding) ─────────────────────
+function SavingsInterestEstimator() {
+  const [principal, setPrincipal] = useState("500000");
+  const [rate, setRate] = useState("3.0");
+  const [months, setMonths] = useState("12");
+
+  const p = Math.max(0, parseFloat(principal) || 0);
+  const r = parseFloat(rate) || 0;
+  const m = Math.max(0, parseFloat(months) || 0);
+
+  // Savings interest: calculated daily on closing balance, credited quarterly → compound quarterly.
+  const quarters = m / 3;
+  const qRate = r / 100 / 4;
+  const maturity = p * Math.pow(1 + qRate, quarters);
+  const interest = maturity - p;
+  const effectiveYield = p > 0 && m > 0 ? (Math.pow(maturity / p, 12 / m) - 1) * 100 : 0;
+  const tds = interest > 40000 ? interest * 0.10 : 0; // indicative: TDS on bank interest above ₹40k (Sec 194A)
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Interest-on-Savings Estimator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Savings-account interest is calculated daily on the closing balance and credited quarterly. Estimate what a parked balance earns, the effective annual yield, and the indicative TDS once interest crosses ₹40,000 in a year.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Average balance held (₹)</label>
+            <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Savings rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Period (months)</label>
+            <input type="number" value={months} onChange={e => setMonths(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Interest earned", value: formatCurrency(Math.round(interest)), color: "text-green-400" },
+          { label: "Maturity value", value: formatCurrency(Math.round(maturity)), color: "text-[var(--color-text)]" },
+          { label: "Effective yield", value: `${effectiveYield.toFixed(2)}%`, color: "text-blue-400" },
+          { label: "Indicative TDS", value: tds > 0 ? formatCurrency(Math.round(tds)) : "—", color: tds > 0 ? "text-yellow-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <Callout tone="ok" icon={Coins}>
+        A savings account at {r}% barely beats inflation. For idle business cash, an overnight/liquid fund or an auto-sweep FD usually yields more — compare in the Sweep Planner.
+      </Callout>
+      <p className="text-[10px] text-[var(--color-muted)]">Estimate only, assuming a steady average balance and quarterly compounding. TDS shown is indicative (10% u/s 194A above the ₹40,000 threshold; banks deduct on actual interest credited). Confirm with your bank and CA.</p>
+    </div>
+  );
+}
+
+// ── 20. Bank-holiday-aware payment date picker ────────────────────────────────────
+const BANK_HOLIDAYS_2026 = [
+  "2026-01-26", "2026-03-06", "2026-03-21", "2026-04-01", "2026-04-03",
+  "2026-04-14", "2026-05-01", "2026-08-15", "2026-08-28", "2026-10-02",
+  "2026-10-20", "2026-11-09", "2026-12-25",
+];
+function PaymentDatePicker() {
+  const [startDate, setStartDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [extraRaw, setExtraRaw] = useState("");
+
+  const extra = useMemo(() => extraRaw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean), [extraRaw]);
+  const holidays = useMemo(() => new Set([...BANK_HOLIDAYS_2026, ...extra]), [extra]);
+
+  const isHoliday = (d: Date) => {
+    const day = d.getDay();
+    if (day === 0) return { holiday: true, reason: "Sunday" };
+    // 2nd & 4th Saturday are bank holidays in India
+    if (day === 6) {
+      const week = Math.ceil(d.getDate() / 7);
+      if (week === 2 || week === 4) return { holiday: true, reason: `${week === 2 ? "2nd" : "4th"} Saturday` };
+    }
+    if (holidays.has(format(d, "yyyy-MM-dd"))) return { holiday: true, reason: "Bank holiday" };
+    return { holiday: false, reason: "" };
+  };
+
+  const result = useMemo(() => {
+    let d = parseISO(startDate);
+    if (isNaN(d.getTime())) return null;
+    const skipped: { date: string; reason: string }[] = [];
+    let guard = 0;
+    while (guard < 40) {
+      const h = isHoliday(d);
+      if (!h.holiday) break;
+      skipped.push({ date: format(d, "yyyy-MM-dd"), reason: h.reason });
+      d = new Date(d.getTime() + 86400000);
+      guard++;
+    }
+    return { settles: format(d, "yyyy-MM-dd"), skipped };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, holidays]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Bank-Holiday-Aware Payment Date</h3>
+        <p className="text-xs text-[var(--color-muted)]">NEFT/RTGS settle 24x7 now, but cheque clearing, NACH debits and many corporate cut-offs still follow the banking calendar. Pick a date and we roll it forward to the next working day, skipping Sundays, 2nd/4th Saturdays and holidays.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Intended date</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Extra holiday dates (YYYY-MM-DD, comma/space separated)</label>
+            <input value={extraRaw} onChange={e => setExtraRaw(e.target.value)} placeholder="2026-09-07, 2026-11-08" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Effective working date", value: result.settles, color: result.skipped.length ? "text-yellow-400" : "text-green-400" },
+              { label: "Non-working days skipped", value: `${result.skipped.length}`, color: result.skipped.length ? "text-yellow-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          {result.skipped.length > 0 ? (
+            <div className={`${CARD} overflow-hidden`}>
+              <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Skipped because</p></div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {result.skipped.map(s => (
+                  <div key={s.date} className="px-5 py-2.5 flex items-center justify-between text-sm">
+                    <span className="text-[var(--color-muted)]">{s.date}</span>
+                    <span className="text-xs">{s.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Callout tone="ok" icon={CheckCircle2}>
+              {result.settles} is a working day — your cheque/NACH instruction should be honoured on the date you intended.
+            </Callout>
+          )}
+          <p className="text-[10px] text-[var(--color-muted)]">Holiday list is the common national set; state-specific RBI holidays vary by location — add them in the extra-dates field. Verify with your bank&apos;s holiday calendar.</p>
+        </>
       )}
     </div>
   );

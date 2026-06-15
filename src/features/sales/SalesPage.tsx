@@ -6,6 +6,8 @@ import {
   Briefcase, KanbanSquare, FileText, ShoppingCart, Coins, UserCircle2,
   TrendingUp, BellRing, Trophy, Target, ClipboardList, Plus, Trash2,
   ArrowRight, CheckCircle2, XCircle, Phone, MessageCircle, Award,
+  Percent, MapPin, PhoneCall, Clock, Layers, UserMinus, Smile, ListChecks,
+  Repeat, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -16,7 +18,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type TabId =
   | "overview" | "pipeline" | "deals" | "quote" | "commission" | "customer360"
-  | "forecast" | "leads" | "winloss" | "target" | "leaderboard";
+  | "forecast" | "leads" | "winloss" | "target" | "leaderboard"
+  | "discount-approval" | "territory" | "activity-log" | "quote-expiry"
+  | "cross-sell" | "churn-risk" | "nps" | "playbook" | "renewals" | "referrals";
 
 export default function SalesPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -45,6 +49,16 @@ export default function SalesPage() {
             ["winloss", "Win / Loss", Trophy],
             ["target", "Target vs Actual", Target],
             ["leaderboard", "Rep Leaderboard", Award],
+            ["discount-approval", "Discount Approval", Percent],
+            ["territory", "Territory Planner", MapPin],
+            ["activity-log", "Activity Log", PhoneCall],
+            ["quote-expiry", "Quote Expiry", Clock],
+            ["cross-sell", "Cross-Sell", Layers],
+            ["churn-risk", "Churn Risk", UserMinus],
+            ["nps", "NPS & Feedback", Smile],
+            ["playbook", "Sales Playbook", ListChecks],
+            ["renewals", "Renewals", Repeat],
+            ["referrals", "Referrals", Gift],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -65,6 +79,16 @@ export default function SalesPage() {
       {tab === "winloss" && <WinLossTracker />}
       {tab === "target" && <TargetVsActual />}
       {tab === "leaderboard" && <RepLeaderboard />}
+      {tab === "discount-approval" && <DiscountApproval />}
+      {tab === "territory" && <TerritoryPlanner />}
+      {tab === "activity-log" && <ActivityLog />}
+      {tab === "quote-expiry" && <QuoteExpiryTracker />}
+      {tab === "cross-sell" && <CrossSellSuggester />}
+      {tab === "churn-risk" && <ChurnRiskList />}
+      {tab === "nps" && <NpsTracker />}
+      {tab === "playbook" && <SalesPlaybook />}
+      {tab === "renewals" && <RenewalTracker />}
+      {tab === "referrals" && <ReferralTracker />}
     </div>
   );
 }
@@ -1058,6 +1082,953 @@ function SalesOverview({ onJump }: { onJump: (t: TabId) => void }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── #21 / #35 Discount & Margin Approval Calculator ───────────────────────────────
+function DiscountApproval() {
+  const [listPrice, setListPrice] = useState("");
+  const [cost, setCost] = useState("");
+  const [discountPct, setDiscountPct] = useState("");
+  const [commissionPct, setCommissionPct] = useState("5");
+  const [floorMarginPct, setFloorMarginPct] = useState("15");
+  const [approvalThreshold, setApprovalThreshold] = useState("10");
+
+  const calc = useMemo(() => {
+    const lp = parseFloat(listPrice) || 0;
+    const c = parseFloat(cost) || 0;
+    const disc = Math.min(100, Math.max(0, parseFloat(discountPct) || 0));
+    const comm = Math.max(0, parseFloat(commissionPct) || 0) / 100;
+    const net = lp * (1 - disc / 100);
+    const commission = net * comm;
+    const grossMargin = net - c;
+    const netMargin = grossMargin - commission;
+    const marginPct = net > 0 ? (netMargin / net) * 100 : 0;
+    return { lp, c, disc, net, commission, grossMargin, netMargin, marginPct };
+  }, [listPrice, cost, discountPct, commissionPct]);
+
+  const floor = parseFloat(floorMarginPct) || 0;
+  const threshold = parseFloat(approvalThreshold) || 0;
+  const hasInput = (parseFloat(listPrice) || 0) > 0;
+  const belowFloor = hasInput && calc.marginPct < floor;
+  const needsApproval = hasInput && calc.disc > threshold;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Discount &amp; Margin Approval</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">List price (₹)</label>
+            <input type="number" value={listPrice} onChange={e => setListPrice(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your cost (₹)</label>
+            <input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="70000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount asked %</label>
+            <input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="12" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Commission %</label>
+            <input type="number" value={commissionPct} onChange={e => setCommissionPct(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Floor margin %</label>
+            <input type="number" value={floorMarginPct} onChange={e => setFloorMarginPct(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Approval over discount %</label>
+            <input type="number" value={approvalThreshold} onChange={e => setApprovalThreshold(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {hasInput && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Net price", value: formatCurrency(Math.round(calc.net)), color: "text-[var(--color-text)]" },
+              { label: "Commission", value: formatCurrency(Math.round(calc.commission)), color: "text-orange-400" },
+              { label: "Net margin ₹", value: formatCurrency(Math.round(calc.netMargin)), color: calc.netMargin >= 0 ? "text-green-400" : "text-red-400" },
+              { label: "Net margin %", value: `${calc.marginPct.toFixed(1)}%`, color: belowFloor ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4 space-y-2 text-sm`}>
+            {belowFloor ? (
+              <p className="text-red-400 flex items-center gap-1.5"><XCircle size={14} /> Below floor margin of {floor}% — do not commit this price.</p>
+            ) : (
+              <p className="text-green-400 flex items-center gap-1.5"><CheckCircle2 size={14} /> Margin {calc.marginPct.toFixed(1)}% is above the {floor}% floor.</p>
+            )}
+            {needsApproval ? (
+              <p className="text-yellow-400 flex items-center gap-1.5"><BellRing size={14} /> Discount {calc.disc}% exceeds {threshold}% — route to owner for approval.</p>
+            ) : (
+              <p className="text-[var(--color-muted)] flex items-center gap-1.5"><CheckCircle2 size={14} /> Within rep authority ({threshold}% cap) — no approval needed.</p>
+            )}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Net margin = (net price − cost − commission). Reps discount blind to profit; set a floor and an approval threshold to protect margin.</p>
+    </div>
+  );
+}
+
+// ── #17 Sales Territory Planner ───────────────────────────────────────────────────
+type Territory = { id: string; name: string; rep: string; pincodes: string; accounts: number; potential: number };
+function TerritoryPlanner() {
+  const [rows, setRows] = useFeatureState<Territory[]>("sales-territories", []);
+  const [name, setName] = useState("");
+  const [rep, setRep] = useState("");
+  const [pincodes, setPincodes] = useState("");
+  const [accounts, setAccounts] = useState("");
+  const [potential, setPotential] = useState("");
+
+  const add = () => {
+    const a = parseInt(accounts, 10), p = parseFloat(potential);
+    if (!name.trim() || !rep.trim()) { toast.error("Enter a territory name and rep"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), name: name.trim(), rep: rep.trim(), pincodes: pincodes.trim(), accounts: isNaN(a) ? 0 : a, potential: isNaN(p) ? 0 : p }]);
+    setName(""); setRep(""); setPincodes(""); setAccounts(""); setPotential("");
+    toast.success("Territory mapped");
+  };
+
+  const totalAccounts = rows.reduce((s, r) => s + r.accounts, 0);
+  const totalPotential = rows.reduce((s, r) => s + r.potential, 0);
+  const repCount = new Set(rows.map(r => r.rep)).size;
+  const avgPerRep = repCount > 0 ? totalAccounts / repCount : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><MapPin size={14} className="text-[var(--color-primary)]" /> Map a territory</h3>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Territory</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="South Pune" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rep</label>
+            <input value={rep} onChange={e => setRep(e.target.value)} placeholder="Rahul" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pincodes</label>
+            <input value={pincodes} onChange={e => setPincodes(e.target.value)} placeholder="411037, 411040" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Accounts</label>
+            <input type="number" value={accounts} onChange={e => setAccounts(e.target.value)} placeholder="40" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Potential (₹)</label>
+            <input type="number" value={potential} onChange={e => setPotential(e.target.value)} placeholder="2500000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No territories mapped yet. Assign reps to pincodes to balance field coverage.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Territories", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+              { label: "Total accounts", value: `${totalAccounts}`, color: "text-[var(--color-text)]" },
+              { label: "Total potential", value: formatCurrency(totalPotential), color: "text-[var(--color-primary)]" },
+              { label: "Avg accounts / rep", value: avgPerRep.toFixed(0), color: "text-[var(--color-muted)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Territory", "Rep", "Pincodes", "Accounts", "Potential", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rep}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.pincodes || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.accounts}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.potential)}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #18 / #50 Activity & Call Log ─────────────────────────────────────────────────
+type Activity = { id: string; contact: string; type: "call" | "whatsapp" | "visit" | "email" | "meeting"; outcome: "connected" | "no-answer" | "follow-up" | "closed"; duration: number; note: string; at: string };
+const ACT_TYPE: Activity["type"][] = ["call", "whatsapp", "visit", "email", "meeting"];
+const ACT_OUTCOME: Activity["outcome"][] = ["connected", "no-answer", "follow-up", "closed"];
+function ActivityLog() {
+  const [rows, setRows] = useFeatureState<Activity[]>("sales-activities", []);
+  const [contact, setContact] = useState("");
+  const [type, setType] = useState<Activity["type"]>("call");
+  const [outcome, setOutcome] = useState<Activity["outcome"]>("connected");
+  const [duration, setDuration] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    if (!contact.trim()) { toast.error("Enter a contact name"); return; }
+    const d = parseFloat(duration);
+    setRows([{ id: crypto.randomUUID(), contact: contact.trim(), type, outcome, duration: isNaN(d) ? 0 : d, note: note.trim(), at: new Date().toISOString() }, ...rows]);
+    setContact(""); setDuration(""); setNote("");
+    toast.success("Activity logged");
+  };
+
+  const totalCalls = rows.filter(r => r.type === "call").length;
+  const totalMins = rows.reduce((s, r) => s + r.duration, 0);
+  const connected = rows.filter(r => r.outcome === "connected" || r.outcome === "closed").length;
+  const connectRate = rows.length > 0 ? (connected / rows.length) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PhoneCall size={14} className="text-[var(--color-primary)]" /> Log an activity</h3>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Contact</label>
+            <input value={contact} onChange={e => setContact(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as Activity["type"])} className={INP}>
+              {ACT_TYPE.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Outcome</label>
+            <select value={outcome} onChange={e => setOutcome(e.target.value as Activity["outcome"])} className={INP}>
+              {ACT_OUTCOME.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Duration (min)</label>
+            <input type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="8" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Wants revised quote" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Log
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No activity logged yet. Record every call, visit and message to keep an audit trail.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Activities", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+              { label: "Calls made", value: `${totalCalls}`, color: "text-[var(--color-text)]" },
+              { label: "Total minutes", value: `${totalMins}`, color: "text-[var(--color-primary)]" },
+              { label: "Connect rate", value: `${connectRate.toFixed(0)}%`, color: connectRate >= 50 ? "text-green-400" : "text-yellow-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["When", "Contact", "Type", "Outcome", "Mins", "Note", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(parseISO(r.at), "d MMM, HH:mm")}</td>
+                      <td className="px-4 py-2.5 font-medium">{r.contact}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.type}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                          r.outcome === "closed" ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                          r.outcome === "connected" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" :
+                          r.outcome === "no-answer" ? "bg-red-900/30 text-red-400 border-red-800/40" :
+                          "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.outcome}</span>
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.duration || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[200px] truncate">{r.note || "—"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #51 Quote Expiry Tracker ──────────────────────────────────────────────────────
+type QuoteExp = { id: string; quote: string; customer: string; value: number; validUntil: string };
+function QuoteExpiryTracker() {
+  const [rows, setRows] = useFeatureState<QuoteExp[]>("sales-quote-expiry", []);
+  const [quote, setQuote] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [value, setValue] = useState("");
+  const [validUntil, setValidUntil] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 15); return d.toISOString().split("T")[0];
+  });
+  const today = new Date();
+
+  const add = () => {
+    const v = parseFloat(value);
+    if (!quote.trim() || !customer.trim() || isNaN(v) || v <= 0) { toast.error("Enter quote, customer and a positive value"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), quote: quote.trim(), customer: customer.trim(), value: v, validUntil }]);
+    setQuote(""); setCustomer(""); setValue("");
+    toast.success("Quote tracked");
+  };
+
+  const sorted = [...rows].sort((a, b) => parseISO(a.validUntil).getTime() - parseISO(b.validUntil).getTime());
+  const expired = rows.filter(r => differenceInCalendarDays(parseISO(r.validUntil), today) < 0);
+  const expiringSoon = rows.filter(r => { const d = differenceInCalendarDays(parseISO(r.validUntil), today); return d >= 0 && d <= 3; });
+  const liveValue = rows.filter(r => differenceInCalendarDays(parseISO(r.validUntil), today) >= 0).reduce((s, r) => s + r.value, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Track a quote&apos;s validity</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Quote ref</label>
+            <input value={quote} onChange={e => setQuote(e.target.value)} placeholder="Q-1042" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Value (₹)</label>
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="150000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Valid until</label>
+            <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+        {expiringSoon.length > 0 && (
+          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {expiringSoon.length} quote(s) expiring within 3 days — remind the buyer before the price lapses.</p>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No quotes tracked yet. Open-ended quotes erode price discipline — set a validity date.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Live quote value", value: formatCurrency(liveValue), color: "text-[var(--color-primary)]" },
+              { label: "Expiring ≤ 3 days", value: `${expiringSoon.length}`, color: expiringSoon.length > 0 ? "text-yellow-400" : "text-green-400" },
+              { label: "Already expired", value: `${expired.length}`, color: expired.length > 0 ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Quote", "Customer", "Value", "Valid until", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {sorted.map(r => {
+                    const days = differenceInCalendarDays(parseISO(r.validUntil), today);
+                    const status = days < 0 ? "expired" : days <= 3 ? "expiring" : "live";
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.quote}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.customer}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.value)}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{format(parseISO(r.validUntil), "d MMM yyyy")}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                            status === "live" ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                            status === "expiring" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                            "bg-red-900/30 text-red-400 border-red-800/40"}`}>
+                            {status === "expired" ? `${Math.abs(days)}d expired` : status === "expiring" ? `${days}d left` : "live"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #46 Cross-Sell / Upsell Suggester (live from invoice basket history) ──────────
+function CrossSellSuggester() {
+  const { store } = useApp();
+  const [selected, setSelected] = useState("");
+
+  // Build a co-occurrence map of products bought together, keyed by invoice customer.
+  const data = useMemo(() => {
+    type Item = { customer: string; product: string };
+    const items: Item[] = [];
+    store.invoices.forEach(i => {
+      const product = (i.description || i.invoiceNumber || "").trim();
+      if (i.customer && product) items.push({ customer: i.customer, product });
+    });
+    const productsByCustomer = new Map<string, Set<string>>();
+    items.forEach(({ customer, product }) => {
+      if (!productsByCustomer.has(customer)) productsByCustomer.set(customer, new Set());
+      productsByCustomer.get(customer)!.add(product);
+    });
+    const allProducts = [...new Set(items.map(i => i.product))].sort();
+    return { productsByCustomer, allProducts };
+  }, [store.invoices]);
+
+  const active = selected || data.allProducts[0] || "";
+
+  const suggestions = useMemo(() => {
+    if (!active) return [];
+    const tally = new Map<string, number>();
+    data.productsByCustomer.forEach(set => {
+      if (set.has(active)) set.forEach(p => { if (p !== active) tally.set(p, (tally.get(p) ?? 0) + 1); });
+    });
+    return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [active, data]);
+
+  if (data.allProducts.length === 0) {
+    return <p className="text-xs text-[var(--color-muted)] px-1">No basket history yet. Cross-sell suggestions appear once you have invoices with product descriptions.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <label className="text-xs text-[var(--color-muted)] block mb-1 flex items-center gap-2"><Layers size={13} className="text-[var(--color-primary)]" /> When a customer buys…</label>
+        <select value={active} onChange={e => setSelected(e.target.value)} className={`${INP} max-w-sm`}>
+          {data.allProducts.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-3">…they often also buy</p>
+        {suggestions.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)]">No co-purchase pattern found yet for this product. Suggestions improve as more orders are billed.</p>
+        ) : (
+          <div className="space-y-2">
+            {suggestions.map(([p, n]) => (
+              <div key={p} className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5">
+                <span className="text-sm font-medium flex items-center gap-2"><ArrowRight size={12} className="text-[var(--color-primary)]" /> {p}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">bought together {n}×</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Suggestions are mined live from your invoices: products that recurringly appear in the same customer's basket. Attach these at quote time to lift basket value.</p>
+    </div>
+  );
+}
+
+// ── #52 / #36 Customer Churn-Risk List (live from invoice recency + dues) ─────────
+function ChurnRiskList() {
+  const { store } = useApp();
+  const today = new Date();
+
+  const risks = useMemo(() => {
+    const byCustomer = new Map<string, { customer: string; lastBilled: Date | null; billed: number; overdue: number; count: number }>();
+    store.invoices.forEach(i => {
+      if (!i.customer) return;
+      const e = byCustomer.get(i.customer) ?? { customer: i.customer, lastBilled: null, billed: 0, overdue: 0, count: 0 };
+      e.billed += i.amount;
+      e.count += 1;
+      if (i.status === "overdue") e.overdue += i.amount;
+      const due = i.dueDate ? parseISO(i.dueDate) : null;
+      if (due && (!e.lastBilled || due > e.lastBilled)) e.lastBilled = due;
+      byCustomer.set(i.customer, e);
+    });
+    return [...byCustomer.values()].map(e => {
+      const daysSince = e.lastBilled ? differenceInCalendarDays(today, e.lastBilled) : 999;
+      let score = 0;
+      if (daysSince > 90) score += 50; else if (daysSince > 60) score += 30; else if (daysSince > 30) score += 15;
+      if (e.overdue > 0) score += 30;
+      if (e.count <= 1) score += 20;
+      score = Math.min(100, score);
+      const level = score >= 60 ? "high" : score >= 30 ? "medium" : "low";
+      return { ...e, daysSince, score, level };
+    }).sort((a, b) => b.score - a.score);
+  }, [store.invoices, today]);
+
+  if (risks.length === 0) {
+    return <p className="text-xs text-[var(--color-muted)] px-1">No customers found yet. Churn risk is computed live once you have invoices.</p>;
+  }
+
+  const atRisk = risks.filter(r => r.level !== "low");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Customers tracked", value: `${risks.length}`, color: "text-[var(--color-text)]" },
+          { label: "At risk (med/high)", value: `${atRisk.length}`, color: atRisk.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Revenue at risk", value: formatCurrency(atRisk.reduce((s, r) => s + r.billed, 0)), color: "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold flex items-center gap-2"><UserMinus size={14} className="text-[var(--color-primary)]" /> Churn-risk ranking</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Customer", "Last activity", "Overdue", "Lifetime billed", "Risk"].map(h =>
+                <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {risks.map(r => (
+                <tr key={r.customer} className="hover:bg-white/2">
+                  <td className="px-5 py-2.5 font-medium">{r.customer}</td>
+                  <td className="px-5 py-2.5 text-[var(--color-muted)] tabular-nums">{r.daysSince >= 999 ? "—" : `${r.daysSince}d ago`}</td>
+                  <td className={`px-5 py-2.5 tabular-nums ${r.overdue > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.overdue > 0 ? formatCurrency(r.overdue) : "—"}</td>
+                  <td className="px-5 py-2.5 tabular-nums">{formatCurrency(r.billed)}</td>
+                  <td className="px-5 py-2.5">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                      r.level === "high" ? "bg-red-900/30 text-red-400 border-red-800/40" :
+                      r.level === "medium" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                      "bg-green-900/30 text-green-400 border-green-800/40"}`}>{r.level} · {r.score}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Risk score blends inactivity (days since last due date), overdue dues, and one-time-buyer status. Win back high-risk accounts before they go silent.</p>
+    </div>
+  );
+}
+
+// ── #61 NPS & Feedback Tracker ────────────────────────────────────────────────────
+type Feedback = { id: string; customer: string; score: number; comment: string; at: string };
+function NpsTracker() {
+  const [rows, setRows] = useFeatureState<Feedback[]>("sales-nps", []);
+  const [customer, setCustomer] = useState("");
+  const [score, setScore] = useState("9");
+  const [comment, setComment] = useState("");
+
+  const add = () => {
+    const s = parseInt(score, 10);
+    if (!customer.trim() || isNaN(s) || s < 0 || s > 10) { toast.error("Enter a customer and a score 0–10"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), score: s, comment: comment.trim(), at: new Date().toISOString() }, ...rows]);
+    setCustomer(""); setComment("");
+    toast.success("Feedback recorded");
+  };
+
+  const promoters = rows.filter(r => r.score >= 9).length;
+  const passives = rows.filter(r => r.score >= 7 && r.score <= 8).length;
+  const detractors = rows.filter(r => r.score <= 6).length;
+  const nps = rows.length > 0 ? Math.round(((promoters - detractors) / rows.length) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Smile size={14} className="text-[var(--color-primary)]" /> Record feedback</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Score (0–10)</label>
+            <select value={score} onChange={e => setScore(e.target.value)} className={INP}>
+              {Array.from({ length: 11 }, (_, i) => 10 - i).map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Comment</label>
+            <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Fast delivery" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No feedback yet. Send a 0–10 survey after each sale to track satisfaction.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "NPS", value: `${nps}`, color: nps >= 50 ? "text-green-400" : nps >= 0 ? "text-yellow-400" : "text-red-400" },
+              { label: "Promoters", value: `${promoters}`, color: "text-green-400" },
+              { label: "Passives", value: `${passives}`, color: "text-yellow-400" },
+              { label: "Detractors", value: `${detractors}`, color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["When", "Customer", "Score", "Bucket", "Comment", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const bucket = r.score >= 9 ? "promoter" : r.score >= 7 ? "passive" : "detractor";
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(parseISO(r.at), "d MMM")}</td>
+                        <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{r.score}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                            bucket === "promoter" ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                            bucket === "passive" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                            "bg-red-900/30 text-red-400 border-red-800/40"}`}>{bucket}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[220px] truncate">{r.comment || "—"}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">NPS = % promoters (9–10) − % detractors (0–6). Above 50 is strong for SMB.</p>
+    </div>
+  );
+}
+
+// ── #57 Sales Playbook / Onboarding Checklist ─────────────────────────────────────
+type PlayStep = { id: string; label: string; done: boolean };
+const PLAYBOOK_TEMPLATE: string[] = [
+  "Respond to enquiry within 1 hour",
+  "Qualify need, budget and timeline",
+  "Validate buyer GSTIN & place of supply",
+  "Send branded, GST-correct quote",
+  "Set quote validity & follow-up reminder",
+  "Get discount approved if above policy",
+  "Confirm credit limit before order",
+  "Convert to sales order with UPI link",
+  "Dispatch & share tracking",
+  "Send NPS survey post-delivery",
+];
+function SalesPlaybook() {
+  const defaultSteps = useMemo<PlayStep[]>(() => PLAYBOOK_TEMPLATE.map(label => ({ id: crypto.randomUUID(), label, done: false })), []);
+  const [steps, setSteps] = useFeatureState<PlayStep[]>("sales-playbook", defaultSteps);
+  const [newStep, setNewStep] = useState("");
+
+  const toggle = (id: string) => setSteps(steps.map(s => s.id === id ? { ...s, done: !s.done } : s));
+  const add = () => {
+    if (!newStep.trim()) { toast.error("Enter a step"); return; }
+    setSteps([...steps, { id: crypto.randomUUID(), label: newStep.trim(), done: false }]);
+    setNewStep("");
+  };
+  const reset = () => { setSteps(steps.map(s => ({ ...s, done: false }))); toast.success("Playbook reset for a new deal"); };
+
+  const done = steps.filter(s => s.done).length;
+  const pct = steps.length > 0 ? (done / steps.length) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Deal playbook — {done}/{steps.length} done</h3>
+          <button onClick={reset} className="text-xs text-[var(--color-primary)] hover:underline">Reset for new deal</button>
+        </div>
+        <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all bg-[var(--color-primary)]" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="space-y-1.5">
+          {steps.map(s => (
+            <div key={s.id} className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+              <button onClick={() => toggle(s.id)} className="flex items-center gap-2 text-sm text-left flex-1">
+                {s.done
+                  ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                  : <span className="w-[15px] h-[15px] rounded-full border border-[var(--color-border)] shrink-0" />}
+                <span className={s.done ? "line-through text-[var(--color-muted)]" : ""}>{s.label}</span>
+              </button>
+              <button onClick={() => setSteps(steps.filter(x => x.id !== s.id))} className="text-[var(--color-muted)] hover:text-red-400 ml-2"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={newStep} onChange={e => setNewStep(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Add a custom step…" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A repeatable checklist makes every rep follow the same winning motion. Tick steps as you progress, then reset for the next deal.</p>
+    </div>
+  );
+}
+
+// ── #65 / #27 Renewal Tracker ─────────────────────────────────────────────────────
+type Renewal = { id: string; customer: string; product: string; value: number; renewalDate: string; status: "active" | "renewed" | "lapsed" };
+function RenewalTracker() {
+  const [rows, setRows] = useFeatureState<Renewal[]>("sales-renewals", []);
+  const [customer, setCustomer] = useState("");
+  const [product, setProduct] = useState("");
+  const [value, setValue] = useState("");
+  const [renewalDate, setRenewalDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0];
+  });
+  const today = new Date();
+
+  const add = () => {
+    const v = parseFloat(value);
+    if (!customer.trim() || !product.trim() || isNaN(v) || v <= 0) { toast.error("Enter customer, product and a positive value"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), customer: customer.trim(), product: product.trim(), value: v, renewalDate, status: "active" }]);
+    setCustomer(""); setProduct(""); setValue("");
+    toast.success("Renewal tracked");
+  };
+
+  const setStatus = (id: string, status: Renewal["status"]) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+  const sorted = [...rows].sort((a, b) => parseISO(a.renewalDate).getTime() - parseISO(b.renewalDate).getTime());
+  const dueSoon = rows.filter(r => r.status === "active" && differenceInCalendarDays(parseISO(r.renewalDate), today) <= 14);
+  const activeValue = rows.filter(r => r.status === "active").reduce((s, r) => s + r.value, 0);
+  const renewedValue = rows.filter(r => r.status === "renewed").reduce((s, r) => s + r.value, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Track a renewal</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Product / contract</label>
+            <input value={product} onChange={e => setProduct(e.target.value)} placeholder="AMC plan" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Value (₹)</label>
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="60000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal date</label>
+            <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+        {dueSoon.length > 0 && (
+          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {dueSoon.length} renewal(s) due within 14 days — pitch an upsell while you reach out.</p>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No renewals tracked yet. Recurring orders and contracts default to flat — track them to upsell on renewal.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Active value", value: formatCurrency(activeValue), color: "text-[var(--color-primary)]" },
+              { label: "Due ≤ 14 days", value: `${dueSoon.length}`, color: dueSoon.length > 0 ? "text-yellow-400" : "text-green-400" },
+              { label: "Renewed value", value: formatCurrency(renewedValue), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Customer", "Product", "Value", "Renewal date", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {sorted.map(r => {
+                    const days = differenceInCalendarDays(parseISO(r.renewalDate), today);
+                    const due = r.status === "active" && days <= 14;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.product}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.value)}</td>
+                        <td className={`px-4 py-2.5 tabular-nums ${due ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}`}>
+                          {format(parseISO(r.renewalDate), "d MMM yyyy")}{r.status === "active" ? (days < 0 ? ` · ${Math.abs(days)}d overdue` : ` · ${days}d`) : ""}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <select value={r.status} onChange={e => setStatus(r.id, e.target.value as Renewal["status"])} className={`${INP} py-1 max-w-[120px]`}>
+                            {(["active", "renewed", "lapsed"] as const).map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #26 Referral Tracker ──────────────────────────────────────────────────────────
+type Referral = { id: string; referrer: string; referred: string; dealValue: number; rewardPct: number; status: "pending" | "closed" | "paid" };
+function ReferralTracker() {
+  const [rows, setRows] = useFeatureState<Referral[]>("sales-referrals", []);
+  const [referrer, setReferrer] = useState("");
+  const [referred, setReferred] = useState("");
+  const [dealValue, setDealValue] = useState("");
+  const [rewardPct, setRewardPct] = useState("2");
+
+  const add = () => {
+    const v = parseFloat(dealValue), p = parseFloat(rewardPct);
+    if (!referrer.trim() || !referred.trim()) { toast.error("Enter both the referrer and the referred customer"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), referrer: referrer.trim(), referred: referred.trim(), dealValue: isNaN(v) ? 0 : v, rewardPct: isNaN(p) ? 0 : p, status: "pending" }]);
+    setReferrer(""); setReferred(""); setDealValue("");
+    toast.success("Referral logged");
+  };
+
+  const setStatus = (id: string, status: Referral["status"]) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+  const reward = (r: Referral) => r.dealValue * (r.rewardPct / 100);
+  const closed = rows.filter(r => r.status === "closed" || r.status === "paid");
+  const closedValue = closed.reduce((s, r) => s + r.dealValue, 0);
+  const rewardsDue = rows.filter(r => r.status === "closed").reduce((s, r) => s + reward(r), 0);
+  const rewardsPaid = rows.filter(r => r.status === "paid").reduce((s, r) => s + reward(r), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-[var(--color-primary)]" /> Log a referral</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Referred by</label>
+            <input value={referrer} onChange={e => setReferrer(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">New customer</label>
+            <input value={referred} onChange={e => setReferred(e.target.value)} placeholder="Verma Stores" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deal value (₹)</label>
+            <input type="number" value={dealValue} onChange={e => setDealValue(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reward %</label>
+            <input type="number" value={rewardPct} onChange={e => setRewardPct(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No referrals tracked yet. Reward word-of-mouth so it keeps coming.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Referrals", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+              { label: "Closed value", value: formatCurrency(closedValue), color: "text-[var(--color-primary)]" },
+              { label: "Rewards due", value: formatCurrency(Math.round(rewardsDue)), color: rewardsDue > 0 ? "text-yellow-400" : "text-green-400" },
+              { label: "Rewards paid", value: formatCurrency(Math.round(rewardsPaid)), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Referrer", "New customer", "Deal value", "Reward", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.referrer}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.referred}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.dealValue)}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Math.round(reward(r)))} <span className="text-[10px] text-[var(--color-muted)]">({r.rewardPct}%)</span></td>
+                      <td className="px-4 py-2.5">
+                        <select value={r.status} onChange={e => setStatus(r.id, e.target.value as Referral["status"])} className={`${INP} py-1 max-w-[120px]`}>
+                          {(["pending", "closed", "paid"] as const).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Reward = deal value × reward %. Mark a referral closed when the new customer buys, then paid once you credit the referrer.</p>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Leaf, Factory, Zap, Droplets, ClipboardCheck, FileCheck2, Recycle,
   Gauge, Truck, Trees, Target, CheckCircle2, AlertTriangle, Plus, TrendingDown,
+  Users, Plane, Trash2, Sun, Car, Globe, Landmark, Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,7 +15,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type Tab =
   | "overview" | "footprint" | "scopes" | "energy" | "scorecard" | "brsr"
-  | "greenspend" | "intensity" | "supplier" | "offset" | "goals";
+  | "greenspend" | "intensity" | "supplier" | "offset" | "goals"
+  | "commute" | "travel" | "waste" | "renewable" | "evfleet" | "diversity"
+  | "governance" | "cbam" | "epr" | "greenloan";
 
 export default function EsgPage() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -43,6 +46,16 @@ export default function EsgPage() {
             ["supplier", "Supplier Rating", Truck],
             ["offset", "Offset Cost", Trees],
             ["goals", "Goal Tracker", Target],
+            ["commute", "Commute CO₂", Users],
+            ["travel", "Business Travel", Plane],
+            ["waste", "Waste Tracker", Trash2],
+            ["renewable", "Solar ROI", Sun],
+            ["evfleet", "EV Fleet", Car],
+            ["diversity", "Diversity", Globe],
+            ["governance", "Governance", Landmark],
+            ["cbam", "CBAM Export", Globe],
+            ["epr", "EPR Tracker", Recycle],
+            ["greenloan", "Green Loan", Banknote],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -63,6 +76,16 @@ export default function EsgPage() {
       {tab === "supplier" && <SupplierSustainabilityRating />}
       {tab === "offset" && <CarbonOffsetEstimator />}
       {tab === "goals" && <SustainabilityGoalTracker />}
+      {tab === "commute" && <CommuteEmissions />}
+      {tab === "travel" && <BusinessTravelEmissions />}
+      {tab === "waste" && <WasteTracker />}
+      {tab === "renewable" && <RenewableSwitchRoi />}
+      {tab === "evfleet" && <EvFleetCalculator />}
+      {tab === "diversity" && <DiversityMetrics />}
+      {tab === "governance" && <GovernanceChecklist />}
+      {tab === "cbam" && <CbamExportEstimator />}
+      {tab === "epr" && <EprTracker />}
+      {tab === "greenloan" && <GreenLoanEligibility />}
     </div>
   );
 }
@@ -975,6 +998,837 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Commute & travel mode factors (kg CO2e per passenger-km) ─────────────────────
+const COMMUTE_MODES: { id: string; label: string; factor: number }[] = [
+  { id: "car", label: "Private car (petrol)", factor: 0.171 },
+  { id: "bike", label: "Two-wheeler", factor: 0.061 },
+  { id: "bus", label: "Bus", factor: 0.082 },
+  { id: "metro", label: "Metro / local train", factor: 0.041 },
+  { id: "auto", label: "Auto / cab", factor: 0.131 },
+  { id: "active", label: "Walk / cycle / WFH", factor: 0 },
+];
+const WORK_DAYS = 22; // working days per month
+
+// ── #11 Employee Commute Emissions (Scope 3, cat 7) ─────────────────────────────
+type CommuteRow = { id: string; mode: string; employees: number; km: number };
+function CommuteEmissions() {
+  const [rows, setRows] = useFeatureState<CommuteRow[]>("esg-commute", []);
+  const [mode, setMode] = useState(COMMUTE_MODES[0].id);
+  const [employees, setEmployees] = useState("");
+  const [km, setKm] = useState("");
+
+  const add = () => {
+    const e = parseFloat(employees), d = parseFloat(km);
+    if (isNaN(e) || e <= 0 || isNaN(d) || d <= 0) { toast.error("Enter employees and one-way km"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), mode, employees: e, km: d }]);
+    setEmployees(""); setKm("");
+    toast.success("Commute leg added");
+  };
+
+  // round trip × working days × 12 months
+  const annualKg = (r: CommuteRow) => {
+    const f = COMMUTE_MODES.find(m => m.id === r.mode)?.factor ?? 0;
+    return r.employees * r.km * 2 * WORK_DAYS * 12 * f;
+  };
+  const totalKg = rows.reduce((s, r) => s + annualKg(r), 0);
+  const totalEmp = rows.reduce((s, r) => s + r.employees, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Employee Commute Emissions</h3>
+        <p className="text-xs text-[var(--color-muted)]">GHG Protocol Scope 3 category 7. Add a leg per transport mode — annualised over {WORK_DAYS} working days/month, round trips.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Mode</label>
+            <select value={mode} onChange={e => setMode(e.target.value)} className={INP}>
+              {COMMUTE_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1"># Employees</label>
+            <input type="number" value={employees} onChange={e => setEmployees(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">One-way km</label>
+            <input type="number" value={km} onChange={e => setKm(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Annual commute footprint", value: fmtT(totalKg), color: "text-orange-400" },
+              { label: "Employees covered", value: `${totalEmp}`, color: "text-[var(--color-text)]" },
+              { label: "Per employee / yr", value: totalEmp > 0 ? fmtT(totalKg / totalEmp) : "—", color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Mode", "Employees", "One-way km", "Annual CO₂e", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5">{COMMUTE_MODES.find(m => m.id === r.mode)?.label}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.employees}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.km}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{fmtT(annualKg(r))}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Per-passenger-km factors (India-typical). Shifting staff to metro, bus or WFH days cuts this fastest — model it by editing the leg.</p>
+    </div>
+  );
+}
+
+// ── #12 Business Travel (flight/rail/road) CO2 ──────────────────────────────────
+function BusinessTravelEmissions() {
+  // Flight factors kg CO2e per passenger-km by haul; rail & road per km.
+  const [shortHaul, setShortHaul] = useState("");   // < 1000 km flights, total pax-km
+  const [longHaul, setLongHaul] = useState("");      // domestic/intl long flights
+  const [rail, setRail] = useState("");
+  const [roadKm, setRoadKm] = useState("");
+  const [hotelNights, setHotelNights] = useState("");
+
+  const F_SHORT = 0.158, F_LONG = 0.195, F_RAIL = 0.041, F_ROAD = 0.171, F_HOTEL = 12; // kg/night
+  const n = (v: string) => parseFloat(v) || 0;
+  const flightKg = n(shortHaul) * F_SHORT + n(longHaul) * F_LONG;
+  const railKg = n(rail) * F_RAIL;
+  const roadKg = n(roadKm) * F_ROAD;
+  const hotelKg = n(hotelNights) * F_HOTEL;
+  const total = flightKg + railKg + roadKg + hotelKg;
+
+  const inputs: [string, string, (v: string) => void, string][] = [
+    ["Short-haul flights (pax-km)", shortHaul, setShortHaul, "< 1,000 km legs"],
+    ["Long-haul flights (pax-km)", longHaul, setLongHaul, "domestic long / intl"],
+    ["Rail travel (km)", rail, setRail, "AC train per pax"],
+    ["Road / cab (km)", roadKm, setRoadKm, "car/taxi per pax"],
+    ["Hotel nights", hotelNights, setHotelNights, "accommodation"],
+  ];
+  const breakdown = [
+    { label: "Flights", kg: flightKg, color: "#ef4444" },
+    { label: "Rail", kg: railKg, color: "#22c55e" },
+    { label: "Road / cab", kg: roadKg, color: "#f97316" },
+    { label: "Hotels", kg: hotelKg, color: "#3b82f6" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Plane size={14} className="text-[var(--color-primary)]" /> Business Travel Emissions</h3>
+        <p className="text-xs text-[var(--color-muted)]">Scope 3 category 6. Enter annual passenger-km by mode. Rail is ~4× lower than flying for the same trip.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {inputs.map(([label, val, setter, hint]) => (
+            <div key={label}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder="0" className={INP} />
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{hint}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {total > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {breakdown.map(b => (
+              <div key={b.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{b.label}</p>
+                <p className="text-lg font-bold tabular-nums" style={{ color: b.color }}>{fmtT(b.kg)}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{total > 0 ? `${((b.kg / total) * 100).toFixed(0)}%` : ""}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4 space-y-2`}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Total travel footprint</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{fmtT(total)}</p>
+            </div>
+            <div className="flex h-4 w-full rounded-full overflow-hidden bg-[var(--color-bg)]">
+              {breakdown.map(b => (
+                <div key={b.label} style={{ width: `${(b.kg / total) * 100}%`, background: b.color }} title={`${b.label}: ${fmtT(b.kg)}`} />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Factors are screening estimates; flight figures exclude radiative-forcing uplift. For a journey of n km per pax, pax-km = n. Prefer rail and video calls to cut the largest source.</p>
+    </div>
+  );
+}
+
+// ── #13 Waste & Recycling Tracker ───────────────────────────────────────────────
+type WasteRow = { id: string; stream: string; generatedKg: number; recycledKg: number };
+const WASTE_STREAMS = ["Paper / cardboard", "Plastic", "E-waste", "Organic / food", "Metal", "Hazardous", "General / landfill"];
+function WasteTracker() {
+  const [rows, setRows] = useFeatureState<WasteRow[]>("esg-waste", []);
+  const [stream, setStream] = useState(WASTE_STREAMS[0]);
+  const [generatedKg, setGeneratedKg] = useState("");
+  const [recycledKg, setRecycledKg] = useState("");
+
+  const add = () => {
+    const g = parseFloat(generatedKg), r = parseFloat(recycledKg) || 0;
+    if (isNaN(g) || g <= 0) { toast.error("Enter waste generated (kg)"); return; }
+    if (r > g) { toast.error("Recycled can't exceed generated"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), stream, generatedKg: g, recycledKg: r }]);
+    setGeneratedKg(""); setRecycledKg("");
+    toast.success("Waste stream logged");
+  };
+
+  const totalGen = rows.reduce((s, r) => s + r.generatedKg, 0);
+  const totalRec = rows.reduce((s, r) => s + r.recycledKg, 0);
+  const diversion = totalGen > 0 ? (totalRec / totalGen) * 100 : 0;
+  const toLandfill = totalGen - totalRec;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Trash2 size={14} className="text-[var(--color-primary)]" /> Waste & Recycling Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Log waste generated vs recycled per stream — the diversion rate is a core BRSR and circularity metric, and the data behind EPR obligations.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Stream</label>
+            <select value={stream} onChange={e => setStream(e.target.value)} className={INP}>
+              {WASTE_STREAMS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Generated (kg/yr)</label>
+            <input type="number" value={generatedKg} onChange={e => setGeneratedKg(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Recycled (kg/yr)</label>
+            <input type="number" value={recycledKg} onChange={e => setRecycledKg(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total generated", value: `${totalGen.toLocaleString("en-IN")} kg`, color: "text-[var(--color-text)]" },
+              { label: "Recycled / recovered", value: `${totalRec.toLocaleString("en-IN")} kg`, color: "text-green-400" },
+              { label: "To landfill", value: `${toLandfill.toLocaleString("en-IN")} kg`, color: "text-orange-400" },
+              { label: "Diversion rate", value: `${diversion.toFixed(1)}%`, color: diversion >= 75 ? "text-green-400" : diversion >= 50 ? "text-yellow-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Stream", "Generated", "Recycled", "Diversion", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const d = r.generatedKg > 0 ? (r.recycledKg / r.generatedKg) * 100 : 0;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.stream}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.generatedKg.toLocaleString("en-IN")} kg</td>
+                        <td className="px-4 py-2.5 tabular-nums text-green-400">{r.recycledKg.toLocaleString("en-IN")} kg</td>
+                        <td className="px-4 py-2.5 tabular-nums">{d.toFixed(0)}%</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Diversion rate = recycled ÷ generated. Plastic, e-waste and battery streams here also drive your EPR targets — see the EPR Tracker.</p>
+    </div>
+  );
+}
+
+// ── #14 Renewable Energy Switch ROI (rooftop solar) ─────────────────────────────
+function RenewableSwitchRoi() {
+  const [monthlyKwh, setMonthlyKwh] = useState("");
+  const [tariff, setTariff] = useState("8");          // ₹ per kWh grid
+  const [systemKw, setSystemKw] = useState("");        // proposed solar capacity
+  const [capexPerKw, setCapexPerKw] = useState("55000"); // ₹ per kW installed
+
+  const n = (v: string) => parseFloat(v) || 0;
+  const kw = n(systemKw);
+  const capex = kw * n(capexPerKw);
+  // India: ~4 peak sun hours/day → ~1460 kWh per kW per year
+  const annualGen = kw * 1460;
+  const annualConsumption = n(monthlyKwh) * 12;
+  const usableGen = annualConsumption > 0 ? Math.min(annualGen, annualConsumption) : annualGen;
+  const annualSaving = usableGen * n(tariff);
+  const payback = annualSaving > 0 ? capex / annualSaving : 0;
+  const co2Saved = usableGen * GRID_FACTOR;
+  const lifetime25 = annualSaving * 25 - capex;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Sun size={14} className="text-yellow-400" /> Renewable Switch ROI (Rooftop Solar)</h3>
+        <p className="text-xs text-[var(--color-muted)]">Models savings, payback and emission cuts from rooftop solar. Assumes ~1,460 kWh per installed kW/year (≈4 peak-sun-hours, India average).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly grid use (kWh)</label>
+            <input type="number" value={monthlyKwh} onChange={e => setMonthlyKwh(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Grid tariff (₹/kWh)</label>
+            <input type="number" value={tariff} onChange={e => setTariff(e.target.value)} placeholder="8" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Solar size (kW)</label>
+            <input type="number" value={systemKw} onChange={e => setSystemKw(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Capex (₹/kW)</label>
+            <input type="number" value={capexPerKw} onChange={e => setCapexPerKw(e.target.value)} placeholder="55000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {kw > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "System cost (capex)", value: formatCurrency(Math.round(capex)), color: "text-[var(--color-text)]" },
+              { label: "Annual generation", value: `${Math.round(annualGen).toLocaleString("en-IN")} kWh`, color: "text-yellow-400" },
+              { label: "Annual bill saving", value: formatCurrency(Math.round(annualSaving)), color: "text-green-400" },
+              { label: "Simple payback", value: payback > 0 ? `${payback.toFixed(1)} yrs` : "—", color: "text-[var(--color-primary)]" },
+              { label: "CO₂e avoided / yr", value: fmtT(co2Saved), color: "text-green-400" },
+              { label: "25-yr net benefit", value: formatCurrency(Math.round(lifetime25)), color: lifetime25 > 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          {payback > 0 && payback <= 6 && (
+            <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+              <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Payback under ~6 years — strong case. Check accelerated depreciation and state net-metering before committing.</p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative; excludes O&amp;M, degradation, financing and net-metering credits. Generation usable only up to your own consumption unless you have net-metering / open access.</p>
+    </div>
+  );
+}
+
+// ── #15 EV-Fleet Transition Calculator ──────────────────────────────────────────
+function EvFleetCalculator() {
+  const [vehicles, setVehicles] = useState("");
+  const [kmPerYear, setKmPerYear] = useState("15000");
+  const [mileage, setMileage] = useState("15");       // km per litre (ICE)
+  const [fuelPrice, setFuelPrice] = useState("100");   // ₹ per litre
+  const [evEfficiency, setEvEfficiency] = useState("7"); // km per kWh
+  const [chargeTariff, setChargeTariff] = useState("9"); // ₹ per kWh
+
+  const n = (v: string) => parseFloat(v) || 0;
+  const fleet = n(vehicles);
+  const totalKm = fleet * n(kmPerYear);
+  const litres = n(mileage) > 0 ? totalKm / n(mileage) : 0;
+  const iceCost = litres * n(fuelPrice);
+  const iceKg = litres * PETROL_FACTOR;
+  const kwhNeeded = n(evEfficiency) > 0 ? totalKm / n(evEfficiency) : 0;
+  const evCost = kwhNeeded * n(chargeTariff);
+  const evKg = kwhNeeded * GRID_FACTOR;
+  const costSaving = iceCost - evCost;
+  const co2Saving = iceKg - evKg;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Car size={14} className="text-[var(--color-primary)]" /> EV-Fleet Transition Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Compares running an ICE fleet vs going electric — fuel/energy cost and emissions. EV emissions use the CEA grid factor ({GRID_FACTOR} kg/kWh).</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {([
+            ["Vehicles in fleet", vehicles, setVehicles, "0"],
+            ["km / vehicle / yr", kmPerYear, setKmPerYear, "15000"],
+            ["ICE mileage (km/L)", mileage, setMileage, "15"],
+            ["Fuel price (₹/L)", fuelPrice, setFuelPrice, "100"],
+            ["EV efficiency (km/kWh)", evEfficiency, setEvEfficiency, "7"],
+            ["Charging tariff (₹/kWh)", chargeTariff, setChargeTariff, "9"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {fleet > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "ICE running cost / yr", value: formatCurrency(Math.round(iceCost)), color: "text-red-400" },
+              { label: "EV running cost / yr", value: formatCurrency(Math.round(evCost)), color: "text-green-400" },
+              { label: "Cost saving / yr", value: formatCurrency(Math.round(costSaving)), color: costSaving > 0 ? "text-green-400" : "text-red-400" },
+              { label: "CO₂e cut / yr", value: fmtT(co2Saving), color: co2Saving > 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)]">
+              Across {fleet} vehicle{fleet > 1 ? "s" : ""} ({totalKm.toLocaleString("en-IN")} km/yr): switching to EV {costSaving > 0 ? "saves" : "adds"} {formatCurrency(Math.abs(Math.round(costSaving)))}/yr in energy and {co2Saving > 0 ? "cuts" : "adds"} {fmtT(Math.abs(co2Saving))}. Excludes purchase price, batteries and FAME/state incentives.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Operating comparison only — model upfront EV cost separately. As the grid greens, EV emissions fall further; ICE stays flat.</p>
+    </div>
+  );
+}
+
+// ── #16 Diversity & Social Metrics Tracker ──────────────────────────────────────
+type DiversityState = {
+  totalEmp: string; women: string; mgmtTotal: string; mgmtWomen: string;
+  pwd: string; contractual: string; trainingHrs: string; safetyIncidents: string;
+};
+const DIV_DEFAULT: DiversityState = { totalEmp: "", women: "", mgmtTotal: "", mgmtWomen: "", pwd: "", contractual: "", trainingHrs: "", safetyIncidents: "" };
+function DiversityMetrics() {
+  const [s, setS] = useFeatureState<DiversityState>("esg-diversity", DIV_DEFAULT);
+  const set = (k: keyof DiversityState, v: string) => setS({ ...s, [k]: v });
+  const n = (v: string) => parseFloat(v) || 0;
+
+  const total = n(s.totalEmp);
+  const womenPct = total > 0 ? (n(s.women) / total) * 100 : 0;
+  const mgmtWomenPct = n(s.mgmtTotal) > 0 ? (n(s.mgmtWomen) / n(s.mgmtTotal)) * 100 : 0;
+  const pwdPct = total > 0 ? (n(s.pwd) / total) * 100 : 0;
+  const contractPct = total > 0 ? (n(s.contractual) / total) * 100 : 0;
+  const trainingPerEmp = total > 0 ? n(s.trainingHrs) / total : 0;
+
+  const fields: [keyof DiversityState, string][] = [
+    ["totalEmp", "Total employees"],
+    ["women", "Women employees"],
+    ["mgmtTotal", "Management roles (total)"],
+    ["mgmtWomen", "Women in management"],
+    ["pwd", "Persons with disability"],
+    ["contractual", "Contractual / gig workers"],
+    ["trainingHrs", "Total training hours / yr"],
+    ["safetyIncidents", "Safety incidents / yr"],
+  ];
+  const kpis = [
+    { label: "Women in workforce", value: `${womenPct.toFixed(1)}%`, color: womenPct >= 30 ? "text-green-400" : "text-yellow-400" },
+    { label: "Women in management", value: `${mgmtWomenPct.toFixed(1)}%`, color: mgmtWomenPct >= 30 ? "text-green-400" : "text-yellow-400" },
+    { label: "PwD share", value: `${pwdPct.toFixed(1)}%`, color: "text-[var(--color-primary)]" },
+    { label: "Contractual share", value: `${contractPct.toFixed(1)}%`, color: "text-[var(--color-text)]" },
+    { label: "Training hrs / employee", value: trainingPerEmp.toFixed(1), color: "text-[var(--color-primary)]" },
+    { label: "Safety incidents", value: `${n(s.safetyIncidents)}`, color: n(s.safetyIncidents) > 0 ? "text-red-400" : "text-green-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> Diversity & Social Metrics</h3>
+        <p className="text-xs text-[var(--color-muted)]">The 'S' in ESG and BRSR Section C, Principle 3/5. Enter your headcount mix — figures auto-save and feed disclosure requests.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {fields.map(([k, label]) => (
+            <div key={k}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+              <input type="number" value={s[k]} onChange={e => set(k, e.target.value)} placeholder="0" className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {total > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {kpis.map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Self-reported social metrics. Maintain the underlying registers (payroll, POSH, safety log) so each figure is auditable for BRSR or investor diligence.</p>
+    </div>
+  );
+}
+
+// ── #17 Governance Checklist ────────────────────────────────────────────────────
+type GovItem = { id: string; group: string; label: string };
+const GOV_ITEMS: GovItem[] = [
+  { id: "gv1", group: "Board & oversight", label: "Defined board / advisory body with meeting minutes" },
+  { id: "gv2", group: "Board & oversight", label: "Separation of ownership and key financial controls" },
+  { id: "gv3", group: "Board & oversight", label: "Conflict-of-interest / related-party policy" },
+  { id: "gv4", group: "Ethics & compliance", label: "Written code of conduct shared with all staff" },
+  { id: "gv5", group: "Ethics & compliance", label: "Anti-bribery & anti-corruption policy" },
+  { id: "gv6", group: "Ethics & compliance", label: "Whistleblower / grievance redressal channel" },
+  { id: "gv7", group: "Risk & controls", label: "Statutory & tax filings up to date (GST, ROC, IT)" },
+  { id: "gv8", group: "Risk & controls", label: "Annual financial statements audited" },
+  { id: "gv9", group: "Risk & controls", label: "Documented risk register reviewed periodically" },
+  { id: "gv10", group: "Data & privacy", label: "Data-privacy practice aligned to DPDP Act 2023" },
+  { id: "gv11", group: "Data & privacy", label: "Cyber-security controls & incident plan documented" },
+  { id: "gv12", group: "Data & privacy", label: "Customer/vendor consent & retention policy" },
+];
+function GovernanceChecklist() {
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("esg-governance", {});
+  const toggle = (id: string) => setDone({ ...done, [id]: !done[id] });
+  const groups = Array.from(new Set(GOV_ITEMS.map(i => i.group)));
+  const completed = GOV_ITEMS.filter(i => done[i.id]).length;
+  const pct = Math.round((completed / GOV_ITEMS.length) * 100);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Governance Checklist</h3>
+          <span className={`text-sm font-bold tabular-nums ${pct === 100 ? "text-green-400" : "text-yellow-400"}`}>{completed}/{GOV_ITEMS.length} · {pct}%</span>
+        </div>
+        <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full rounded-full bg-[var(--color-primary)] transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">The 'G' that lenders and acquirers scrutinise first. Tick controls you can evidence today; gaps here often block green credit and diligence.</p>
+      </div>
+
+      {groups.map(g => (
+        <div key={g} className={`${CARD} p-4 space-y-2`}>
+          <p className="text-sm font-semibold">{g}</p>
+          {GOV_ITEMS.filter(i => i.group === g).map(i => (
+            <label key={i.id} className="flex items-center gap-2.5 cursor-pointer text-sm py-1">
+              <input type="checkbox" checked={!!done[i.id]} onChange={() => toggle(i.id)} className="accent-[var(--color-primary)]" />
+              <span className={done[i.id] ? "text-[var(--color-text)] line-through opacity-70" : "text-[var(--color-text)]"}>{i.label}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <p className="text-[10px] text-[var(--color-muted)]">A practical governance baseline for an Indian SMB (Companies Act, DPDP 2023). Not legal advice — confirm statutory obligations with your CA / company secretary.</p>
+    </div>
+  );
+}
+
+// ── #18 CBAM Export-Exposure Estimator ──────────────────────────────────────────
+// EU CBAM transitional embedded-emission intensities (tCO2e per tonne of product).
+const CBAM_GOODS: { id: string; label: string; intensity: number }[] = [
+  { id: "steel", label: "Steel / iron", intensity: 2.1 },
+  { id: "aluminium", label: "Aluminium", intensity: 8.6 },
+  { id: "cement", label: "Cement / clinker", intensity: 0.87 },
+  { id: "fertiliser", label: "Fertiliser", intensity: 1.6 },
+  { id: "hydrogen", label: "Hydrogen", intensity: 10 },
+];
+type CbamRow = { id: string; good: string; tonnes: number };
+function CbamExportEstimator() {
+  const [rows, setRows] = useFeatureState<CbamRow[]>("esg-cbam", []);
+  const [good, setGood] = useState(CBAM_GOODS[0].id);
+  const [tonnes, setTonnes] = useState("");
+  const [euPrice, setEuPrice] = useState("75"); // € per tCO2e (EU ETS proxy)
+  const [eurInr, setEurInr] = useState("90");
+
+  const add = () => {
+    const t = parseFloat(tonnes);
+    if (isNaN(t) || t <= 0) { toast.error("Enter tonnes exported"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), good, tonnes: t }]);
+    setTonnes("");
+    toast.success("Export line added");
+  };
+
+  const embeddedT = (r: CbamRow) => (CBAM_GOODS.find(g => g.id === r.good)?.intensity ?? 0) * r.tonnes;
+  const totalEmbedded = rows.reduce((s, r) => s + embeddedT(r), 0);
+  const priceInr = (parseFloat(euPrice) || 0) * (parseFloat(eurInr) || 0);
+  const liability = totalEmbedded * priceInr;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> CBAM Export-Exposure Estimator</h3>
+        <p className="text-xs text-[var(--color-muted)]">EU's Carbon Border Adjustment hits steel, aluminium, cement, fertiliser & hydrogen from 2026. Estimate embedded emissions and the certificate cost on your EU exports.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Product</label>
+            <select value={good} onChange={e => setGood(e.target.value)} className={INP}>
+              {CBAM_GOODS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tonnes to EU/yr</label>
+            <input type="number" value={tonnes} onChange={e => setTonnes(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">CO₂ price (€/t)</label>
+            <input type="number" value={euPrice} onChange={e => setEuPrice(e.target.value)} placeholder="75" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">€ → ₹</label>
+            <input type="number" value={eurInr} onChange={e => setEurInr(e.target.value)} placeholder="90" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Embedded emissions", value: `${totalEmbedded.toFixed(1)} tCO₂e`, color: "text-orange-400" },
+              { label: "CBAM price / tonne", value: formatCurrency(Math.round(priceInr)), color: "text-[var(--color-text)]" },
+              { label: "Est. annual liability", value: formatCurrency(Math.round(liability)), color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Product", "Tonnes/yr", "Intensity", "Embedded CO₂e", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const gd = CBAM_GOODS.find(g => g.id === r.good);
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{gd?.label}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.tonnes.toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{gd?.intensity} t/t</td>
+                        <td className="px-4 py-2.5 tabular-nums text-orange-400">{embeddedT(r).toFixed(1)} tCO₂e</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Uses default embedded-emission intensities; actuals from a verified product carbon footprint usually lower your liability. Transitional reporting is underway — definitive certificates phase in from 2026.</p>
+    </div>
+  );
+}
+
+// ── #19 EPR (Extended Producer Responsibility) Tracker ──────────────────────────
+type EprRow = { id: string; category: string; obligationKg: number; fulfilledKg: number };
+const EPR_CATEGORIES = ["Plastic packaging", "E-waste", "Battery waste", "Tyre waste", "Used oil"];
+function EprTracker() {
+  const [rows, setRows] = useFeatureState<EprRow[]>("esg-epr", []);
+  const [category, setCategory] = useState(EPR_CATEGORIES[0]);
+  const [obligationKg, setObligationKg] = useState("");
+  const [fulfilledKg, setFulfilledKg] = useState("");
+  const [certPrice, setCertPrice] = useState("15"); // ₹ per kg certificate
+
+  const add = () => {
+    const o = parseFloat(obligationKg), f = parseFloat(fulfilledKg) || 0;
+    if (isNaN(o) || o <= 0) { toast.error("Enter your EPR obligation (kg)"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), category, obligationKg: o, fulfilledKg: f }]);
+    setObligationKg(""); setFulfilledKg("");
+    toast.success("EPR target added");
+  };
+
+  const totalOb = rows.reduce((s, r) => s + r.obligationKg, 0);
+  const totalFul = rows.reduce((s, r) => s + r.fulfilledKg, 0);
+  const shortfall = Math.max(0, totalOb - totalFul);
+  const compliance = totalOb > 0 ? (totalFul / totalOb) * 100 : 0;
+  const certCost = shortfall * (parseFloat(certPrice) || 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Recycle size={14} className="text-[var(--color-primary)]" /> EPR Compliance Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Track Extended Producer Responsibility targets under CPCB rules (plastic, e-waste, battery). Shortfalls must be met by buying EPR certificates — or face environmental compensation.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
+              {EPR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Obligation (kg/yr)</label>
+            <input type="number" value={obligationKg} onChange={e => setObligationKg(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Fulfilled (kg)</label>
+            <input type="number" value={fulfilledKg} onChange={e => setFulfilledKg(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cert price (₹/kg)</label>
+            <input type="number" value={certPrice} onChange={e => setCertPrice(e.target.value)} placeholder="15" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total obligation", value: `${totalOb.toLocaleString("en-IN")} kg`, color: "text-[var(--color-text)]" },
+              { label: "Fulfilled", value: `${totalFul.toLocaleString("en-IN")} kg`, color: "text-green-400" },
+              { label: "Compliance", value: `${compliance.toFixed(0)}%`, color: compliance >= 100 ? "text-green-400" : compliance >= 60 ? "text-yellow-400" : "text-red-400" },
+              { label: "Cost to close gap", value: formatCurrency(Math.round(certCost)), color: shortfall > 0 ? "text-orange-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Category", "Obligation", "Fulfilled", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const met = r.fulfilledKg >= r.obligationKg;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.category}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.obligationKg.toLocaleString("en-IN")} kg</td>
+                        <td className="px-4 py-2.5 tabular-nums text-green-400">{r.fulfilledKg.toLocaleString("en-IN")} kg</td>
+                        <td className="px-4 py-2.5">{met ? <span className="text-green-400 text-xs flex items-center gap-1"><CheckCircle2 size={12} /> Met</span> : <span className="text-orange-400 text-xs flex items-center gap-1"><AlertTriangle size={12} /> Short {(r.obligationKg - r.fulfilledKg).toLocaleString("en-IN")} kg</span>}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Obligations are set by CPCB rules as a percentage of what you introduced to market. Buy certificates from registered recyclers/PROs on the EPR portal before the annual return deadline.</p>
+    </div>
+  );
+}
+
+// ── #20 Green-Loan Eligibility Score ────────────────────────────────────────────
+type GreenCriterion = { id: string; label: string; weight: number };
+const GREEN_CRITERIA: GreenCriterion[] = [
+  { id: "c1", label: "Measured carbon footprint (any scope)", weight: 15 },
+  { id: "c2", label: "Set a quantified reduction target", weight: 15 },
+  { id: "c3", label: "Track energy & water consumption", weight: 10 },
+  { id: "c4", label: "Using or planning renewable energy", weight: 15 },
+  { id: "c5", label: "Loan funds a clear green use (solar/EV/efficiency)", weight: 20 },
+  { id: "c6", label: "Waste / EPR compliance in place", weight: 10 },
+  { id: "c7", label: "Audited financials & clean repayment record", weight: 10 },
+  { id: "c8", label: "Can report KPI progress to the lender annually", weight: 5 },
+];
+function GreenLoanEligibility() {
+  const [checks, setChecks] = useFeatureState<Record<string, boolean>>("esg-greenloan", {});
+  const [amount, setAmount] = useState("");
+  const toggle = (id: string) => setChecks({ ...checks, [id]: !checks[id] });
+
+  const score = GREEN_CRITERIA.reduce((s, c) => s + (checks[c.id] ? c.weight : 0), 0);
+  const band = score >= 75
+    ? { label: "Strong candidate", color: "text-green-400", note: "Approach SIDBI / bank green lines and sustainability-linked loans with confidence.", rate: "—0.5% to —1.0%" }
+    : score >= 50
+      ? { label: "Eligible with gaps", color: "text-yellow-400", note: "Close the unchecked items to unlock better rate step-downs.", rate: "—0.25%" }
+      : { label: "Not yet ready", color: "text-orange-400", note: "Build a footprint and a reduction target first — these are table-stakes for green credit.", rate: "standard" };
+  const loanAmt = parseFloat(amount) || 0;
+  // illustrative annual interest saving from a rate step-down tied to band
+  const stepDown = score >= 75 ? 0.0075 : score >= 50 ? 0.0025 : 0;
+  const annualSaving = loanAmt * stepDown;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Green-Loan Eligibility Score</h3>
+        <p className="text-xs text-[var(--color-muted)]">Self-assess readiness for green / sustainability-linked finance (SIDBI, bank green lines). Tick what you can evidence — lenders often offer a rate step-down for strong ESG profiles.</p>
+        <div className="space-y-1.5">
+          {GREEN_CRITERIA.map(c => (
+            <label key={c.id} className="flex items-center justify-between gap-2.5 cursor-pointer text-sm py-1">
+              <span className="flex items-center gap-2.5">
+                <input type="checkbox" checked={!!checks[c.id]} onChange={() => toggle(c.id)} className="accent-[var(--color-primary)]" />
+                <span className={checks[c.id] ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}>{c.label}</span>
+              </span>
+              <span className="text-[10px] text-[var(--color-muted)] tabular-nums shrink-0">{c.weight} pts</span>
+            </label>
+          ))}
+        </div>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Loan amount sought (₹, optional)</label>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 5000000" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className={`${CARD} p-4`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Eligibility score</p>
+          <p className={`text-2xl font-bold tabular-nums ${band.color}`}>{score}<span className="text-sm">/100</span></p>
+          <p className={`text-[10px] mt-0.5 ${band.color}`}>{band.label}</p>
+        </div>
+        <div className={`${CARD} p-4`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Indicative rate step-down</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{band.rate}</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-0.5">vs standard term loan</p>
+        </div>
+        {loanAmt > 0 && (
+          <div className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Est. annual interest saving</p>
+            <p className="text-2xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(annualSaving))}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">at {(stepDown * 100).toFixed(2)}% step-down</p>
+          </div>
+        )}
+        <div className={`${CARD} p-4 ${loanAmt > 0 ? "" : "md:col-span-2"}`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Next step</p>
+          <p className="text-xs text-[var(--color-text)] mt-1">{band.note}</p>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative screening only — actual eligibility, rates and step-downs are set by the lender. Use this to prioritise which ESG gaps to close before applying.</p>
     </div>
   );
 }

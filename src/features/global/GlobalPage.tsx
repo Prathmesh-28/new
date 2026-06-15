@@ -6,6 +6,7 @@ import {
   Globe, ArrowLeftRight, TrendingUp, FileText, ScrollText, Landmark,
   Ship, Send, GitCompareArrows, Calculator, Receipt, BadgePercent,
   Plus, CheckCircle2, AlertTriangle, Trash2,
+  Layers, Smartphone, Wallet, PiggyBank, Scale, ClipboardList, Map, BadgeCheck, Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -21,7 +22,9 @@ const fmtUSD = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDig
 
 type TabId =
   | "overview" | "fx-convert" | "fx-gainloss" | "export-invoice" | "firc-brc"
-  | "lc-tracker" | "customs" | "payment-fees" | "transfer-pricing" | "gst-export" | "rodtep";
+  | "lc-tracker" | "customs" | "payment-fees" | "transfer-pricing" | "gst-export" | "rodtep"
+  | "fx-forward" | "bank-consolidate" | "swift-upi" | "packing-credit" | "eefc-tracker"
+  | "dtaa-lookup" | "advance-auth" | "country-sales" | "iec-adcode" | "tcs-lrs";
 
 export default function GlobalPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -50,6 +53,16 @@ export default function GlobalPage() {
             ["transfer-pricing", "Transfer Pricing", GitCompareArrows],
             ["gst-export", "GST Export Refund", Receipt],
             ["rodtep", "RoDTEP / Drawback", BadgePercent],
+            ["fx-forward", "FX Forward Cover", Calculator],
+            ["bank-consolidate", "FCY Balances", Layers],
+            ["swift-upi", "SWIFT vs UPI Intl", Smartphone],
+            ["packing-credit", "Packing Credit", PiggyBank],
+            ["eefc-tracker", "EEFC Account", Wallet],
+            ["dtaa-lookup", "DTAA Withholding", Scale],
+            ["advance-auth", "AA / EPCG", ClipboardList],
+            ["country-sales", "Country Sales", Map],
+            ["iec-adcode", "IEC / AD Code", BadgeCheck],
+            ["tcs-lrs", "LRS / TCS", Percent],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -70,6 +83,16 @@ export default function GlobalPage() {
       {tab === "transfer-pricing" && <TransferPricingCalculator />}
       {tab === "gst-export" && <GstExportRefund />}
       {tab === "rodtep" && <RodtepDrawbackEstimator />}
+      {tab === "fx-forward" && <FxForwardCover />}
+      {tab === "bank-consolidate" && <FcyBalanceConsolidator />}
+      {tab === "swift-upi" && <SwiftVsUpiCompare />}
+      {tab === "packing-credit" && <PackingCreditCalculator />}
+      {tab === "eefc-tracker" && <EefcAccountTracker />}
+      {tab === "dtaa-lookup" && <DtaaWithholdingLookup />}
+      {tab === "advance-auth" && <AdvanceAuthEpcgTracker />}
+      {tab === "country-sales" && <CountrySalesSummary />}
+      {tab === "iec-adcode" && <IecAdCodeTracker />}
+      {tab === "tcs-lrs" && <LrsTcsCalculator />}
     </div>
   );
 }
@@ -100,6 +123,16 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
     { id: "transfer-pricing", title: "Transfer Pricing Markup", desc: "Cost-plus / resale-minus arm's-length price for related-party deals." },
     { id: "gst-export", title: "GST Export Refund", desc: "Refund under LUT (unutilised ITC) or with IGST paid — estimate either route." },
     { id: "rodtep", title: "RoDTEP / Duty Drawback", desc: "Estimate remission scrip value and drawback on exported goods." },
+    { id: "fx-forward", title: "FX Forward Cover Calculator", desc: "Price a forward contract from spot + forward points and see your locked-in INR." },
+    { id: "bank-consolidate", title: "FCY Balance Consolidator", desc: "Add foreign-currency balances across banks and see one INR-normalised total." },
+    { id: "swift-upi", title: "SWIFT vs UPI-International", desc: "Compare cost of a SWIFT wire against UPI / fintech rails for small inbound sums." },
+    { id: "packing-credit", title: "Packing Credit (PCFC) Interest", desc: "Pre-shipment interest cost over the credit period at your sanctioned rate." },
+    { id: "eefc-tracker", title: "EEFC Account Tracker", desc: "Log FCY credits and INR conversions; watch the one-month retention window." },
+    { id: "dtaa-lookup", title: "DTAA Withholding Lookup", desc: "Treaty withholding rate by country and income type, net of grossing-up." },
+    { id: "advance-auth", title: "Advance Auth / EPCG Tracker", desc: "Track export obligation versus fulfilment under AA / EPCG with the deadline." },
+    { id: "country-sales", title: "Country-wise Sales Summary", desc: "Group your invoices by destination country to see top export markets." },
+    { id: "iec-adcode", title: "IEC / AD-Code Register", desc: "Keep your IEC, AD codes and port registrations in one place with renewals." },
+    { id: "tcs-lrs", title: "LRS / TCS Calculator", desc: "Tax Collected at Source on outward LRS remittances above the threshold." },
   ];
 
   return (
@@ -958,6 +991,855 @@ function RodtepDrawbackEstimator() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Rates vary by HSN and change with each notification — verify the current rate against the official RoDTEP / All-Industry Drawback schedule for your product.</p>
+    </div>
+  );
+}
+
+// ── #11 FX Forward Cover (hedging) Calculator ───────────────────────────────────
+function FxForwardCover() {
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [spot, setSpot] = useState(String(DEFAULT_RATES.USD));
+  const [points, setPoints] = useState("0.45");
+  const [months, setMonths] = useState("3");
+  const [direction, setDirection] = useState<"sell" | "buy">("sell");
+
+  const amt = parseFloat(amount) || 0;
+  const sp = parseFloat(spot) || 0;
+  const pts = parseFloat(points) || 0;
+  const m = parseFloat(months) || 0;
+  // Indian forwards usually trade at a premium for USD (INR depreciates) — exporter sells fwd, importer buys fwd.
+  const forwardRate = sp + pts;
+  const spotInr = amt * sp;
+  const forwardInr = amt * forwardRate;
+  const gainVsSpot = direction === "sell" ? forwardInr - spotInr : spotInr - forwardInr;
+  const annualisedPct = sp > 0 && m > 0 ? (pts / sp) * (12 / m) * 100 : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> FX Forward Cover Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Lock tomorrow&apos;s rate today. Booking a forward fixes your INR realisation so a quote can&apos;t be eaten by an adverse move.</p>
+        <div className="flex gap-2">
+          {(["sell", "buy"] as const).map(d => (
+            <button key={d} onClick={() => setDirection(d)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${direction === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {d === "sell" ? "Sell forward (exporter — locking inflow)" : "Buy forward (importer — locking outflow)"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Currency</label>
+            <select value={ccy} onChange={e => { setCcy(e.target.value); setSpot(String(DEFAULT_RATES[e.target.value] ?? sp)); }} className={INP}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount ({ccy})</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Spot rate (₹)</label>
+            <input type="number" value={spot} onChange={e => setSpot(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Forward points (₹)</label>
+            <input type="number" value={points} onChange={e => setPoints(e.target.value)} placeholder="0.45" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Tenor (months)</label>
+            <input type="number" value={months} onChange={e => setMonths(e.target.value)} placeholder="3" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {amt > 0 && sp > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Forward rate (spot + points)</span><span className="tabular-nums font-semibold">₹{forwardRate.toFixed(4)}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Value at spot</span><span className="tabular-nums">{formatCurrency(Math.round(spotInr))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Value locked at forward</span><span className="tabular-nums">{formatCurrency(Math.round(forwardInr))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Annualised forward premium</span><span className="tabular-nums">{annualisedPct.toFixed(2)}%</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">{gainVsSpot >= 0 ? "Pick-up vs spot today" : "Cost vs spot today"}</span>
+              <span className={`font-bold tabular-nums ${gainVsSpot >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(gainVsSpot))}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">A forward booked against an underlying export/import order needs no separate margin documentation. Cancel/roll if the order changes — premium is non-refundable on cancellation.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #12 Multi-Currency Bank Balance Consolidator ────────────────────────────────
+type FcyRow = { id: string; bank: string; ccy: string; balance: number };
+function FcyBalanceConsolidator() {
+  const [rows, setRows] = useFeatureState<FcyRow[]>("glb-fcy-balances", []);
+  const [rates] = useFeatureState<Record<string, number>>("glb-fx-rates", DEFAULT_RATES);
+  const [bank, setBank] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [balance, setBalance] = useState("");
+
+  const rate = (code: string) => (code === "INR" ? 1 : rates[code] ?? DEFAULT_RATES[code] ?? 0);
+  const add = () => {
+    const bal = parseFloat(balance);
+    if (!bank.trim() || isNaN(bal)) { toast.error("Enter a bank/account and a balance"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), bank: bank.trim(), ccy, balance: bal }]);
+    setBank(""); setBalance("");
+    toast.success("Balance added");
+  };
+
+  const totalInr = rows.reduce((s, r) => s + r.balance * rate(r.ccy), 0);
+  const byCcy = useMemo(() => {
+    const map: Record<string, number> = {};
+    rows.forEach(r => { map[r.ccy] = (map[r.ccy] || 0) + r.balance; });
+    return Object.entries(map).sort((a, b) => b[1] * rate(b[0]) - a[1] * rate(a[0]));
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Multi-Currency Bank Balance Consolidator</h2>
+        <p className="text-xs text-[var(--color-muted)]">A Nostro-style view: add each foreign-currency bank balance once and see a single INR-normalised total using your converter&apos;s reference rates.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Bank / account</label>
+            <input value={bank} onChange={e => setBank(e.target.value)} placeholder="HDFC EEFC USD" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Currency</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{["INR", ...CURRENCIES].map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Balance</label>
+            <input type="number" value={balance} onChange={e => setBalance(e.target.value)} placeholder="25000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No balances added yet. Add each foreign-currency account to see your consolidated position.</p>
+      ) : (
+        <>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Bank / account", "Currency", "Balance", "Rate (₹)", "INR value", ""].map(h =>
+                    <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-3 py-2.5 font-medium">{r.bank}</td>
+                      <td className="px-3 py-2.5">{r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.balance.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.ccy === "INR" ? "1" : rate(r.ccy).toFixed(2)}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{formatCurrency(Math.round(r.balance * rate(r.ccy)))}</td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4 md:col-span-1`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">Total consolidated balance</p>
+              <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalInr))}</p>
+            </div>
+            <div className={`${CARD} p-4 md:col-span-2`}>
+              <p className="text-xs text-[var(--color-muted)] mb-2">Net position by currency</p>
+              <div className="flex flex-wrap gap-2">
+                {byCcy.map(([c, v]) => (
+                  <span key={c} className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1 tabular-nums">{c} {v.toLocaleString()}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">INR values use the reference rates set in the Currency Converter. Update those rates to re-value this view. Holdings in an EEFC account have a one-month conversion window.</p>
+    </div>
+  );
+}
+
+// ── #13 SWIFT vs UPI-International Fee Compare ───────────────────────────────────
+function SwiftVsUpiCompare() {
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [mid, setMid] = useState(String(DEFAULT_RATES.USD));
+  // SWIFT: flat correspondent fees + a wider FX spread; UPI-intl/fintech: small flat + tight spread, but caps apply.
+  const [swiftFlat, setSwiftFlat] = useState("1200");
+  const [swiftSpread, setSwiftSpread] = useState("2.0");
+  const [upiFlat, setUpiFlat] = useState("0");
+  const [upiSpread, setUpiSpread] = useState("0.6");
+
+  const amt = parseFloat(amount) || 0;
+  const midRate = parseFloat(mid) || 0;
+  const calc = (flatStr: string, spreadStr: string) => {
+    const flat = parseFloat(flatStr) || 0;
+    const spread = parseFloat(spreadStr) || 0;
+    const eff = midRate * (1 - spread / 100);
+    const delivered = amt * eff - flat;
+    return { delivered, fxCost: amt * midRate - amt * eff, flat, total: amt * midRate - delivered };
+  };
+  const swift = calc(swiftFlat, swiftSpread);
+  const upi = calc(upiFlat, upiSpread);
+  const valid = amt > 0 && midRate > 0;
+  const saving = swift.total - upi.total;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Smartphone size={14} className="text-[var(--color-primary)]" /> SWIFT vs UPI-International Fee Compare</h2>
+        <p className="text-xs text-[var(--color-muted)]">For smaller inbound payments, UPI-international / fintech rails often beat a SWIFT wire on both flat fee and FX spread. Compare the all-in cost.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Currency</label>
+            <select value={ccy} onChange={e => { setCcy(e.target.value); setMid(String(DEFAULT_RATES[e.target.value] ?? midRate)); }} className={INP}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount ({ccy})</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="2000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Mid-market rate (₹)</label>
+            <input type="number" value={mid} onChange={e => setMid(e.target.value)} className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">SWIFT wire</p>
+            <input type="number" value={swiftFlat} onChange={e => setSwiftFlat(e.target.value)} placeholder="Flat fee ₹" className={INP} />
+            <input type="number" value={swiftSpread} onChange={e => setSwiftSpread(e.target.value)} placeholder="FX spread %" className={INP} />
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">UPI-intl / fintech</p>
+            <input type="number" value={upiFlat} onChange={e => setUpiFlat(e.target.value)} placeholder="Flat fee ₹" className={INP} />
+            <input type="number" value={upiSpread} onChange={e => setUpiSpread(e.target.value)} placeholder="FX spread %" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {valid && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Rail", "FX cost", "Flat fee", "All-in cost", "You receive"].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {([["SWIFT wire", swift], ["UPI-intl / fintech", upi]] as const).map(([name, r]) => (
+                  <tr key={name} className={`hover:bg-white/2 ${r.total <= Math.min(swift.total, upi.total) ? "bg-green-950/20" : ""}`}>
+                    <td className="px-3 py-2.5 font-medium">{name}{r.total <= Math.min(swift.total, upi.total) && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">CHEAPEST</span>}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.fxCost))}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{formatCurrency(Math.round(r.flat))}</td>
+                    <td className="px-3 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(r.total))}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.delivered))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {Math.abs(saving) > 0 && (
+            <div className="px-4 py-3 text-xs border-t border-[var(--color-border)]">
+              {saving > 0
+                ? <span className="text-green-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={13} /> UPI-intl / fintech saves {formatCurrency(Math.round(saving))} on this inbound payment.</span>
+                : <span className="text-[var(--color-muted)]">SWIFT is cheaper here by {formatCurrency(Math.round(-saving))} — usually only at larger ticket sizes.</span>}
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">UPI-international / fintech rails carry per-transaction and annual caps and may not suit large export receipts. FIRC/eBRC must still be obtainable for the inbound credit.</p>
+    </div>
+  );
+}
+
+// ── #14 Packing Credit (PCFC) Interest Calculator ───────────────────────────────
+function PackingCreditCalculator() {
+  const [principal, setPrincipal] = useState("");
+  const [ratePct, setRatePct] = useState("8.5");
+  const [days, setDays] = useState("90");
+  const [subventionPct, setSubventionPct] = useState("0");
+
+  const p = parseFloat(principal) || 0;
+  const r = parseFloat(ratePct) || 0;
+  const d = parseFloat(days) || 0;
+  const sub = parseFloat(subventionPct) || 0;
+  const effRate = Math.max(0, r - sub);
+  // Simple interest on a 365-day basis over the pre-shipment period.
+  const grossInterest = p * r / 100 * d / 365;
+  const netInterest = p * effRate / 100 * d / 365;
+  const subAmount = grossInterest - netInterest;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Packing Credit (PCFC) Interest</h2>
+        <p className="text-xs text-[var(--color-muted)]">Pre-shipment finance against a confirmed export order. Estimate the interest cost over the credit period, net of any interest-equalisation subvention.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Drawdown (₹)</label>
+            <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Interest rate % p.a.</label>
+            <input type="number" value={ratePct} onChange={e => setRatePct(e.target.value)} placeholder="8.5" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Credit period (days)</label>
+            <input type="number" value={days} onChange={e => setDays(e.target.value)} placeholder="90" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Subvention % (if any)</label>
+            <input type="number" value={subventionPct} onChange={e => setSubventionPct(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {p > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Gross interest @ {r}% for {d}d</span><span className="tabular-nums">{formatCurrency(Math.round(grossInterest))}</span></div>
+            {sub > 0 && <div className="flex justify-between"><span className="text-[var(--color-muted)]">Less interest-equalisation @ {sub}%</span><span className="tabular-nums text-green-400">- {formatCurrency(Math.round(subAmount))}</span></div>}
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Effective rate after subvention</span><span className="tabular-nums">{effRate.toFixed(2)}% p.a.</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">Net interest cost</span>
+              <span className="font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(netInterest))}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Packing credit must be liquidated from export proceeds (or eligible substitution) within the sanctioned period, typically up to 180/270 days. Unliquidated PCFC attracts commercial-rate interest.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #15 EEFC Account Tracker ─────────────────────────────────────────────────────
+type EefcRow = { id: string; ref: string; ccy: string; amount: number; date: string; converted: boolean };
+function EefcAccountTracker() {
+  const [rows, setRows] = useFeatureState<EefcRow[]>("glb-eefc", []);
+  const [ref, setRef] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!ref.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter a reference and a valid amount"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), ref: ref.trim(), ccy, amount: amt, date, converted: false }]);
+    setRef(""); setAmount("");
+    toast.success("Credit logged");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, converted: !r.converted } : r));
+
+  // EEFC: balances should be converted to INR by the last day of the month following the month of credit.
+  const convertBy = (credit: string) => { const dt = new Date(credit); dt.setMonth(dt.getMonth() + 2, 0); return dt; };
+  const heldByCcy = useMemo(() => {
+    const map: Record<string, number> = {};
+    rows.filter(r => !r.converted).forEach(r => { map[r.ccy] = (map[r.ccy] || 0) + r.amount; });
+    return Object.entries(map);
+  }, [rows]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> EEFC Account Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">An Exchange Earners&apos; Foreign Currency account lets you hold export earnings in FCY and pay overseas without re-converting — but unconverted balances must be sold to INR by month-end of the next month.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ref</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="INV-021" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="5000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Credit date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {heldByCcy.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {heldByCcy.map(([c, v]) => (
+            <span key={c} className={`${CARD} px-3 py-1.5 text-xs tabular-nums`}>Held in {c}: <span className="font-semibold">{v.toLocaleString()}</span></span>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No EEFC credits logged. Add a foreign-currency credit to track its conversion deadline.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Ref", "Amount", "Credited", "Convert by", "Days left", "Status", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const cb = convertBy(r.date);
+                  const days = differenceInCalendarDays(cb, new Date());
+                  const breach = !r.converted && days < 0;
+                  return (
+                    <tr key={r.id} className={`hover:bg-white/2 ${breach ? "bg-red-950/20" : ""}`}>
+                      <td className="px-3 py-2.5 font-medium">{r.ref}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{format(new Date(r.date), "d MMM yyyy")}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{format(cb, "d MMM yyyy")}</td>
+                      <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.converted ? "text-green-400" : days < 0 ? "text-red-400" : days < 7 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>
+                        {r.converted ? "—" : days < 0 ? `${Math.abs(days)}d over` : `${days}d`}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.converted ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.converted ? "Converted" : "Held in FCY"}</button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Conversion rule: the sum total of accruals in a calendar month must be converted to INR on or before the last day of the succeeding month, net of utilisation. No interest is payable on EEFC balances. Confirm current rules with your AD bank.</p>
+    </div>
+  );
+}
+
+// ── #16 Withholding Tax by Treaty (DTAA) Lookup ─────────────────────────────────
+const DTAA: Record<string, { royalty: number; fts: number; interest: number; dividend: number }> = {
+  "USA": { royalty: 15, fts: 15, interest: 15, dividend: 25 },
+  "UK": { royalty: 15, fts: 15, interest: 15, dividend: 15 },
+  "Singapore": { royalty: 10, fts: 10, interest: 15, dividend: 15 },
+  "UAE": { royalty: 10, fts: 10, interest: 12.5, dividend: 10 },
+  "Germany": { royalty: 10, fts: 10, interest: 10, dividend: 10 },
+  "Netherlands": { royalty: 10, fts: 10, interest: 10, dividend: 10 },
+  "Japan": { royalty: 10, fts: 10, interest: 10, dividend: 10 },
+  "Australia": { royalty: 10, fts: 10, interest: 15, dividend: 15 },
+  "France": { royalty: 10, fts: 10, interest: 10, dividend: 10 },
+};
+function DtaaWithholdingLookup() {
+  const [country, setCountry] = useState("USA");
+  const [income, setIncome] = useState<"royalty" | "fts" | "interest" | "dividend">("fts");
+  const [amount, setAmount] = useState("");
+  const [grossUp, setGrossUp] = useState(false);
+
+  const treaty = DTAA[country];
+  const rate = treaty[income];
+  const amt = parseFloat(amount) || 0;
+  // Domestic non-treaty rate for FTS/royalty under s.115A is commonly higher; treaty is usually beneficial.
+  const tax = amt * rate / 100;
+  // If grossed-up (you bear the tax), the payment is grossed so the vendor receives `amt` net.
+  const grossed = grossUp && rate < 100 ? amt / (1 - rate / 100) : amt;
+  const grossedTax = grossed - (grossUp ? amt : amt - tax);
+
+  const LABELS: Record<typeof income, string> = { royalty: "Royalty", fts: "Fees for technical services", interest: "Interest", dividend: "Dividend" };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> DTAA Withholding-Tax Lookup</h2>
+        <p className="text-xs text-[var(--color-muted)]">Find the beneficial treaty rate for tax withheld on payments to a foreign party. Treaty benefit needs a valid TRC + Form 10F + No-PE declaration.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Counterparty country</label>
+            <select value={country} onChange={e => setCountry(e.target.value)} className={INP}>
+              {Object.keys(DTAA).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Nature of income</label>
+            <select value={income} onChange={e => setIncome(e.target.value as typeof income)} className={INP}>
+              {(["fts", "royalty", "interest", "dividend"] as const).map(k => <option key={k} value={k}>{LABELS[k]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Payment amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={grossUp} onChange={e => setGrossUp(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Gross-up — you bear the tax so the vendor receives the full amount net
+        </label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+          {(Object.keys(treaty) as Array<keyof typeof treaty>).map(k => (
+            <div key={k} className={`bg-[var(--color-bg)] border rounded-lg px-3 py-2 ${k === income ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+              <p className="text-[10px] text-[var(--color-muted)] capitalize">{k === "fts" ? "FTS" : k}</p>
+              <p className="text-sm font-bold tabular-nums">{treaty[k]}%</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {amt > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">{LABELS[income]} to {country}</span><span className="tabular-nums">{formatCurrency(Math.round(amt))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Treaty withholding rate</span><span className="tabular-nums font-semibold">{rate}%</span></div>
+            {grossUp ? (
+              <>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Grossed-up base</span><span className="tabular-nums">{formatCurrency(Math.round(grossed))}</span></div>
+                <div className="flex justify-between pt-2 border-t border-[var(--color-border)]"><span className="font-semibold">TDS you deposit</span><span className="font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(grossedTax))}</span></div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">TDS to withhold</span><span className="tabular-nums text-orange-400">{formatCurrency(Math.round(tax))}</span></div>
+                <div className="flex justify-between pt-2 border-t border-[var(--color-border)]"><span className="font-semibold">Net remittance to vendor</span><span className="font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(amt - tax))}</span></div>
+              </>
+            )}
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative treaty rates only — actual articles, surcharge/cess, MFN clauses and s.206AA (PAN absence → 20%) can change this. File Form 15CA/15CB before remitting.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #17 Advance Authorisation / EPCG Tracker ────────────────────────────────────
+type EoRow = { id: string; scheme: "AA" | "EPCG"; lic: string; obligation: number; fulfilled: number; ccy: string; expiry: string };
+function AdvanceAuthEpcgTracker() {
+  const [rows, setRows] = useFeatureState<EoRow[]>("glb-export-oblig", []);
+  const [scheme, setScheme] = useState<"AA" | "EPCG">("EPCG");
+  const [lic, setLic] = useState("");
+  const [obligation, setObligation] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [expiry, setExpiry] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const ob = parseFloat(obligation);
+    if (!lic.trim() || isNaN(ob) || ob <= 0) { toast.error("Enter a licence number and obligation value"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), scheme, lic: lic.trim(), obligation: ob, fulfilled: 0, ccy, expiry }]);
+    setLic(""); setObligation("");
+    toast.success("Authorisation tracked");
+  };
+  const addFulfil = (id: string, v: string) => {
+    const n = parseFloat(v); if (isNaN(n)) return;
+    setRows(rows.map(r => r.id === id ? { ...r, fulfilled: Math.max(0, n) } : r));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Advance Authorisation / EPCG Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Duty-free import schemes carry a time-bound export obligation. Track fulfilment so you don&apos;t default and trigger duty + interest recovery.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Scheme</label>
+            <select value={scheme} onChange={e => setScheme(e.target.value as "AA" | "EPCG")} className={INP}>
+              <option value="EPCG">EPCG</option>
+              <option value="AA">Advance Auth</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Licence no.</label>
+            <input value={lic} onChange={e => setLic(e.target.value)} placeholder="EPCG/2026/01" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">EO value</label>
+            <input type="number" value={obligation} onChange={e => setObligation(e.target.value)} placeholder="120000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">EO period ends</label>
+            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No authorisations tracked. Add an AA / EPCG licence to monitor its export obligation.</p>
+      ) : rows.map(r => {
+        const pct = r.obligation > 0 ? Math.min(100, (r.fulfilled / r.obligation) * 100) : 0;
+        const days = differenceInCalendarDays(new Date(r.expiry), new Date());
+        const met = r.fulfilled >= r.obligation;
+        return (
+          <div key={r.id} className={`${CARD} p-5`}>
+            <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
+              <div>
+                <p className="text-sm font-semibold">{r.scheme === "AA" ? "Advance Authorisation" : "EPCG"} · {r.lic}</p>
+                <p className="text-xs text-[var(--color-muted)]">EO {r.fulfilled.toLocaleString()} / {r.obligation.toLocaleString()} {r.ccy} · period ends {format(new Date(r.expiry), "d MMM yyyy")} ({days < 0 ? `${Math.abs(days)}d ago` : `${days}d left`})</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${met ? "bg-green-900/30 text-green-400 border-green-800/40" : days < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{met ? "Fulfilled" : days < 0 ? "Defaulted" : `${pct.toFixed(0)}%`}</span>
+                <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+            <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-3">
+              <div className={`h-full rounded-full ${met ? "bg-green-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[var(--color-muted)]">Fulfilled to date ({r.ccy})</label>
+              <input type="number" defaultValue={r.fulfilled || ""} onBlur={e => addFulfil(r.id, e.target.value)} placeholder="0" className={`${INP} max-w-[160px]`} />
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">EPCG export obligation is typically 6× the duty saved over 6 years; AA obligation is set by the input-output norms. File EODC (Export Obligation Discharge Certificate) on DGFT once met. Verify exact terms on your licence.</p>
+    </div>
+  );
+}
+
+// ── #18 Country-wise Sales Summary ───────────────────────────────────────────────
+function CountrySalesSummary() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  // Invoices don't carry a country, so the owner maps each customer to a market once.
+  const [map, setMap] = useFeatureState<Record<string, string>>("glb-customer-country", {});
+
+  const customers = useMemo(() => Array.from(new Set(invoices.map(i => i.customer).filter(Boolean))), [invoices]);
+
+  const summary = useMemo(() => {
+    const agg: Record<string, { count: number; total: number }> = {};
+    invoices.forEach(inv => {
+      const country = (map[inv.customer] || "").trim() || "Unmapped";
+      const amt = typeof inv.amount === "number" ? inv.amount : 0;
+      if (!agg[country]) agg[country] = { count: 0, total: 0 };
+      agg[country].count += 1;
+      agg[country].total += amt;
+    });
+    return Object.entries(agg).map(([country, v]) => ({ country, ...v })).sort((a, b) => b.total - a.total);
+  }, [invoices, map]);
+
+  const grand = summary.reduce((s, r) => s + r.total, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Map size={14} className="text-[var(--color-primary)]" /> Country-wise Sales Summary</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-1">Your live invoices grouped by export market. Tag each customer with a country once below and the totals roll up automatically.</p>
+      </div>
+
+      {customers.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No invoice data yet. Once you raise invoices, tag each customer with a country to see market-wise sales.</p>
+      ) : (
+        <>
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3">Tag customers to a country</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {customers.map(c => (
+                <div key={c} className="flex items-center gap-2">
+                  <span className="text-xs flex-1 truncate">{c}</span>
+                  <input value={map[c] ?? ""} onChange={e => setMap({ ...map, [c]: e.target.value })} placeholder="Country" className={`${INP} max-w-[160px]`} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Country / market", "Invoices", "Revenue", "Share", ""].map(h =>
+                    <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {summary.map(r => {
+                    const share = grand > 0 ? (r.total / grand) * 100 : 0;
+                    return (
+                      <tr key={r.country} className="hover:bg-white/2">
+                        <td className="px-3 py-2.5 font-medium">{r.country}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{r.count}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{formatCurrency(Math.round(r.total))}</td>
+                        <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{share.toFixed(1)}%</td>
+                        <td className="px-3 py-2.5 w-32">
+                          <div className="w-full h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${share}%` }} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t border-[var(--color-border)] font-semibold">
+                    <td className="px-3 py-2.5">Total</td>
+                    <td className="px-3 py-2.5 tabular-nums">{summary.reduce((s, r) => s + r.count, 0)}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(grand))}</td>
+                    <td className="px-3 py-2.5" colSpan={2}>100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Untagged customers roll up under &quot;Unmapped&quot;. Amounts are the invoice value recorded in your books.</p>
+    </div>
+  );
+}
+
+// ── #19 IEC / AD-Code Tracker ────────────────────────────────────────────────────
+type RegRow = { id: string; type: "IEC" | "AD Code" | "Port reg." | "RCMC" | "LUT"; code: string; issuer: string; renewal: string };
+function IecAdCodeTracker() {
+  const [rows, setRows] = useFeatureState<RegRow[]>("glb-iec-adcode", []);
+  const [type, setType] = useState<RegRow["type"]>("IEC");
+  const [code, setCode] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [renewal, setRenewal] = useState("");
+
+  const add = () => {
+    if (!code.trim()) { toast.error("Enter the registration number / code"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), type, code: code.trim(), issuer: issuer.trim(), renewal }]);
+    setCode(""); setIssuer(""); setRenewal("");
+    toast.success("Registration saved");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> IEC / AD-Code Register</h2>
+        <p className="text-xs text-[var(--color-muted)]">One home for the registrations every exporter needs: IEC, AD code (per bank), port registrations, RCMC and the annual LUT — with renewal reminders.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as RegRow["type"])} className={INP}>
+              {(["IEC", "AD Code", "Port reg.", "RCMC", "LUT"] as const).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Number / code</label>
+            <input value={code} onChange={e => setCode(e.target.value)} placeholder="IEC / AD code" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Issuer / bank / port</label>
+            <input value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="DGFT / HDFC / INNSA1" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Renewal / valid till</label>
+            <input type="date" value={renewal} onChange={e => setRenewal(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No registrations saved. Add your IEC and AD codes so they&apos;re handy at filing time.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Type", "Number / code", "Issuer", "Renewal", "Status", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const days = r.renewal ? differenceInCalendarDays(new Date(r.renewal), new Date()) : null;
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-3 py-2.5"><span className="text-[10px] px-2 py-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] font-medium">{r.type}</span></td>
+                      <td className="px-3 py-2.5 font-medium tabular-nums">{r.code}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.issuer || "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.renewal ? format(new Date(r.renewal), "d MMM yyyy") : "—"}</td>
+                      <td className="px-3 py-2.5">
+                        {days === null ? <span className="text-[var(--color-muted)] text-xs">No date</span>
+                          : days < 0 ? <span className="text-red-400 text-xs font-semibold">Expired</span>
+                          : days < 30 ? <span className="text-yellow-400 text-xs font-semibold">{days}d to renew</span>
+                          : <span className="text-green-400 text-xs">{days}d valid</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">IEC must be updated/confirmed on DGFT every financial year even if unchanged, or it is de-activated. AD code is registered per bank at each port of export before the first shipping bill.</p>
+    </div>
+  );
+}
+
+// ── #20 LRS / TCS on Foreign Remittance Calculator ──────────────────────────────
+function LrsTcsCalculator() {
+  const [purpose, setPurpose] = useState<"general" | "education_loan" | "education_other" | "medical">("general");
+  const [amount, setAmount] = useState("");
+  const [already, setAlready] = useState("");
+
+  const amt = parseFloat(amount) || 0;
+  const prior = parseFloat(already) || 0;
+  const THRESHOLD = 1000000; // ₹10 lakh per financial year (FY24-25 onwards) for most purposes.
+  // Education funded by loan: 0.5% above threshold. Medical & education (other): 5% above threshold. General/other: 20% above threshold.
+  const ratePct = purpose === "education_loan" ? 0.5 : purpose === "education_other" || purpose === "medical" ? 5 : 20;
+  const cumulativeBefore = prior;
+  const cumulativeAfter = prior + amt;
+  // TCS applies only on the portion of this remittance that exceeds the ₹10L cumulative threshold.
+  const taxablePortion = Math.max(0, cumulativeAfter - Math.max(THRESHOLD, cumulativeBefore));
+  const tcs = taxablePortion * ratePct / 100;
+
+  const LABELS = {
+    general: "Other purposes (travel, investment, gifts)",
+    education_loan: "Education — funded by a loan",
+    education_other: "Education — self-funded",
+    medical: "Medical treatment",
+  } as const;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> LRS / TCS on Outward Remittance</h2>
+        <p className="text-xs text-[var(--color-muted)]">Tax Collected at Source applies on outward remittances under the Liberalised Remittance Scheme beyond ₹10 lakh in a financial year. TCS is creditable against your income tax.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-3">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Purpose</label>
+            <select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)} className={INP}>
+              {(Object.keys(LABELS) as Array<keyof typeof LABELS>).map(k => <option key={k} value={k}>{LABELS[k]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">This remittance (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1500000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Already remitted this FY (₹)</label>
+            <input type="number" value={already} onChange={e => setAlready(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {amt > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Cumulative LRS this FY</span><span className="tabular-nums">{formatCurrency(Math.round(cumulativeAfter))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Threshold (per FY)</span><span className="tabular-nums">{formatCurrency(THRESHOLD)}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Amount above threshold (taxable)</span><span className="tabular-nums">{formatCurrency(Math.round(taxablePortion))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">TCS rate</span><span className="tabular-nums font-semibold">{ratePct}%</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">TCS collected</span>
+              <span className="font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(tcs))}</span>
+            </div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Total debited from you</span><span className="tabular-nums">{formatCurrency(Math.round(amt + tcs))}</span></div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">TCS is not an extra tax — claim it as credit against your income-tax liability (or refund) when filing your return. Education-loan remittances enjoy the concessional 0.5% rate above the threshold.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Rates and the ₹10L threshold reflect the post-Oct-2023 LRS framework; overseas tour packages follow separate slabs. Confirm the current Finance-Act rates with your CA before remitting.</p>
     </div>
   );
 }

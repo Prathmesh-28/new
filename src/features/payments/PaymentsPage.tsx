@@ -6,6 +6,9 @@ import {
   QrCode, Link2, CalendarClock, Percent, Wallet, RotateCcw, Split,
   Activity, MessageCircle, PieChart, Smartphone, Copy, Plus, CheckCircle2,
   AlertTriangle, IndianRupee, TrendingUp,
+  Repeat, FileSpreadsheet, BellRing, Grid3x3, ShieldAlert,
+  CalendarRange, Coins, Calculator, FileSearch,
+  Download, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
@@ -16,7 +19,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type Tab =
   | "overview" | "qr" | "links" | "mandates" | "mdr" | "settlement"
-  | "refunds" | "split" | "success" | "collect" | "mix";
+  | "refunds" | "split" | "success" | "collect" | "mix"
+  | "autopay" | "bulk" | "reminders" | "qrbatch" | "disputes"
+  | "emi" | "convfee" | "forecast" | "tip" | "utr";
 
 async function copy(text: string, label = "Copied") {
   try {
@@ -54,6 +59,16 @@ export default function PaymentsPage() {
             ["success", "Success Rate", Activity],
             ["collect", "Collect Request", MessageCircle],
             ["mix", "Method Mix", PieChart],
+            ["autopay", "AutoPay Calc", Repeat],
+            ["bulk", "Bulk Payout", FileSpreadsheet],
+            ["reminders", "Reminder Plan", BellRing],
+            ["qrbatch", "QR Batch", Grid3x3],
+            ["disputes", "Dispute Tracker", ShieldAlert],
+            ["emi", "EMI on Invoice", CalendarRange],
+            ["convfee", "Convenience Fee", Coins],
+            ["forecast", "Settle Forecast", Calculator],
+            ["tip", "Tip & Rounding", IndianRupee],
+            ["utr", "UTR Recon", FileSearch],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -74,6 +89,16 @@ export default function PaymentsPage() {
       {tab === "success" && <SuccessRateDashboard />}
       {tab === "collect" && <CollectComposer />}
       {tab === "mix" && <MethodMix />}
+      {tab === "autopay" && <AutoPayCalculator />}
+      {tab === "bulk" && <BulkPayoutBuilder />}
+      {tab === "reminders" && <ReminderScheduler />}
+      {tab === "qrbatch" && <QrBatchGenerator />}
+      {tab === "disputes" && <DisputeTracker />}
+      {tab === "emi" && <EmiOnInvoiceBuilder />}
+      {tab === "convfee" && <ConvenienceFeeCalculator />}
+      {tab === "forecast" && <SettlementForecaster />}
+      {tab === "tip" && <TipRoundingConfig />}
+      {tab === "utr" && <UtrReconciliation />}
     </div>
   );
 }
@@ -1153,6 +1178,1021 @@ function MethodMix() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">A high UPI share keeps blended MDR near zero. If cards dominate small-ticket sales, nudging customers to UPI directly improves margin.</p>
+    </div>
+  );
+}
+
+// ── UPI AutoPay mandate calculator ─────────────────────────────────────────────────
+function AutoPayCalculator() {
+  const [plan, setPlan] = useState("");
+  const [frequency, setFrequency] = useState<"monthly" | "quarterly" | "yearly" | "weekly">("monthly");
+  const [buffer, setBuffer] = useState("20");
+
+  const amt = parseFloat(plan) || 0;
+  const bufferPct = parseFloat(buffer) || 0;
+  // The mandate cap should cover the charge plus headroom for taxes / price revisions.
+  const cap = amt > 0 ? Math.ceil((amt * (1 + bufferPct / 100)) / 10) * 10 : 0;
+  const perYear = { monthly: 12, quarterly: 4, yearly: 1, weekly: 52 }[frequency];
+  const annual = amt * perYear;
+  // NPCI UPI AutoPay: debits up to ₹15,000 are PIN-less; above needs additional auth each time.
+  const pinless = cap <= 15000;
+  const debitDates = useMemo(() => {
+    const out: Date[] = [];
+    const stepM = frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : frequency === "yearly" ? 12 : 0;
+    for (let i = 1; i <= 4; i++) {
+      out.push(frequency === "weekly" ? new Date(Date.now() + i * 7 * 864e5) : addMonths(new Date(), i * stepM));
+    }
+    return out;
+  }, [frequency]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> UPI AutoPay Mandate Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Size the right mandate cap for a recurring plan — we add headroom for taxes and price revisions, and flag the ₹15,000 PIN-less threshold and pre-debit notification.</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Charge per cycle ₹</label>
+            <input type="number" min={0} value={plan} onChange={e => setPlan(e.target.value)} placeholder="999" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={frequency} onChange={e => setFrequency(e.target.value as typeof frequency)} className={INP}>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cap headroom %</label>
+            <input type="number" min={0} value={buffer} onChange={e => setBuffer(e.target.value)} placeholder="20" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {amt > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Recommended cap", value: formatCurrency(cap), color: "text-blue-400" },
+              { label: "Annual value", value: formatAmount(Math.round(annual)), color: "text-green-400" },
+              { label: "Debits / year", value: String(perYear), color: "text-[var(--color-text)]" },
+              { label: "Auth mode", value: pinless ? "PIN-less" : "Step-up", color: pinless ? "text-green-400" : "text-orange-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3">Next 4 debit dates &amp; pre-debit notice</p>
+            <div className="space-y-2">
+              {debitDates.map((d, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs">Debit {i + 1} — <span className="font-medium">{format(d, "d MMM yyyy")}</span></span>
+                  <span className="text-[11px] text-[var(--color-muted)]">Notify by {format(new Date(d.getTime() - 864e5), "d MMM")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">UPI AutoPay requires a mandatory pre-debit notification 24h before each charge. Debits at or below ₹15,000 execute without the payer re-entering UPI PIN; larger debits need additional authentication every cycle, so keep the cap under ₹15,000 where you can.</p>
+    </div>
+  );
+}
+
+// ── Bulk-payout file builder (CSV) ─────────────────────────────────────────────────
+type PayeeRow = { id: string; name: string; account: string; ifsc: string; amount: number };
+function BulkPayoutBuilder() {
+  const [rows, setRows] = useFeatureState<PayeeRow[]>("pay-bulk-payees", []);
+  const [name, setName] = useState("");
+  const [account, setAccount] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const ifscValid = (v: string) => /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(v.trim());
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!name.trim() || !account.trim() || isNaN(a) || a <= 0) { toast.error("Enter payee name, account and a valid amount"); return; }
+    if (ifsc.trim() && !ifscValid(ifsc)) { toast.error("IFSC looks invalid (e.g. HDFC0001234)"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), name: name.trim(), account: account.trim(), ifsc: ifsc.trim().toUpperCase(), amount: a }]);
+    setName(""); setAccount(""); setIfsc(""); setAmount("");
+    toast.success("Payee added");
+  };
+
+  // Detect duplicate account numbers — a classic bulk-transfer error.
+  const dupAccounts = useMemo(() => {
+    const seen = new Map<string, number>();
+    rows.forEach(r => seen.set(r.account, (seen.get(r.account) ?? 0) + 1));
+    return new Set([...seen.entries()].filter(([, n]) => n > 1).map(([acc]) => acc));
+  }, [rows]);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  const exportCsv = () => {
+    if (rows.length === 0) { toast.error("Add at least one payee first"); return; }
+    const header = "beneficiary_name,account_number,ifsc,amount,narration";
+    const body = rows.map(r => [r.name, r.account, r.ifsc, r.amount.toFixed(2), "Payout"].map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `bulk-payout-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSV downloaded — upload to your bank/PG portal");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Bulk-Payout File Builder</h2>
+        <p className="text-xs text-[var(--color-muted)]">Build a validated payee sheet for IMPS/NEFT/UPI bulk disbursal — dedupe accounts, check IFSC format, then export a bank-ready CSV.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Beneficiary</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ravi Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Account no.</label>
+            <input value={account} onChange={e => setAccount(e.target.value)} placeholder="50100123456789" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
+            <input value={ifsc} onChange={e => setIfsc(e.target.value)} placeholder="HDFC0001234" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="15000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Payees", value: String(rows.length), color: "text-[var(--color-text)]" },
+          { label: "Total to disburse", value: formatAmount(Math.round(total)), color: "text-blue-400" },
+          { label: "Duplicate accounts", value: String(dupAccounts.size), color: dupAccounts.size ? "text-red-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No payees yet. Add beneficiaries to build a bulk-transfer file.</p>
+      ) : (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
+              <Download size={12} /> Export CSV
+            </button>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Beneficiary", "Account", "IFSC", "Amount", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className={`hover:bg-white/2 ${dupAccounts.has(r.account) ? "bg-red-950/10" : ""}`}>
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.account}{dupAccounts.has(r.account) && <span className="ml-2 text-[9px] text-red-400">DUP</span>}</td>
+                      <td className="px-4 py-2.5">{r.ifsc || <span className="text-[var(--color-muted)]">—</span>}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">CSV columns match most bank/PG bulk-upload templates (name, account, IFSC, amount, narration). Always run a penny-drop verification before disbursing — a wrong account number is rarely recoverable.</p>
+    </div>
+  );
+}
+
+// ── Payment reminder scheduler ─────────────────────────────────────────────────────
+type ReminderRow = { id: string; customer: string; amount: number; dueDate: string; channel: "whatsapp" | "sms" | "email"; cadence: "once" | "3-day" | "weekly"; done: boolean };
+function ReminderScheduler() {
+  const [reminders, setReminders] = useFeatureState<ReminderRow[]>("pay-reminders", []);
+  const [customer, setCustomer] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [channel, setChannel] = useState<ReminderRow["channel"]>("whatsapp");
+  const [cadence, setCadence] = useState<ReminderRow["cadence"]>("3-day");
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!customer.trim() || isNaN(a) || a <= 0) { toast.error("Enter customer and a valid amount"); return; }
+    setReminders([...reminders, { id: crypto.randomUUID(), customer: customer.trim(), amount: a, dueDate, channel, cadence, done: false }]);
+    setCustomer(""); setAmount("");
+    toast.success("Reminder scheduled");
+  };
+  const toggle = (id: string) => setReminders(reminders.map(r => r.id === id ? { ...r, done: !r.done } : r));
+
+  const today = new Date();
+  const open = reminders.filter(r => !r.done);
+  const overdue = open.filter(r => differenceInCalendarDays(new Date(r.dueDate), today) < 0);
+  const outstanding = open.reduce((s, r) => s + r.amount, 0);
+  const CADENCE_LABEL: Record<ReminderRow["cadence"], string> = { once: "One-off", "3-day": "Every 3 days", weekly: "Weekly" };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BellRing size={14} className="text-[var(--color-primary)]" /> Payment Reminder Scheduler</h2>
+        <p className="text-xs text-[var(--color-muted)]">Plan a follow-up cadence for each outstanding payment so nothing slips. Mark done once collected. Pair with the Collect-Request composer to actually send.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Acme Pvt Ltd" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="12000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Due date</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as ReminderRow["channel"])} className={INP}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="sms">SMS</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cadence</label>
+            <select value={cadence} onChange={e => setCadence(e.target.value as ReminderRow["cadence"])} className={INP}>
+              <option value="once">One-off</option>
+              <option value="3-day">Every 3 days</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Schedule
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Open reminders", value: String(open.length), color: "text-blue-400" },
+          { label: "Overdue", value: String(overdue.length), color: overdue.length ? "text-red-400" : "text-green-400" },
+          { label: "Outstanding", value: formatAmount(Math.round(outstanding)), color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {reminders.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No reminders scheduled yet.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Amount", "Due", "Channel", "Cadence", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {[...reminders].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(r => {
+                  const days = differenceInCalendarDays(new Date(r.dueDate), today);
+                  return (
+                    <tr key={r.id} className={`hover:bg-white/2 ${r.done ? "opacity-50" : ""}`}>
+                      <td className={`px-4 py-2.5 font-medium ${r.done ? "line-through" : ""}`}>{r.customer}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {format(new Date(r.dueDate), "d MMM")}
+                        {!r.done && <span className={`ml-2 text-[10px] ${days < 0 ? "text-red-400" : days <= 2 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{days < 0 ? `${-days}d overdue` : `${days}d`}</span>}
+                      </td>
+                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.channel}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{CADENCE_LABEL[r.cadence]}</td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <button onClick={() => toggle(r.id)} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">{r.done ? "Reopen" : "Mark paid"}</button>
+                        <button onClick={() => setReminders(reminders.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A polite 3-day cadence collects materially faster than a single reminder. Keep WhatsApp messages personal and within policy — you tap send from the Collect-Request composer.</p>
+    </div>
+  );
+}
+
+// ── QR-batch generator (per-table / per-counter) ───────────────────────────────────
+function QrBatchGenerator() {
+  const { store } = useApp();
+  const [vpa, setVpa] = useState("");
+  const [prefix, setPrefix] = useState("Table");
+  const [count, setCount] = useState("8");
+  const [amount, setAmount] = useState("");
+
+  const vpaValid = /^[\w.\-]{2,}@[\w.\-]{2,}$/.test(vpa.trim());
+  const n = Math.min(Math.max(parseInt(count) || 0, 0), 50);
+  const labels = useMemo(() => Array.from({ length: n }, (_, i) => `${prefix.trim() || "Counter"} ${i + 1}`), [n, prefix]);
+
+  const uriFor = (label: string) =>
+    buildUpiUri({ pa: vpa, pn: store.firm?.name ?? "", am: amount.trim() && Number(amount) > 0 ? amount : "", tn: label, tr: label.replace(/\s+/g, "-").toUpperCase(), cu: "INR" });
+
+  const copyAll = () => {
+    const text = labels.map(l => `${l}: ${uriFor(l)}`).join("\n");
+    copy(text, `${labels.length} QR link(s) copied`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Grid3x3 size={14} className="text-[var(--color-primary)]" /> QR-Batch Generator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Print a unique UPI QR per table / counter / room. Each carries its own reference tag (tr) so inbound payments self-identify where they came from.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payee VPA *</label>
+            <input value={vpa} onChange={e => setVpa(e.target.value)} placeholder="cafe@okhdfcbank" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Label prefix</label>
+            <input value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="Table" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">How many (max 50)</label>
+            <input type="number" min={1} max={50} value={count} onChange={e => setCount(e.target.value)} placeholder="8" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Fixed amount ₹ (optional)</label>
+            <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="blank = open" className={INP} />
+          </div>
+        </div>
+        {vpa.trim() !== "" && !vpaValid && <p className="text-[10px] text-red-400">Enter a valid UPI ID like cafe@bank</p>}
+      </div>
+
+      {!vpaValid ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter a valid payee VPA to generate the QR batch.</p>
+      ) : (
+        <>
+          <div className="flex justify-end">
+            <button onClick={copyAll} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
+              <Copy size={12} /> Copy all links
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {labels.map(label => {
+              const uri = uriFor(label);
+              return (
+                <div key={label} className={`${CARD} p-3 flex flex-col items-center gap-2`}>
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=6&data=${encodeURIComponent(uri)}`}
+                    alt={`UPI QR ${label}`} width={140} height={140}
+                    className="rounded-md border border-[var(--color-border)] bg-white p-1.5" />
+                  <p className="text-xs font-semibold">{label}</p>
+                  <button onClick={() => copy(uri, `${label} link copied`)} className="text-[10px] text-[var(--color-primary)] hover:underline">Copy link</button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Each QR embeds its label as the transaction reference (tr), so your settlement report shows which table/counter collected what — invaluable for tip splitting and per-station reconciliation.</p>
+    </div>
+  );
+}
+
+// ── Chargeback / dispute tracker ───────────────────────────────────────────────────
+type DisputeRow = { id: string; customer: string; orderRef: string; amount: number; raised: string; deadline: string; stage: "received" | "evidence-sent" | "won" | "lost" };
+function DisputeTracker() {
+  const [disputes, setDisputes] = useFeatureState<DisputeRow[]>("pay-disputes", []);
+  const [customer, setCustomer] = useState("");
+  const [orderRef, setOrderRef] = useState("");
+  const [amount, setAmount] = useState("");
+  const [evidenceDays, setEvidenceDays] = useState("7");
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!customer.trim() || isNaN(a) || a <= 0) { toast.error("Enter customer and the disputed amount"); return; }
+    const raised = new Date();
+    const deadline = new Date(raised.getTime() + (parseInt(evidenceDays) || 7) * 864e5);
+    setDisputes([{ id: crypto.randomUUID(), customer: customer.trim(), orderRef: orderRef.trim(), amount: a, raised: raised.toISOString().split("T")[0], deadline: deadline.toISOString().split("T")[0], stage: "received" }, ...disputes]);
+    setCustomer(""); setOrderRef(""); setAmount("");
+    toast.success("Dispute logged");
+  };
+  const setStage = (id: string, stage: DisputeRow["stage"]) => setDisputes(disputes.map(d => d.id === id ? { ...d, stage } : d));
+
+  const today = new Date();
+  const openD = disputes.filter(d => d.stage === "received" || d.stage === "evidence-sent");
+  const atRisk = openD.reduce((s, d) => s + d.amount, 0);
+  const won = disputes.filter(d => d.stage === "won");
+  const decided = disputes.filter(d => d.stage === "won" || d.stage === "lost");
+  const winRate = decided.length ? (won.length / decided.length) * 100 : 0;
+  const STAGE_STYLE: Record<DisputeRow["stage"], string> = {
+    received: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    "evidence-sent": "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    won: "bg-green-900/30 text-green-400 border-green-800/40",
+    lost: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Chargeback / Dispute Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Log every card chargeback with its evidence deadline so you never miss the window — undefended disputes are auto-lost. Track your win rate over time.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Ravi Kumar" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Order / ref</label>
+            <input value={orderRef} onChange={e => setOrderRef(e.target.value)} placeholder="ORD-5521" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="4999" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Evidence window (days)</label>
+            <input type="number" value={evidenceDays} onChange={e => setEvidenceDays(e.target.value)} placeholder="7" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Log
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Open disputes", value: String(openD.length), color: openD.length ? "text-orange-400" : "text-green-400" },
+          { label: "Amount at risk", value: formatAmount(Math.round(atRisk)), color: "text-red-400" },
+          { label: "Win rate", value: decided.length ? `${winRate.toFixed(0)}%` : "—", color: winRate >= 50 ? "text-green-400" : "text-yellow-400" },
+          { label: "Total logged", value: String(disputes.length), color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {disputes.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No disputes logged. Add a chargeback the moment your acquirer notifies you.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Ref", "Amount", "Deadline", "Stage", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {disputes.map(d => {
+                  const daysLeft = differenceInCalendarDays(new Date(d.deadline), today);
+                  const open = d.stage === "received" || d.stage === "evidence-sent";
+                  return (
+                    <tr key={d.id} className={`hover:bg-white/2 ${open && daysLeft < 0 ? "bg-red-950/10" : ""}`}>
+                      <td className="px-4 py-2.5 font-medium">{d.customer}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.orderRef || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.amount)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {format(new Date(d.deadline), "d MMM")}
+                        {open && <span className={`ml-2 text-[10px] ${daysLeft < 0 ? "text-red-400" : daysLeft <= 2 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{daysLeft < 0 ? "lapsed" : `${daysLeft}d left`}</span>}
+                      </td>
+                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STAGE_STYLE[d.stage]}`}>{d.stage.replace("-", " ")}</span></td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {d.stage === "received" && <button onClick={() => setStage(d.id, "evidence-sent")} className="text-[10px] text-blue-400 hover:underline mr-2">Evidence sent</button>}
+                        {open && (
+                          <>
+                            <button onClick={() => setStage(d.id, "won")} className="text-[10px] text-green-400 hover:underline mr-2">Won</button>
+                            <button onClick={() => setStage(d.id, "lost")} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 mr-2">Lost</button>
+                          </>
+                        )}
+                        <button onClick={() => setDisputes(disputes.filter(x => x.id !== d.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Compile a strong evidence packet — order confirmation, delivery proof, customer comms, and your refund/return policy — before the acquirer's deadline. A clear bank-statement descriptor prevents many disputes in the first place.</p>
+    </div>
+  );
+}
+
+// ── EMI-on-invoice / payment-plan builder ──────────────────────────────────────────
+function EmiOnInvoiceBuilder() {
+  const [principal, setPrincipal] = useState("");
+  const [months, setMonths] = useState("6");
+  const [rate, setRate] = useState("0");
+  const [start, setStart] = useState(() => format(addMonths(new Date(), 1), "yyyy-MM-dd"));
+
+  const P = parseFloat(principal) || 0;
+  const nMonths = Math.max(parseInt(months) || 0, 0);
+  const annualRate = parseFloat(rate) || 0;
+  const r = annualRate / 12 / 100;
+  // Standard reducing-balance EMI; r=0 falls back to a simple equal split.
+  const emi = nMonths > 0 ? (r > 0 ? (P * r * Math.pow(1 + r, nMonths)) / (Math.pow(1 + r, nMonths) - 1) : P / nMonths) : 0;
+  const totalPayable = emi * nMonths;
+  const totalInterest = totalPayable - P;
+
+  const schedule = useMemo(() => {
+    if (P <= 0 || nMonths <= 0) return [] as { n: number; date: Date; principal: number; interest: number; balance: number }[];
+    let balance = P;
+    const out: { n: number; date: Date; principal: number; interest: number; balance: number }[] = [];
+    const startDate = new Date(start);
+    for (let i = 1; i <= nMonths; i++) {
+      const interest = balance * r;
+      const principalPart = Math.min(emi - interest, balance);
+      balance = Math.max(balance - principalPart, 0);
+      out.push({ n: i, date: addMonths(startDate, i - 1), principal: principalPart, interest, balance });
+    }
+    return out;
+  }, [P, nMonths, r, emi, start]);
+
+  const shareText = useMemo(() =>
+    schedule.length === 0 ? "" :
+      [`Payment plan: ${formatCurrency(Math.round(P))} over ${nMonths} months`,
+      `EMI: ${formatCurrency(Math.round(emi))}/month${annualRate > 0 ? ` @ ${annualRate}% p.a.` : " (0% — no interest)"}`,
+      ...schedule.map(s => `${format(s.date, "d MMM yyyy")}: ${formatCurrency(Math.round(s.principal + s.interest))}`)].join("\n"),
+    [schedule, P, nMonths, emi, annualRate]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> EMI-on-Invoice / Payment-Plan Builder</h2>
+        <p className="text-xs text-[var(--color-muted)]">Split a large invoice into instalments — set interest (or 0% for a no-cost plan) and generate a dated schedule you can share with the customer.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice amount ₹</label>
+            <input type="number" min={0} value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="60000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+            <input type="number" min={1} value={months} onChange={e => setMonths(e.target.value)} placeholder="6" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Interest % p.a.</label>
+            <input type="number" min={0} value={rate} onChange={e => setRate(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First instalment</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {schedule.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Monthly EMI", value: formatCurrency(Math.round(emi)), color: "text-blue-400" },
+              { label: "Total payable", value: formatAmount(Math.round(totalPayable)), color: "text-[var(--color-text)]" },
+              { label: "Total interest", value: formatCurrency(Math.round(totalInterest)), color: totalInterest > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "Instalments", value: String(nMonths), color: "text-[var(--color-text)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={() => copy(shareText, "Payment plan copied")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
+              <Copy size={12} /> Copy plan
+            </button>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["#", "Due date", "Principal", "Interest", "EMI", "Balance"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {schedule.map(s => (
+                    <tr key={s.n} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.n}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{format(s.date, "d MMM yyyy")}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(s.principal))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(s.interest))}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(s.principal + s.interest))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(s.balance))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A 0% plan is a no-cost EMI — you absorb financing in exchange for a closed sale. Pair each instalment with a UPI AutoPay mandate (see the AutoPay calculator) so collections are automatic.</p>
+    </div>
+  );
+}
+
+// ── Convenience-fee calculator (gross-up to a target net) ───────────────────────────
+function ConvenienceFeeCalculator() {
+  const [target, setTarget] = useState("");
+  const [feePct, setFeePct] = useState("2");
+  const [flatFee, setFlatFee] = useState("0");
+  const [addGst, setAddGst] = useState(true);
+
+  const net = parseFloat(target) || 0;
+  const pct = (parseFloat(feePct) || 0) / 100;
+  const flat = parseFloat(flatFee) || 0;
+  const gstMult = addGst ? 1.18 : 1; // 18% GST applies on the convenience fee itself
+  // Solve for gross G such that G - (G*pct + flat)*gstMult = net.
+  const denom = 1 - pct * gstMult;
+  const gross = denom > 0 ? (net + flat * gstMult) / denom : 0;
+  const feeBase = gross * pct + flat;
+  const feeWithGst = feeBase * gstMult;
+  const customerPays = gross;
+  const effPct = net > 0 ? ((customerPays - net) / net) * 100 : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Convenience-Fee Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Work backwards from the amount you want to net. We gross-up the charge so the customer's convenience fee (plus GST on it) exactly covers your processing cost.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount you want to net ₹</label>
+            <input type="number" min={0} value={target} onChange={e => setTarget(e.target.value)} placeholder="5000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Fee %</label>
+            <input type="number" min={0} value={feePct} onChange={e => setFeePct(e.target.value)} placeholder="2" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Flat fee ₹</label>
+            <input type="number" min={0} value={flatFee} onChange={e => setFlatFee(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={addGst} onChange={e => setAddGst(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Add 18% GST on the convenience fee
+        </label>
+      </div>
+
+      {net > 0 && (
+        <>
+          {denom <= 0 ? (
+            <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 text-xs text-red-400">Fee % is too high to gross-up — reduce it below {(100 / gstMult).toFixed(0)}%.</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Customer pays", value: formatCurrency(Math.round(customerPays)), color: "text-[var(--color-text)]" },
+                { label: "Convenience fee", value: formatCurrency(Math.round(feeBase)), color: "text-orange-400" },
+                { label: "Fee incl. GST", value: formatCurrency(Math.round(feeWithGst)), color: "text-orange-400" },
+                { label: "Effective add-on", value: `${effPct.toFixed(2)}%`, color: "text-yellow-400" },
+              ].map(k => (
+                <div key={k.label} className={`${CARD} p-4`}>
+                  <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                  <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">RBI prohibits surcharging on debit cards and UPI. Convenience fees on credit cards / other rails are allowed only where transparently disclosed before payment. This tool sizes the fee so your net equals the target after the fee and its GST.</p>
+    </div>
+  );
+}
+
+// ── Settlement T+1 / T+2 forecaster ────────────────────────────────────────────────
+type SaleRow = { id: string; date: string; gross: number; instrument: "upi" | "card" | "netbanking" };
+function SettlementForecaster() {
+  const [sales, setSales] = useFeatureState<SaleRow[]>("pay-forecast-sales", []);
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [gross, setGross] = useState("");
+  const [instrument, setInstrument] = useState<SaleRow["instrument"]>("upi");
+
+  // Indicative settlement cycle + blended cost per instrument.
+  const PROFILE: Record<SaleRow["instrument"], { label: string; days: number; mdr: number }> = {
+    upi: { label: "UPI", days: 1, mdr: 0 },
+    card: { label: "Cards", days: 2, mdr: 0.018 },
+    netbanking: { label: "Net banking", days: 1, mdr: 0.01 },
+  };
+  const add = () => {
+    const g = parseFloat(gross);
+    if (isNaN(g) || g <= 0) { toast.error("Enter the captured amount"); return; }
+    setSales([...sales, { id: crypto.randomUUID(), date, gross: g, instrument }]);
+    setGross("");
+    toast.success("Sale added");
+  };
+
+  const forecast = useMemo(() => {
+    const map = new Map<string, { gross: number; payout: number }>();
+    sales.forEach(s => {
+      const p = PROFILE[s.instrument];
+      const settleDate = format(new Date(new Date(s.date).getTime() + p.days * 864e5), "yyyy-MM-dd");
+      const fee = s.gross * p.mdr;
+      const payout = s.gross - fee - fee * 0.18;
+      const cur = map.get(settleDate) ?? { gross: 0, payout: 0 };
+      cur.gross += s.gross; cur.payout += payout; map.set(settleDate, cur);
+    });
+    return [...map.entries()].map(([d, v]) => ({ date: d, ...v })).sort((a, b) => a.date.localeCompare(b.date));
+  }, [sales]);
+
+  const incoming = forecast.filter(f => f.date >= new Date().toISOString().split("T")[0]).reduce((s, f) => s + f.payout, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Settlement T+1 / T+2 Forecaster</h2>
+        <p className="text-xs text-[var(--color-muted)]">Enter captured sales by instrument — we project when each settles (UPI T+1, cards T+2) net of MDR, so you know exactly what lands in your bank and when.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Capture date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross captured ₹</label>
+            <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="25000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Instrument</label>
+            <select value={instrument} onChange={e => setInstrument(e.target.value as SaleRow["instrument"])} className={INP}>
+              <option value="upi">UPI (T+1, 0%)</option>
+              <option value="card">Cards (T+2, ~1.8%)</option>
+              <option value="netbanking">Net banking (T+1, ~1%)</option>
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {forecast.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Captured (count)", value: String(sales.length), color: "text-[var(--color-text)]" },
+            { label: "Upcoming payouts", value: formatAmount(Math.round(incoming)), color: "text-green-400" },
+            { label: "Settlement days", value: String(forecast.length), color: "text-blue-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {forecast.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Add captured sales to forecast your settlement calendar.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Settles on", "Gross", "Net payout"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {forecast.map(f => (
+                  <tr key={f.date} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums font-medium">{format(new Date(f.date), "EEE, d MMM")}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatAmount(Math.round(f.gross))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(Math.round(f.payout))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Cycles are indicative — most gateways settle UPI/net-banking at T+1 and cards at T+2, excluding bank holidays. Same-day/instant settlement is usually available for a transparent extra fee. Confirm your exact cycle with your acquirer.</p>
+    </div>
+  );
+}
+
+// ── Tip & rounding config ──────────────────────────────────────────────────────────
+function TipRoundingConfig() {
+  const [bill, setBill] = useState("");
+  const [tipMode, setTipMode] = useState<"percent" | "fixed" | "none">("percent");
+  const [tipValue, setTipValue] = useState("10");
+  const [rounding, setRounding] = useState<"none" | "1" | "5" | "10">("none");
+
+  const base = parseFloat(bill) || 0;
+  const tip = tipMode === "percent" ? base * (parseFloat(tipValue) || 0) / 100 : tipMode === "fixed" ? (parseFloat(tipValue) || 0) : 0;
+  const subtotal = base + tip;
+  const step = rounding === "none" ? 0 : parseInt(rounding);
+  const rounded = step > 0 ? Math.ceil(subtotal / step) * step : subtotal;
+  const roundDelta = rounded - subtotal;
+
+  const presets = [5, 10, 15, 18];
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><IndianRupee size={14} className="text-[var(--color-primary)]" /> Tip &amp; Rounding Config</h2>
+        <p className="text-xs text-[var(--color-muted)]">Add an optional tip line and round the payable to a clean figure — the rounding goes to staff/charity as a transparent extra. Useful for cafes, salons and delivery.</p>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Bill amount ₹</label>
+          <input type="number" min={0} value={bill} onChange={e => setBill(e.target.value)} placeholder="850" className={`${INP} max-w-xs`} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tip mode</label>
+            <select value={tipMode} onChange={e => setTipMode(e.target.value as typeof tipMode)} className={INP}>
+              <option value="percent">Percent %</option>
+              <option value="fixed">Fixed ₹</option>
+              <option value="none">No tip</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tip value</label>
+            <input type="number" min={0} value={tipValue} onChange={e => setTipValue(e.target.value)} className={INP} disabled={tipMode === "none"} />
+          </div>
+        </div>
+        {tipMode === "percent" && (
+          <div className="flex gap-2 flex-wrap">
+            {presets.map(p => (
+              <button key={p} onClick={() => setTipValue(String(p))}
+                className={`text-xs px-3 py-1.5 rounded-lg border ${String(p) === tipValue ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {p}%
+              </button>
+            ))}
+          </div>
+        )}
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Round payable up to nearest ₹</label>
+          <select value={rounding} onChange={e => setRounding(e.target.value as typeof rounding)} className={`${INP} max-w-xs`}>
+            <option value="none">No rounding</option>
+            <option value="1">₹1</option>
+            <option value="5">₹5</option>
+            <option value="10">₹10</option>
+          </select>
+        </div>
+      </div>
+
+      {base > 0 && (
+        <div className={`${CARD} p-5 space-y-2`}>
+          <div className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2">
+            <span className="text-xs text-[var(--color-muted)]">Bill</span>
+            <span className="tabular-nums">{formatCurrency(Math.round(base))}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2">
+            <span className="text-xs text-[var(--color-muted)]">Tip {tipMode === "percent" ? `(${tipValue || 0}%)` : ""}</span>
+            <span className="tabular-nums text-green-400">{formatCurrency(Math.round(tip))}</span>
+          </div>
+          {step > 0 && (
+            <div className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2">
+              <span className="text-xs text-[var(--color-muted)]">Round-up to ₹{step}</span>
+              <span className="tabular-nums text-blue-400">{formatCurrency(roundDelta)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-sm font-semibold">Customer pays</span>
+            <span className="text-2xl font-bold tabular-nums">{formatCurrency(Math.round(rounded))}</span>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Tips and round-ups should be optional and clearly itemised — never auto-added without consent. The tip line can be routed to a staff payout pool in your bulk-payout file.</p>
+    </div>
+  );
+}
+
+// ── Payout reconciliation by UTR ───────────────────────────────────────────────────
+type UtrRow = { id: string; utr: string; amount: number; expected: boolean; note: string };
+function UtrReconciliation() {
+  const [rows, setRows] = useFeatureState<UtrRow[]>("pay-utr", []);
+  const [utr, setUtr] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [side, setSide] = useState<"expected" | "received">("expected");
+
+  const utrValid = (v: string) => /^[A-Za-z0-9]{12,22}$/.test(v.trim());
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!utr.trim() || isNaN(a) || a <= 0) { toast.error("Enter a UTR / RRN and amount"); return; }
+    if (!utrValid(utr)) { toast.error("UTR/RRN is typically 12–22 alphanumeric chars"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), utr: utr.trim().toUpperCase(), amount: a, expected: side === "expected", note: note.trim() }]);
+    setUtr(""); setAmount(""); setNote("");
+    toast.success("Entry added");
+  };
+
+  // Match expected vs received entries that share the same UTR.
+  const evaluated = useMemo(() => {
+    const byUtr = new Map<string, UtrRow[]>();
+    rows.forEach(r => { const arr = byUtr.get(r.utr) ?? []; arr.push(r); byUtr.set(r.utr, arr); });
+    return [...byUtr.entries()].map(([u, entries]) => {
+      const exp = entries.find(e => e.expected);
+      const rec = entries.find(e => !e.expected);
+      const status: "matched" | "missing" | "unexpected" | "mismatch" =
+        exp && rec ? (Math.abs(exp.amount - rec.amount) < 1 ? "matched" : "mismatch")
+          : exp ? "missing" : "unexpected";
+      return { utr: u, exp, rec, status, note: entries.map(e => e.note).filter(Boolean).join(" · ") };
+    }).sort((a, b) => a.status.localeCompare(b.status));
+  }, [rows]);
+
+  const matched = evaluated.filter(e => e.status === "matched").length;
+  const issues = evaluated.filter(e => e.status !== "matched").length;
+  const STATUS_STYLE: Record<string, string> = {
+    matched: "bg-green-900/30 text-green-400 border-green-800/40",
+    missing: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    unexpected: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    mismatch: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> Payout Reconciliation by UTR</h2>
+        <p className="text-xs text-[var(--color-muted)]">Match expected payouts to actual bank credits by UTR / RRN. Add both your expected entries and the credits from your statement — we flag missing, unexpected and amount-mismatched UTRs.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">UTR / RRN</label>
+            <input value={utr} onChange={e => setUtr(e.target.value)} placeholder="HDFCN1234567890" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="9788" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Side</label>
+            <select value={side} onChange={e => setSide(e.target.value as typeof side)} className={INP}>
+              <option value="expected">Expected (book)</option>
+              <option value="received">Received (bank)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Razorpay 12 Jun" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Matched", value: String(matched), color: "text-green-400" },
+          { label: "Needs attention", value: String(issues), color: issues ? "text-orange-400" : "text-green-400" },
+          { label: "Unique UTRs", value: String(evaluated.length), color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {evaluated.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Add expected payouts and bank credits to reconcile by UTR.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["UTR / RRN", "Expected", "Received", "Status", "Note", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {evaluated.map(e => (
+                  <tr key={e.utr} className={`hover:bg-white/2 ${e.status === "mismatch" ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{e.utr}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{e.exp ? formatCurrency(e.exp.amount) : <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{e.rec ? formatCurrency(e.rec.amount) : <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[e.status]}`}>{e.status}</span></td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{e.note || "—"}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.utr !== e.utr))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">UTR (NEFT/RTGS) and RRN (IMPS/UPI) uniquely identify a transfer end-to-end. Missing = expected but not credited yet (chase the gateway); unexpected = a credit you didn't book; mismatch = amount differs (likely a fee or partial reversal).</p>
     </div>
   );
 }
