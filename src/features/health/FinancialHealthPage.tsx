@@ -7,6 +7,7 @@ import { formatAmount } from "@/lib/utils";
 import {
   HeartPulse, ArrowRight, TrendingUp, TrendingDown, Minus, Droplets, Receipt, Scale,
   Users, ShieldCheck, PiggyBank, Landmark, Activity, Waves, AlertTriangle, CheckCircle2, Gauge,
+  Layers, Percent, RefreshCw, Timer, Siren, XCircle,
 } from "lucide-react";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -80,9 +81,15 @@ export default function FinancialHealthPage() {
   // Section index — single-scroll equivalent of a tab selector. Each entry jumps
   // to the matching <section> anchor below. Add new tools here as [id, label, Icon].
   const sections = ([
-    ["health-altman-z",      "Distress (Z')", Gauge],
-    ["health-stress-test",   "Stress Test",   Waves],
-    ["health-fitness-trend", "Fitness Trend", Activity],
+    ["health-altman-z",        "Distress (Z')",  Gauge],
+    ["health-stress-test",     "Stress Test",    Waves],
+    ["health-fitness-trend",   "Fitness Trend",  Activity],
+    ["health-liquidity-ladder","Liquidity",      Droplets],
+    ["health-solvency",        "Solvency",       Scale],
+    ["health-efficiency",      "Efficiency",     RefreshCw],
+    ["health-dupont",          "DuPont ROE",     Layers],
+    ["health-runway-gauge",    "Runway Gauge",   Timer],
+    ["health-early-warning",   "Early Warning",  Siren],
   ] as const);
 
   return (
@@ -218,7 +225,374 @@ export default function FinancialHealthPage() {
 
       {/* #156 Financial Fitness Trend */}
       <FinancialFitnessTrend snap={snap} />
+
+      {/* #157 Liquidity Ladder */}
+      <LiquidityLadder snap={snap} />
+
+      {/* #158 Solvency & Coverage */}
+      <SolvencyCoverage snap={snap} />
+
+      {/* #159 Efficiency / Turnover */}
+      <EfficiencyTurnover snap={snap} />
+
+      {/* #160 DuPont ROE Breakdown */}
+      <DuPontRoe snap={snap} />
+
+      {/* #161 Cash-Runway Gauge */}
+      <RunwayGauge snap={snap} />
+
+      {/* #162 Distress Early-Warning Checklist */}
+      <EarlyWarning snap={snap} />
     </div>
+  );
+}
+
+// ── shared bits ──────────────────────────────────────────────────────────────
+function MetricCard({ label, value, target, ok, note }: { label: string; value: string; target?: string; ok?: boolean; note?: string }) {
+  const tone = ok === undefined ? "" : ok ? "text-green-400" : "text-red-400";
+  return (
+    <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+      <p className="text-[10px] text-[var(--color-muted)] mb-1">{label}</p>
+      <p className={`text-lg font-bold tabular-nums ${tone}`}>{value}</p>
+      {(target || note) && (
+        <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+          {target ? `Target ${target}` : ""}{target && note ? " · " : ""}{note ?? (ok === undefined ? "" : ok ? "on track" : "needs attention")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── #157 LIQUIDITY LADDER — current / quick / cash ratios with health bands ──────
+// Three layered liquidity tests against the same current-liabilities base, from
+// least to most conservative, so owners see how much survives if inventory and
+// receivables are stripped out.
+function LiquidityLadder({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    // Current liabilities proxy: payables + 90-day obligations + ~one year of debt service.
+    const currentLiab = Math.max(1, snap.accountsPayable + snap.obligationsDue90 + snap.monthlyDebtService * 12);
+    const currentAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue;
+    const current = currentAssets / currentLiab;
+    const quick   = (snap.cash + snap.accountsReceivable) / currentLiab;
+    const cash    = snap.cash / currentLiab;
+    return { current, quick, cash, currentLiab, currentAssets };
+  }, [snap]);
+
+  const rungs: { label: string; value: number; target: number; desc: string }[] = [
+    { label: "Current Ratio", value: m.current, target: 1.5, desc: "All current assets ÷ current liabilities" },
+    { label: "Quick Ratio (acid test)", value: m.quick, target: 1.0, desc: "Excludes inventory — cash + receivables only" },
+    { label: "Cash Ratio", value: m.cash, target: 0.5, desc: "Pure cash cover for near-term bills" },
+  ];
+
+  return (
+    <section id="health-liquidity-ladder" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Droplets size={15} className="text-[var(--color-primary)]" /> Liquidity Ladder</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Three progressively stricter liquidity tests against the same liabilities base. Each rung strips out a less-liquid asset, showing what really covers your short-term bills.
+      </p>
+      <div className="space-y-4">
+        {rungs.map(r => {
+          const pct = Math.min(100, (r.value / (r.target * 1.5)) * 100);
+          const ok = r.value >= r.target;
+          return (
+            <div key={r.label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{r.label}</span>
+                  <span className="text-[10px] text-[var(--color-muted)] ml-2">target ≥ {r.target.toFixed(1)}x</span>
+                  <p className="text-[10px] text-[var(--color-muted)]">{r.desc}</p>
+                </div>
+                <span className={`text-lg font-bold tabular-nums shrink-0 ${ok ? "text-green-400" : "text-red-400"}`}>{r.value.toFixed(2)}x</span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${ok ? "bg-green-500" : r.value >= r.target * 0.66 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+        <MetricCard label="Current assets" value={formatAmount(m.currentAssets)} />
+        <MetricCard label="Current liabilities (est.)" value={formatAmount(m.currentLiab)} />
+        <MetricCard label="Net working capital" value={formatAmount(snap.netWorkingCapital)} ok={snap.netWorkingCapital > 0} />
+      </div>
+      <button onClick={() => navigate("/working-capital")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Open working capital <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #158 SOLVENCY & COVERAGE — long-term leverage & ability to service debt ──────
+// Debt-to-equity, debt-to-assets, equity ratio and interest/debt coverage against
+// lender bands, with a single solvency verdict.
+function SolvencyCoverage({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const estimatedFA = snap.monthlyRevenue * 6;
+    const totalAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue + estimatedFA;
+    const totalLiab   = snap.debtOutstanding + snap.accountsPayable + snap.obligationsDue90;
+    const equity      = Math.max(0, totalAssets - totalLiab);
+    const debtEquity  = equity > 0 ? snap.debtOutstanding / equity : (snap.debtOutstanding > 0 ? null : 0);
+    const debtAssets  = totalAssets > 0 ? snap.debtOutstanding / totalAssets : 0;
+    const equityRatio = totalAssets > 0 ? equity / totalAssets : 0;
+    const annualNet   = snap.monthlyNet * 12;
+    const debtToEarnings = annualNet > 0 ? snap.debtOutstanding / annualNet : (snap.debtOutstanding > 0 ? null : 0);
+    return { totalAssets, totalLiab, equity, debtEquity, debtAssets, equityRatio, debtToEarnings };
+  }, [snap]);
+
+  const rows: { label: string; value: string; target: string; ok: boolean }[] = [
+    { label: "Debt-to-Equity", value: m.debtEquity === null ? "∞" : `${m.debtEquity.toFixed(2)}x`, target: "≤ 2.0x", ok: m.debtEquity !== null && m.debtEquity <= 2 },
+    { label: "Debt-to-Assets", value: `${(m.debtAssets * 100).toFixed(0)}%`, target: "≤ 50%", ok: m.debtAssets <= 0.5 },
+    { label: "Equity Ratio", value: `${(m.equityRatio * 100).toFixed(0)}%`, target: "≥ 40%", ok: m.equityRatio >= 0.4 },
+    { label: "Interest Coverage", value: snap.interestCoverage !== null ? `${snap.interestCoverage.toFixed(1)}x` : "No debt", target: "≥ 3x", ok: snap.interestCoverage === null || snap.interestCoverage >= 3 },
+    { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", target: "≥ 1.25x", ok: snap.dscr === null || snap.dscr >= 1.25 },
+    { label: "Debt ÷ Annual Profit", value: m.debtToEarnings === null ? "—" : `${m.debtToEarnings.toFixed(1)}x`, target: "≤ 3x", ok: m.debtToEarnings !== null && m.debtToEarnings <= 3 },
+  ];
+  const passes = rows.filter(r => r.ok).length;
+  const solvent = passes >= 4;
+
+  return (
+    <section id="health-solvency" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-sm font-semibold flex items-center gap-2"><Scale size={15} className="text-[var(--color-primary)]" /> Solvency &amp; Coverage</p>
+        <span className={`text-xs font-semibold flex items-center gap-1 ${solvent ? "text-green-400" : "text-red-400"}`}>
+          {solvent ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />} {passes}/{rows.length} lender bands met
+        </span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Long-term leverage and your ability to service debt, measured against the bands banks use. Equity and assets are derived from transaction proxies.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {rows.map(r => <MetricCard key={r.label} label={r.label} value={r.value} target={r.target} ok={r.ok} />)}
+      </div>
+      <div className="grid grid-cols-3 gap-3 mt-3">
+        <MetricCard label="Total assets (est.)" value={formatAmount(m.totalAssets)} />
+        <MetricCard label="Total liabilities (est.)" value={formatAmount(m.totalLiab)} />
+        <MetricCard label="Book equity (est.)" value={formatAmount(m.equity)} />
+      </div>
+      <button onClick={() => navigate("/debt")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Open debt module <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #159 EFFICIENCY / TURNOVER — how hard assets work, in turns and days ─────────
+function EfficiencyTurnover({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const annualRev = snap.monthlyRevenue * 12;
+    const annualCogs = snap.monthlyExpense * 12;
+    const estimatedFA = snap.monthlyRevenue * 6;
+    const totalAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue + estimatedFA;
+    const assetTurns = totalAssets > 0 ? annualRev / totalAssets : 0;
+    const arTurns    = snap.accountsReceivable > 0 ? annualRev / snap.accountsReceivable : null;
+    const invTurns   = snap.inventoryValue > 0 ? annualCogs / snap.inventoryValue : null;
+    const apTurns    = snap.accountsPayable > 0 ? annualCogs / snap.accountsPayable : null;
+    return { assetTurns, arTurns, invTurns, apTurns, totalAssets };
+  }, [snap]);
+
+  const rows: { label: string; turns: number | null; days: number; target: string; ok: boolean }[] = [
+    { label: "Asset Turnover", turns: m.assetTurns, days: snap.cccDays, target: "≥ 1.0x", ok: m.assetTurns >= 1 },
+    { label: "Receivables Turnover", turns: m.arTurns, days: snap.dsoDays, target: "DSO ≤ 45d", ok: snap.dsoDays <= 45 },
+    { label: "Inventory Turnover", turns: m.invTurns, days: snap.dioDays, target: "DIO ≤ 60d", ok: snap.dioDays <= 60 },
+    { label: "Payables Turnover", turns: m.apTurns, days: snap.dpoDays, target: "DPO 30-60d", ok: snap.dpoDays >= 30 },
+  ];
+
+  return (
+    <section id="health-efficiency" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><RefreshCw size={15} className="text-[var(--color-primary)]" /> Efficiency &amp; Turnover</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        How many times a year each asset class cycles into revenue, with the equivalent days. Faster turns free up cash; the cash-conversion cycle is {snap.cccDays} days today.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Metric", "Turns / yr", "Equivalent days", "Target", "Status"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-3 py-2 font-medium">{r.label}</td>
+                <td className="px-3 py-2 tabular-nums">{r.turns === null ? "—" : `${r.turns.toFixed(1)}x`}</td>
+                <td className="px-3 py-2 tabular-nums">{r.days} days</td>
+                <td className="px-3 py-2 text-xs text-[var(--color-muted)]">{r.target}</td>
+                <td className={`px-3 py-2 text-xs font-semibold ${r.ok ? "text-green-400" : "text-red-400"}`}>{r.ok ? "Good" : "Slow"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button onClick={() => navigate("/working-capital")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Improve the cash cycle <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #160 DUPONT ROE — return on equity decomposed into its three drivers ─────────
+// ROE = Net margin × Asset turnover × Equity multiplier. Shows which lever drives
+// (or drags) the return shareholders earn.
+function DuPontRoe({ snap }: { snap: FinancialSnapshot }) {
+  const m = useMemo(() => {
+    const annualRev = snap.monthlyRevenue * 12;
+    const annualNet = snap.monthlyNet * 12;
+    const estimatedFA = snap.monthlyRevenue * 6;
+    const totalAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue + estimatedFA;
+    const totalLiab   = snap.debtOutstanding + snap.accountsPayable + snap.obligationsDue90;
+    const equity      = Math.max(1, totalAssets - totalLiab);
+    const netMargin   = annualRev > 0 ? annualNet / annualRev : 0;
+    const assetTurn   = totalAssets > 0 ? annualRev / totalAssets : 0;
+    const equityMult  = totalAssets > 0 ? totalAssets / equity : 1;
+    const roe = netMargin * assetTurn * equityMult;
+    return { netMargin, assetTurn, equityMult, roe, equity, totalAssets, annualNet };
+  }, [snap]);
+
+  const drivers: { label: string; value: string; note: string }[] = [
+    { label: "Net Profit Margin", value: `${(m.netMargin * 100).toFixed(1)}%`, note: "Profit kept per ₹1 of sales" },
+    { label: "Asset Turnover", value: `${m.assetTurn.toFixed(2)}x`, note: "Sales generated per ₹1 of assets" },
+    { label: "Equity Multiplier", value: `${m.equityMult.toFixed(2)}x`, note: "Leverage — assets per ₹1 of equity" },
+  ];
+  const roePct = m.roe * 100;
+  const ok = roePct >= 15;
+
+  return (
+    <section id="health-dupont" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={15} className="text-[var(--color-primary)]" /> DuPont ROE Breakdown</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Return on equity split into its three levers: profitability, efficiency and leverage. ROE = margin × turnover × multiplier. Target ≥ 15%.
+      </p>
+      <div className="flex items-center gap-2 flex-wrap mb-4">
+        {drivers.map((d, i) => (
+          <div key={d.label} className="flex items-center gap-2">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 min-w-[130px]">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{d.label}</p>
+              <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{d.value}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{d.note}</p>
+            </div>
+            {i < drivers.length - 1 && <Percent size={14} className="text-[var(--color-muted)] rotate-90 sm:rotate-0" />}
+          </div>
+        ))}
+        <span className="text-[var(--color-muted)] font-bold px-1">=</span>
+        <div className={`rounded-lg px-5 py-3 border text-center ${ok ? "border-green-800/40 bg-green-900/20" : "border-yellow-800/40 bg-yellow-900/20"}`}>
+          <p className="text-[10px] text-[var(--color-muted)] mb-1">Return on Equity</p>
+          <p className={`text-2xl font-bold tabular-nums ${ok ? "text-green-400" : "text-yellow-400"}`}>{roePct.toFixed(1)}%</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <MetricCard label="Annual net profit (est.)" value={formatAmount(m.annualNet)} />
+        <MetricCard label="Book equity (est.)" value={formatAmount(m.equity)} />
+        <MetricCard label="Total assets (est.)" value={formatAmount(m.totalAssets)} />
+      </div>
+    </section>
+  );
+}
+
+// ── #161 CASH-RUNWAY GAUGE — months of survival against burn, with bands ─────────
+function RunwayGauge({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const cfPositive = snap.runwayDays >= 999;
+  const months = cfPositive ? 99 : snap.runwayDays / 30;
+  const dailyBurn = snap.monthlyNet < 0 ? -snap.monthlyNet / 30 : 0;
+  // Gauge: 0–12 months mapped to a half-ring.
+  const capped = Math.min(12, months);
+  const pct = capped / 12;
+  const r = 70, c = Math.PI * r; // semicircle length
+  const stroke = cfPositive || months >= 6 ? "#22c55e" : months >= 3 ? "#eab308" : "#ef4444";
+  const band = cfPositive ? "Cash-flow positive — burning nothing"
+    : months >= 6 ? "Comfortable — 6+ months of cover"
+    : months >= 3 ? "Tight — rebuild buffer toward 6 months"
+    : "Critical — under 3 months, act now";
+
+  return (
+    <section id="health-runway-gauge" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={15} className="text-[var(--color-primary)]" /> Cash-Runway Gauge</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Months of survival at your current burn rate. The healthy band is 6+ months of operating cover; below 3 months is the danger zone.
+      </p>
+      <div className="flex items-center gap-8 flex-wrap justify-center sm:justify-start">
+        <div className="relative w-[180px] h-[100px] shrink-0">
+          <svg viewBox="0 0 180 100" className="w-full h-full">
+            <path d="M 20 95 A 70 70 0 0 1 160 95" fill="none" stroke="var(--color-border)" strokeWidth="12" strokeLinecap="round" />
+            <path d="M 20 95 A 70 70 0 0 1 160 95" fill="none" stroke={stroke} strokeWidth="12" strokeLinecap="round"
+              strokeDasharray={c} strokeDashoffset={c * (1 - pct)} className="transition-all duration-700" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
+            <span className="text-3xl font-bold tabular-nums" style={{ color: stroke }}>{cfPositive ? "∞" : months.toFixed(1)}</span>
+            <span className="text-[10px] text-[var(--color-muted)]">months of runway</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[200px] space-y-3">
+          <p className="text-sm font-semibold" style={{ color: stroke }}>{band}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard label="Cash on hand" value={formatAmount(snap.cash)} />
+            <MetricCard label="Daily burn" value={cfPositive ? "₹0" : formatAmount(dailyBurn)} />
+            <MetricCard label="Monthly net" value={formatAmount(snap.monthlyNet)} ok={snap.monthlyNet >= 0} />
+            <MetricCard label="Runway days" value={cfPositive ? "CF positive" : `${snap.runwayDays} days`} ok={cfPositive || snap.runwayDays >= 90} />
+          </div>
+          <button onClick={() => navigate("/forecast")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1">
+            Extend runway in forecast <ArrowRight size={11} />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── #162 DISTRESS EARLY-WARNING CHECKLIST — red flags lenders watch ──────────────
+// Eight live red-flag tests; the count of triggered flags maps to a warning level.
+function EarlyWarning({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const flags: { label: string; bad: boolean; detail: string; path: string }[] = useMemo(() => {
+    const overduePct = snap.accountsReceivable > 0 ? (snap.overdueReceivable / snap.accountsReceivable) * 100 : 0;
+    return [
+      { label: "Negative operating cash flow", bad: snap.monthlyNet < 0, detail: `Monthly net ${formatAmount(snap.monthlyNet)}`, path: "/forecast" },
+      { label: "Runway under 90 days", bad: snap.runwayDays < 90, detail: snap.runwayDays >= 999 ? "CF positive" : `${snap.runwayDays} days left`, path: "/forecast" },
+      { label: "DSCR below 1.25x", bad: snap.dscr !== null && snap.dscr < 1.25, detail: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", path: "/debt" },
+      { label: "Current ratio below 1.0x", bad: snap.currentRatio !== null && snap.currentRatio < 1, detail: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—", path: "/working-capital" },
+      { label: "Over 40% receivables overdue", bad: overduePct > 40, detail: `${overduePct.toFixed(0)}% overdue`, path: "/receivables" },
+      { label: "Customer concentration over 40%", bad: snap.topCustomerPct > 40, detail: `Top customer ${snap.topCustomerPct.toFixed(0)}%`, path: "/invoices" },
+      { label: "Cash-conversion cycle over 75 days", bad: snap.cccDays > 75, detail: `${snap.cccDays} days`, path: "/working-capital" },
+      { label: "Negative net working capital", bad: snap.netWorkingCapital < 0, detail: formatAmount(snap.netWorkingCapital), path: "/working-capital" },
+    ];
+  }, [snap]);
+
+  const triggered = flags.filter(f => f.bad).length;
+  const level = triggered === 0
+    ? { label: "All clear — no distress flags raised", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
+    : triggered <= 2
+    ? { label: `${triggered} early warning${triggered > 1 ? "s" : ""} — monitor`, color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
+    : { label: `${triggered} red flags raised — intervene`, color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: Siren };
+
+  return (
+    <section id="health-early-warning" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Siren size={15} className="text-[var(--color-primary)]" /> Distress Early-Warning Checklist</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">
+        Eight red flags lenders and auditors watch for, evaluated live. The more that trip, the closer the business is to a liquidity or solvency event.
+      </p>
+      <div className={`rounded-lg p-3 border ${level.border} ${level.bg} flex items-center gap-2 mb-4`}>
+        <level.Icon size={16} className={`${level.color} shrink-0`} />
+        <p className={`text-sm font-semibold ${level.color}`}>{level.label}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {flags.map(f => (
+          <button key={f.label} onClick={() => navigate(f.path)}
+            className="text-left flex items-start gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 hover:border-[var(--color-primary)]/40 transition-colors">
+            {f.bad ? <XCircle size={14} className="text-red-400 mt-0.5 shrink-0" /> : <CheckCircle2 size={14} className="text-green-400 mt-0.5 shrink-0" />}
+            <div className="min-w-0">
+              <p className={`text-xs font-medium ${f.bad ? "text-red-400" : ""}`}>{f.label}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{f.detail}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

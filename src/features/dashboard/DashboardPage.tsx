@@ -4,8 +4,8 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { runForecast } from "@/lib/forecastEngine";
 import { updateWidgetData } from "@/lib/widgetBridge";
-import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target, LayoutGrid, Flag, Sunrise, Wallet, Trash2 } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target, LayoutGrid, Flag, Sunrise, Wallet, Trash2, FileWarning, Clock, Activity, PieChart as PieIcon, Scale } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
 import { format, addMonths, setDate, isBefore, addDays, isToday } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
@@ -864,6 +864,363 @@ function MorningBriefCard() {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD WIDGETS — additional practical cards (additive, self-contained).
+// Each computes from the live store; transient UI uses useState; durable picks
+// persist via useFeatureState with "dash-" keys. Do not disturb existing widgets.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Overdue Invoices ──────────────────────────────────────────────────────────
+// Receivables already past their due date, ranked by amount. Deep-links to AR.
+function OverdueInvoicesWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const invoices = store.invoices ?? [];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const overdue = invoices
+    .filter(i => i.status !== "paid" && i.dueDate < todayStr)
+    .map(i => ({ ...i, daysLate: Math.max(0, Math.round((Date.now() - new Date(i.dueDate).getTime()) / 86400000)) }))
+    .sort((a, b) => b.amount - a.amount);
+
+  if (overdue.length === 0) return null;
+  const total = overdue.reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <FileWarning size={13} className="text-red-400" />
+          Overdue Invoices
+        </h2>
+        <button onClick={() => navigate("/receivables")} className="text-xs text-[var(--color-primary)] hover:underline">Chase all →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">{overdue.length} invoice{overdue.length > 1 ? "s" : ""} past due · <span className="text-red-400 font-semibold">{formatCurrency(total)}</span> outstanding</p>
+      <div className="space-y-1">
+        {overdue.slice(0, 5).map(i => (
+          <button key={i.id} onClick={() => navigate("/receivables")}
+            className="w-full flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0 text-left hover:bg-white/3 rounded px-1 transition-colors">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{i.customer}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{i.invoiceNumber ? `${i.invoiceNumber} · ` : ""}{i.daysLate}d late</p>
+            </div>
+            <span className="text-sm font-semibold tabular-nums text-red-400 shrink-0 ml-3">{formatCurrency(i.amount)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Upcoming Dues (next 7 days) ───────────────────────────────────────────────
+// Invoices coming due + recurring outflows landing this week, on a timeline.
+function UpcomingDuesWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+  const invoices = store.invoices ?? [];
+
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const horizon = addDays(now, 7).toISOString().split("T")[0];
+
+  type Due = { id: string; label: string; sub: string; date: string; amount: number; kind: "in" | "out"; path: string };
+  const items: Due[] = [];
+
+  invoices
+    .filter(i => i.status !== "paid" && i.dueDate >= todayStr && i.dueDate <= horizon)
+    .forEach(i => items.push({ id: "inv-" + i.id, label: i.customer, sub: "Invoice due", date: i.dueDate, amount: i.amount, kind: "in", path: "/receivables" }));
+
+  // Recurring outflows: project this month's recurring debits onto the 7-day window.
+  transactions
+    .filter(t => t.isRecurring && t.amount < 0)
+    .forEach(t => {
+      const dom = new Date(t.date).getDate();
+      const proj = new Date(now.getFullYear(), now.getMonth(), dom);
+      const projStr = proj.toISOString().split("T")[0];
+      if (projStr >= todayStr && projStr <= horizon) {
+        items.push({ id: "rec-" + t.id, label: t.description || t.counterparty || "Recurring payment", sub: "Recurring · " + t.category, date: projStr, amount: Math.abs(t.amount), kind: "out", path: "/transactions" });
+      }
+    });
+
+  if (items.length === 0) return null;
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  const inflow = items.filter(i => i.kind === "in").reduce((s, i) => s + i.amount, 0);
+  const outflow = items.filter(i => i.kind === "out").reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Clock size={13} className="text-[var(--color-primary)]" />
+          Due in the next 7 days
+        </h2>
+        <span className="text-[10px] text-[var(--color-muted)]">
+          <span className="text-green-400">+{formatCurrency(inflow)}</span> · <span className="text-red-400">−{formatCurrency(outflow)}</span>
+        </span>
+      </div>
+      <div className="space-y-1">
+        {items.slice(0, 6).map(i => {
+          const d = new Date(i.date);
+          const when = isToday(d) ? "Today" : format(d, "EEE d MMM");
+          return (
+            <button key={i.id} onClick={() => navigate(i.path)}
+              className="w-full flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0 text-left hover:bg-white/3 rounded px-1 transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${i.kind === "in" ? "bg-green-400" : "bg-red-400"}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{i.label}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{i.sub} · {when}</p>
+                </div>
+              </div>
+              <span className={`text-sm font-semibold tabular-nums shrink-0 ml-3 ${i.kind === "in" ? "text-green-400" : "text-red-400"}`}>
+                {i.kind === "in" ? "+" : "−"}{formatCurrency(i.amount)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Recent Activity Feed ──────────────────────────────────────────────────────
+// Latest transactions across all accounts, newest first.
+function RecentActivityFeed() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const recent = [...transactions]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+
+  if (recent.length === 0) return null;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Activity size={13} className="text-[var(--color-primary)]" />
+          Recent Activity
+        </h2>
+        <button onClick={() => navigate("/transactions")} className="text-xs text-[var(--color-primary)] hover:underline">View all →</button>
+      </div>
+      <div className="space-y-1">
+        {recent.map(t => {
+          const isIn = t.amount > 0;
+          return (
+            <div key={t.id} className="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isIn ? "bg-green-950/40 text-green-400" : "bg-red-950/40 text-red-400"}`}>
+                  {isIn ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{t.description || t.counterparty || "Transaction"}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] capitalize">{t.category} · {format(new Date(t.date), "d MMM")}</p>
+                </div>
+              </div>
+              <span className={`text-sm font-semibold tabular-nums shrink-0 ml-3 ${isIn ? "text-green-400" : "text-red-400"}`}>
+                {isIn ? "+" : "−"}{formatCurrency(Math.abs(t.amount))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Cash Trend Sparkline ──────────────────────────────────────────────────────
+// Reconstructs the daily closing balance over the last 30 days from current
+// balance minus subsequent net flows (back-cast).
+function CashTrendSparkline() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+
+  const data = useMemo(() => {
+    const days = 30;
+    const now = new Date();
+    // Net flow per day for the last `days` days.
+    const flowByDay: Record<string, number> = {};
+    transactions.forEach(t => { flowByDay[t.date] = (flowByDay[t.date] ?? 0) + t.amount; });
+
+    // Walk backwards from today's balance.
+    const series: { date: string; bal: number }[] = [];
+    let running = balance;
+    for (let i = 0; i < days; i++) {
+      const d = addDays(now, -i);
+      const key = d.toISOString().split("T")[0];
+      series.push({ date: format(d, "d MMM"), bal: Math.round(running / 1000) });
+      running -= flowByDay[key] ?? 0; // subtract that day's flow to get the prior close
+    }
+    return series.reverse();
+  }, [transactions, balance]);
+
+  const start = data[0]?.bal ?? 0;
+  const end = data[data.length - 1]?.bal ?? 0;
+  const changePct = start !== 0 ? ((end - start) / Math.abs(start)) * 100 : 0;
+  const up = end >= start;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <TrendingUp size={13} className="text-[var(--color-primary)]" />
+          Cash Trend · 30 days
+        </h2>
+        <span className={`text-xs font-semibold tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
+          {up ? "▲" : "▼"} {Math.abs(changePct).toFixed(0)}%
+        </span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Estimated daily closing balance · ₹ thousands</p>
+      <ResponsiveContainer width="100%" height={120}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="cashTrendGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={up ? "#2EA882" : "#ef4444"} stopOpacity={0.25} />
+              <stop offset="95%" stopColor={up ? "#2EA882" : "#ef4444"} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} interval={6} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
+          <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}K`, "Balance"]} />
+          <Area type="monotone" dataKey="bal" stroke={up ? "#2EA882" : "#ef4444"} strokeWidth={2} fill="url(#cashTrendGrad)" animationDuration={400} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── This-month mini P&L ───────────────────────────────────────────────────────
+// Compact income statement for the current calendar month from the store.
+function MiniPnLWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const mtd = transactions.filter(t => t.date.startsWith(monthStr));
+
+  const revenue = mtd.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const cat = (c: string) => Math.abs(mtd.filter(t => t.category === c && t.amount < 0).reduce((s, t) => s + t.amount, 0));
+  const payroll = cat("payroll");
+  const opex = cat("expense");
+  const tax = cat("tax");
+  const loan = cat("loan");
+  const otherOut = Math.abs(mtd.filter(t => t.amount < 0 && !["payroll", "expense", "tax", "loan"].includes(t.category)).reduce((s, t) => s + t.amount, 0));
+  const totalCost = payroll + opex + tax + loan + otherOut;
+  const net = revenue - totalCost;
+  const margin = revenue > 0 ? (net / revenue) * 100 : 0;
+
+  const rows = [
+    { label: "Revenue", value: revenue, tone: "text-green-400", strong: true },
+    { label: "Payroll", value: -payroll, tone: "text-[var(--color-text)]" },
+    { label: "Operating expense", value: -opex, tone: "text-[var(--color-text)]" },
+    { label: "Tax", value: -tax, tone: "text-[var(--color-text)]" },
+    { label: "Loan / EMI", value: -loan, tone: "text-[var(--color-text)]" },
+    { label: "Other", value: -otherOut, tone: "text-[var(--color-text)]" },
+  ].filter(r => r.value !== 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Scale size={13} className="text-[var(--color-primary)]" />
+          This Month · Mini P&amp;L
+        </h2>
+        <button onClick={() => navigate("/analytics")} className="text-xs text-[var(--color-primary)] hover:underline">Details →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">{format(new Date(), "MMMM yyyy")} · cash basis</p>
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-center justify-between text-sm">
+            <span className={`${r.strong ? "font-semibold" : "text-[var(--color-muted)] text-xs"}`}>{r.label}</span>
+            <span className={`tabular-nums ${r.value >= 0 ? r.tone : "text-red-400"}`}>
+              {r.value >= 0 ? "" : "−"}{formatCurrency(Math.abs(r.value))}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
+        <span className="text-sm font-semibold">Net {net >= 0 ? "profit" : "loss"}</span>
+        <span className={`text-base font-bold tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {net >= 0 ? "+" : "−"}{formatCurrency(Math.abs(net))}
+        </span>
+      </div>
+      {revenue > 0 && (
+        <p className="text-[10px] text-[var(--color-muted)] mt-1 text-right">{margin >= 0 ? "" : "−"}{Math.abs(margin).toFixed(0)}% net margin</p>
+      )}
+    </div>
+  );
+}
+
+// ── Spend by Payee (donut) ────────────────────────────────────────────────────
+// Where the money goes — top outflow counterparties as a donut (distinct from
+// the category bar breakdown).
+const PAYEE_COLORS = ["#2EA882", "#3b82f6", "#a855f7", "#eab308", "#ef4444", "#64748b"] as const;
+
+function SpendByPayeeDonut() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const byPayee: Record<string, number> = {};
+    transactions.filter(t => t.amount < 0).forEach(t => {
+      const key = t.counterparty || t.category || "Other";
+      byPayee[key] = (byPayee[key] ?? 0) + Math.abs(t.amount);
+    });
+    const sorted = Object.entries(byPayee).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const top = sorted.slice(0, 5);
+    const rest = sorted.slice(5).reduce((s, x) => s + x.value, 0);
+    if (rest > 0) top.push({ name: "Other", value: rest });
+    return top;
+  }, [transactions]);
+
+  if (data.length === 0) return null;
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <h2 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+        <PieIcon size={13} className="text-[var(--color-primary)]" />
+        Where the Money Goes
+      </h2>
+      <div className="flex items-center gap-4">
+        <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={36} outerRadius={56} paddingAngle={2} stroke="none">
+                {data.map((_, i) => <Cell key={i} fill={PAYEE_COLORS[i % PAYEE_COLORS.length]} />)}
+              </Pie>
+              <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => formatCurrency(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-[9px] text-[var(--color-muted)]">Total out</span>
+            <span className="text-xs font-bold tabular-nums">{formatCurrency(total)}</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {data.map((d, i) => {
+            const pct = total > 0 ? (d.value / total) * 100 : 0;
+            return (
+              <div key={d.name} className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PAYEE_COLORS[i % PAYEE_COLORS.length] }} />
+                  <span className="truncate font-medium">{d.name}</span>
+                </span>
+                <span className="text-[var(--color-muted)] tabular-nums shrink-0 ml-2">{pct.toFixed(0)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
@@ -1122,6 +1479,18 @@ export default function DashboardPage() {
             <DailyCashSnapshot />
             <GoalTracker />
           </div>
+
+          {/* ── More widgets: dues, activity, trend, P&L, overdue, spend ── */}
+          <OverdueInvoicesWidget />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <UpcomingDuesWidget />
+            <RecentActivityFeed />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <MiniPnLWidget />
+            <SpendByPayeeDonut />
+          </div>
+          <CashTrendSparkline />
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

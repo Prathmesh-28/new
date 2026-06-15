@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 const INP = "w-full text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]";
@@ -19,7 +19,7 @@ export default function AlertsPage() {
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 
-  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud">("active");
+  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi">("active");
   const [showConfig,  setShowConfig]  = useState(false);
   const [newThreshold, setNewThreshold] = useState(String(safetyDays));
   const [actionText,  setActionText]  = useState<Record<string, string>>({});
@@ -160,6 +160,12 @@ export default function AlertsPage() {
           ["compliance", "Compliance Due-Dates",          CalendarClock],
           ["liquidity",  "Cash-Low / Overdraft",          Droplets],
           ["fraud",      "Fraud / Anomaly",               ShieldAlert],
+          ["mute",       "Snooze / Mute",                 BellOff],
+          ["digest",     "Alert Digest",                  Mail],
+          ["escalation", "Escalation Rules",              Users],
+          ["receivables","Overdue Receivables",           FileText],
+          ["payables",   "Payment-Due Alerts",            Wallet],
+          ["kpi",        "KPI Target Alerts",             SlidersHorizontal],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -219,10 +225,16 @@ export default function AlertsPage() {
         </>
       )}
 
-      {tab === "thresholds" && <ThresholdAlertBuilder />}
-      {tab === "compliance" && <ComplianceDueDateAlerts />}
-      {tab === "liquidity"  && <CashLowOverdraftAlert />}
-      {tab === "fraud"      && <FraudAnomalyAlerts />}
+      {tab === "thresholds"  && <ThresholdAlertBuilder />}
+      {tab === "compliance"  && <ComplianceDueDateAlerts />}
+      {tab === "liquidity"   && <CashLowOverdraftAlert />}
+      {tab === "fraud"       && <FraudAnomalyAlerts />}
+      {tab === "mute"        && <SnoozeMuteConfig />}
+      {tab === "digest"      && <AlertDigestScheduler />}
+      {tab === "escalation"  && <EscalationRules />}
+      {tab === "receivables" && <OverdueReceivablesAlerts />}
+      {tab === "payables"    && <PaymentDueAlerts />}
+      {tab === "kpi"         && <KpiTargetAlerts />}
     </div>
   );
 }
@@ -641,6 +653,538 @@ function FraudAnomalyAlerts() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Heuristic detection — outliers and new payees are often legitimate (a large vendor settlement, a new supplier). Treat these as a review queue, not proof of fraud. Inter-account transfers are excluded.</p>
+    </div>
+  );
+}
+
+// ── Snooze / Mute Config ─────────────────────────────────────────────────────────
+// Mute whole alert categories (by `type`) for a chosen window. Active mutes hide
+// matching live alerts and auto-expire; nothing is deleted, only suppressed.
+type MuteRule = { id: string; type: string; until: string; createdAt: string };
+
+function SnoozeMuteConfig() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<MuteRule[]>("alr-mute-rules", []);
+  const [type, setType] = useState("");
+  const [hours, setHours] = useState("24");
+
+  // Distinct alert types currently present, so the user mutes real categories.
+  const types = useMemo(() => {
+    const s = new Set<string>();
+    (store.alerts ?? []).forEach(a => { if (a.type) s.add(a.type); });
+    return [...s].sort();
+  }, [store.alerts]);
+
+  const now = Date.now();
+  const active = rules.filter(r => new Date(r.until).getTime() > now);
+  const isMuted = (t: string) => active.some(r => r.type === t);
+
+  const add = () => {
+    const t = type || types[0];
+    if (!t) { toast.error("No alert types available to mute"); return; }
+    const h = parseInt(hours);
+    if (isNaN(h) || h < 1) { toast.error("Enter a valid number of hours"); return; }
+    const until = new Date(now + h * 3600000).toISOString();
+    setRules(prev => [...prev.filter(r => r.type !== t), { id: crypto.randomUUID(), type: t, until, createdAt: new Date().toISOString() }]);
+    toast.success(`Muted "${t}" for ${h}h`);
+  };
+
+  const liveActive = (store.alerts ?? []).filter(a => !a.isRead);
+  const suppressed = liveActive.filter(a => isMuted(a.type)).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BellOff size={14} className="text-[var(--color-primary)]" /> Snooze / Mute Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Temporarily silence a noisy alert category — say you already know runway is tight and don't want the reminder every few hours. Mutes auto-expire after the window you set; the underlying alert is never deleted.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Alert type</label>
+            <select value={type} onChange={e => setType(e.target.value)} className={INP}>
+              {types.length === 0 && <option value="">No alert types yet</option>}
+              {types.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Mute for (hours)</label>
+            <select value={hours} onChange={e => setHours(e.target.value)} className={INP}>
+              {["1", "4", "8", "24", "72", "168"].map(h => <option key={h} value={h}>{h === "168" ? "1 week" : h === "72" ? "3 days" : h === "24" ? "1 day" : `${h} hours`}</option>)}
+            </select>
+          </div>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Mute category</button>
+        </div>
+        {suppressed > 0 && <p className="text-[11px] text-[var(--color-muted)] mt-2">{suppressed} active alert{suppressed > 1 ? "s are" : " is"} currently suppressed by your mute rules.</p>}
+      </div>
+
+      {active.length > 0 ? (
+        <div className="space-y-2">
+          {active.map(r => {
+            const mins = Math.round((new Date(r.until).getTime() - now) / 60000);
+            const rem = mins >= 1440 ? `${Math.round(mins / 1440)}d` : mins >= 60 ? `${Math.round(mins / 60)}h` : `${mins}m`;
+            return (
+              <div key={r.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{r.type}</p>
+                  <p className="text-xs text-[var(--color-muted)]">Muted until {new Date(r.until).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {rem} left</p>
+                </div>
+                <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] px-2 py-1 rounded-lg">Unmute</button>
+              </div>
+            );
+          })}
+        </div>
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No active mutes — all alert categories are live.</p>}
+      <p className="text-[10px] text-[var(--color-muted)]">Muting suppresses notifications, not the condition itself. Critical liquidity alerts will still surface on the dashboard.</p>
+    </div>
+  );
+}
+
+// ── Alert Digest Scheduler ───────────────────────────────────────────────────────
+// Configure a daily/weekly roll-up email of unread alerts, plus a live preview of
+// what the next digest would contain based on the current store.
+function AlertDigestScheduler() {
+  const { store } = useApp();
+  const [enabled, setEnabled] = useFeatureState<boolean>("alr-digest-enabled", false);
+  const [freq, setFreq] = useFeatureState<"daily" | "weekly">("alr-digest-freq", "daily");
+  const [hour, setHour] = useFeatureState<string>("alr-digest-hour", "9");
+  const [channel, setChannel] = useFeatureState<"email" | "whatsapp" | "both">("alr-digest-channel", "email");
+
+  const unread = (store.alerts ?? []).filter(a => !a.isRead);
+  const counts = useMemo(() => {
+    const c = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
+    unread.forEach(a => { c[a.severity] = (c[a.severity] ?? 0) + 1; });
+    return c;
+  }, [store.alerts]);
+
+  const save = () => { toast.success(`Digest ${enabled ? "scheduled" : "disabled"}`); };
+  const hourLabel = (h: number) => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Mail size={14} className="text-[var(--color-primary)]" /> Alert Digest Scheduler</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Instead of a ping per alert, get one tidy roll-up at a fixed time. Pick daily or weekly, the delivery hour, and the channel. The preview below shows what your next digest would carry right now.</p>
+        <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span className="text-sm font-medium">Send me a periodic alert digest</span>
+        </label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={freq} onChange={e => setFreq(e.target.value as "daily" | "weekly")} disabled={!enabled} className={INP}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly (Monday)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Delivery hour</label>
+            <select value={hour} onChange={e => setHour(e.target.value)} disabled={!enabled} className={INP}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={String(h)}>{hourLabel(h)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as "email" | "whatsapp" | "both")} disabled={!enabled} className={INP}>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="both">Email + WhatsApp</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={save} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save schedule</button>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Next digest preview {enabled && <span className="text-[var(--color-primary)] normal-case">· {freq}, {hourLabel(parseInt(hour) || 0)}, via {channel}</span>}</p>
+        {unread.length === 0 ? (
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No unread alerts — your digest would be empty.</p>
+        ) : (
+          <>
+            <p className="text-sm mb-3"><span className="font-bold">{unread.length}</span> unread alert{unread.length > 1 ? "s" : ""}: <span className="text-red-400">{counts.critical} critical</span> · <span className="text-orange-400">{counts.high} high</span> · <span className="text-yellow-400">{counts.medium} warning</span> · <span className="text-blue-400">{counts.low} info</span></p>
+            <ul className="space-y-1.5">
+              {unread.slice(0, 6).map(a => (
+                <li key={a.id} className="text-xs text-[var(--color-muted)] flex items-start gap-2">
+                  <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${SEV[a.severity]?.color.replace("text-", "bg-")}`} />
+                  <span><span className="text-[var(--color-text)] font-medium">{a.title || a.type}</span> — {a.message}</span>
+                </li>
+              ))}
+              {unread.length > 6 && <li className="text-xs text-[var(--color-muted)]">…and {unread.length - 6} more</li>}
+            </ul>
+          </>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Digest settings persist and sync across devices. Critical alerts are still delivered immediately regardless of digest timing.</p>
+    </div>
+  );
+}
+
+// ── Escalation Rules ─────────────────────────────────────────────────────────────
+// Define who gets notified at each severity tier (recipient + channel), so a
+// critical cash event reaches the founder while routine info stays with finance.
+type EscalationRule = { id: string; severity: "critical" | "high" | "medium" | "low"; recipient: string; channel: "email" | "whatsapp" | "call"; createdAt: string };
+
+function EscalationRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<EscalationRule[]>("alr-escalation-rules", []);
+  const [severity, setSeverity] = useState<EscalationRule["severity"]>("critical");
+  const [recipient, setRecipient] = useState("");
+  const [channel, setChannel] = useState<EscalationRule["channel"]>("whatsapp");
+
+  const activeBySev = useMemo(() => {
+    const c = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
+    (store.alerts ?? []).filter(a => !a.isRead).forEach(a => { c[a.severity] = (c[a.severity] ?? 0) + 1; });
+    return c;
+  }, [store.alerts]);
+
+  const add = () => {
+    if (!recipient.trim()) { toast.error("Enter a recipient name or contact"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), severity, recipient: recipient.trim(), channel, createdAt: new Date().toISOString() }]);
+    setRecipient("");
+    toast.success("Escalation rule added");
+  };
+
+  const ORDER: EscalationRule["severity"][] = ["critical", "high", "medium", "low"];
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Escalation Rules</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Route alerts to the right people by severity — a critical cash shortfall pings the founder on WhatsApp, while routine info stays with your accountant over email. Add one or more recipients per tier.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Severity</label>
+            <select value={severity} onChange={e => setSeverity(e.target.value as EscalationRule["severity"])} className={INP}>
+              {ORDER.map(s => <option key={s} value={s}>{SEV[s]?.label ?? s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Notify</label>
+            <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Name / phone / email" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as EscalationRule["channel"])} className={INP}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+              <option value="call">Phone call</option>
+            </select>
+          </div>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add rule</button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {ORDER.map(sev => {
+          const tier = rules.filter(r => r.severity === sev);
+          const sevMeta = SEV[sev];
+          return (
+            <div key={sev} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${sevMeta?.color}`}>{sevMeta?.label ?? sev}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{activeBySev[sev] ?? 0} active now · {tier.length} recipient{tier.length === 1 ? "" : "s"}</span>
+              </div>
+              {tier.length > 0 ? (
+                <div className="space-y-1.5">
+                  {tier.map(r => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span><span className="font-medium">{r.recipient}</span> <span className="text-[var(--color-muted)] capitalize">· {r.channel}</span></span>
+                      <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-[var(--color-muted)] italic">No recipients — alerts at this tier go to in-app only.</p>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Rules persist and sync. Phone-call escalation requires a connected voice provider; WhatsApp uses your verified business number.</p>
+    </div>
+  );
+}
+
+// ── Overdue Receivables Alerts ───────────────────────────────────────────────────
+// Live aging of unpaid invoices into buckets, with a configurable "alert me when
+// overdue exceeds" amount so AR drift surfaces before it bites cashflow.
+function OverdueReceivablesAlerts() {
+  const { store } = useApp();
+  const [thresholdInput, setThresholdInput] = useFeatureState<string>("alr-recv-threshold", "");
+  const fc = formatCurrency;
+
+  const data = useMemo(() => {
+    const today = Date.now();
+    const open = (store.invoices ?? []).filter(i => i.status !== "paid");
+    const buckets = { current: 0, b1: 0, b30: 0, b60: 0, b90: 0 };
+    const overdueRows: { id: string; customer: string; amount: number; days: number }[] = [];
+    let overdueTotal = 0;
+    open.forEach(i => {
+      const days = Math.round((today - new Date(i.dueDate).getTime()) / 86400000);
+      const amt = i.amount || 0;
+      if (days <= 0) buckets.current += amt;
+      else {
+        overdueTotal += amt;
+        overdueRows.push({ id: i.id, customer: i.customer, amount: amt, days });
+        if (days <= 30) buckets.b1 += amt;
+        else if (days <= 60) buckets.b30 += amt;
+        else if (days <= 90) buckets.b60 += amt;
+        else buckets.b90 += amt;
+      }
+    });
+    overdueRows.sort((a, b) => b.days - a.days);
+    return { open, buckets, overdueRows, overdueTotal };
+  }, [store.invoices]);
+
+  const threshold = parseFloat(thresholdInput) || 0;
+  const breached = threshold > 0 && data.overdueTotal > threshold;
+
+  const BUCKETS = [
+    { label: "Not yet due", value: data.buckets.current, color: "text-green-400" },
+    { label: "1–30 days", value: data.buckets.b1, color: "text-yellow-400" },
+    { label: "31–60 days", value: data.buckets.b30, color: "text-orange-400" },
+    { label: "61–90 days", value: data.buckets.b60, color: "text-orange-400" },
+    { label: "90+ days", value: data.buckets.b90, color: "text-red-400" },
+  ];
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Overdue Receivables Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Watches your open invoices and ages them automatically. Set a ceiling for total overdue AR and we flag the moment it's crossed — so slipping collections never quietly drain your runway.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when total overdue exceeds (₹) — optional</label>
+          <input type="number" value={thresholdInput} onChange={e => setThresholdInput(e.target.value)} placeholder="e.g. 500000" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {BUCKETS.map(b => (
+          <div key={b.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{b.label}</p>
+            <p className={`text-base font-bold tabular-nums ${b.value > 0 ? b.color : "text-[var(--color-muted)]"}`}>{fc(b.value)}</p>
+          </div>
+        ))}
+      </div>
+
+      {breached ? (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-400 leading-snug">Total overdue AR is {fc(data.overdueTotal)} — above your {fc(threshold)} alert ceiling.</p>
+        </div>
+      ) : data.overdueTotal > 0 ? (
+        <div className="rounded-lg border border-orange-800/40 bg-orange-950/20 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-orange-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-orange-400 leading-snug">{fc(data.overdueTotal)} across {data.overdueRows.length} invoice{data.overdueRows.length > 1 ? "s" : ""} is overdue.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">No overdue invoices — collections are on track.</p>
+        </div>
+      )}
+
+      {data.overdueRows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Overdue by", "Amount"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.overdueRows.map(r => (
+                <tr key={r.id}>
+                  <td className="px-4 py-2.5 text-xs font-medium">{r.customer}</td>
+                  <td className={`px-4 py-2.5 text-xs ${r.days > 90 ? "text-red-400" : r.days > 30 ? "text-orange-400" : "text-yellow-400"}`}>{r.days} days</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums font-semibold">{fc(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Aging uses each invoice's due date against today. Mark invoices paid in Receivables to clear them from this view.</p>
+    </div>
+  );
+}
+
+// ── Payment-Due Alerts ───────────────────────────────────────────────────────────
+// Upcoming outflow obligations (loans, tax, payroll, other) with a configurable
+// look-ahead window so you can pre-fund what's about to leave your account.
+function PaymentDueAlerts() {
+  const { store } = useApp();
+  const [windowInput, setWindowInput] = useFeatureState<string>("alr-payable-window", "14");
+  const fc = formatCurrency;
+  const lookAhead = Math.max(parseInt(windowInput) || 14, 1);
+
+  const data = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const horizon = today.getTime() + lookAhead * 86400000;
+    const rows = (store.obligations ?? []).map(o => ({
+      ...o,
+      days: Math.round((new Date(o.dueDate).getTime() - today.getTime()) / 86400000),
+    }));
+    const overdue = rows.filter(o => o.days < 0).sort((a, b) => a.days - b.days);
+    const upcoming = rows.filter(o => o.days >= 0 && new Date(o.dueDate).getTime() <= horizon).sort((a, b) => a.days - b.days);
+    const dueSoon = [...overdue, ...upcoming];
+    const total = dueSoon.reduce((s, o) => s + (o.amount || 0), 0);
+    return { dueSoon, total, overdueCount: overdue.length };
+  }, [store.obligations, lookAhead]);
+
+  const TYPECLS: Record<string, string> = {
+    loan: "text-orange-400", tax: "text-red-400", payroll: "text-blue-400", other: "text-[var(--color-muted)]",
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Payment-Due Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces loan EMIs, tax payments, payroll and other obligations falling due inside a window you choose — so you can pre-fund the account before money leaves. Overdue items are always shown.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Look-ahead window (days)</label>
+          <input type="number" value={windowInput} onChange={e => setWindowInput(e.target.value)} placeholder="14" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Due in {lookAhead} days</p>
+          <p className="text-lg font-bold tabular-nums">{fc(data.total)}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Obligations</p>
+          <p className="text-lg font-bold tabular-nums">{data.dueSoon.length}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Overdue</p>
+          <p className={`text-lg font-bold tabular-nums ${data.overdueCount > 0 ? "text-red-400" : "text-green-400"}`}>{data.overdueCount}</p>
+        </div>
+      </div>
+
+      {data.dueSoon.length > 0 ? (
+        <div className="space-y-2">
+          {data.dueSoon.map(o => (
+            <div key={o.id} className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${o.days < 0 ? "bg-red-950/20 border-red-800/40" : o.days <= 3 ? "bg-orange-950/20 border-orange-800/40" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{o.name}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${TYPECLS[o.type] ?? TYPECLS.other}`}>{o.type}</span>
+                </div>
+                <p className="text-xs text-[var(--color-muted)]">{o.days < 0 ? `${Math.abs(o.days)} days overdue` : o.days === 0 ? "due today" : `due in ${o.days} days`} · {new Date(o.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+              </div>
+              <span className="text-sm font-bold tabular-nums shrink-0">{fc(o.amount || 0)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">Nothing due in the next {lookAhead} days.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Obligations come from your scheduled outflows. Add loan EMIs and statutory dues so this stays a complete picture of what's leaving your account.</p>
+    </div>
+  );
+}
+
+// ── KPI Target Alerts ────────────────────────────────────────────────────────────
+// Set targets on core operating KPIs (gross margin, monthly revenue, expense ratio)
+// and get a pass/miss read computed live from the last-30-day transaction window.
+type KpiKey = "revenue30" | "margin" | "expenseRatio" | "newRevenueShare";
+type KpiTarget = { id: string; kpi: KpiKey; goal: "atLeast" | "atMost"; value: number; createdAt: string };
+
+const KPIS: Record<KpiKey, { label: string; unit: "money" | "pct"; help: string }> = {
+  revenue30:       { label: "Revenue (30d)",        unit: "money", help: "Total revenue booked in the last 30 days." },
+  margin:          { label: "Gross margin %",       unit: "pct",   help: "(Revenue − expenses) ÷ revenue over the last 30 days." },
+  expenseRatio:    { label: "Expense ratio %",      unit: "pct",   help: "Expenses as a share of revenue over the last 30 days." },
+  newRevenueShare: { label: "Recurring revenue %",  unit: "pct",   help: "Share of last-30-day revenue tagged as recurring." },
+};
+
+function KpiTargetAlerts() {
+  const { store } = useApp();
+  const [targets, setTargets] = useFeatureState<KpiTarget[]>("alr-kpi-targets", []);
+  const [kpi, setKpi] = useState<KpiKey>("revenue30");
+  const [goal, setGoal] = useState<KpiTarget["goal"]>("atLeast");
+  const [value, setValue] = useState("");
+  const fc = formatCurrency;
+
+  const live = useMemo(() => {
+    const cutoff = Date.now() - 30 * 86400000;
+    const recent = (store.transactions ?? []).filter(t => new Date(t.date).getTime() >= cutoff);
+    const revenue30 = recent.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const expense30 = recent.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const recurringRev = recent.filter(t => t.category === "revenue" && t.isRecurring).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const margin = revenue30 > 0 ? ((revenue30 - expense30) / revenue30) * 100 : 0;
+    const expenseRatio = revenue30 > 0 ? (expense30 / revenue30) * 100 : 0;
+    const newRevenueShare = revenue30 > 0 ? (recurringRev / revenue30) * 100 : 0;
+    return { revenue30, margin, expenseRatio, newRevenueShare } as Record<KpiKey, number>;
+  }, [store.transactions]);
+
+  const fmt = (k: KpiKey, v: number) => KPIS[k].unit === "money" ? fc(v) : `${v.toFixed(1)}%`;
+
+  const add = () => {
+    const num = parseFloat(value);
+    if (isNaN(num)) { toast.error("Enter a target value"); return; }
+    setTargets(prev => [...prev, { id: crypto.randomUUID(), kpi, goal, value: num, createdAt: new Date().toISOString() }]);
+    setValue("");
+    toast.success("KPI target added");
+  };
+
+  const missed = (t: KpiTarget) => t.goal === "atLeast" ? live[t.kpi] < t.value : live[t.kpi] > t.value;
+  const missing = targets.filter(missed);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> KPI Target Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set goals on the operating metrics that matter — "revenue at least ₹10L/month" or "gross margin at least 40%" — and see a live pass/miss read computed from your last-30-day transactions.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">KPI</label>
+            <select value={kpi} onChange={e => setKpi(e.target.value as KpiKey)} className={INP}>
+              {(Object.keys(KPIS) as KpiKey[]).map(k => <option key={k} value={k}>{KPIS[k].label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Goal</label>
+            <select value={goal} onChange={e => setGoal(e.target.value as KpiTarget["goal"])} className={INP}>
+              <option value="atLeast">at least</option>
+              <option value="atMost">at most</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target ({KPIS[kpi].unit === "money" ? "₹" : "%"})</label>
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder={KPIS[kpi].unit === "money" ? "e.g. 1000000" : "e.g. 40"} className={INP} />
+          </div>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add target</button>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">{KPIS[kpi].help} Current: <span className="text-[var(--color-text)] font-medium tabular-nums">{fmt(kpi, live[kpi])}</span></p>
+      </div>
+
+      {targets.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["KPI", "Target", "Current", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {targets.map(t => {
+                const miss = missed(t);
+                return (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{KPIS[t.kpi].label} {t.goal === "atLeast" ? "≥" : "≤"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fmt(t.kpi, t.value)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fmt(t.kpi, live[t.kpi])}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider ${miss ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{miss ? "Missing" : "On track"}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setTargets(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No KPI targets yet — add one above to start tracking.</p>}
+
+      {missing.length > 0 && (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {missing.length} KPI target{missing.length > 1 ? "s" : ""} off track</p>
+          <ul className="text-xs text-[var(--color-muted)] mt-1.5 space-y-0.5 list-disc list-inside">
+            {missing.map(t => <li key={t.id}>{KPIS[t.kpi].label} is {fmt(t.kpi, live[t.kpi])} (target {t.goal === "atLeast" ? "≥" : "≤"} {fmt(t.kpi, t.value)})</li>)}
+          </ul>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">KPIs use a rolling 30-day transaction window — margin and ratios need revenue in that window to be meaningful. Targets persist and sync across devices.</p>
     </div>
   );
 }

@@ -2,10 +2,11 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, monthlyBurn, runwayDays } from "@/lib/utils";
-import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy } from "lucide-react";
+import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
+import type { Transaction } from "@/data/types";
 
 interface BriefSection {
   title: string;
@@ -55,7 +56,7 @@ const SECTION_STYLE: Record<BriefSection["type"], string> = {
   action:  "border-green-800/30 bg-green-950/10",
 };
 
-type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist";
+type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager";
 
 export default function CfoBriefPage() {
   const [view, setView] = useState<CfoView>("ai-brief");
@@ -63,7 +64,7 @@ export default function CfoBriefPage() {
   return (
     <div className="space-y-5">
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert]] as const).map(([id, label, Icon]) => (
+        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -75,6 +76,12 @@ export default function CfoBriefPage() {
       {view === "variance" && <VarianceCommentary />}
       {view === "board-deck" && <BoardDeckGenerator />}
       {view === "watchlist" && <RiskWatchlistBrief />}
+      {view === "scorecard" && <KpiScorecard />}
+      {view === "cash-snapshot" && <CashFlowSnapshot />}
+      {view === "margins" && <MarginSnapshot />}
+      {view === "calendar" && <FinancialCalendar />}
+      {view === "actions" && <TopActionsThisWeek />}
+      {view === "one-pager" && <OnePageSummary />}
     </div>
   );
 }
@@ -692,6 +699,531 @@ function RiskWatchlistBrief() {
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
         Risks are scored heuristically from your connected bank data and open alerts. This is decision support, not financial advice.
+      </div>
+    </div>
+  );
+}
+
+// #154 ── WEEKLY KPI SCORECARD ───────────────────────────────────────────────────
+// A compact scorecard of the headline finance KPIs with MoM deltas and a RAG
+// (red/amber/green) status per metric, computed entirely from the live store.
+function KpiScorecard() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, activeLoans } = store;
+
+  const rows = useMemo(() => {
+    const cur = monthBounds(0), prev = monthBounds(1);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const p = flowsIn(transactions, prev.start, prev.end);
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    const burn = monthlyBurn(transactions);
+    const runway = runwayDays(bankAccounts.map(b => b.balance), burn);
+    const totalEmi = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0);
+    const dscr = c.inflow > 0 ? Math.round((totalEmi / c.inflow) * 100) : 0;
+
+    type Rag = "green" | "amber" | "red";
+    const mk = (label: string, value: string, delta: number | null, rag: Rag, hint: string) => ({ label, value, delta, rag, hint });
+
+    return [
+      mk("Revenue (MoM)", formatCurrency(c.inflow), pctChange(c.inflow, p.inflow), c.inflow >= p.inflow ? "green" : c.inflow >= p.inflow * 0.9 ? "amber" : "red", `vs ${formatAmount(p.inflow)} last month`),
+      mk("Net cash flow", formatCurrency(c.net), pctChange(c.net, p.net), c.net > 0 ? "green" : c.net === 0 ? "amber" : "red", `inflow − outflow this month`),
+      mk("Cash balance", formatCurrency(balance), null, balance > burn * 3 ? "green" : balance > burn ? "amber" : "red", `${(burn > 0 ? balance / burn : 0).toFixed(1)}× monthly burn`),
+      mk("Runway", `${runway}d`, null, runway > 90 ? "green" : runway > 45 ? "amber" : "red", `at ${formatAmount(burn)}/mo burn`),
+      mk("Monthly burn", formatCurrency(burn), pctChange(c.outflow, p.outflow), c.outflow <= p.outflow ? "green" : c.outflow <= p.outflow * 1.1 ? "amber" : "red", `outflow ${formatAmount(c.outflow)} this month`),
+      mk("Debt-service ratio", `${dscr}%`, null, dscr < 20 ? "green" : dscr < 35 ? "amber" : "red", `EMI ${formatAmount(totalEmi)}/mo vs revenue`),
+    ];
+  }, [transactions, bankAccounts, activeLoans]);
+
+  const ragDot: Record<string, string> = { green: "bg-green-400", amber: "bg-yellow-400", red: "bg-red-400" };
+
+  const copy = () => {
+    const txt = `Weekly KPI Scorecard — ${monthBounds(0).label}\n\n${rows.map(r => `${r.label}: ${r.value}${r.delta !== null ? ` (${r.delta >= 0 ? "+" : ""}${r.delta}% MoM)` : ""} [${r.rag.toUpperCase()}]`).join("\n")}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Scorecard copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Gauge size={18} className="text-[var(--color-primary)]" /> Weekly KPI Scorecard</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Headline finance KPIs with MoM deltas and red/amber/green status — straight from your live data</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy scorecard
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {rows.map(r => (
+          <div key={r.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[var(--color-muted)]">{r.label}</p>
+              <span className={`w-2.5 h-2.5 rounded-full ${ragDot[r.rag]}`} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums mb-1">{r.value}</p>
+            <div className="flex items-center gap-2 text-[11px]">
+              {r.delta !== null && (
+                <span className={`flex items-center gap-0.5 font-medium ${r.delta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  {r.delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{r.delta >= 0 ? "+" : ""}{r.delta}%
+                </span>
+              )}
+              <span className="text-[var(--color-muted)]">{r.hint}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// #155 ── CASH-FLOW SNAPSHOT (Sources & Uses) ────────────────────────────────────
+// A one-screen sources-and-uses view of this month's cash: where money came from
+// (by category) and where it went, with each line as a share of the side total.
+function CashFlowSnapshot() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+
+  const data = useMemo(() => {
+    const cur = monthBounds(0);
+    const win = transactions.filter(t => t.date >= cur.start && t.date <= cur.end);
+    const sourcesMap: Record<string, number> = {};
+    const usesMap: Record<string, number> = {};
+    win.forEach(t => {
+      if (t.amount > 0) sourcesMap[t.category] = (sourcesMap[t.category] || 0) + t.amount;
+      else usesMap[t.category] = (usesMap[t.category] || 0) + Math.abs(t.amount);
+    });
+    const sources = Object.entries(sourcesMap).sort((a, b) => b[1] - a[1]);
+    const uses = Object.entries(usesMap).sort((a, b) => b[1] - a[1]);
+    const inflow = sources.reduce((s, [, v]) => s + v, 0);
+    const outflow = uses.reduce((s, [, v]) => s + v, 0);
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    return { sources, uses, inflow, outflow, net: inflow - outflow, opening: balance - (inflow - outflow), closing: balance, label: cur.label };
+  }, [transactions, bankAccounts]);
+
+  const Side = ({ title, rows, total, positive }: { title: string; rows: [string, number][]; total: number; positive: boolean }) => (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+      <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+        {positive ? <TrendingUp size={14} className="text-green-400" /> : <TrendingDown size={14} className="text-orange-400" />}{title}
+      </h3>
+      {rows.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No activity this month.</p> : (
+        <div className="space-y-2.5">
+          {rows.map(([cat, v]) => {
+            const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+            return (
+              <div key={cat}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="capitalize">{cat}</span>
+                  <span className="tabular-nums font-medium">{formatCurrency(v)} <span className="text-[var(--color-muted)]">({pct}%)</span></span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                  <div className={`h-full ${positive ? "bg-green-400" : "bg-orange-400"}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between text-sm font-bold pt-2 border-t border-[var(--color-border)]">
+            <span>Total</span><span className={`tabular-nums ${positive ? "text-green-400" : "text-orange-400"}`}>{formatCurrency(total)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Wallet size={18} className="text-[var(--color-primary)]" /> Cash-Flow Snapshot</h1>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Sources &amp; uses of cash for {data.label} — where money came from and where it went</p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Opening cash", value: formatAmount(data.opening), color: "text-[var(--color-text)]" },
+          { label: "Sources", value: `+${formatAmount(data.inflow)}`, color: "text-green-400" },
+          { label: "Uses", value: `−${formatAmount(data.outflow)}`, color: "text-orange-400" },
+          { label: "Closing cash", value: formatAmount(data.closing), color: data.net >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Side title="Sources of cash" rows={data.sources} total={data.inflow} positive />
+        <Side title="Uses of cash" rows={data.uses} total={data.outflow} positive={false} />
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Opening cash is derived as closing balance minus this month's net flow. Figures come from your connected bank transactions.
+      </div>
+    </div>
+  );
+}
+
+// #156 ── PROFITABILITY / MARGIN SNAPSHOT ────────────────────────────────────────
+// Gross-style margin view: revenue minus direct costs (expense + payroll), then
+// net margin after tax & interest, with this month vs last month deltas.
+function MarginSnapshot() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const calc = (start: string, end: string) => {
+    const win = transactions.filter(t => t.date >= start && t.date <= end);
+    const sum = (cat: Transaction["category"]) => Math.abs(win.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0));
+    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const directCost = sum("expense") + sum("payroll");
+    const overheads = sum("tax") + sum("loan");
+    const grossProfit = revenue - directCost;
+    const netProfit = grossProfit - overheads;
+    return { revenue, directCost, overheads, grossProfit, netProfit,
+      grossMargin: revenue > 0 ? Math.round((grossProfit / revenue) * 100) : 0,
+      netMargin: revenue > 0 ? Math.round((netProfit / revenue) * 100) : 0 };
+  };
+
+  const { cur, prev } = useMemo(() => {
+    const c = monthBounds(0), p = monthBounds(1);
+    return { cur: { ...calc(c.start, c.end), label: c.label }, prev: { ...calc(p.start, p.end), label: p.label } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions]);
+
+  const rows: { label: string; cur: number; prev: number; isPct?: boolean; good: "high" | "low" }[] = [
+    { label: "Revenue", cur: cur.revenue, prev: prev.revenue, good: "high" },
+    { label: "Direct costs (expense + payroll)", cur: cur.directCost, prev: prev.directCost, good: "low" },
+    { label: "Gross profit", cur: cur.grossProfit, prev: prev.grossProfit, good: "high" },
+    { label: "Gross margin", cur: cur.grossMargin, prev: prev.grossMargin, isPct: true, good: "high" },
+    { label: "Overheads (tax + interest)", cur: cur.overheads, prev: prev.overheads, good: "low" },
+    { label: "Net profit", cur: cur.netProfit, prev: prev.netProfit, good: "high" },
+    { label: "Net margin", cur: cur.netMargin, prev: prev.netMargin, isPct: true, good: "high" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Percent size={18} className="text-[var(--color-primary)]" /> Margin Snapshot</h1>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Gross &amp; net margins for {cur.label} vs {prev.label}, computed from categorised transactions</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Gross margin ({cur.label})</p>
+          <p className={`text-2xl font-bold tabular-nums ${cur.grossMargin >= 0 ? "text-green-400" : "text-red-400"}`}>{cur.grossMargin}%</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Net margin ({cur.label})</p>
+          <p className={`text-2xl font-bold tabular-nums ${cur.netMargin >= 0 ? "text-green-400" : "text-red-400"}`}>{cur.netMargin}%</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] text-[var(--color-muted)] border-b border-[var(--color-border)]">
+              <th className="text-left font-medium px-4 py-2.5">Line</th>
+              <th className="text-right font-medium px-4 py-2.5">{prev.label}</th>
+              <th className="text-right font-medium px-4 py-2.5">{cur.label}</th>
+              <th className="text-right font-medium px-4 py-2.5">Δ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const delta = r.cur - r.prev;
+              const improved = r.good === "high" ? delta >= 0 : delta <= 0;
+              return (
+                <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5">{r.label}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{r.isPct ? `${r.prev}%` : formatCurrency(r.prev)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{r.isPct ? `${r.cur}%` : formatCurrency(r.cur)}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${improved ? "text-green-400" : "text-orange-400"}`}>
+                    {delta >= 0 ? "+" : ""}{r.isPct ? `${delta}pp` : formatAmount(delta)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        A cash-basis approximation: direct costs = expense + payroll, overheads = tax + interest. Use as a directional margin read, not a statutory P&amp;L.
+      </div>
+    </div>
+  );
+}
+
+// #157 ── FINANCIAL CALENDAR (dues this month) ───────────────────────────────────
+// Consolidates upcoming financial obligations — loan EMIs, payable/overdue
+// invoices, and a fixed GST filing date — into a single dated to-do for the month.
+function FinancialCalendar() {
+  const { store } = useApp();
+  const { activeLoans, invoices } = store;
+
+  const events = useMemo(() => {
+    const cur = monthBounds(0);
+    type Ev = { date: string; label: string; amount: number; kind: "emi" | "ar" | "compliance" };
+    const out: Ev[] = [];
+
+    activeLoans.forEach(l => {
+      if (l.nextPaymentDate >= cur.start && l.nextPaymentDate <= cur.end) {
+        out.push({ date: l.nextPaymentDate, label: `EMI — ${l.lender}`, amount: l.nextPaymentAmount || l.monthlyEmi, kind: "emi" });
+      }
+    });
+
+    invoices.filter(i => i.status !== "paid" && i.dueDate >= cur.start && i.dueDate <= cur.end).forEach(i => {
+      out.push({ date: i.dueDate, label: `Receivable due — ${i.customer}`, amount: i.amount, kind: "ar" });
+    });
+
+    // GST filing — standard 20th-of-month deadline.
+    const gstDate = `${cur.start.slice(0, 7)}-20`;
+    out.push({ date: gstDate, label: "GSTR-3B filing deadline", amount: 0, kind: "compliance" });
+
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }, [activeLoans, invoices]);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const outflow = events.filter(e => e.kind === "emi").reduce((s, e) => s + e.amount, 0);
+  const inflow = events.filter(e => e.kind === "ar").reduce((s, e) => s + e.amount, 0);
+
+  const kindStyle: Record<string, string> = {
+    emi: "border-orange-800/30 bg-orange-950/10",
+    ar: "border-green-800/30 bg-green-950/10",
+    compliance: "border-blue-800/30 bg-blue-950/10",
+  };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold flex items-center gap-2"><CalendarClock size={18} className="text-[var(--color-primary)]" /> Financial Calendar</h1>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything due in {monthBounds(0).label} — EMIs, receivables and the GST deadline, in date order</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Expected in (AR)", value: `+${formatAmount(inflow)}`, color: "text-green-400" },
+          { label: "Committed out (EMI)", value: `−${formatAmount(outflow)}`, color: "text-orange-400" },
+          { label: "Events this month", value: events.length.toString(), color: "text-[var(--color-text)]" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2.5">
+        {events.map((e, i) => {
+          const overdue = e.date < todayStr;
+          return (
+            <div key={i} className={`border rounded-xl p-4 flex items-center justify-between gap-3 ${kindStyle[e.kind]}`}>
+              <div className="flex items-center gap-3">
+                <div className="text-center shrink-0 w-12">
+                  <p className="text-lg font-bold tabular-nums leading-none">{format(new Date(e.date), "d")}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] uppercase">{format(new Date(e.date), "MMM")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--color-text)]">{e.label}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">{overdue ? <span className="text-red-400 font-medium">Overdue</span> : `Due ${format(new Date(e.date), "EEE d MMM")}`}</p>
+                </div>
+              </div>
+              {e.amount > 0 && <span className={`text-sm font-bold tabular-nums ${e.kind === "ar" ? "text-green-400" : "text-orange-400"}`}>{e.kind === "ar" ? "+" : "−"}{formatAmount(e.amount)}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// #158 ── TOP ACTIONS THIS WEEK ──────────────────────────────────────────────────
+// Ranks the most valuable finance actions the owner should take this week from
+// live signals (overdue AR, runway, idle cash, open alerts) with a check-off list
+// that persists. Each action carries the rupee impact that justifies its rank.
+function TopActionsThisWeek() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, invoices, activeLoans, alerts } = store;
+
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("cfo-actions-done", {});
+
+  const actions = useMemo(() => {
+    type Act = { id: string; title: string; detail: string; impact: number; weight: number };
+    const out: Act[] = [];
+    const cur = monthBounds(0);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    const burn = monthlyBurn(transactions);
+    const runway = runwayDays(bankAccounts.map(b => b.balance), burn);
+
+    const overdue = invoices.filter(i => i.status === "overdue");
+    const overdueAmt = overdue.reduce((s, i) => s + i.amount, 0);
+    if (overdue.length) out.push({ id: "collect", title: `Chase ${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}`, detail: `${formatAmount(overdueAmt)} is past due — sending reminders frees up working capital fast.`, impact: overdueAmt, weight: 90 });
+
+    if (runway < 90) out.push({ id: "runway", title: "Shore up runway", detail: `Runway is ~${runway} days. Line up a working-capital facility or trim discretionary spend before it tightens further.`, impact: burn, weight: 100 - runway });
+
+    if (c.net < 0) out.push({ id: "cashflow", title: "Reverse negative cash flow", detail: `Outflow exceeded inflow by ${formatAmount(Math.abs(c.net))} this month — review the largest expense categories.`, impact: Math.abs(c.net), weight: 70 });
+
+    const idle = balance - burn * 3;
+    if (idle > burn) out.push({ id: "idle", title: "Park idle cash", detail: `~${formatAmount(idle)} sits above a 3-month buffer — sweep into a liquid fund or FD to earn yield.`, impact: Math.round(idle * 0.06 / 12), weight: 30 });
+
+    const due = activeLoans.filter(l => l.nextPaymentDate >= cur.start && l.nextPaymentDate <= cur.end);
+    const dueAmt = due.reduce((s, l) => s + (l.nextPaymentAmount || l.monthlyEmi), 0);
+    if (due.length) out.push({ id: "emi", title: `Fund ${due.length} EMI payment${due.length === 1 ? "" : "s"} due this month`, detail: `${formatAmount(dueAmt)} in EMIs fall due — ensure the balance is available to avoid penalties.`, impact: dueAmt, weight: 50 });
+
+    alerts.filter(a => !a.isRead && (a.severity === "critical" || a.severity === "high")).slice(0, 3).forEach(a => {
+      out.push({ id: `alert-${a.id}`, title: `Resolve: ${a.title}`, detail: a.message, impact: 0, weight: a.severity === "critical" ? 85 : 60 });
+    });
+
+    return out.sort((a, b) => b.weight - a.weight).slice(0, 5);
+  }, [transactions, bankAccounts, invoices, activeLoans, alerts]);
+
+  const completed = actions.filter(a => done[a.id]).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><ListChecks size={18} className="text-[var(--color-primary)]" /> Top Actions This Week</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The five highest-impact finance moves for the week, ranked from your live signals — {completed}/{actions.length} done</p>
+        </div>
+      </div>
+
+      {actions.length === 0 ? (
+        <div className="border border-green-800/30 bg-green-950/10 rounded-xl p-10 text-center">
+          <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400" />
+          <p className="text-sm font-semibold text-green-400 mb-1">Nothing urgent this week</p>
+          <p className="text-xs text-[var(--color-muted)]">No overdue receivables, runway pressure, or open critical alerts detected.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {actions.map((a, i) => {
+            const isDone = !!done[a.id];
+            return (
+              <button key={a.id} onClick={() => setDone(prev => ({ ...prev, [a.id]: !prev[a.id] }))}
+                className={`w-full text-left border rounded-xl p-5 flex items-start gap-3 transition-opacity ${isDone ? "border-green-800/30 bg-green-950/10 opacity-50" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+                <div className="shrink-0 mt-0.5">
+                  {isDone ? <CheckCircle2 size={18} className="text-green-400" /> : <span className="flex items-center justify-center w-[18px] h-[18px] rounded-full border border-[var(--color-muted)] text-[10px] font-bold text-[var(--color-muted)]">{i + 1}</span>}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className={`text-sm font-bold ${isDone ? "line-through text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{a.title}</h3>
+                    {a.impact > 0 && <span className="text-[11px] font-medium text-[var(--color-muted)] shrink-0 tabular-nums">~{formatAmount(a.impact)} impact</span>}
+                  </div>
+                  <p className="text-sm text-[var(--color-muted)] leading-relaxed mt-1">{a.detail}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// #159 ── ONE-PAGE FINANCIAL SUMMARY ─────────────────────────────────────────────
+// A single printable/exportable page distilling the whole financial position into
+// four blocks: position, performance, obligations, and headline takeaway.
+function OnePageSummary() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, activeLoans, invoices, firm, alerts } = store;
+
+  const s = useMemo(() => {
+    const cur = monthBounds(0), prev = monthBounds(1);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const p = flowsIn(transactions, prev.start, prev.end);
+    const balance = bankAccounts.reduce((a, b) => a + b.balance, 0);
+    const burn = monthlyBurn(transactions);
+    const runway = runwayDays(bankAccounts.map(b => b.balance), burn);
+    const totalDebt = activeLoans.reduce((a, l) => a + l.outstanding, 0);
+    const totalEmi = activeLoans.reduce((a, l) => a + l.monthlyEmi, 0);
+    const ar = invoices.filter(i => i.status !== "paid").reduce((a, i) => a + i.amount, 0);
+    const overdue = invoices.filter(i => i.status === "overdue").reduce((a, i) => a + i.amount, 0);
+    const revPct = pctChange(c.inflow, p.inflow);
+    const openRisks = alerts.filter(a => !a.isRead).length;
+    return { cur, balance, burn, runway, totalDebt, totalEmi, ar, overdue, inflow: c.inflow, outflow: c.outflow, net: c.net, revPct, openRisks };
+  }, [transactions, bankAccounts, activeLoans, invoices, alerts]);
+
+  const takeaway = s.net >= 0 && s.runway > 90
+    ? "Healthy position: positive cash flow this month and over 90 days of runway. Focus on growth and collections discipline."
+    : s.runway < 45
+      ? "Caution: runway is short — prioritise collections and financing this week."
+      : "Stable but watch cash: keep outflow in check and accelerate receivables to extend runway.";
+
+  const exportTxt = () => {
+    const txt = `${firm.name || "Company"} — One-Page Financial Summary (${s.cur.label})
+${"=".repeat(48)}
+
+POSITION
+  Cash balance        ${formatCurrency(s.balance)}
+  Runway              ${s.runway} days
+  Receivables (open)  ${formatCurrency(s.ar)} (overdue ${formatCurrency(s.overdue)})
+
+PERFORMANCE (this month)
+  Revenue             ${formatCurrency(s.inflow)} (${s.revPct === null ? "n/a" : `${s.revPct >= 0 ? "+" : ""}${s.revPct}% MoM`})
+  Expenses            ${formatCurrency(s.outflow)}
+  Net cash flow       ${formatCurrency(s.net)}
+  Monthly burn        ${formatCurrency(s.burn)}
+
+OBLIGATIONS
+  Debt outstanding    ${formatCurrency(s.totalDebt)}
+  EMI / month         ${formatCurrency(s.totalEmi)}
+  Open risks          ${s.openRisks}
+
+TAKEAWAY
+  ${takeaway}`;
+    const blob = new Blob([txt], { type: "text/plain" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "financial-summary.txt"; a.click();
+    toast.success("Summary exported");
+  };
+
+  const Block = ({ title, rows }: { title: string; rows: [string, string, string?][] }) => (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">{title}</h3>
+      <div className="space-y-2">
+        {rows.map(([k, v, color]) => (
+          <div key={k} className="flex items-center justify-between text-sm">
+            <span className="text-[var(--color-muted)]">{k}</span>
+            <span className={`tabular-nums font-semibold ${color || ""}`}>{v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><FileText size={18} className="text-[var(--color-primary)]" /> One-Page Financial Summary</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The whole picture on one page for {s.cur.label} — position, performance, obligations and the takeaway</p>
+        </div>
+        <button onClick={exportTxt} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          <Download size={13} /> Export
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Block title="Position" rows={[
+          ["Cash balance", formatCurrency(s.balance)],
+          ["Runway", `${s.runway}d`, s.runway > 90 ? "text-green-400" : s.runway > 45 ? "text-yellow-400" : "text-red-400"],
+          ["Open receivables", formatCurrency(s.ar)],
+          ["Overdue AR", formatCurrency(s.overdue), s.overdue > 0 ? "text-orange-400" : undefined],
+        ]} />
+        <Block title="Performance (MTD)" rows={[
+          ["Revenue", formatCurrency(s.inflow), s.revPct !== null && s.revPct >= 0 ? "text-green-400" : "text-red-400"],
+          ["Expenses", formatCurrency(s.outflow)],
+          ["Net cash flow", formatCurrency(s.net), s.net >= 0 ? "text-green-400" : "text-red-400"],
+          ["Monthly burn", formatCurrency(s.burn)],
+        ]} />
+        <Block title="Obligations" rows={[
+          ["Debt outstanding", formatCurrency(s.totalDebt)],
+          ["EMI / month", formatCurrency(s.totalEmi)],
+          ["Open risks", s.openRisks.toString(), s.openRisks > 0 ? "text-orange-400" : "text-green-400"],
+        ]} />
+      </div>
+
+      <div className={`border rounded-xl p-5 ${s.net >= 0 && s.runway > 90 ? "border-green-800/30 bg-green-950/10" : s.runway < 45 ? "border-red-800/40 bg-red-950/20" : "border-yellow-800/30 bg-yellow-950/10"}`}>
+        <h3 className="text-sm font-bold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Takeaway</h3>
+        <p className="text-sm text-[var(--color-muted)] leading-relaxed">{takeaway}</p>
       </div>
     </div>
   );

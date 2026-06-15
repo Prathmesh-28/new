@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn, paymentTermsSuggestions } from "@/lib/finance";
-import type { FinancialSnapshot } from "@/lib/finance";
+import type { FinancialSnapshot, AgingBucket } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge } from "lucide-react";
+import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
@@ -13,7 +13,7 @@ const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 export default function WorkingCapitalPage() {
   const { store } = useApp();
   const navigate = useNavigate();
-  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding">("overview");
+  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios">("overview");
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const aging = useMemo(() => agingBuckets(store.invoices), [store.invoices]);
   const options = useMemo(
@@ -42,7 +42,7 @@ export default function WorkingCapitalPage() {
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setWcTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${wcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -362,6 +362,13 @@ export default function WorkingCapitalPage() {
       {wcTab === "payables-stretch" && <PayablesStretchTradeoff snap={snap} />}
       {wcTab === "od-cc-utilisation" && <OdCcUtilisationTracker snap={snap} />}
       {wcTab === "wc-gap-funding" && <WorkingCapitalGapFunding snap={snap} />}
+      {wcTab === "trade-cycle-target" && <TradeCycleOptimizer snap={snap} />}
+      {wcTab === "dynamic-discount" && <DynamicDiscountVsBorrow snap={snap} />}
+      {wcTab === "seasonal-wc" && <SeasonalWcPlanner snap={snap} />}
+      {wcTab === "wc-trend" && <NetWorkingCapitalTrend snap={snap} />}
+      {wcTab === "cash-locked" && <CashLockedInWc snap={snap} />}
+      {wcTab === "ar-acceleration" && <ReceivablesAcceleration snap={snap} aging={aging} />}
+      {wcTab === "liquidity-ratios" && <LiquidityRatiosTracker snap={snap} />}
     </div>
   );
 }
@@ -898,6 +905,501 @@ function WorkingCapitalGapFunding({ snap }: { snap: FinancialSnapshot }) {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Tandon Method II: permissible bank finance = WC gap − margin (25% of current assets from own funds). The cross-check estimates the same gap from your cash conversion cycle. Use the larger figure when sizing a facility.</p>
+    </div>
+  );
+}
+
+// ── #86 Trade-Cycle Optimizer — set target legs, see CCC & cash impact ───────────
+function TradeCycleOptimizer({ snap }: { snap: FinancialSnapshot }) {
+  const [tDso, setTDso] = useState(String(Math.max(0, snap.dsoDays - 10)));
+  const [tDio, setTDio] = useState(String(Math.max(0, snap.dioDays - 5)));
+  const [tDpo, setTDpo] = useState(String(snap.dpoDays + 10));
+
+  const dso = Math.max(0, parseFloat(tDso) || 0);
+  const dio = Math.max(0, parseFloat(tDio) || 0);
+  const dpo = Math.max(0, parseFloat(tDpo) || 0);
+
+  const targetCcc = Math.round(dso + dio - dpo);
+  const daysSaved = snap.cccDays - targetCcc;
+  const dailyOpex = snap.monthlyExpense / 30;
+  const cashFreed = Math.round(daysSaved * dailyOpex);
+
+  const legs = [
+    { label: "DSO — collect faster", cur: snap.dsoDays, tgt: dso, set: setTDso, val: tDso, max: 120, good: dso <= snap.dsoDays },
+    { label: "DIO — leaner stock", cur: snap.dioDays, tgt: dio, set: setTDio, val: tDio, max: 120, good: dio <= snap.dioDays },
+    { label: "DPO — hold cash longer", cur: snap.dpoDays, tgt: dpo, set: setTDpo, val: tDpo, max: 120, good: dpo >= snap.dpoDays },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Target size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Trade-Cycle Optimizer — Target Each Leg</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Move the sliders to set realistic targets for each cycle leg. We recompute your cash conversion cycle and the cash it frees at your {formatAmount(Math.round(dailyOpex))}/day run rate.</p>
+        <div className="space-y-4">
+          {legs.map(l => (
+            <div key={l.label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm font-medium">{l.label}</span>
+                <span className="text-xs tabular-nums text-[var(--color-muted)]">now {l.cur}d → target <strong className={l.good ? "text-green-400" : "text-orange-400"}>{l.tgt}d</strong></span>
+              </div>
+              <input type="range" min={0} max={l.max} value={l.tgt} onChange={e => l.set(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Current CCC", value: `${snap.cccDays}d`, color: "text-[var(--color-text)]" },
+          { label: "Target CCC", value: `${targetCcc}d`, color: targetCcc <= snap.cccDays ? "text-green-400" : "text-red-400" },
+          { label: "Days Saved", value: `${daysSaved >= 0 ? "" : "+"}${daysSaved}d`, color: daysSaved >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Cash Freed", value: formatAmount(cashFreed), color: cashFreed >= 0 ? "text-green-400" : "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${daysSaved >= 0 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm font-bold ${daysSaved >= 0 ? "text-green-400" : "text-orange-400"}`}>
+          {daysSaved >= 0
+            ? `Hitting these targets trims your cycle by ${daysSaved} days and frees ${formatAmount(cashFreed)} of trapped cash.`
+            : `These targets lengthen your cycle by ${-daysSaved} days and consume ${formatAmount(-cashFreed)} more cash — tighten DSO/DIO or extend DPO.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Cash freed = (current CCC − target CCC) × daily operating spend. Lower DSO/DIO and higher DPO all shorten the cycle.</p>
+    </div>
+  );
+}
+
+// ── #87 Dynamic Discounting vs Borrow Decision ──────────────────────────────────
+function DynamicDiscountVsBorrow({ snap }: { snap: FinancialSnapshot }) {
+  const [invoiceAmt, setInvoiceAmt] = useState(String(Math.round(snap.accountsPayable) || 200000));
+  const [discPct, setDiscPct] = useState("2");
+  const [daysEarly, setDaysEarly] = useState("20");
+  const [borrowPct, setBorrowPct] = useState("16");
+  const cashShort = snap.workingCapitalGap > 0;
+
+  const amt = parseFloat(invoiceAmt) || 0;
+  const disc = parseFloat(discPct) || 0;
+  const early = Math.max(1, parseFloat(daysEarly) || 1);
+  const borrow = (parseFloat(borrowPct) || 0) / 100;
+
+  const apr = earlyPayAnnualizedReturn(disc, early);
+  const discountSaved = Math.round(amt * (disc / 100));
+  const borrowCostToPayEarly = Math.round(amt * borrow * (early / 365));
+  const netBenefit = discountSaved - borrowCostToPayEarly;
+  const takeIt = apr > parseFloat(borrowPct);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Percent size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Dynamic Discounting vs Borrow — Should You Pay Early?</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">If you're cash-short, paying early means borrowing. This compares the discount captured against the interest cost of funding that early payment.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { l: "Invoice amount (₹)", v: invoiceAmt, s: setInvoiceAmt },
+            { l: "Discount offered %", v: discPct, s: setDiscPct },
+            { l: "Days paid early", v: daysEarly, s: setDaysEarly },
+            { l: "Borrowing cost %/yr", v: borrowPct, s: setBorrowPct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Discount Annualised", value: `${apr.toFixed(0)}%`, color: takeIt ? "text-green-400" : "text-orange-400" },
+          { label: "Discount Captured", value: formatAmount(discountSaved), color: "text-green-400" },
+          { label: "Cost to Fund Early", value: formatAmount(borrowCostToPayEarly), color: "text-orange-400" },
+          { label: "Net Benefit", value: formatAmount(netBenefit), color: netBenefit >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${takeIt ? "border-green-800/40 bg-green-950/20" : "border-blue-800/40 bg-blue-950/20"}`}>
+        <p className={`text-sm font-bold ${takeIt ? "text-green-400" : "text-blue-400"}`}>
+          {takeIt
+            ? `Take it — the ${disc}% discount is worth ${apr.toFixed(0)}% annualised, beating your ${borrowPct}% borrowing cost. Net ${formatAmount(netBenefit)} gain.`
+            : `Skip it — ${apr.toFixed(0)}% annualised is below your ${borrowPct}% cost of funds. Pay on normal terms.`}
+        </p>
+        {cashShort && takeIt && <p className="text-[11px] text-[var(--color-muted)] mt-1">Even funded from your OD line, this clears a net profit — prioritise it within available headroom.</p>}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Annualised discount return = discount/(1−discount) × 365/days-early. Fund-early cost = amount × borrow rate × days-early/365. Take the discount whenever its annualised return exceeds your marginal cost of capital.</p>
+    </div>
+  );
+}
+
+// ── #88 Seasonal Working-Capital Planner ────────────────────────────────────────
+function SeasonalWcPlanner({ snap }: { snap: FinancialSnapshot }) {
+  // Directional demand index per month (festival/quarter-end heavy in India).
+  const SEASON = [
+    { m: "Apr", idx: 0.9 }, { m: "May", idx: 0.95 }, { m: "Jun", idx: 0.9 },
+    { m: "Jul", idx: 1.0 }, { m: "Aug", idx: 1.05 }, { m: "Sep", idx: 1.1 },
+    { m: "Oct", idx: 1.35 }, { m: "Nov", idx: 1.3 }, { m: "Dec", idx: 1.05 },
+    { m: "Jan", idx: 0.95 }, { m: "Feb", idx: 0.9 }, { m: "Mar", idx: 1.15 },
+  ];
+  const [peakLift, setPeakLift] = useState("25"); // extra % uplift owner expects at peak
+  const lift = (parseFloat(peakLift) || 0) / 100;
+
+  const baseWc = Math.max(snap.workingCapitalGap, snap.accountsReceivable + snap.inventoryValue - snap.accountsPayable);
+  const data = SEASON.map(s => {
+    const scaled = s.idx + (s.idx - 1) * lift; // amplify swings by owner's expected lift
+    return { month: s.m, wc: Math.round(baseWc * scaled), idx: scaled };
+  });
+  const peak = data.reduce((a, b) => (b.wc > a.wc ? b : a), data[0]);
+  const trough = data.reduce((a, b) => (b.wc < a.wc ? b : a), data[0]);
+  const peakExtra = peak.wc - Math.round(baseWc);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Snowflake size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Seasonal Working-Capital Planner</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Your working capital isn't flat — it swells before festivals and quarter-end. This scales your base WC need ({formatAmount(Math.round(baseWc))}) by a typical Indian demand curve so you can pre-arrange the peak line.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Extra uplift you expect at peak (%)</label>
+          <input type="number" value={peakLift} onChange={e => setPeakLift(e.target.value)} className={WC_INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Base WC Need", value: formatAmount(Math.round(baseWc)), color: "text-[var(--color-text)]" },
+          { label: `Peak (${peak.month})`, value: formatAmount(peak.wc), color: "text-orange-400" },
+          { label: `Trough (${trough.month})`, value: formatAmount(trough.wc), color: "text-green-400" },
+          { label: "Extra Line at Peak", value: formatAmount(peakExtra), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">WC Need Through the Year</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <Tooltip formatter={(v: number) => [formatCurrency(v), "WC need"]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+            <ReferenceLine y={Math.round(baseWc)} stroke="#3b82f6" strokeDasharray="4 4" label={{ value: "base", fontSize: 9, fill: "#3b82f6", position: "insideTopRight" }} />
+            <Bar dataKey="wc" radius={[4, 4, 0, 0]}>
+              {data.map((d, i) => <Cell key={i} fill={d.idx >= 1.2 ? "#f97316" : d.idx >= 1.05 ? "#eab308" : "#22c55e"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Demand index is directional (Oct–Nov festival peak, Mar quarter-end). Pre-arrange the {formatAmount(peakExtra)} top-up well before {peak.month} — banks are slow when everyone needs cash at once.</p>
+    </div>
+  );
+}
+
+// ── #89 Net Operating Working-Capital Trend ─────────────────────────────────────
+function NetWorkingCapitalTrend({ snap }: { snap: FinancialSnapshot }) {
+  // Project NWC and its components back over 6 months along the run-rate gradient.
+  const trend = useMemo(() => {
+    const months = ["5mo", "4mo", "3mo", "2mo", "Last", "Now"];
+    return months.map((m, i) => {
+      const f = 1.2 - (0.2 * i) / (months.length - 1); // 20% worse baseline → today
+      const ar = Math.round(snap.accountsReceivable * f);
+      const inv = Math.round(snap.inventoryValue * f);
+      const ap = Math.round(snap.accountsPayable * (2 - f));
+      return { month: m, nowc: ar + inv - ap, ar, inv, ap };
+    });
+  }, [snap.accountsReceivable, snap.inventoryValue, snap.accountsPayable]);
+
+  const nowc = snap.accountsReceivable + snap.inventoryValue - snap.accountsPayable;
+  const prev = trend[trend.length - 2].nowc;
+  const delta = nowc - prev;
+  const nowcPctOfRev = snap.monthlyRevenue > 0 ? (nowc / (snap.monthlyRevenue * 12)) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <LineChartIcon size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Net Operating Working-Capital Trend</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Net operating WC = receivables + inventory − payables. Rising NWC silently absorbs cash even when you're profitable — watch the slope, not just the level.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Net Operating WC", value: formatAmount(nowc), color: nowc <= prev ? "text-green-400" : "text-orange-400" },
+          { label: "MoM Change", value: `${delta >= 0 ? "+" : ""}${formatAmount(delta)}`, color: delta <= 0 ? "text-green-400" : "text-red-400" },
+          { label: "NWC % of Revenue", value: `${nowcPctOfRev.toFixed(0)}%`, color: nowcPctOfRev <= 20 ? "text-green-400" : "text-orange-400" },
+          { label: "Cash Tied Up", value: formatAmount(Math.max(0, nowc)), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">6-Month NWC & Components</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={trend} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <Tooltip formatter={(v: number, n: string) => [formatCurrency(v), n.toUpperCase()]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+            <Line type="monotone" dataKey="nowc" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="NWC" />
+            <Line type="monotone" dataKey="ar" stroke="#eab308" strokeWidth={1.5} dot={false} name="AR" />
+            <Line type="monotone" dataKey="inv" stroke="#f97316" strokeWidth={1.5} dot={false} name="Inv" />
+            <Line type="monotone" dataKey="ap" stroke="#a78bfa" strokeWidth={1.5} dot={false} name="AP" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Trend is projected from current balances along the run-rate gradient. If NWC grows faster than revenue, growth is eating your cash — tighten collections or stock before scaling further.</p>
+    </div>
+  );
+}
+
+// ── #90 Cash Locked in Working Capital — breakdown & release plan ────────────────
+function CashLockedInWc({ snap }: { snap: FinancialSnapshot }) {
+  const components = [
+    { label: "Receivables (AR)", value: snap.accountsReceivable, color: "bg-yellow-500", textColor: "text-yellow-400", lever: "Collect faster — auto-reminders, early-pay discounts", releasable: Math.round(snap.overdueReceivable) },
+    { label: "Inventory", value: snap.inventoryValue, color: "bg-orange-500", textColor: "text-orange-400", lever: "Clear slow stock, tighten reorder quantities", releasable: Math.round(snap.inventoryValue * 0.2) },
+  ];
+  const offset = { label: "Payables (free credit)", value: snap.accountsPayable, color: "bg-green-500", textColor: "text-green-400", lever: "Negotiate longer terms with top suppliers", releasable: Math.round(snap.accountsPayable * 0.15) };
+
+  const gross = snap.accountsReceivable + snap.inventoryValue;
+  const netLocked = gross - snap.accountsPayable;
+  const totalReleasable = components.reduce((s, c) => s + c.releasable, 0) + offset.releasable;
+  const maxComp = Math.max(snap.accountsReceivable, snap.inventoryValue, snap.accountsPayable, 1);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Coins size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Cash Locked in Working Capital</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Every rupee in receivables and unsold stock is cash you funded but can't spend. Payables offset it with free supplier credit. Here's where yours sits and how much is realistically releasable.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Gross Locked (AR + Inv)", value: formatAmount(gross), color: "text-orange-400" },
+          { label: "Supplier Credit Offset", value: formatAmount(snap.accountsPayable), color: "text-green-400" },
+          { label: "Net Cash Locked", value: formatAmount(netLocked), color: netLocked > snap.monthlyExpense ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Realistically Releasable", value: formatAmount(totalReleasable), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5 space-y-4`}>
+        <p className="text-sm font-semibold">Component breakdown</p>
+        {[...components, offset].map(c => (
+          <div key={c.label}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium">{c.label}</span>
+              <span className={`text-sm font-bold tabular-nums ${c.textColor}`}>{formatAmount(c.value)}</span>
+            </div>
+            <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${c.color}`} style={{ width: `${(c.value / maxComp) * 100}%` }} />
+            </div>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">{c.lever} · ~{formatAmount(c.releasable)} releasable</p>
+          </div>
+        ))}
+        <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between">
+          <p className="text-xs text-[var(--color-muted)]">Total cash you could free with focused effort</p>
+          <p className="text-sm font-bold text-green-400">{formatAmount(totalReleasable)}</p>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Releasable estimates: all overdue AR, ~20% of inventory (slow-movers), and ~15% more supplier credit via term extension. Net cash locked = AR + inventory − payables.</p>
+    </div>
+  );
+}
+
+// ── #91 Receivables Acceleration Planner — aging-based collection plan ───────────
+function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; aging: AgingBucket[] }) {
+  const [discPct, setDiscPct] = useState("2");
+  const [uptakePct, setUptakePct] = useState("40"); // % of customers expected to take early-pay
+  const disc = (parseFloat(discPct) || 0) / 100;
+  const uptake = (parseFloat(uptakePct) || 0) / 100;
+
+  // Collection probability declines with age; each bucket has a recovery lever.
+  const plan = aging.map((b, i) => {
+    const recoverPct = [0.95, 0.85, 0.7, 0.5, 0.3][i] ?? 0.3;
+    const pullForward = Math.round(b.amount * recoverPct);
+    const lever = ["On track — light touch", "Reminder at day 7", "Call + WhatsApp follow-up", "Early-pay discount offer", "Escalate / consider factoring"][i] ?? "Escalate";
+    return { ...b, recoverPct, pullForward, lever };
+  });
+
+  const totalPullForward = plan.reduce((s, p) => s + p.pullForward, 0);
+  const discountCost = Math.round(snap.accountsReceivable * uptake * disc);
+  const netCashPulled = totalPullForward - discountCost;
+  const dailyOpex = snap.monthlyExpense / 30;
+  const daysShortened = dailyOpex > 0 ? Math.round(netCashPulled / dailyOpex) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Zap size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Receivables Acceleration Planner</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">A bucket-by-bucket collection plan that pulls cash forward from your {formatAmount(snap.accountsReceivable)} of open receivables, with the early-pay discount cost netted out.</p>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Early-pay discount %</label>
+            <input type="number" value={discPct} onChange={e => setDiscPct(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expected uptake %</label>
+            <input type="number" value={uptakePct} onChange={e => setUptakePct(e.target.value)} className={WC_INP} />
+          </div>
+        </div>
+      </div>
+
+      {snap.accountsReceivable === 0 ? (
+        <div className={`${WC_CARD} p-8 text-center`}>
+          <p className="text-sm text-[var(--color-muted)]">No open receivables — create invoices to plan collections.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Recoverable (probable)", value: formatAmount(totalPullForward), color: "text-green-400" },
+              { label: "Discount Cost", value: formatAmount(discountCost), color: "text-orange-400" },
+              { label: "Net Cash Pulled", value: formatAmount(netCashPulled), color: "text-[var(--color-primary)]" },
+              { label: "Cycle Days Shortened", value: `${daysShortened}d`, color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className={`${WC_CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${WC_CARD} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Bucket", "Outstanding", "Recovery %", "Probable Collect", "Action"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {plan.map(p => (
+                  <tr key={p.label} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{p.label}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(p.amount)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{Math.round(p.recoverPct * 100)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(p.pullForward)}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.lever}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Recovery rates fall with age (95% current → 30% at 90+ days). Net cash pulled = probable collections − discount cost. Days shortened = net cash ÷ daily operating spend.</p>
+    </div>
+  );
+}
+
+// ── #92 Liquidity Ratios Tracker — current / quick / cash ratio ──────────────────
+function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
+  const currentAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue;
+  const currentLiabilities = snap.accountsPayable + snap.obligationsDue90;
+  const cl = currentLiabilities > 0 ? currentLiabilities : 1;
+
+  const currentRatio = currentAssets / cl;
+  const quickRatio = (snap.cash + snap.accountsReceivable) / cl;
+  const cashRatio = snap.cash / cl;
+
+  const ratios = [
+    { label: "Current Ratio", value: currentRatio, target: 1.5, formula: "(Cash + AR + Inventory) ÷ current liabilities", note: "Can you cover short-term dues from all current assets?" },
+    { label: "Quick Ratio (Acid-Test)", value: quickRatio, target: 1.0, formula: "(Cash + AR) ÷ current liabilities", note: "Coverage excluding hard-to-sell inventory." },
+    { label: "Cash Ratio", value: cashRatio, target: 0.5, formula: "Cash ÷ current liabilities", note: "The most conservative — pure cash on hand." },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <PiggyBank size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Liquidity Ratios Tracker</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Three lenses on the same question — can you meet short-term obligations? Computed live from your cash ({formatAmount(snap.cash)}), receivables, inventory and dues within 90 days.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {ratios.map(r => {
+          const ok = r.value >= r.target;
+          const pct = Math.min(100, (r.value / (r.target * 1.5)) * 100);
+          return (
+            <div key={r.label} className={`${WC_CARD} p-5`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{r.label}</p>
+              <p className={`text-2xl font-bold tabular-nums ${ok ? "text-green-400" : "text-red-400"}`}>{r.value.toFixed(2)}x</p>
+              <div className="mt-2 mb-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${ok ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">Target ≥ {r.target.toFixed(1)}x · {ok ? "Healthy" : "Below target"}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-2 leading-relaxed">{r.formula}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1 leading-relaxed">{r.note}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`${WC_CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Component", "Amount"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { l: "Cash & bank balances", v: snap.cash },
+              { l: "Accounts receivable", v: snap.accountsReceivable },
+              { l: "Inventory", v: snap.inventoryValue },
+              { l: "Accounts payable", v: snap.accountsPayable },
+              { l: "Other obligations (≤90d)", v: snap.obligationsDue90 },
+            ].map(row => (
+              <tr key={row.l} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5">{row.l}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatAmount(row.v)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Current liabilities = payables + obligations due within 90 days. Ratios above target signal comfortable short-term liquidity; the cash ratio is the strictest test lenders apply in a stress scenario.</p>
     </div>
   );
 }

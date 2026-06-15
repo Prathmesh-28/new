@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search } from "lucide-react";
+import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake } from "lucide-react";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 
@@ -18,13 +18,21 @@ interface SupplierOffer {
   due_date: string;
 }
 
-type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify";
+type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify"
+  | "terms-optimizer" | "price-trend" | "leadtime-variance" | "alt-supplier" | "concentration" | "grn-match" | "negotiation-prep";
 const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
-  { id: "early-pay",     label: "Early-Pay",      Icon: Zap },
-  { id: "scorecard",     label: "Scorecard",      Icon: Award },
-  { id: "reorder",       label: "Reorder Point",  Icon: RefreshCw },
-  { id: "rate-contract", label: "Rate Contracts", Icon: FileText },
-  { id: "msme-verify",   label: "MSME Verify",    Icon: BadgeCheck },
+  { id: "early-pay",         label: "Early-Pay",      Icon: Zap },
+  { id: "scorecard",         label: "Scorecard",      Icon: Award },
+  { id: "reorder",           label: "Reorder Point",  Icon: RefreshCw },
+  { id: "rate-contract",     label: "Rate Contracts", Icon: FileText },
+  { id: "msme-verify",       label: "MSME Verify",    Icon: BadgeCheck },
+  { id: "terms-optimizer",   label: "Terms Optimizer", Icon: Percent },
+  { id: "price-trend",       label: "Price Trend",    Icon: LineChart },
+  { id: "leadtime-variance", label: "Lead-Time Var",  Icon: Timer },
+  { id: "alt-supplier",      label: "Alt Suppliers",  Icon: GitCompare },
+  { id: "concentration",     label: "Concentration",  Icon: PieChart },
+  { id: "grn-match",         label: "GRN 3-Way",      Icon: ClipboardCheck },
+  { id: "negotiation-prep",  label: "Negotiation",    Icon: Handshake },
 ];
 
 export default function SuppliersPage() {
@@ -39,11 +47,18 @@ export default function SuppliersPage() {
           </button>
         ))}
       </div>
-      {tab === "early-pay"     && <EarlyPaySection />}
-      {tab === "scorecard"     && <SupplierScorecard />}
-      {tab === "reorder"       && <ReorderPointTracker />}
-      {tab === "rate-contract" && <RateContractManager />}
-      {tab === "msme-verify"   && <MsmeVerificationBatch />}
+      {tab === "early-pay"         && <EarlyPaySection />}
+      {tab === "scorecard"         && <SupplierScorecard />}
+      {tab === "reorder"           && <ReorderPointTracker />}
+      {tab === "rate-contract"     && <RateContractManager />}
+      {tab === "msme-verify"       && <MsmeVerificationBatch />}
+      {tab === "terms-optimizer"   && <PaymentTermsOptimizer />}
+      {tab === "price-trend"       && <PriceTrendTracker />}
+      {tab === "leadtime-variance" && <LeadTimeVarianceAnalyzer />}
+      {tab === "alt-supplier"      && <AltSupplierShortlist />}
+      {tab === "concentration"     && <ConcentrationRisk />}
+      {tab === "grn-match"         && <GrnThreeWayMatch />}
+      {tab === "negotiation-prep"  && <NegotiationPrepSheet />}
     </div>
   );
 }
@@ -591,6 +606,673 @@ function MsmeVerificationBatch() {
         </div>
       </>}
       <p className="text-[10px] text-[var(--color-muted)]">Format check only — confirm live status on the Udyam portal. The 45-day limit applies where there is a written agreement (15 days otherwise). Sums unpaid to micro/small suppliers at FY-end are disallowed u/s 43B(h) and added back to income. Verify with your CA.</p>
+    </div>
+  );
+}
+
+// ── #69 Payment-Terms Optimizer (discount yield vs cost of capital) ──────────────
+type TermRow = {
+  id: string;
+  supplier: string;
+  invoiceAmount: number;
+  discountPct: number;   // early-pay discount %
+  discountDays: number;  // pay within this many days to get discount
+  netDays: number;       // otherwise due in this many days
+};
+function PaymentTermsOptimizer() {
+  const [rows, setRows] = useFeatureState<TermRow[]>("sup-terms-optimizer", []);
+  const [coc, setCoc] = useFeatureState<number>("sup-terms-coc", 14); // annual cost of capital %
+  const [supplier, setSupplier] = useState("");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [discountPct, setDiscountPct] = useState("");
+  const [discountDays, setDiscountDays] = useState("10");
+  const [netDays, setNetDays] = useState("45");
+
+  // Annualised yield of taking discount = discount/(100-discount) × 365/(net-discount days)
+  const annualYieldOf = (r: TermRow) => {
+    const span = Math.max(1, r.netDays - r.discountDays);
+    return (r.discountPct / Math.max(0.01, 100 - r.discountPct)) * (365 / span) * 100;
+  };
+  const savingOf = (r: TermRow) => r.invoiceAmount * (r.discountPct / 100);
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      invoiceAmount: Math.max(0, parseFloat(invoiceAmount) || 0),
+      discountPct: Math.max(0, parseFloat(discountPct) || 0),
+      discountDays: Math.max(0, parseFloat(discountDays) || 0),
+      netDays: Math.max(1, parseFloat(netDays) || 30),
+    }]);
+    setSupplier(""); setInvoiceAmount(""); setDiscountPct("");
+    toast.success("Term added");
+  };
+
+  const worthTaking = rows.filter(r => annualYieldOf(r) >= coc);
+  const totalSaving = worthTaking.reduce((s, r) => s + savingOf(r), 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Payment-Terms Optimizer</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Decide whether an early-pay discount beats your cost of capital. Annualised discount yield = d/(100−d) × 365/(net−disc days). Take it when the yield exceeds your borrowing rate.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={invoiceAmount} onChange={e => setInvoiceAmount(e.target.value)} placeholder="Invoice amount (₹)" className={INP} />
+          <input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="Discount %" className={INP} />
+          <input type="number" value={discountDays} onChange={e => setDiscountDays(e.target.value)} placeholder="Pay within (days)" className={INP} />
+          <input type="number" value={netDays} onChange={e => setNetDays(e.target.value)} placeholder="Net due (days)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add term</button>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-[var(--color-muted)]">Your cost of capital (annual %)</label>
+          <input type="number" value={coc} onChange={e => setCoc(Math.max(0, parseFloat(e.target.value) || 0))} className={`${INP} w-24`} />
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Terms tracked", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "Worth paying early", value: String(worthTaking.length), color: "text-green-400" },
+            { label: "Discount captured", value: formatCurrency(totalSaving), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Invoice", "Terms", "Saving", "Ann. yield", "Verdict", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const y = annualYieldOf(r);
+                const take = y >= coc;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.invoiceAmount)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.discountPct}/{r.discountDays} net {r.netDays}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{formatCurrency(savingOf(r))}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${take ? "text-green-400" : "text-[var(--color-muted)]"}`}>{y.toFixed(1)}%</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${take ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{take ? "Pay early" : "Pay on net"}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">A 2/10-net-45 term yields ~21% annualised — far above most borrowing costs, so take it. Only skip the discount when your cash is genuinely tighter than the implied yield.</p>
+    </div>
+  );
+}
+
+// ── #70 Supplier Price-Trend Tracker ─────────────────────────────────────────────
+type PriceQuote = { id: string; supplier: string; item: string; price: number; date: string };
+function PriceTrendTracker() {
+  const [rows, setRows] = useFeatureState<PriceQuote[]>("sup-price-trend", []);
+  const [supplier, setSupplier] = useState("");
+  const [item, setItem] = useState("");
+  const [price, setPrice] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    if (!supplier.trim() || !item.trim()) { toast.error("Enter supplier and item"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      item: item.trim(),
+      price: Math.max(0, parseFloat(price) || 0),
+      date,
+    }]);
+    setSupplier(""); setPrice("");
+    toast.success("Quote logged");
+  };
+
+  // Group by supplier+item, sort by date, compute trend vs first quote
+  const series = useMemo(() => {
+    const map = new Map<string, PriceQuote[]>();
+    for (const r of rows) {
+      const k = `${r.supplier}␟${r.item}`;
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(r);
+    }
+    return [...map.entries()].map(([k, qs]) => {
+      const sorted = [...qs].sort((a, b) => a.date.localeCompare(b.date));
+      const first = sorted[0].price;
+      const last = sorted[sorted.length - 1].price;
+      const changePct = first > 0 ? ((last - first) / first) * 100 : 0;
+      const [supplier, item] = k.split("␟");
+      return { k, supplier, item, first, last, changePct, count: sorted.length, latest: sorted[sorted.length - 1].date };
+    }).sort((a, b) => b.changePct - a.changePct);
+  }, [rows]);
+
+  const rising = series.filter(s => s.changePct > 0).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Supplier Price-Trend Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log each quote per supplier-item over time. See which prices are creeping up so you can renegotiate, switch, or pre-buy before the next hike.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
+          <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="Quoted price (₹)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Quote date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log quote</button>
+        </div>
+      </div>
+
+      {series.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Tracked lines", value: String(series.length), color: "text-[var(--color-primary)]" },
+            { label: "Prices rising", value: String(rising), color: rising > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Quotes logged", value: String(rows.length), color: "text-[var(--color-muted)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Item", "First", "Latest", "Change", "Quotes", "Last date"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {series.map(s => (
+                <tr key={s.k} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{s.supplier}</td>
+                  <td className="px-3 py-2.5 text-xs">{s.item}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{formatCurrency(s.first)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(s.last)}</td>
+                  <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${s.changePct > 0 ? "text-red-400" : s.changePct < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{s.changePct > 0 ? "+" : ""}{s.changePct.toFixed(1)}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{s.count}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{s.latest}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Trend compares the latest quote to the first logged for each supplier-item. Log at least 3 quotes for a meaningful signal; a sustained rise is your cue to RFQ alternates.</p>
+    </div>
+  );
+}
+
+// ── #71 Lead-Time Variance Analyzer ──────────────────────────────────────────────
+type LeadRow = { id: string; supplier: string; promisedDays: number; actualDays: number; po: string };
+function LeadTimeVarianceAnalyzer() {
+  const [rows, setRows] = useFeatureState<LeadRow[]>("sup-leadtime-variance", []);
+  const [supplier, setSupplier] = useState("");
+  const [po, setPo] = useState("");
+  const [promisedDays, setPromisedDays] = useState("");
+  const [actualDays, setActualDays] = useState("");
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      po: po.trim(),
+      promisedDays: Math.max(0, parseFloat(promisedDays) || 0),
+      actualDays: Math.max(0, parseFloat(actualDays) || 0),
+    }]);
+    setSupplier(""); setPo(""); setPromisedDays(""); setActualDays("");
+    toast.success("Delivery logged");
+  };
+
+  // Per-supplier: mean slip, std dev (variability), reliability = on-time %
+  const stats = useMemo(() => {
+    const map = new Map<string, LeadRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.supplier)) map.set(r.supplier, []);
+      map.get(r.supplier)!.push(r);
+    }
+    return [...map.entries()].map(([supplier, rs]) => {
+      const slips = rs.map(r => r.actualDays - r.promisedDays);
+      const mean = slips.reduce((s, v) => s + v, 0) / slips.length;
+      const variance = slips.reduce((s, v) => s + (v - mean) ** 2, 0) / slips.length;
+      const std = Math.sqrt(variance);
+      const onTime = rs.filter(r => r.actualDays <= r.promisedDays).length;
+      const onTimePct = Math.round((onTime / rs.length) * 100);
+      return { supplier, n: rs.length, meanSlip: mean, std, onTimePct };
+    }).sort((a, b) => b.std - a.std);
+  }, [rows]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Lead-Time Variance Analyzer</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log promised vs actual delivery days per PO. The analyzer shows each supplier's average slip and variability (σ) — high variance means unreliable lead times and bigger safety stock.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={po} onChange={e => setPo(e.target.value)} placeholder="PO ref (optional)" className={INP} />
+          <input type="number" value={promisedDays} onChange={e => setPromisedDays(e.target.value)} placeholder="Promised days" className={INP} />
+          <input type="number" value={actualDays} onChange={e => setActualDays(e.target.value)} placeholder="Actual days" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log delivery</button>
+        </div>
+      </div>
+
+      {stats.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Deliveries", "Avg slip", "Variability σ", "On-time %", "Rating"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {stats.map(s => {
+                const reliable = s.std <= 2 && s.onTimePct >= 80;
+                const shaky = s.std > 5 || s.onTimePct < 50;
+                const rating = reliable ? { t: "Reliable", c: "text-green-400" } : shaky ? { t: "Erratic", c: "text-red-400" } : { t: "Watch", c: "text-yellow-400" };
+                return (
+                  <tr key={s.supplier} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{s.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{s.n}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${s.meanSlip > 0 ? "text-red-400" : "text-green-400"}`}>{s.meanSlip > 0 ? "+" : ""}{s.meanSlip.toFixed(1)}d</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">±{s.std.toFixed(1)}d</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{s.onTimePct}%</td>
+                    <td className={`px-3 py-2.5 text-xs font-semibold ${rating.c}`}>{rating.t}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Variability (σ) drives safety stock more than average lead time. A supplier averaging 10d ±1 is far easier to plan than one averaging 8d ±6. Push erratic vendors to commit firm windows.</p>
+    </div>
+  );
+}
+
+// ── #72 Alternate-Supplier Shortlist ─────────────────────────────────────────────
+type AltRow = { id: string; item: string; supplier: string; price: number; leadDays: number; minOrderQty: number; approved: boolean };
+function AltSupplierShortlist() {
+  const [rows, setRows] = useFeatureState<AltRow[]>("sup-alt-shortlist", []);
+  const [item, setItem] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [price, setPrice] = useState("");
+  const [leadDays, setLeadDays] = useState("");
+  const [minOrderQty, setMinOrderQty] = useState("");
+
+  const add = () => {
+    if (!item.trim() || !supplier.trim()) { toast.error("Enter item and supplier"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      item: item.trim(),
+      supplier: supplier.trim(),
+      price: Math.max(0, parseFloat(price) || 0),
+      leadDays: Math.max(0, parseFloat(leadDays) || 0),
+      minOrderQty: Math.max(0, parseFloat(minOrderQty) || 0),
+      approved: false,
+    }]);
+    setSupplier(""); setPrice(""); setLeadDays(""); setMinOrderQty("");
+    toast.success("Alternate added");
+  };
+
+  // Group by item; cheapest per item flagged "best price", fastest "fastest"
+  const groups = useMemo(() => {
+    const map = new Map<string, AltRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.item)) map.set(r.item, []);
+      map.get(r.item)!.push(r);
+    }
+    return [...map.entries()].map(([item, rs]) => {
+      const withPrice = rs.filter(r => r.price > 0);
+      const minPrice = withPrice.length ? Math.min(...withPrice.map(r => r.price)) : 0;
+      const minLead = Math.min(...rs.map(r => r.leadDays));
+      return { item, rows: [...rs].sort((a, b) => (a.price || Infinity) - (b.price || Infinity)), minPrice, minLead };
+    });
+  }, [rows]);
+
+  const singleSourced = groups.filter(g => g.rows.length < 2).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompare size={14} className="text-[var(--color-primary)]" /> Alternate-Supplier Shortlist</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Maintain a backup bench per item so a single supplier never holds you hostage. Cheapest and fastest options are flagged automatically — qualify a second source for every critical SKU.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="Price (₹)" className={INP} />
+          <input type="number" value={leadDays} onChange={e => setLeadDays(e.target.value)} placeholder="Lead time (days)" className={INP} />
+          <input type="number" value={minOrderQty} onChange={e => setMinOrderQty(e.target.value)} placeholder="Min order qty" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add option</button>
+        </div>
+      </div>
+
+      {groups.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Items with options", value: String(groups.length), color: "text-[var(--color-primary)]" },
+            { label: "Single-sourced (risk)", value: String(singleSourced), color: singleSourced > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Total options", value: String(rows.length), color: "text-[var(--color-muted)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        {groups.map(g => (
+          <div key={g.item} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-semibold">{g.item}</p>
+              {g.rows.length < 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-red-900/30 text-red-400 border-red-800/40">Single source</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Price", "Lead", "MOQ", "Flag", ""].map(h => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {g.rows.map(r => {
+                    const best = r.price > 0 && r.price === g.minPrice;
+                    const fast = r.leadDays === g.minLead;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-3 py-2 text-xs font-medium">{r.supplier}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{r.price > 0 ? formatCurrency(r.price) : "—"}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{r.leadDays}d</td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{r.minOrderQty || "—"}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className="flex gap-1">
+                            {best && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Best ₹</span>}
+                            {fast && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-blue-900/30 text-blue-400 border-blue-800/40">Fastest</span>}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Single-sourced items are a supply risk — one disruption stops your line. Qualify and periodically trial-order from a backup so you can switch fast when price, quality, or availability slips.</p>
+    </div>
+  );
+}
+
+// ── #73 Supplier Concentration Risk (Pareto) ─────────────────────────────────────
+type SpendRow = { id: string; supplier: string; annualSpend: number };
+function ConcentrationRisk() {
+  const [rows, setRows] = useFeatureState<SpendRow[]>("sup-concentration", []);
+  const [supplier, setSupplier] = useState("");
+  const [annualSpend, setAnnualSpend] = useState("");
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), supplier: supplier.trim(), annualSpend: Math.max(0, parseFloat(annualSpend) || 0) }]);
+    setSupplier(""); setAnnualSpend("");
+    toast.success("Supplier spend added");
+  };
+
+  const total = rows.reduce((s, r) => s + r.annualSpend, 0);
+  const ranked = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => b.annualSpend - a.annualSpend);
+    let cum = 0;
+    return sorted.map(r => {
+      const share = total > 0 ? (r.annualSpend / total) * 100 : 0;
+      cum += share;
+      return { ...r, share, cum };
+    });
+  }, [rows, total]);
+
+  const top = ranked[0];
+  const topShare = top ? top.share : 0;
+  // HHI = sum of squared market shares (0-10000); >2500 = highly concentrated
+  const hhi = Math.round(ranked.reduce((s, r) => s + r.share ** 2, 0));
+  const concentrated = topShare > 30 || hhi > 2500;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Supplier Concentration Risk</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Enter annual spend per supplier to see a Pareto view and HHI. If one vendor takes too big a share, a price hike or disruption hits hard — diversify before it bites.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={annualSpend} onChange={e => setAnnualSpend(e.target.value)} placeholder="Annual spend (₹)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add supplier</button>
+        </div>
+      </div>
+
+      {ranked.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total spend", value: formatCurrency(total), color: "text-[var(--color-primary)]" },
+            { label: "Top-vendor share", value: `${topShare.toFixed(0)}%`, color: topShare > 30 ? "text-red-400" : "text-green-400" },
+            { label: "HHI", value: String(hhi), color: hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        {concentrated && (
+          <div className="bg-red-900/15 border border-red-800/40 rounded-lg p-3 text-xs text-red-400">
+            High concentration — your top supplier carries {topShare.toFixed(0)}% of spend. Qualify alternates (see Alt Suppliers) and split orders to cut dependency.
+          </div>
+        )}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["#", "Supplier", "Annual spend", "Share", "Cumulative", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ranked.map((r, i) => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{i + 1}</td>
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.annualSpend)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${Math.min(100, r.share)}%` }} /></div>
+                      <span>{r.share.toFixed(1)}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.cum.toFixed(0)}%</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">HHI sums squared shares: under 1500 is diversified, 1500–2500 moderate, above 2500 highly concentrated. The Pareto cumulative column shows how few vendors make up the bulk of spend.</p>
+    </div>
+  );
+}
+
+// ── #74 GRN / Three-Way Match Register ───────────────────────────────────────────
+type MatchRow = {
+  id: string;
+  po: string;
+  supplier: string;
+  poQty: number; grnQty: number; invQty: number;
+  poRate: number; invRate: number;
+  rejectedQty: number;
+};
+function GrnThreeWayMatch() {
+  const [rows, setRows] = useFeatureState<MatchRow[]>("sup-grn-match", []);
+  const [tolPct, setTolPct] = useFeatureState<number>("sup-grn-tolerance", 2);
+  const [po, setPo] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [poQty, setPoQty] = useState(""); const [grnQty, setGrnQty] = useState(""); const [invQty, setInvQty] = useState("");
+  const [poRate, setPoRate] = useState(""); const [invRate, setInvRate] = useState(""); const [rejectedQty, setRejectedQty] = useState("");
+
+  const add = () => {
+    if (!po.trim() || !supplier.trim()) { toast.error("Enter PO and supplier"); return; }
+    const n = (v: string) => Math.max(0, parseFloat(v) || 0);
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), po: po.trim(), supplier: supplier.trim(),
+      poQty: n(poQty), grnQty: n(grnQty), invQty: n(invQty),
+      poRate: n(poRate), invRate: n(invRate), rejectedQty: n(rejectedQty),
+    }]);
+    setPo(""); setSupplier(""); setPoQty(""); setGrnQty(""); setInvQty(""); setPoRate(""); setInvRate(""); setRejectedQty("");
+    toast.success("Receipt logged");
+  };
+
+  // Match passes if invoice qty ≤ GRN qty and rate within tolerance of PO rate
+  const within = (a: number, b: number) => b === 0 ? a === 0 : Math.abs(a - b) / b * 100 <= tolPct;
+  const evalRow = (r: MatchRow) => {
+    const qtyOk = r.invQty <= r.grnQty + 0.0001;
+    const rateOk = within(r.invRate, r.poRate);
+    const accepted = Math.max(0, r.grnQty - r.rejectedQty);
+    const rejectRate = r.grnQty > 0 ? (r.rejectedQty / r.grnQty) * 100 : 0;
+    return { qtyOk, rateOk, accepted, rejectRate, clean: qtyOk && rateOk };
+  };
+
+  const clean = rows.filter(r => evalRow(r).clean).length;
+  const overbilled = rows.reduce((s, r) => { const e = evalRow(r); return s + (e.rateOk ? 0 : Math.max(0, (r.invRate - r.poRate)) * r.invQty); }, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> GRN / Three-Way Match Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Match PO, goods-receipt, and invoice on quantity and rate before paying. Flags over-billing and quality rejects so you never pay for goods you didn't receive or accept.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={po} onChange={e => setPo(e.target.value)} placeholder="PO ref *" className={INP} />
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={poQty} onChange={e => setPoQty(e.target.value)} placeholder="PO qty" className={INP} />
+          <input type="number" value={grnQty} onChange={e => setGrnQty(e.target.value)} placeholder="GRN qty" className={INP} />
+          <input type="number" value={invQty} onChange={e => setInvQty(e.target.value)} placeholder="Invoice qty" className={INP} />
+          <input type="number" value={poRate} onChange={e => setPoRate(e.target.value)} placeholder="PO rate (₹)" className={INP} />
+          <input type="number" value={invRate} onChange={e => setInvRate(e.target.value)} placeholder="Invoice rate (₹)" className={INP} />
+          <input type="number" value={rejectedQty} onChange={e => setRejectedQty(e.target.value)} placeholder="Rejected qty" className={INP} />
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log receipt</button>
+          <span className="text-xs text-[var(--color-muted)] flex items-center gap-2">Rate tolerance %
+            <input type="number" value={tolPct} onChange={e => setTolPct(Math.max(0, parseFloat(e.target.value) || 0))} className={`${INP} w-20`} />
+          </span>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Receipts", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "Clean matches", value: `${clean}/${rows.length}`, color: clean === rows.length ? "text-green-400" : "text-yellow-400" },
+            { label: "Over-billed", value: formatCurrency(overbilled), color: overbilled > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["PO", "Supplier", "PO/GRN/Inv qty", "Reject %", "Qty", "Rate", "Match", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const e = evalRow(r);
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.po}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.poQty}/{r.grnQty}/{r.invQty}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${e.rejectRate > 5 ? "text-red-400" : ""}`}>{e.rejectRate.toFixed(0)}%</td>
+                    <td className="px-3 py-2.5">{e.qtyOk ? <Check size={13} className="text-green-400" /> : <span className="text-red-400 text-xs font-semibold">Over</span>}</td>
+                    <td className="px-3 py-2.5">{e.rateOk ? <Check size={13} className="text-green-400" /> : <span className="text-red-400 text-xs font-semibold">Off</span>}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.clean ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{e.clean ? "Pass" : "Hold"}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Only release "Pass" invoices for payment. "Hold" rows have invoice qty above what was received or a rate outside tolerance — raise a debit note or query the supplier before paying.</p>
+    </div>
+  );
+}
+
+// ── #75 Negotiation Prep Sheet ───────────────────────────────────────────────────
+type NegoRow = { id: string; label: string; done: boolean };
+function NegotiationPrepSheet() {
+  const [supplier, setSupplier] = useFeatureState<string>("sup-nego-supplier", "");
+  const [annualSpend, setAnnualSpend] = useFeatureState<string>("sup-nego-spend", "");
+  const [currentRate, setCurrentRate] = useFeatureState<string>("sup-nego-current", "");
+  const [targetRate, setTargetRate] = useFeatureState<string>("sup-nego-target", "");
+  const [walkawayRate, setWalkawayRate] = useFeatureState<string>("sup-nego-walk", "");
+  const [items, setItems] = useFeatureState<NegoRow[]>("sup-nego-checklist", [
+    { id: "c1", label: "Benchmarked price vs 2+ alternate quotes", done: false },
+    { id: "c2", label: "Pulled 12-month spend & volume history", done: false },
+    { id: "c3", label: "Listed quality/delivery issues as leverage", done: false },
+    { id: "c4", label: "Defined target, walk-away & BATNA", done: false },
+    { id: "c5", label: "Prepared volume-commitment or early-pay trade-offs", done: false },
+  ]);
+  const [newItem, setNewItem] = useState("");
+
+  const spend = parseFloat(annualSpend) || 0;
+  const cur = parseFloat(currentRate) || 0;
+  const tgt = parseFloat(targetRate) || 0;
+  const annualSaving = cur > 0 && tgt > 0 && tgt < cur ? spend * ((cur - tgt) / cur) : 0;
+
+  const toggle = (id: string) => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    setItems(prev => [...prev, { id: crypto.randomUUID(), label: newItem.trim(), done: false }]);
+    setNewItem("");
+  };
+  const doneCount = items.filter(i => i.done).length;
+  const ready = doneCount === items.length && items.length > 0;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Handshake size={14} className="text-[var(--color-primary)]" /> Negotiation Prep Sheet</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Walk into every supplier negotiation prepared. Set your target and walk-away rate, see the annual saving at stake, and tick off the homework before you sit down.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier" className={INP} />
+          <input type="number" value={annualSpend} onChange={e => setAnnualSpend(e.target.value)} placeholder="Annual spend (₹)" className={INP} />
+          <input type="number" value={currentRate} onChange={e => setCurrentRate(e.target.value)} placeholder="Current rate (₹)" className={INP} />
+          <input type="number" value={targetRate} onChange={e => setTargetRate(e.target.value)} placeholder="Target rate (₹)" className={INP} />
+          <input type="number" value={walkawayRate} onChange={e => setWalkawayRate(e.target.value)} placeholder="Walk-away rate (₹)" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Target discount", value: cur > 0 && tgt > 0 ? `${(((cur - tgt) / cur) * 100).toFixed(1)}%` : "—", color: "text-[var(--color-primary)]" },
+          { label: "Annual saving at target", value: formatCurrency(annualSaving), color: "text-green-400" },
+          { label: "Prep complete", value: `${doneCount}/${items.length}`, color: ready ? "text-green-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-3">Prep checklist {supplier && `· ${supplier}`}</p>
+        <div className="space-y-2">
+          {items.map(i => (
+            <div key={i.id} className="flex items-center gap-2">
+              <button onClick={() => toggle(i.id)} className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${i.done ? "bg-[var(--color-primary)] border-transparent" : "border-[var(--color-border)]"}`}>
+                {i.done && <Check size={11} className="text-[var(--color-bg)]" />}
+              </button>
+              <span className={`text-xs flex-1 ${i.done ? "line-through text-[var(--color-muted)]" : ""}`}>{i.label}</span>
+              <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <input value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Add a prep point…" className={INP} />
+          <button onClick={addItem} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] font-semibold px-3 py-2 rounded-lg hover:bg-[var(--color-bg)] shrink-0"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Anchor on benchmarked alternate quotes, lead with your volume and payment reliability, and never reveal your walk-away. The annual-saving figure is your real prize — keep it front of mind.</p>
     </div>
   );
 }
