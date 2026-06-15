@@ -81,6 +81,10 @@ const SecurityPage       = lazy(() => import("@/features/security/SecurityPage")
 const PrivacyPage        = lazy(() => import("@/features/privacy/PrivacyPage"));
 const BankingPage        = lazy(() => import("@/features/banking/BankingPage"));
 const PredictPage        = lazy(() => import("@/features/predict/PredictPage"));
+const VoicePage          = lazy(() => import("@/features/voice/VoicePage"));
+const FieldPage          = lazy(() => import("@/features/field/FieldPage"));
+const TokensPage         = lazy(() => import("@/features/tokens/TokensPage"));
+const FrontierPage       = lazy(() => import("@/features/frontier/FrontierPage"));
 
 function PageLoader() {
   return (
@@ -111,7 +115,7 @@ const GUARDED_TABS = new Set([
   "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
   "sales", "payments", "insurance", "treasury", "esg", "global",
   "marketplace", "network", "automation", "copilot", "security", "privacy",
-  "banking", "predict",
+  "banking", "predict", "voice", "field", "tokens", "frontier",
 ]);
 
 function landingFor(role: string): string {
@@ -256,6 +260,10 @@ function AppShell() {
                 <Route path="/privacy"       element={<PrivacyPage />} />
                 <Route path="/banking"       element={<BankingPage />} />
                 <Route path="/predict"       element={<PredictPage />} />
+                <Route path="/voice"         element={<VoicePage />} />
+                <Route path="/field"         element={<FieldPage />} />
+                <Route path="/tokens"        element={<TokensPage />} />
+                <Route path="/frontier"      element={<FrontierPage />} />
                 <Route path="/data"          element={<DataPage />} />
                 <Route path="/profile"       element={<ProfilePage />} />
                 <Route path="*"              element={<NotFoundPage />} />

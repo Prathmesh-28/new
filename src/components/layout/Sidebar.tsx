@@ -13,6 +13,7 @@ import {
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
+  Mic, Smartphone, Blocks, FlaskConical,
 } from "lucide-react";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
@@ -78,6 +79,10 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
       { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
       { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
+      { to: "/voice",        label: "Voice",        icon: Mic,             tab: "voice"        },
+      { to: "/field",        label: "Field/Offline",icon: Smartphone,      tab: "field"        },
+      { to: "/tokens",       label: "Tokens",       icon: Blocks,          tab: "tokens"       },
+      { to: "/frontier",     label: "Frontier Lab", icon: FlaskConical,    tab: "frontier"     },
     ]},
   ],
   owner: [
@@ -137,6 +142,10 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
       { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
       { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
+      { to: "/voice",        label: "Voice",        icon: Mic,             tab: "voice"        },
+      { to: "/field",        label: "Field/Offline",icon: Smartphone,      tab: "field"        },
+      { to: "/tokens",       label: "Tokens",       icon: Blocks,          tab: "tokens"       },
+      { to: "/frontier",     label: "Frontier Lab", icon: FlaskConical,    tab: "frontier"     },
     ]},
   ],
   finance_manager: [
