@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers } from "lucide-react";
+import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers, BadgeCheck, HandCoins, Repeat, Landmark } from "lucide-react";
 import { toast } from "sonner";
 
 const INP = "w-full text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]";
@@ -19,7 +19,7 @@ export default function AlertsPage() {
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 
-  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi" | "inventory" | "largetxn" | "budget" | "concentration" | "inbox">("active");
+  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi" | "inventory" | "largetxn" | "budget" | "concentration" | "inbox" | "licenses" | "emicover" | "recurring" | "taxsetaside">("active");
   const [showConfig,  setShowConfig]  = useState(false);
   const [newThreshold, setNewThreshold] = useState(String(safetyDays));
   const [actionText,  setActionText]  = useState<Record<string, string>>({});
@@ -171,6 +171,10 @@ export default function AlertsPage() {
           ["budget",     "Budget-Overrun",                Layers],
           ["concentration", "Customer Concentration",     PieChart],
           ["inbox",      "Priority Inbox",                Inbox],
+          ["licenses",   "Licence Expiry",                BadgeCheck],
+          ["emicover",   "EMI Coverage",                  HandCoins],
+          ["recurring",  "Recurring-Spend Watch",         Repeat],
+          ["taxsetaside","Tax Set-Aside",                 Landmark],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -245,6 +249,10 @@ export default function AlertsPage() {
       {tab === "budget"      && <BudgetOverrunAlerts />}
       {tab === "concentration" && <CustomerConcentrationAlerts />}
       {tab === "inbox"       && <PriorityInbox />}
+      {tab === "licenses"    && <LicenceExpiryAlerts />}
+      {tab === "emicover"    && <EmiCoverageAlerts />}
+      {tab === "recurring"   && <RecurringSpendWatch />}
+      {tab === "taxsetaside" && <TaxSetAsideAlerts />}
     </div>
   );
 }
@@ -1598,6 +1606,317 @@ function PriorityInbox() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Dismissing moves an alert to Resolved without a note. To log what you did, use the Active tab's resolve box instead.</p>
+    </div>
+  );
+}
+
+// ── Licence Expiry Alerts ────────────────────────────────────────────────────────
+// One-time, non-recurring registrations & licences (trade licence, FSSAI, insurance,
+// ISO, domain/SSL) with escalating reminder bands as their expiry date approaches.
+type Licence = { id: string; name: string; expiryDate: string; createdAt: string };
+
+function LicenceExpiryAlerts() {
+  const [items, setItems] = useFeatureState<Licence[]>("alr-licence-items", []);
+  const [name, setName] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+
+  const PRESETS = ["Trade licence", "FSSAI licence", "Shops & Establishment", "Fire NOC", "Professional tax registration", "GST registration", "ISO certification", "Insurance policy", "Domain / SSL", "Import-Export Code"];
+
+  const add = () => {
+    if (!name.trim() || !expiryDate) { toast.error("Enter a licence name and expiry date"); return; }
+    setItems(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), expiryDate, createdAt: new Date().toISOString() }]);
+    setName(""); setExpiryDate("");
+    toast.success("Licence added");
+  };
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const daysTo = (d: string) => Math.round((new Date(d).getTime() - today.getTime()) / 86400000);
+  const band = (days: number) => days < 0 ? { color: "text-red-400", bg: "bg-red-950/20 border-red-800/40", label: "Expired" }
+    : days <= 15 ? { color: "text-orange-400", bg: "bg-orange-950/20 border-orange-800/40", label: "Expiring ≤15 days" }
+    : days <= 45 ? { color: "text-yellow-400", bg: "bg-yellow-950/20 border-yellow-800/40", label: "Renew soon" }
+    : { color: "text-[var(--color-muted)]", bg: "bg-[var(--color-surface)] border-[var(--color-border)]", label: "Valid" };
+
+  const sorted = [...items].sort((a, b) => daysTo(a.expiryDate) - daysTo(b.expiryDate));
+  const urgent = sorted.filter(i => daysTo(i.expiryDate) <= 45).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> Licence Expiry Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track licences, registrations and certificates that lapse on a fixed date — trade licence, FSSAI, fire NOC, insurance, SSL. Reminders escalate from "Renew soon" to "Expired" so a lapsed permit never catches you out.</p>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {PRESETS.map(p => <button key={p} onClick={() => setName(p)} className="text-[11px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-[var(--color-primary)]/40">{p}</button>)}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Licence / certificate *" className={INP} />
+          <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={INP} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add licence</button>
+        </div>
+      </div>
+
+      {urgent > 0 && (
+        <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+          <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {urgent} licence{urgent > 1 ? "s" : ""} expired or expiring within 45 days</p>
+        </div>
+      )}
+
+      {sorted.length > 0 ? (
+        <div className="space-y-2">
+          {sorted.map(i => {
+            const days = daysTo(i.expiryDate);
+            const b = band(days);
+            return (
+              <div key={i.id} className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${b.bg}`}>
+                <div className="min-w-0">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${b.color}`}>{b.label}</span>
+                  <p className="text-sm font-semibold mt-0.5">{i.name}</p>
+                  <p className="text-xs text-[var(--color-muted)]">Expires {new Date(i.expiryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {days < 0 ? `${Math.abs(days)} days ago` : days === 0 ? "today" : `in ${days} days`}</p>
+                </div>
+                <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="p-1 text-[var(--color-muted)] hover:text-red-400 rounded shrink-0"><X size={13} /></button>
+              </div>
+            );
+          })}
+        </div>
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No licences tracked — add one above or pick a preset.</p>}
+      <p className="text-[10px] text-[var(--color-muted)]">For licences that renew on a cycle (GST returns, TDS), use Compliance Due-Dates instead — this tab is for fixed-expiry registrations. Start renewals early; some need inspections.</p>
+    </div>
+  );
+}
+
+// ── EMI Coverage Alerts ──────────────────────────────────────────────────────────
+// Checks whether your current bank balance can cover loan/EMI obligations falling
+// due inside a window — surfacing a funding shortfall before a payment bounces.
+function EmiCoverageAlerts() {
+  const { store } = useApp();
+  const [windowInput, setWindowInput] = useFeatureState<string>("alr-emicover-window", "30");
+  const fc = formatCurrency;
+  const lookAhead = Math.max(parseInt(windowInput) || 30, 1);
+
+  const data = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const horizon = today.getTime() + lookAhead * 86400000;
+    const balance = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+    const emis = (store.obligations ?? [])
+      .filter(o => o.type === "loan")
+      .map(o => ({ ...o, days: Math.round((new Date(o.dueDate).getTime() - today.getTime()) / 86400000) }))
+      .filter(o => new Date(o.dueDate).getTime() <= horizon)
+      .sort((a, b) => a.days - b.days);
+    const due = emis.reduce((s, o) => s + (o.amount || 0), 0);
+    const after = balance - due;
+    return { balance, emis, due, after };
+  }, [store.bankAccounts, store.obligations, lookAhead]);
+
+  const shortfall = data.after < 0;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> EMI Coverage Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Adds up your loan EMIs due inside a window and checks them against your live bank balance — so you know whether you can cover every instalment, or need to arrange funds before a payment bounces and dents your credit.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Coverage window (days)</label>
+          <input type="number" value={windowInput} onChange={e => setWindowInput(e.target.value)} placeholder="30" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total balance", value: fc(data.balance), color: "text-[var(--color-text)]" },
+          { label: `EMIs due (${lookAhead}d)`, value: fc(data.due), color: data.due > 0 ? "text-orange-400" : "text-[var(--color-text)]" },
+          { label: "Balance after EMIs", value: fc(data.after), color: data.after < 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {shortfall ? (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-400 leading-snug">Projected shortfall of {fc(Math.abs(data.after))} — your balance won't cover all EMIs due in the next {lookAhead} days. Arrange funds or talk to your lender before the due date.</p>
+        </div>
+      ) : data.due > 0 ? (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">Balance covers all EMIs due in this window with {fc(data.after)} to spare.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 flex items-center gap-2">
+          <Info size={15} className="text-blue-400" />
+          <p className="text-sm text-[var(--color-muted)]">No loan EMIs due in the next {lookAhead} days. Add loan obligations in Forecast to track instalment coverage.</p>
+        </div>
+      )}
+
+      {data.emis.length > 0 && (
+        <div className="space-y-2">
+          {data.emis.map(o => (
+            <div key={o.id} className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${o.days < 0 ? "bg-red-950/20 border-red-800/40" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{o.name}</p>
+                <p className="text-xs text-[var(--color-muted)]">{o.days < 0 ? `${Math.abs(o.days)} days overdue` : o.days === 0 ? "due today" : `due in ${o.days} days`} · {new Date(o.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+              </div>
+              <span className="text-sm font-bold tabular-nums shrink-0">{fc(o.amount || 0)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Only obligations typed as loans are counted here — see Payment-Due for tax and payroll. Balance is the live sum across connected accounts; expected inflows in the window are not netted in.</p>
+    </div>
+  );
+}
+
+// ── Recurring-Spend Watch ────────────────────────────────────────────────────────
+// Surfaces every recurring expense/subscription on file, totals the committed
+// monthly outflow, and flags subscription creep against a budget ceiling you set.
+function RecurringSpendWatch() {
+  const { store } = useApp();
+  const [ceilingInput, setCeilingInput] = useFeatureState<string>("alr-recurring-ceiling", "");
+  const fc = formatCurrency;
+  const ceiling = parseFloat(ceilingInput) || 0;
+
+  const data = useMemo(() => {
+    const recurring = (store.transactions ?? []).filter(t => t.isRecurring && (t.category === "expense" || t.category === "payroll") && (t.amount || 0) < 0);
+    // Latest recurring charge per counterparty — treat each as one monthly commitment.
+    const latest = new Map<string, { id: string; party: string; amount: number; date: string }>();
+    [...recurring].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(t => {
+      const key = (t.counterparty || t.description || t.id).trim();
+      latest.set(key, { id: t.id, party: t.counterparty || t.description || "Recurring charge", amount: Math.abs(t.amount || 0), date: t.date });
+    });
+    const rows = [...latest.values()].sort((a, b) => b.amount - a.amount);
+    const monthly = rows.reduce((s, r) => s + r.amount, 0);
+    return { rows, monthly, count: rows.length };
+  }, [store.transactions]);
+
+  const breached = ceiling > 0 && data.monthly > ceiling;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Recurring-Spend Watch</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Lists every recurring charge on file — SaaS subscriptions, rent, retainers — and totals your committed monthly outflow. Set a ceiling to catch subscription creep before it quietly eats your margin.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when recurring spend exceeds (₹/mo) — optional</label>
+          <input type="number" value={ceilingInput} onChange={e => setCeilingInput(e.target.value)} placeholder="e.g. 200000" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Recurring charges", value: String(data.count), color: "text-[var(--color-text)]" },
+          { label: "Committed / month", value: fc(data.monthly), color: breached ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Committed / year", value: fc(data.monthly * 12), color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {breached ? (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-400 leading-snug">Recurring spend is {fc(data.monthly)}/mo — above your {fc(ceiling)} ceiling. Review subscriptions for ones you can pause or downgrade.</p>
+        </div>
+      ) : data.count > 0 ? (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">Recurring commitments are within your ceiling.</p>
+        </div>
+      ) : null}
+
+      {data.rows.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Charge", "Last seen", "Monthly amount"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-xs font-medium">{r.party}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{new Date(r.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums font-semibold">{fc(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No recurring charges found — mark subscription and rent transactions as recurring to track them here.</p>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Built from transactions flagged recurring, one commitment per counterparty at its latest amount. Annualised figure assumes the charge repeats monthly — adjust for quarterly or annual billing.</p>
+    </div>
+  );
+}
+
+// ── Tax Set-Aside Alerts ─────────────────────────────────────────────────────────
+// Estimates how much tax you should be reserving from recent revenue at a rate you
+// set, and warns if your bank balance can't cover that provision.
+function TaxSetAsideAlerts() {
+  const { store } = useApp();
+  const [rateInput, setRateInput] = useFeatureState<string>("alr-taxsetaside-rate", "25");
+  const fc = formatCurrency;
+  const rate = Math.min(Math.max(parseFloat(rateInput) || 25, 0), 100);
+
+  const data = useMemo(() => {
+    const cutoff = Date.now() - 90 * 86400000;
+    const recent = (store.transactions ?? []).filter(t => new Date(t.date).getTime() >= cutoff);
+    const revenue = recent.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const expenses = recent.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const profit = Math.max(revenue - expenses, 0);
+    const provision = profit * (rate / 100);
+    // Tax already paid out in the quarter offsets what still needs setting aside.
+    const taxPaid = recent.filter(t => t.category === "tax").reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const stillOwed = Math.max(provision - taxPaid, 0);
+    const balance = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+    return { revenue, expenses, profit, provision, taxPaid, stillOwed, balance };
+  }, [store.transactions, store.bankAccounts, rate]);
+
+  const underReserved = data.stillOwed > data.balance;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Tax Set-Aside Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Estimates the tax you should be parking from the last 90 days of profit at a rate you set, nets off tax already paid, and warns if your balance can't cover what's still owed — so advance-tax season never blindsides you.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Effective tax rate on profit: {rate}%</label>
+          <input type="range" min="0" max="40" step="1" value={rateInput} onChange={e => setRateInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Profit (90d)", value: fc(data.profit), color: "text-[var(--color-text)]" },
+          { label: "Provision needed", value: fc(Math.round(data.provision)), color: "text-[var(--color-text)]" },
+          { label: "Tax already paid", value: fc(data.taxPaid), color: "text-green-400" },
+          { label: "Still to set aside", value: fc(Math.round(data.stillOwed)), color: data.stillOwed > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {underReserved ? (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-400 leading-snug">You should be reserving {fc(Math.round(data.stillOwed))} for tax but hold only {fc(data.balance)} in the bank. Build the reserve before the next advance-tax instalment.</p>
+        </div>
+      ) : data.stillOwed > 0 ? (
+        <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex items-start gap-2.5">
+          <Info size={14} className="text-yellow-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-yellow-400 leading-snug">Set aside about {fc(Math.round(data.stillOwed))} for tax on this quarter's profit. Your balance covers it — ring-fence it so it isn't spent.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">{data.profit <= 0 ? "No taxable profit in the last 90 days at the moment." : "Tax already paid covers the estimated provision for this period."}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A rough provisioning aid, not a tax computation — it ignores carry-forward losses, depreciation, exemptions and surcharge. Confirm your actual liability and instalment dates with your CA.</p>
     </div>
   );
 }

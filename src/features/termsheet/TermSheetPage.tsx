@@ -3,9 +3,9 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { termSheetMath, type RoundType } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles, Network, Landmark, Milestone, Clock, LineChart } from "lucide-react";
+import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles, Network, Landmark, Milestone, Clock, LineChart, PiggyBank, Coins, SlidersHorizontal } from "lucide-react";
 
-type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist" | "multi-class-waterfall" | "board-modeler" | "tranche-planner" | "note-maturity" | "dilution-rounds";
+type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist" | "multi-class-waterfall" | "board-modeler" | "tranche-planner" | "note-maturity" | "dilution-rounds" | "exit-proceeds" | "esop-exit-value" | "discount-vs-cap";
 
 const ROUND_LABELS: Record<RoundType, string> = {
   priced:      "Priced Equity Round",
@@ -72,7 +72,7 @@ export default function TermSheetPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users], ["clause-explainer", "Clause Explainer", BookOpen], ["anti-dilution", "Anti-Dilution", Layers], ["pro-rata", "Pro-Rata Rights", Percent], ["safe-vs-priced", "SAFE vs Priced", Scale], ["vesting", "Vesting Schedule", CalendarClock], ["checklist", "Term-Sheet Checklist", ListChecks], ["multi-class-waterfall", "Multi-Class Waterfall", Network], ["board-modeler", "Board Composition", Landmark], ["tranche-planner", "Tranche Planner", Milestone], ["note-maturity", "Note Maturity", Clock], ["dilution-rounds", "Dilution Over Rounds", LineChart]] as const).map(([id, label, Icon]) => (
+        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users], ["clause-explainer", "Clause Explainer", BookOpen], ["anti-dilution", "Anti-Dilution", Layers], ["pro-rata", "Pro-Rata Rights", Percent], ["safe-vs-priced", "SAFE vs Priced", Scale], ["vesting", "Vesting Schedule", CalendarClock], ["checklist", "Term-Sheet Checklist", ListChecks], ["multi-class-waterfall", "Multi-Class Waterfall", Network], ["board-modeler", "Board Composition", Landmark], ["tranche-planner", "Tranche Planner", Milestone], ["note-maturity", "Note Maturity", Clock], ["dilution-rounds", "Dilution Over Rounds", LineChart], ["exit-proceeds", "Exit Proceeds Split", PiggyBank], ["esop-exit-value", "ESOP Value at Exit", Coins], ["discount-vs-cap", "Discount vs Cap", SlidersHorizontal]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -94,6 +94,9 @@ export default function TermSheetPage() {
       {tab === "tranche-planner" && <TranchePlanner />}
       {tab === "note-maturity"   && <NoteMaturityScenarios />}
       {tab === "dilution-rounds" && <DilutionOverRounds />}
+      {tab === "exit-proceeds"   && <ExitProceedsDistribution />}
+      {tab === "esop-exit-value" && <EsopExitValue />}
+      {tab === "discount-vs-cap" && <DiscountVsCapChooser />}
 
       {tab === "generator" && <>
       {/* Round type selector */}
@@ -1714,6 +1717,368 @@ function DilutionOverRounds() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
         Dilution compounds: a 20% round on top of a 20% round leaves you with 64%, not 60%. New option pools dilute founders too. This is a planning estimate (each round's investor + pool are taken from post-money); model your real cap table for exact numbers.
+      </div>
+    </div>
+  );
+}
+
+// ── #126 Exit-Proceeds Distribution — split a sale across preferred stack + common after liquidation prefs ──
+interface ProceedRow {
+  id: string;
+  name: string;
+  pct: number;        // fully-diluted ownership %
+  invested: number;   // capital invested (0 for founders/pool)
+  prefX: number;      // liquidation pref multiple (0 = common)
+  participating: boolean;
+}
+
+function blankProceedRow(name: string, pct: number, invested: number, prefX: number): ProceedRow {
+  return { id: Math.random().toString(36).slice(2), name, pct, invested, prefX, participating: false };
+}
+
+function ExitProceedsDistribution() {
+  const [exitValue, setExitValue] = useState(200_000_000);
+  const [rows, setRows] = useState<ProceedRow[]>([
+    blankProceedRow("Founders / common", 55, 0, 0),
+    blankProceedRow("Series A", 25, 30_000_000, 1),
+    blankProceedRow("Seed", 10, 8_000_000, 1),
+    blankProceedRow("ESOP pool", 10, 0, 0),
+  ]);
+
+  const patch = (id: string, key: keyof ProceedRow, value: ProceedRow[keyof ProceedRow]) =>
+    setRows(prev => prev.map(r => (r.id === id ? { ...r, [key]: value } : r)));
+
+  const exit = Math.max(0, exitValue);
+
+  // Distribution: preferred takes the GREATER of (pref, as-converted) for non-participating;
+  // participating preferred takes pref + pro-rata of remainder. Common takes what's left.
+  const dist = (() => {
+    // 1. Preferred preferences paid first (capped by available exit)
+    const prefs = rows.map(r => ({ row: r, pref: r.prefX > 0 ? r.invested * r.prefX : 0 }));
+    const totalPref = prefs.reduce((s, p) => s + p.pref, 0);
+    // For each preferred, compare pref vs as-converted to decide if it converts to common
+    const ownership = (r: ProceedRow) => Math.max(0, r.pct) / 100;
+    // Non-participating preferred converts if as-converted > pref
+    const decisions = rows.map(r => {
+      if (r.prefX <= 0) return { row: r, converts: true, pref: 0 };
+      const pref = r.invested * r.prefX;
+      const asConv = exit * ownership(r);
+      if (!r.participating && asConv >= pref) return { row: r, converts: true, pref: 0 };
+      return { row: r, converts: false, pref };
+    });
+    const paidPrefTotal = Math.min(exit, decisions.reduce((s, d) => s + d.pref, 0));
+    const remainder = Math.max(0, exit - paidPrefTotal);
+    // Pro-rata pool for remainder = common holders + participating preferred + converted preferred
+    const sharePctTotal = decisions.reduce((s, d) => {
+      const r = d.row;
+      const shares = d.converts || (r.prefX > 0 && r.participating) ? ownership(r) : 0;
+      return s + shares;
+    }, 0);
+    return decisions.map(d => {
+      const r = d.row;
+      const shares = d.converts || (r.prefX > 0 && r.participating) ? ownership(r) : 0;
+      const fromRemainder = sharePctTotal > 0 ? (shares / sharePctTotal) * remainder : 0;
+      const prefPaid = totalPref > 0 ? d.pref * (paidPrefTotal / Math.max(1, decisions.reduce((s, x) => s + x.pref, 0))) : 0;
+      const payout = prefPaid + fromRemainder;
+      return { row: r, payout, prefPaid, fromRemainder, converts: d.converts, multiple: r.invested > 0 ? payout / r.invested : 0 };
+    });
+  })();
+
+  const fc = formatCurrency;
+  const palette = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4", "#a855f7"];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Exit-Proceeds Distribution</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Split a sale across the preferred stack and common after liquidation preferences. Non-participating preferred takes the greater of its pref or as-converted equity.</p>
+        </div>
+        <label className="text-xs text-[var(--color-muted)] block max-w-xs">Exit / sale value (₹)
+          <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+        </label>
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+              <label className="text-[10px] text-[var(--color-muted)] block">Stakeholder
+                <input value={r.name} onChange={e => patch(r.id, "name", e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block">Ownership %
+                <input type="number" value={r.pct} onChange={e => patch(r.id, "pct", +e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block">Invested (₹)
+                <input type="number" value={r.invested} onChange={e => patch(r.id, "invested", +e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block">Pref (×, 0 = common)
+                <input type="number" step="0.5" min={0} value={r.prefX} onChange={e => patch(r.id, "prefX", +e.target.value)} className={tsInp} />
+              </label>
+              <div className="flex items-center gap-2 pb-2">
+                <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                  <input type="checkbox" disabled={r.prefX <= 0} checked={r.participating} onChange={e => patch(r.id, "participating", e.target.checked)} className="accent-[var(--color-primary)]" /> Part.
+                </label>
+                {rows.length > 1 && <button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs ml-auto">✕</button>}
+              </div>
+            </div>
+          ))}
+          {rows.length < 6 && (
+            <button onClick={() => setRows(prev => [...prev, blankProceedRow(`Holder ${prev.length + 1}`, 0, 0, 0)])}
+              className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]">+ Add holder</button>
+          )}
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)]">Ownership total: <span className={`tabular-nums ${Math.abs(rows.reduce((s, r) => s + r.pct, 0) - 100) < 0.5 ? "text-green-400" : "text-orange-400"}`}>{rows.reduce((s, r) => s + r.pct, 0).toFixed(1)}%</span></p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Stakeholder", "Treatment", "Preference paid", "From remainder", "Total payout", "Return"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dist.map(d => (
+              <tr key={d.row.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{d.row.name}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.row.prefX <= 0 ? "Common" : d.converts ? "Converted to common" : d.row.participating ? "Pref + participation" : "Took preference"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.prefPaid > 0 ? fc(Math.round(d.prefPaid)) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.fromRemainder > 0 ? fc(Math.round(d.fromRemainder)) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(Math.round(d.payout))}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${d.row.invested > 0 ? (d.multiple >= 1 ? "text-green-400" : "text-red-400") : "text-[var(--color-muted)]"}`}>{d.row.invested > 0 ? `${d.multiple.toFixed(2)}×` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+        <p className="text-xs font-semibold mb-1">Payout waterfall</p>
+        {dist.map((d, i) => {
+          const pct = exit > 0 ? (d.payout / exit) * 100 : 0;
+          const color = palette[i % palette.length];
+          return (
+            <div key={d.row.id}>
+              <div className="flex items-center justify-between text-xs mb-0.5">
+                <span className="font-medium">{d.row.name}</span>
+                <span className="tabular-nums" style={{ color }}>{fc(Math.round(d.payout))} · {pct.toFixed(0)}%</span>
+              </div>
+              <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Simplified single-tier waterfall — all preferences are treated pari-passu (paid together, pro-rated if the exit can't cover them). Real stacks often have seniority ordering (later rounds paid first) and caps. Use this for a directional split, not the closing statement.
+      </div>
+    </div>
+  );
+}
+
+// ── #127 ESOP Value at Exit — what an option grant is worth across exit valuations after strike & dilution ──
+function EsopExitValue() {
+  const [grantPct, setGrantPct]       = useState(0.5);   // grant as % of fully-diluted at grant
+  const [strikePrice, setStrikePrice] = useState(50);    // ₹ per share
+  const [grantPrice, setGrantPrice]   = useState(120);   // implied ₹/share at grant
+  const [futureDilution, setFutureDilution] = useState(30); // % dilution before exit from future rounds
+  const [exitValue, setExitValue]     = useState(500_000_000);
+  const [vestedPct, setVestedPct]     = useState(75);
+
+  // Shares granted (notional) from grant % of a notional 1,000,000-share cap table
+  const totalShares = 1_000_000;
+  const grantedShares = totalShares * (grantPct / 100);
+  const dilutionFactor = Math.max(0, 1 - Math.min(100, futureDilution) / 100);
+  const ownershipAtExit = (grantPct / 100) * dilutionFactor; // diluted ownership fraction
+  const exit = Math.max(0, exitValue);
+
+  const grossValue = exit * ownershipAtExit;
+  const strikeCost = grantedShares * strikePrice;
+  const netValueFull = Math.max(0, grossValue - strikeCost);
+  const netValueVested = netValueFull * (Math.min(100, Math.max(0, vestedPct)) / 100);
+  const gainMultiple = grantPrice > 0 ? exit / (totalShares * grantPrice) : 0;
+  const fc = formatCurrency;
+
+  // Sensitivity across a range of exit valuations
+  const scenarios = [0.25, 0.5, 1, 2, 4].map(mult => {
+    const ev = exit * mult;
+    const gross = ev * ownershipAtExit;
+    const net = Math.max(0, gross - strikeCost) * (vestedPct / 100);
+    return { mult, ev, net };
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> ESOP Value at Exit</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">What an option grant is actually worth at exit, after the strike price, future-round dilution and vesting. Helps an employee judge an offer's equity component.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Grant % (at grant, fully diluted)
+            <input type="number" step="0.01" value={grantPct} onChange={e => setGrantPct(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Strike price / share (₹)
+            <input type="number" value={strikePrice} onChange={e => setStrikePrice(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Implied price / share at grant (₹)
+            <input type="number" value={grantPrice} onChange={e => setGrantPrice(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Future dilution before exit %
+            <input type="number" value={futureDilution} onChange={e => setFutureDilution(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Exit valuation (₹)
+            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Vested at exit %
+            <input type="number" value={vestedPct} onChange={e => setVestedPct(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Gross value (vested + unvested)", value: fc(Math.round(grossValue)), color: "text-[var(--color-text)]" },
+          { label: "Strike cost to exercise", value: fc(Math.round(strikeCost)), color: "text-orange-400" },
+          { label: "Net value (fully vested)", value: fc(Math.round(netValueFull)), color: "text-[var(--color-primary)]" },
+          { label: "Net value (vested only)", value: fc(Math.round(netValueVested)), color: netValueVested > 0 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[420px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Exit scenario", "Exit valuation", "Net value (vested)"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {scenarios.map(s => (
+              <tr key={s.mult} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{s.mult}× base</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatAmount(s.ev)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-green-400">{fc(Math.round(s.net))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Grant value erodes with every future round (dilution) and you pay the strike to exercise. Implied gain multiple at base exit: <span className="tabular-nums text-[var(--color-text)]">{gainMultiple.toFixed(1)}×</span> the grant-date price. Ignores taxes (perquisite + capital gains) and exit liquidation preferences ahead of common — net cash may be lower.
+      </div>
+    </div>
+  );
+}
+
+// ── #128 Convertible Discount-vs-Cap Chooser — which term wins at the next round's price ──
+function DiscountVsCapChooser() {
+  const [investment, setInvestment]   = useState(5_000_000);
+  const [discountPct, setDiscountPct] = useState(20);
+  const [valCap, setValCap]           = useState(60_000_000);
+  const [nextPre, setNextPre]         = useState(120_000_000);
+
+  const inv = Math.max(0, investment);
+  const disc = Math.min(99, Math.max(0, discountPct)) / 100;
+  const cap = Math.max(1, valCap);
+  const pre = Math.max(1, nextPre);
+
+  // Discount method: investor converts at (1 - discount) of the next-round price → effective pre = pre × (1-disc)
+  const discountEffPre = pre * (1 - disc);
+  // Cap method: investor converts at the cap valuation (if cap < pre, that's a better price)
+  const capEffPre = Math.min(cap, pre);
+  // Lower effective pre = cheaper price = more shares = better for investor.
+  // Standard notes give the investor the BETTER of the two.
+  const betterEffPre = Math.min(discountEffPre, capEffPre);
+  const winner = capEffPre < discountEffPre ? "Valuation cap" : capEffPre > discountEffPre ? "Discount" : "Tie";
+
+  const ownership = (effPre: number) => {
+    const effPost = effPre + inv;
+    return effPost > 0 ? (inv / effPost) * 100 : 0;
+  };
+  const discOwn = ownership(discountEffPre);
+  const capOwn = ownership(capEffPre);
+  const bestOwn = ownership(betterEffPre);
+  const noTermsOwn = ownership(pre); // converting at full price, no benefit
+  const fc = formatCurrency;
+
+  const rows = [
+    { label: "No cap / no discount", effPre: pre, own: noTermsOwn, color: "text-[var(--color-muted)]" },
+    { label: "Discount only", effPre: discountEffPre, own: discOwn, color: "text-blue-400", win: winner === "Discount" },
+    { label: "Valuation cap only", effPre: capEffPre, own: capOwn, color: "text-orange-400", win: winner === "Valuation cap" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Convertible Discount-vs-Cap Chooser</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">A SAFE/note usually converts at the better of its discount or its valuation cap. See which term actually bites at a given next-round price — and the founder dilution it implies.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Investment (₹)
+            <input type="number" value={investment} onChange={e => setInvestment(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Discount %
+            <input type="number" value={discountPct} onChange={e => setDiscountPct(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Valuation cap (₹)
+            <input type="number" value={valCap} onChange={e => setValCap(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Next-round pre-money (₹)
+            <input type="number" value={nextPre} onChange={e => setNextPre(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Binding term", value: winner, color: "text-[var(--color-primary)]" },
+          { label: "Effective pre-money", value: formatAmount(betterEffPre), color: "text-[var(--color-text)]" },
+          { label: "Investor ownership", value: `${bestOwn.toFixed(1)}%`, color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[440px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Conversion term", "Effective pre-money", "Investor ownership"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className={`px-4 py-2.5 font-medium ${r.color}`}>{r.label}{r.win && " ✓"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.effPre)}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${r.win ? "text-green-400 font-semibold" : ""}`}>{r.own.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Investors take whichever term gives the lower conversion price (more shares). The cap bites when the next round prices above it; the discount bites on smaller step-ups. A high cap with a modest discount is the most founder-friendly. Pre-money method shown; some notes use post-money caps which dilute founders more.
       </div>
     </div>
   );

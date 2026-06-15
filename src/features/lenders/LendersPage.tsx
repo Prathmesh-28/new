@@ -9,7 +9,7 @@ import {
   ShieldCheck, TrendingUp, Landmark, CheckCircle2, X,
   Gauge, FileSpreadsheet, ClipboardList, AlertTriangle, Plus, Trash2,
   Users, Scale, ListChecks, CalendarClock, Handshake, History, Star,
-  Layers, Lock, Repeat, Phone, Activity,
+  Layers, Lock, Repeat, Phone, Activity, PieChart, Percent, ArrowLeftRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -94,7 +94,8 @@ function BidModal({ app, onClose, onBid }: { app: Application; onClose: () => vo
 
 type LenderTab = "marketplace" | "covenants" | "borrowing-base" | "mis-pack"
   | "lender-shortlist" | "offer-compare" | "app-tracker" | "disbursement" | "rate-prep" | "repayment-record"
-  | "syndication" | "collateral-register" | "refinance-scanner" | "lender-crm" | "utilization-trend";
+  | "syndication" | "collateral-register" | "refinance-scanner" | "lender-crm" | "utilization-trend"
+  | "concentration-risk" | "interest-paid" | "sanction-vs-drawn";
 
 export default function LendersPage() {
   const { user } = useAuth();
@@ -110,7 +111,7 @@ export default function LendersPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">AA-verified applications · Covenants · Borrowing base · Recurring MIS</p>
         </div>
         <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History], ["syndication", "Syndication Split", Layers], ["collateral-register", "Collateral Register", Lock], ["refinance-scanner", "Refinance Scanner", Repeat], ["lender-crm", "Lender CRM", Phone], ["utilization-trend", "Utilization Trend", Activity]] as const).map(([id, label, Icon]) => (
+          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History], ["syndication", "Syndication Split", Layers], ["collateral-register", "Collateral Register", Lock], ["refinance-scanner", "Refinance Scanner", Repeat], ["lender-crm", "Lender CRM", Phone], ["utilization-trend", "Utilization Trend", Activity], ["concentration-risk", "Concentration Risk", PieChart], ["interest-paid", "Interest Paid", Percent], ["sanction-vs-drawn", "Sanction vs Drawn", ArrowLeftRight]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -134,6 +135,9 @@ export default function LendersPage() {
       {tab === "refinance-scanner" && <RefinanceScanner />}
       {tab === "lender-crm" && <LenderCrm />}
       {tab === "utilization-trend" && <UtilizationTrend />}
+      {tab === "concentration-risk" && <ConcentrationRisk />}
+      {tab === "interest-paid" && <InterestPaidSummary />}
+      {tab === "sanction-vs-drawn" && <SanctionVsDrawn />}
     </div>
   );
 }
@@ -1753,6 +1757,283 @@ function UtilizationTrend() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
         Adding a month already present overwrites it. Bars turn amber above 75% and red above 90% utilization — sustained high utilization can prompt a lender to review or reprice the limit.
+      </div>
+    </div>
+  );
+}
+
+// ── LENDER CONCENTRATION RISK ────────────────────────────────────────────────────
+// Group live active loans by lender and flag over-reliance on any single counterparty.
+// HHI-style concentration plus a per-lender share table from store.activeLoans.
+function ConcentrationRisk() {
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+
+  const { rows, total, hhi, top } = useMemo(() => {
+    const byLender = new Map<string, number>();
+    loans.forEach(l => byLender.set(l.lender, (byLender.get(l.lender) ?? 0) + (l.outstanding || 0)));
+    const total = [...byLender.values()].reduce((s, v) => s + v, 0);
+    const rows = [...byLender.entries()]
+      .map(([lender, outstanding]) => ({ lender, outstanding, share: total > 0 ? outstanding / total : 0 }))
+      .sort((a, b) => b.outstanding - a.outstanding);
+    const hhi = rows.reduce((s, r) => s + r.share * r.share, 0);   // 0..1, higher = concentrated
+    const top = rows.length > 0 ? rows[0] : null;
+    return { rows, total, hhi, top };
+  }, [loans]);
+
+  const concLevel = hhi >= 0.5 ? "high" : hhi >= 0.25 ? "moderate" : "low";
+  const CONC = {
+    high:     { color: "text-red-400",    text: "HIGH concentration" },
+    moderate: { color: "text-yellow-400", text: "MODERATE concentration" },
+    low:      { color: "text-green-400",  text: "WELL diversified" },
+  } as const;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Lender Concentration Risk</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Outstanding debt grouped by lender from your live loan book. Over-reliance on one counterparty is a refinancing and pricing risk — diversify before you need to.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <PieChart size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No active loans in your book yet. Concentration appears once loans are synced.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Lenders", value: rows.length.toString(), color: "text-[var(--color-text)]" },
+              { label: "Largest share", value: top ? `${(top.share * 100).toFixed(0)}%` : "—", color: top && top.share >= 0.5 ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Concentration", value: CONC[concLevel].text, color: CONC[concLevel].color },
+            ].map(c => (
+              <div key={c.label} className={`${card} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${card} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Lender", "Outstanding", "Share", ""].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.lender} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.outstanding)}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.share >= 0.5 ? "text-red-400" : r.share >= 0.33 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{(r.share * 100).toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 w-1/3">
+                      <div className="h-2 rounded-full bg-[var(--color-accent)] overflow-hidden">
+                        <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.min(100, r.share * 100)}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--color-accent)] font-bold">
+                  <td className="px-4 py-2.5">Total outstanding</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(total)}</td>
+                  <td className="px-4 py-2.5" colSpan={2} />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {concLevel === "high" && top && (
+            <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
+              <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
+              <p className="text-xs text-red-300">{top.lender} holds {(top.share * 100).toFixed(0)}% of your outstanding debt. If they tighten terms or exit, you have limited fallback — line up a second lender before your next renewal.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Concentration uses a Herfindahl-style index on outstanding balances: high above 0.50, moderate 0.25–0.50, diversified below. Loans without a distinct lender name are grouped together.
+      </div>
+    </div>
+  );
+}
+
+// ── INTEREST-PAID SUMMARY ────────────────────────────────────────────────────────
+// Estimate annual interest cost across the live loan book and per loan, with a
+// blended cost of debt. Useful for the finance line and lender ROI conversations.
+function InterestPaidSummary() {
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+
+  const rows = useMemo(() => loans.map(l => {
+    const annualInterest = (l.outstanding || 0) * (l.rate || 0) / 100;
+    return { ...l, annualInterest, monthlyInterest: annualInterest / 12 };
+  }).sort((a, b) => b.annualInterest - a.annualInterest), [loans]);
+
+  const totalOutstanding = rows.reduce((s, r) => s + (r.outstanding || 0), 0);
+  const totalAnnual      = rows.reduce((s, r) => s + r.annualInterest, 0);
+  const blendedRate      = totalOutstanding > 0 ? totalAnnual / totalOutstanding * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Interest-Paid Summary</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Approximate annual interest cost across your live loan book, with a blended cost of debt. Shows which facilities are most expensive to carry.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Percent size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No active loans to summarise yet.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Annual interest", value: formatCurrency(Math.round(totalAnnual)), color: "text-[var(--color-primary)]" },
+              { label: "Monthly interest", value: formatCurrency(Math.round(totalAnnual / 12)), color: "text-[var(--color-text)]" },
+              { label: "Blended cost of debt", value: `${blendedRate.toFixed(2)}%`, color: blendedRate >= 16 ? "text-red-400" : "text-[var(--color-text)]" },
+            ].map(c => (
+              <div key={c.label} className={`${card} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${card} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Lender", "Outstanding", "Rate", "Monthly interest", "Annual interest"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.outstanding || 0)}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${(r.rate || 0) >= 16 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{(r.rate || 0).toFixed(2)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.monthlyInterest))}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(r.annualInterest))}</td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--color-accent)] font-bold">
+                  <td className="px-4 py-2.5">Total</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(totalOutstanding)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{blendedRate.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(totalAnnual / 12))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalAnnual))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Interest is approximated as outstanding × rate, so it understates cost slightly versus a full reducing-balance schedule paid on the original principal. Use for relative comparison and budgeting, not as a tax-deductible figure.
+      </div>
+    </div>
+  );
+}
+
+// ── SANCTION vs DRAWN REPORT ─────────────────────────────────────────────────────
+// Compare each loan's sanctioned principal against the amount still outstanding to
+// show drawn/repaid progress across the live book from store.activeLoans.
+function SanctionVsDrawn() {
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+
+  const rows = useMemo(() => loans.map(l => {
+    const principal = l.principal || 0;
+    const outstanding = Math.min(l.outstanding || 0, principal || (l.outstanding || 0));
+    const repaid = Math.max(0, principal - (l.outstanding || 0));
+    const repaidPct = principal > 0 ? repaid / principal : 0;
+    return { ...l, principal, outstanding, repaid, repaidPct };
+  }).sort((a, b) => b.principal - a.principal), [loans]);
+
+  const totalSanctioned = rows.reduce((s, r) => s + r.principal, 0);
+  const totalOutstanding = rows.reduce((s, r) => s + (r.outstanding || 0), 0);
+  const totalRepaid = Math.max(0, totalSanctioned - totalOutstanding);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Sanction vs Drawn / Repaid</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Each facility's sanctioned principal against the balance still outstanding, with repayment progress — a clean snapshot for any lender review.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <ArrowLeftRight size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No active loans to report on yet.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total sanctioned", value: formatCurrency(totalSanctioned), color: "text-[var(--color-text)]" },
+              { label: "Still outstanding", value: formatCurrency(totalOutstanding), color: "text-[var(--color-primary)]" },
+              { label: "Repaid to date", value: formatCurrency(totalRepaid), color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className={`${card} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${card} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Lender", "Sanctioned", "Outstanding", "Repaid", "Progress"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.principal)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.outstanding || 0)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.repaid)}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 flex-1 rounded-full bg-[var(--color-accent)] overflow-hidden min-w-[60px]">
+                          <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, r.repaidPct * 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] tabular-nums text-[var(--color-muted)] w-9 text-right">{(r.repaidPct * 100).toFixed(0)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--color-accent)] font-bold">
+                  <td className="px-4 py-2.5">Total</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(totalSanctioned)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(totalOutstanding)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(totalRepaid)}</td>
+                  <td className="px-4 py-2.5" />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Repaid is computed as sanctioned principal minus current outstanding, so it reflects principal reduction only — not interest paid. Drawn-down term loans show the full sanction as drawn; revolving lines may differ.
       </div>
     </div>
   );
