@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -324,6 +324,372 @@ function AuditLogCard() {
   );
 }
 
+/* ── #174 Invoice Defaults ─────────────────────────────────────────────────
+   Prefix, next number, payment terms, and a default footer note pre-filled on
+   every new invoice the SMB creates. */
+type InvoiceDefaults = { prefix: string; nextNumber: number; termsDays: number; footerNote: string };
+const INVOICE_TERMS = [0, 7, 15, 30, 45, 60, 90] as const;
+
+function InvoiceDefaultsCard() {
+  const [cfg, setCfg] = useFeatureState<InvoiceDefaults>("set-invoice-defaults", {
+    prefix: "INV-", nextNumber: 1, termsDays: 30, footerNote: "Thank you for your business.",
+  });
+  const set = <K extends keyof InvoiceDefaults>(k: K, v: InvoiceDefaults[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const preview = `${cfg.prefix}${String(cfg.nextNumber).padStart(4, "0")}`;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <FileText size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Invoice Defaults</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Pre-fill the numbering series, payment terms and footer on every new invoice.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice prefix</label>
+          <input value={cfg.prefix} onChange={e => set("prefix", e.target.value)} placeholder="INV-"
+            maxLength={12}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Next number</label>
+          <input type="number" min="1" value={cfg.nextNumber}
+            onChange={e => set("nextNumber", Math.max(1, Number(e.target.value) || 1))}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Payment terms</label>
+          <select value={cfg.termsDays} onChange={e => set("termsDays", Number(e.target.value))}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {INVOICE_TERMS.map(d => <option key={d} value={d}>{d === 0 ? "Due on receipt" : `Net ${d} days`}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="mt-4">
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Default footer note</label>
+        <textarea value={cfg.footerNote} onChange={e => set("footerNote", e.target.value)} rows={2}
+          placeholder="Thank you for your business."
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] resize-none" />
+      </div>
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        Your next invoice will be numbered <strong className="text-[var(--color-text)] font-mono">{preview}</strong>, due in {cfg.termsDays === 0 ? "on receipt" : `${cfg.termsDays} days`}. Saved automatically.
+      </div>
+    </div>
+  );
+}
+
+/* ── #175 Currency & Locale ────────────────────────────────────────────────
+   Number grouping (Indian lakh/crore vs international), symbol position and
+   decimal places used when amounts are shown across the app. */
+type LocaleCfg = { grouping: "indian" | "international"; decimals: 0 | 2; symbolBefore: boolean };
+
+function CurrencyLocaleCard() {
+  const [cfg, setCfg] = useFeatureState<LocaleCfg>("set-currency-locale", { grouping: "indian", decimals: 2, symbolBefore: true });
+  const set = <K extends keyof LocaleCfg>(k: K, v: LocaleCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  const sample = (() => {
+    const n = 1234567.5;
+    const locale = cfg.grouping === "indian" ? "en-IN" : "en-US";
+    const body = n.toLocaleString(locale, { minimumFractionDigits: cfg.decimals, maximumFractionDigits: cfg.decimals });
+    return cfg.symbolBefore ? `₹${body}` : `${body} ₹`;
+  })();
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Globe size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Currency &amp; Locale</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">How rupee amounts are grouped and formatted when shown across Headroom.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Number grouping</label>
+          <select value={cfg.grouping} onChange={e => set("grouping", e.target.value as LocaleCfg["grouping"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="indian">Indian (lakh / crore)</option>
+            <option value="international">International (thousands)</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Decimal places</label>
+          <select value={cfg.decimals} onChange={e => set("decimals", Number(e.target.value) as LocaleCfg["decimals"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value={0}>0 — whole rupees</option>
+            <option value={2}>2 — paise</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Symbol position</label>
+          <select value={cfg.symbolBefore ? "before" : "after"} onChange={e => set("symbolBefore", e.target.value === "before")}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="before">Before (₹1,000)</option>
+            <option value="after">After (1,000 ₹)</option>
+          </select>
+        </div>
+      </div>
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        Preview: <strong className="text-[var(--color-text)] font-mono">{sample}</strong>
+      </div>
+    </div>
+  );
+}
+
+/* ── #176 Document Branding ────────────────────────────────────────────────
+   Logo URL, signatory name and a footer line stamped on invoices, statements
+   and exported PDFs. */
+type BrandingCfg = { logoUrl: string; signatory: string; footer: string };
+
+function DocumentBrandingCard() {
+  const [cfg, setCfg] = useFeatureState<BrandingCfg>("set-document-branding", { logoUrl: "", signatory: "", footer: "" });
+  const set = <K extends keyof BrandingCfg>(k: K, v: BrandingCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const [err, setErr] = useState(false);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Image size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Document Branding</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Logo, signatory and footer stamped on invoices, statements and PDF exports.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col md:flex-row gap-4 items-start">
+        <div className="w-20 h-20 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] flex items-center justify-center overflow-hidden shrink-0">
+          {cfg.logoUrl && !err
+            ? <img src={cfg.logoUrl} alt="Logo preview" onError={() => setErr(true)} className="w-full h-full object-contain" />
+            : <Image size={20} className="text-[var(--color-muted)]" />}
+        </div>
+        <div className="flex-1 w-full space-y-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Logo URL</label>
+            <input value={cfg.logoUrl} onChange={e => { setErr(false); set("logoUrl", e.target.value); }}
+              placeholder="https://…/logo.png"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Authorised signatory</label>
+              <input value={cfg.signatory} onChange={e => set("signatory", e.target.value)} placeholder="e.g. Raj Mehta, Director"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Footer line</label>
+              <input value={cfg.footer} onChange={e => set("footer", e.target.value)} placeholder="Reg office · GSTIN · contact"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+          </div>
+        </div>
+      </div>
+      {err && <p className="text-[10px] text-red-400 mt-2">Couldn't load that image — check the URL is public.</p>}
+    </div>
+  );
+}
+
+/* ── #177 Reminder Cadence ─────────────────────────────────────────────────
+   When automatic payment reminders go out relative to an invoice due date. */
+type ReminderCfg = { enabled: boolean; beforeDue: number; onDue: boolean; afterDue: number; channel: "whatsapp" | "email" | "both" };
+
+function ReminderCadenceCard() {
+  const [cfg, setCfg] = useFeatureState<ReminderCfg>("set-reminder-cadence", {
+    enabled: true, beforeDue: 3, onDue: true, afterDue: 7, channel: "whatsapp",
+  });
+  const set = <K extends keyof ReminderCfg>(k: K, v: ReminderCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <BellRing size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Payment Reminder Cadence</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Default schedule for chasing unpaid invoices, applied to new receivables.</p>
+        </div>
+      </div>
+
+      <label className="mt-5 flex items-center gap-3 cursor-pointer">
+        <div onClick={() => set("enabled", !cfg.enabled)}
+          className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${cfg.enabled ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+        </div>
+        <span className="text-sm">Send automatic reminders</span>
+      </label>
+
+      {cfg.enabled && (
+        <>
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Days before due</label>
+              <input type="number" min="0" max="30" value={cfg.beforeDue}
+                onChange={e => set("beforeDue", Math.max(0, Number(e.target.value) || 0))}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Days after due</label>
+              <input type="number" min="0" max="60" value={cfg.afterDue}
+                onChange={e => set("afterDue", Math.max(0, Number(e.target.value) || 0))}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+              <select value={cfg.channel} onChange={e => set("channel", e.target.value as ReminderCfg["channel"])}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
+                <option value="both">WhatsApp + Email</option>
+              </select>
+            </div>
+          </div>
+          <label className="mt-4 flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={cfg.onDue} onChange={e => set("onDue", e.target.checked)}
+              className="accent-[var(--color-primary)] w-4 h-4" />
+            Also remind on the due date itself
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── #178 Number Format & Rounding ─────────────────────────────────────────
+   Rounding rule and unit scaling used when totals are computed and displayed. */
+type RoundingCfg = { mode: "none" | "nearest" | "up" | "down"; nearest: 1 | 5 | 10; displayUnit: "full" | "thousands" | "lakhs" };
+
+function NumberRoundingCard() {
+  const [cfg, setCfg] = useFeatureState<RoundingCfg>("set-number-rounding", { mode: "nearest", nearest: 1, displayUnit: "full" });
+  const set = <K extends keyof RoundingCfg>(k: K, v: RoundingCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  const example = (() => {
+    const raw = 12347.6;
+    let r = raw;
+    if (cfg.mode === "nearest") r = Math.round(raw / cfg.nearest) * cfg.nearest;
+    else if (cfg.mode === "up") r = Math.ceil(raw / cfg.nearest) * cfg.nearest;
+    else if (cfg.mode === "down") r = Math.floor(raw / cfg.nearest) * cfg.nearest;
+    return formatCurrency(r);
+  })();
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Hash size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Number Format &amp; Rounding</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">How computed totals are rounded and scaled in summaries and reports.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Rounding rule</label>
+          <select value={cfg.mode} onChange={e => set("mode", e.target.value as RoundingCfg["mode"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="none">No rounding</option>
+            <option value="nearest">Round to nearest</option>
+            <option value="up">Always round up</option>
+            <option value="down">Always round down</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Round to</label>
+          <select value={cfg.nearest} onChange={e => set("nearest", Number(e.target.value) as RoundingCfg["nearest"])}
+            disabled={cfg.mode === "none"}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none disabled:opacity-50">
+            <option value={1}>₹1</option>
+            <option value={5}>₹5</option>
+            <option value={10}>₹10</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Display unit</label>
+          <select value={cfg.displayUnit} onChange={e => set("displayUnit", e.target.value as RoundingCfg["displayUnit"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="full">Full amount</option>
+            <option value="thousands">In thousands (K)</option>
+            <option value="lakhs">In lakhs (L)</option>
+          </select>
+        </div>
+      </div>
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        Example: {formatCurrency(12347.6)} shown as <strong className="text-[var(--color-text)]">{example}</strong>.
+      </div>
+    </div>
+  );
+}
+
+/* ── #179 Theme & Density ──────────────────────────────────────────────────
+   Visual preferences — appearance, layout density and motion. Saved so the
+   choice follows the user across devices. */
+type AppearanceCfg = { theme: "system" | "dark" | "light"; density: "comfortable" | "compact"; reduceMotion: boolean };
+
+function ThemeDensityCard() {
+  const [cfg, setCfg] = useFeatureState<AppearanceCfg>("set-theme-density", { theme: "system", density: "comfortable", reduceMotion: false });
+  const set = <K extends keyof AppearanceCfg>(k: K, v: AppearanceCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const THEMES = [
+    { id: "system", label: "System" },
+    { id: "dark", label: "Dark" },
+    { id: "light", label: "Light" },
+  ] as const;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Palette size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Theme &amp; Density</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Appearance and layout preferences, remembered across your devices.</p>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-xs text-[var(--color-muted)] mb-2">Appearance</p>
+        <div className="flex flex-wrap gap-2">
+          {THEMES.map(t => (
+            <button key={t.id} onClick={() => set("theme", t.id)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${cfg.theme === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]"}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-xs text-[var(--color-muted)] mb-2">Layout density</p>
+        <div className="flex flex-wrap gap-2">
+          {(["comfortable", "compact"] as const).map(d => (
+            <button key={d} onClick={() => set("density", d)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors capitalize ${cfg.density === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]"}`}>
+              {d}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <label className="mt-5 flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={cfg.reduceMotion} onChange={e => set("reduceMotion", e.target.checked)}
+          className="accent-[var(--color-primary)] w-4 h-4" />
+        Reduce motion and animations
+      </label>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -519,6 +885,24 @@ export default function SettingsPage() {
 
       {/* #173 Audit log / login history */}
       <AuditLogCard />
+
+      {/* #174 Invoice defaults */}
+      <InvoiceDefaultsCard />
+
+      {/* #175 Currency & locale */}
+      <CurrencyLocaleCard />
+
+      {/* #176 Document branding */}
+      <DocumentBrandingCard />
+
+      {/* #177 Payment reminder cadence */}
+      <ReminderCadenceCard />
+
+      {/* #178 Number format & rounding */}
+      <NumberRoundingCard />
+
+      {/* #179 Theme & density */}
+      <ThemeDensityCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

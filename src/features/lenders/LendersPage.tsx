@@ -8,6 +8,7 @@ import { Navigate } from "react-router-dom";
 import {
   ShieldCheck, TrendingUp, Landmark, CheckCircle2, X,
   Gauge, FileSpreadsheet, ClipboardList, AlertTriangle, Plus, Trash2,
+  Users, Scale, ListChecks, CalendarClock, Handshake, History, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -90,7 +91,8 @@ function BidModal({ app, onClose, onBid }: { app: Application; onClose: () => vo
   );
 }
 
-type LenderTab = "marketplace" | "covenants" | "borrowing-base" | "mis-pack";
+type LenderTab = "marketplace" | "covenants" | "borrowing-base" | "mis-pack"
+  | "lender-shortlist" | "offer-compare" | "app-tracker" | "disbursement" | "rate-prep" | "repayment-record";
 
 export default function LendersPage() {
   const { user } = useAuth();
@@ -106,7 +108,7 @@ export default function LendersPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">AA-verified applications · Covenants · Borrowing base · Recurring MIS</p>
         </div>
         <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList]] as const).map(([id, label, Icon]) => (
+          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -119,6 +121,12 @@ export default function LendersPage() {
       {tab === "covenants" && <CovenantDashboard />}
       {tab === "borrowing-base" && <BorrowingBaseGenerator />}
       {tab === "mis-pack" && <LenderMisPack />}
+      {tab === "lender-shortlist" && <LenderShortlist />}
+      {tab === "offer-compare" && <OfferCompare />}
+      {tab === "app-tracker" && <ApplicationTracker />}
+      {tab === "disbursement" && <DisbursementPlanner />}
+      {tab === "rate-prep" && <RateNegotiationPrep />}
+      {tab === "repayment-record" && <RepaymentRecord />}
     </div>
   );
 }
@@ -603,6 +611,620 @@ function LenderMisPack() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
         Your selected cadence is saved across devices. Figures are computed from the live store, not audited financials — share alongside your signed statements at each reporting date.
+      </div>
+    </div>
+  );
+}
+
+// ── #120 LENDER DIRECTORY & SHORTLIST ────────────────────────────────────────────
+// Maintain a working shortlist of lenders with the terms each indicated, then score
+// them on a blended fit (rate, speed, relationship). Pick the right partner faster.
+interface ShortlistLender {
+  id: string;
+  name: string;
+  type: "Bank" | "NBFC" | "Fintech";
+  indicativeRate: number;   // % p.a.
+  maxTicket: number;        // ₹
+  turnaroundDays: number;
+  relationship: 1 | 2 | 3 | 4 | 5;  // existing relationship strength
+}
+
+function LenderShortlist() {
+  const [lenders, setLenders] = useFeatureState<ShortlistLender[]>("lnd-shortlist", [
+    { id: "l1", name: "HDFC Bank",   type: "Bank",    indicativeRate: 12.5, maxTicket: 10000000, turnaroundDays: 14, relationship: 4 },
+    { id: "l2", name: "Lendingkart", type: "Fintech", indicativeRate: 18,   maxTicket: 5000000,  turnaroundDays: 3,  relationship: 2 },
+    { id: "l3", name: "Bajaj Finserv", type: "NBFC",  indicativeRate: 15,   maxTicket: 7500000,  turnaroundDays: 7,  relationship: 3 },
+  ]);
+  const [name, setName]     = useState("");
+  const [type, setType]     = useState<ShortlistLender["type"]>("Bank");
+  const [rate, setRate]     = useState("");
+  const [ticket, setTicket] = useState("");
+  const [tat, setTat]       = useState("");
+
+  // Blended fit score 0-100: cheaper rate, faster TAT and stronger relationship rank higher.
+  const rates = lenders.map(l => l.indicativeRate);
+  const tats  = lenders.map(l => l.turnaroundDays);
+  const minRate = Math.min(...rates, Infinity), maxRate = Math.max(...rates, 0);
+  const minTat  = Math.min(...tats, Infinity),  maxTat  = Math.max(...tats, 0);
+  const scored = lenders.map(l => {
+    const rateScore = maxRate === minRate ? 1 : (maxRate - l.indicativeRate) / (maxRate - minRate);
+    const tatScore  = maxTat === minTat ? 1 : (maxTat - l.turnaroundDays) / (maxTat - minTat);
+    const relScore  = l.relationship / 5;
+    const score = Math.round((rateScore * 0.5 + tatScore * 0.3 + relScore * 0.2) * 100);
+    return { ...l, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const add = () => {
+    const r = parseFloat(rate), t = parseFloat(ticket), d = parseFloat(tat);
+    if (!name.trim() || isNaN(r) || isNaN(t) || isNaN(d)) { toast.error("Fill name, rate, ticket and turnaround"); return; }
+    setLenders(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), type, indicativeRate: r, maxTicket: t, turnaroundDays: Math.round(d), relationship: 3 }]);
+    setName(""); setRate(""); setTicket(""); setTat("");
+    toast.success("Lender added to shortlist");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Lender Directory & Shortlist</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Track the lenders you are courting and the terms each indicated. The fit score blends rate (50%), turnaround (30%) and relationship strength (20%).</p>
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[720px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Lender", "Type", "Rate", "Max ticket", "TAT", "Relationship", "Fit", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {scored.length === 0 && (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No lenders yet — add one below.</td></tr>
+            )}
+            {scored.map((l, i) => (
+              <tr key={l.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{i === 0 && <Star size={11} className="inline mr-1 text-yellow-400" />}{l.name}</td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.type}</td>
+                <td className="px-4 py-2.5 tabular-nums">{l.indicativeRate.toFixed(2)}%</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(l.maxTicket)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{l.turnaroundDays}d</td>
+                <td className="px-4 py-2.5">
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} onClick={() => setLenders(prev => prev.map(x => x.id === l.id ? { ...x, relationship: n as ShortlistLender["relationship"] } : x))}>
+                        <Star size={11} className={n <= l.relationship ? "text-yellow-400 fill-yellow-400" : "text-[var(--color-muted)] opacity-40"} />
+                      </button>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-4 py-2.5"><span className={`text-xs font-bold tabular-nums ${l.score >= 70 ? "text-green-400" : l.score >= 45 ? "text-yellow-400" : "text-red-400"}`}>{l.score}</span></td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => setLenders(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add lender</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Lender name" className={inp} />
+          <select value={type} onChange={e => setType(e.target.value as ShortlistLender["type"])} className={inp}>
+            <option value="Bank">Bank</option><option value="NBFC">NBFC</option><option value="Fintech">Fintech</option>
+          </select>
+          <input type="number" step="0.25" value={rate} onChange={e => setRate(e.target.value)} placeholder="Rate %" className={inp} />
+          <input type="number" value={ticket} onChange={e => setTicket(e.target.value)} placeholder="Max ticket ₹" className={inp} />
+          <input type="number" value={tat} onChange={e => setTat(e.target.value)} placeholder="TAT days" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add lender</button>
+      </div>
+    </div>
+  );
+}
+
+// ── #121 LOAN-OFFER COMPARISON ───────────────────────────────────────────────────
+// Put competing offers side by side and rank them on true cost: total interest over
+// tenure plus processing fee, expressed as an effective annual cost on the principal.
+interface LoanOffer {
+  id: string;
+  lender: string;
+  amount: number;
+  rate: number;       // % p.a. (reducing)
+  tenureMonths: number;
+  feePct: number;     // processing fee % of principal
+}
+
+function offerMetrics(o: LoanOffer) {
+  const r = o.rate / 100 / 12;
+  const n = o.tenureMonths;
+  const emi = r > 0 ? (o.amount * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : o.amount / n;
+  const totalPaid = emi * n;
+  const totalInterest = totalPaid - o.amount;
+  const fee = o.amount * o.feePct / 100;
+  const totalCost = totalInterest + fee;
+  // Effective annual cost = total cost / principal, annualised over the tenure.
+  const effectiveAnnual = o.amount > 0 ? (totalCost / o.amount) / (n / 12) * 100 : 0;
+  return { emi, totalInterest, fee, totalCost, effectiveAnnual };
+}
+
+function OfferCompare() {
+  const [offers, setOffers] = useState<LoanOffer[]>([
+    { id: "o1", lender: "HDFC Bank",   amount: 5000000, rate: 12.5, tenureMonths: 36, feePct: 1.0 },
+    { id: "o2", lender: "Lendingkart", amount: 5000000, rate: 17,   tenureMonths: 24, feePct: 2.0 },
+  ]);
+  const [lender, setLender]   = useState("");
+  const [amount, setAmount]   = useState("");
+  const [rate, setRate]       = useState("");
+  const [tenure, setTenure]   = useState("");
+  const [fee, setFee]         = useState("");
+
+  const rows = offers.map(o => ({ ...o, m: offerMetrics(o) }));
+  const best = rows.length ? rows.reduce((a, b) => b.m.effectiveAnnual < a.m.effectiveAnnual ? b : a) : null;
+
+  const add = () => {
+    const a = parseFloat(amount), r = parseFloat(rate), t = parseFloat(tenure), f = parseFloat(fee || "0");
+    if (!lender.trim() || isNaN(a) || isNaN(r) || isNaN(t) || t <= 0) { toast.error("Fill lender, amount, rate and tenure"); return; }
+    setOffers(prev => [...prev, { id: crypto.randomUUID(), lender: lender.trim(), amount: a, rate: r, tenureMonths: Math.round(t), feePct: isNaN(f) ? 0 : f }]);
+    setLender(""); setAmount(""); setRate(""); setTenure(""); setFee("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Loan-Offer Comparison</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Compare competing sanctions on true cost — EMI, total interest, processing fee and an effective annual cost so headline rates do not mislead.</p>
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[760px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Lender", "Amount", "Rate", "Tenure", "EMI", "Total interest", "Fee", "Effective cost", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No offers yet — add one below.</td></tr>
+            )}
+            {rows.map(o => {
+              const isBest = best?.id === o.id;
+              return (
+                <tr key={o.id} className={`border-b border-[var(--color-border)] last:border-0 ${isBest ? "bg-green-950/15" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{isBest && <Star size={11} className="inline mr-1 text-green-400" />}{o.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(o.amount)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{o.rate.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{o.tenureMonths}m</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(o.m.emi))}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(o.m.totalInterest))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(o.m.fee))}</td>
+                  <td className={`px-4 py-2.5 tabular-nums font-bold ${isBest ? "text-green-400" : "text-[var(--color-text)]"}`}>{o.m.effectiveAnnual.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5">
+                    <button onClick={() => setOffers(prev => prev.filter(x => x.id !== o.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {best && rows.length > 1 && (
+        <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 text-xs text-green-300">
+          Lowest effective cost: <span className="font-semibold">{best.lender}</span> at {best.m.effectiveAnnual.toFixed(2)}% effective annual cost ({formatCurrency(Math.round(best.m.totalCost))} total cost of credit).
+        </div>
+      )}
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add offer</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={lender} onChange={e => setLender(e.target.value)} placeholder="Lender" className={inp} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹" className={inp} />
+          <input type="number" step="0.25" value={rate} onChange={e => setRate(e.target.value)} placeholder="Rate % p.a." className={inp} />
+          <input type="number" value={tenure} onChange={e => setTenure(e.target.value)} placeholder="Tenure (months)" className={inp} />
+          <input type="number" step="0.1" value={fee} onChange={e => setFee(e.target.value)} placeholder="Fee %" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add offer</button>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        EMI assumes a reducing-balance loan. Effective annual cost = (total interest + processing fee) ÷ principal, annualised over the tenure — a simple comparison metric, not a regulatory APR. Confirm GST on fees and any insurance separately.
+      </div>
+    </div>
+  );
+}
+
+// ── #122 APPLICATION-STATUS TRACKER ──────────────────────────────────────────────
+// Track each live application through the funnel from submission to disbursal, so
+// no lender goes dark and follow-ups happen on time.
+type AppStage = "submitted" | "docs" | "underwriting" | "sanctioned" | "disbursed" | "declined";
+interface TrackedApp {
+  id: string;
+  lender: string;
+  amount: number;
+  stage: AppStage;
+  appliedOn: string;     // yyyy-MM-dd
+}
+
+const STAGE_ORDER: AppStage[] = ["submitted", "docs", "underwriting", "sanctioned", "disbursed"];
+const STAGE_LABEL: Record<AppStage, string> = {
+  submitted: "Submitted", docs: "Docs pending", underwriting: "Underwriting",
+  sanctioned: "Sanctioned", disbursed: "Disbursed", declined: "Declined",
+};
+
+function ApplicationTracker() {
+  const [apps, setApps] = useFeatureState<TrackedApp[]>("lnd-app-tracker", [
+    { id: "a1", lender: "HDFC Bank",   amount: 5000000, stage: "underwriting", appliedOn: "2026-05-28" },
+    { id: "a2", lender: "Lendingkart", amount: 2500000, stage: "sanctioned",   appliedOn: "2026-06-02" },
+  ]);
+  const [lender, setLender] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!lender.trim() || isNaN(a)) { toast.error("Enter lender and amount"); return; }
+    setApps(prev => [...prev, { id: crypto.randomUUID(), lender: lender.trim(), amount: a, stage: "submitted", appliedOn: format(new Date(), "yyyy-MM-dd") }]);
+    setLender(""); setAmount("");
+    toast.success("Application added");
+  };
+
+  const setStage = (id: string, stage: AppStage) =>
+    setApps(prev => prev.map(x => x.id === id ? { ...x, stage } : x));
+
+  const active = apps.filter(a => a.stage !== "disbursed" && a.stage !== "declined").length;
+  const sanctionedValue = apps.filter(a => a.stage === "sanctioned" || a.stage === "disbursed").reduce((s, a) => s + a.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Application-Status Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Every live application from submission to disbursal, so nothing stalls and follow-ups land on time.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total applications", value: apps.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "In progress", value: active.toString(), color: "text-yellow-400" },
+          { label: "Sanctioned value", value: formatCurrency(sanctionedValue), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {apps.length === 0 && (
+          <div className="border border-dashed border-[var(--color-border)] rounded-xl p-8 text-center text-xs text-[var(--color-muted)]">No applications tracked yet.</div>
+        )}
+        {apps.map(a => {
+          const declined = a.stage === "declined";
+          const stepIdx = STAGE_ORDER.indexOf(a.stage);
+          return (
+            <div key={a.id} className={`${card} p-4`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-semibold">{a.lender}</p>
+                  <p className="text-xs text-[var(--color-muted)]">{formatCurrency(a.amount)} · applied {format(new Date(a.appliedOn), "d MMM yyyy")}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select value={a.stage} onChange={e => setStage(a.id, e.target.value as AppStage)} className={`${inp} w-auto py-1.5 text-xs`}>
+                    {(Object.keys(STAGE_LABEL) as AppStage[]).map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
+                  </select>
+                  <button onClick={() => setApps(prev => prev.filter(x => x.id !== a.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                </div>
+              </div>
+              {declined ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-red-950/30 text-red-400 border-red-800/40">DECLINED</span>
+              ) : (
+                <div className="flex items-center gap-1">
+                  {STAGE_ORDER.map((s, i) => (
+                    <div key={s} className="flex-1 flex flex-col items-center gap-1">
+                      <div className={`w-full h-1.5 rounded-full ${i <= stepIdx ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`} />
+                      <span className={`text-[9px] ${i <= stepIdx ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>{STAGE_LABEL[s]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Track new application</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <input value={lender} onChange={e => setLender(e.target.value)} placeholder="Lender" className={inp} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add</button>
+      </div>
+    </div>
+  );
+}
+
+// ── #123 DISBURSEMENT / DRAWDOWN PLANNER ─────────────────────────────────────────
+// Split a sanction into staged tranches and see, per draw, the date, amount, the
+// cumulative utilization and the undrawn balance against the sanctioned limit.
+interface Tranche { id: string; date: string; amount: number; note: string; }
+
+function DisbursementPlanner() {
+  const [sanction, setSanction]   = useState("5000000");
+  const [tranches, setTranches]   = useFeatureState<Tranche[]>("lnd-disbursement", [
+    { id: "t1", date: "2026-06-20", amount: 2000000, note: "Initial draw" },
+    { id: "t2", date: "2026-08-01", amount: 1500000, note: "Inventory build-up" },
+  ]);
+  const [date, setDate]     = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote]     = useState("");
+
+  const sanctionAmt = parseFloat(sanction) || 0;
+  const sorted = [...tranches].sort((a, b) => a.date.localeCompare(b.date));
+  let running = 0;
+  const rows = sorted.map(t => {
+    running += t.amount;
+    return { ...t, cumulative: running, undrawn: sanctionAmt - running };
+  });
+  const totalDrawn = running;
+  const overSanction = totalDrawn > sanctionAmt && sanctionAmt > 0;
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!date || isNaN(a) || a <= 0) { toast.error("Pick a date and a positive amount"); return; }
+    setTranches(prev => [...prev, { id: crypto.randomUUID(), date, amount: a, note: note.trim() }]);
+    setDate(""); setAmount(""); setNote("");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Disbursement / Drawdown Planner</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Stage a sanction into tranches and watch cumulative utilization against the limit, so you draw only what you need when you need it.</p>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned limit (₹)</label>
+          <input type="number" value={sanction} onChange={e => setSanction(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Sanctioned", value: formatCurrency(sanctionAmt), color: "text-[var(--color-text)]" },
+          { label: "Total drawn", value: formatCurrency(totalDrawn), color: overSanction ? "text-red-400" : "text-[var(--color-primary)]" },
+          { label: "Undrawn", value: formatCurrency(Math.max(0, sanctionAmt - totalDrawn)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Date", "Tranche", "Cumulative", "Undrawn", "Note", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No tranches planned yet.</td></tr>
+            )}
+            {rows.map(t => (
+              <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 tabular-nums">{format(new Date(t.date), "d MMM yyyy")}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(t.amount)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(t.cumulative)}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${t.undrawn < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{t.undrawn < 0 ? `(${formatCurrency(Math.abs(t.undrawn))})` : formatCurrency(t.undrawn)}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{t.note || "—"}</td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => setTranches(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {overSanction && (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
+          <p className="text-xs text-red-300">Planned draws exceed the sanctioned limit by {formatCurrency(totalDrawn - sanctionAmt)}. Reduce a tranche or request a limit enhancement.</p>
+        </div>
+      )}
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add tranche</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹" className={inp} />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add tranche</button>
+      </div>
+    </div>
+  );
+}
+
+// ── #124 RATE-NEGOTIATION PREP SHEET ─────────────────────────────────────────────
+// Assemble the leverage points that justify a rate cut — strong ratios, clean
+// repayment, low utilization — into talking points and a defensible target rate.
+function RateNegotiationPrep() {
+  const fin = useLenderFinancials();
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+  const [currentRate, setCurrentRate] = useState(() => {
+    const wavg = loans.length ? loans.reduce((s, l) => s + l.rate * l.outstanding, 0) / loans.reduce((s, l) => s + l.outstanding, 0) : 0;
+    return wavg ? wavg.toFixed(2) : "15";
+  });
+
+  const cur = parseFloat(currentRate) || 0;
+
+  // Each strong signal earns basis-point arguing room toward a lower rate.
+  const points = [
+    { ok: fin.dscr >= 1.5 && fin.dscr < 99, bps: 50, label: "DSCR comfortably above 1.5×", detail: fin.dscr >= 99 ? "no debt service to test" : `DSCR is ${fin.dscr.toFixed(2)}×` },
+    { ok: fin.leverage < 2.5 && fin.leverage < 99, bps: 50, label: "Leverage (debt/EBITDA) under 2.5×", detail: fin.leverage >= 99 ? "no debt outstanding" : `${fin.leverage.toFixed(2)}×` },
+    { ok: fin.currentRatio >= 1.5 && fin.currentRatio < 99, bps: 25, label: "Healthy current ratio", detail: fin.currentRatio >= 99 ? "n/a" : `${fin.currentRatio.toFixed(2)}×` },
+    { ok: fin.interestCover >= 3 && fin.interestCover < 99, bps: 25, label: "Strong interest coverage", detail: fin.interestCover >= 99 ? "n/a" : `${fin.interestCover.toFixed(2)}×` },
+    { ok: fin.arOverdue / Math.max(1, fin.ar) < 0.1, bps: 25, label: "Receivables largely current", detail: `${((fin.arOverdue / Math.max(1, fin.ar)) * 100).toFixed(0)}% overdue` },
+    { ok: fin.cash > fin.debtService, bps: 25, label: "Cash buffer exceeds annual debt service", detail: `${formatCurrency(fin.cash)} cash` },
+  ];
+
+  const earnedBps = points.filter(p => p.ok).reduce((s, p) => s + p.bps, 0);
+  const targetRate = Math.max(8, cur - earnedBps / 100);
+  const annualSaving = loans.reduce((s, l) => s + l.outstanding, 0) * (earnedBps / 100) / 100;
+
+  const copy = () => {
+    const text = [
+      `${fin.firmName} — Rate negotiation brief`,
+      `Current weighted rate: ${cur.toFixed(2)}%  →  Target: ${targetRate.toFixed(2)}%`,
+      "",
+      "Leverage points:",
+      ...points.filter(p => p.ok).map(p => `  • ${p.label} (${p.detail}) — worth ~${p.bps}bps`),
+      "",
+      `Indicative annual saving on current outstanding: ${formatCurrency(Math.round(annualSaving))}`,
+    ].join("\n");
+    navigator.clipboard?.writeText(text).then(() => toast.success("Negotiation brief copied")).catch(() => toast.error("Could not copy"));
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Handshake size={14} className="text-[var(--color-primary)]" /> Rate-Negotiation Prep</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Turn your live financial strength into a defensible ask. Each strong signal earns arguing room (basis points) toward a lower rate.</p>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Current rate (% p.a.)</label>
+          <input type="number" step="0.25" value={currentRate} onChange={e => setCurrentRate(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Arguing room", value: `${earnedBps} bps`, color: "text-[var(--color-primary)]" },
+          { label: "Target rate", value: `${targetRate.toFixed(2)}%`, color: "text-green-400" },
+          { label: "Est. annual saving", value: formatCurrency(Math.round(annualSaving)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-hidden`}>
+        <div className="px-4 py-2.5 border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Leverage points</div>
+        <table className="w-full text-sm">
+          <tbody>
+            {points.map(p => (
+              <tr key={p.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5">
+                  <span className="flex items-center gap-2">
+                    {p.ok ? <CheckCircle2 size={13} className="text-green-400" /> : <X size={13} className="text-[var(--color-muted)]" />}
+                    <span className={p.ok ? "" : "text-[var(--color-muted)]"}>{p.label}</span>
+                  </span>
+                  <span className="block text-[10px] text-[var(--color-muted)] ml-5">{p.detail}</span>
+                </td>
+                <td className={`px-4 py-2.5 tabular-nums text-right ${p.ok ? "text-green-400 font-semibold" : "text-[var(--color-muted)]"}`}>{p.ok ? `+${p.bps} bps` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <button onClick={copy} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+        <Handshake size={12} /> Copy negotiation brief
+      </button>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Basis-point values are indicative anchors for your conversation, not a lender commitment. The achievable cut depends on the lender's cost of funds, your repayment track record and prevailing rates.
+      </div>
+    </div>
+  );
+}
+
+// ── #125 REPAYMENT TRACK-RECORD SHEET ────────────────────────────────────────────
+// A per-loan record of how far through each loan you are and how much you have
+// repaid — the credibility sheet lenders ask for before pricing a new facility.
+function RepaymentRecord() {
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+
+  const rows = loans.map(l => {
+    const repaidPrincipal = Math.max(0, l.principal - l.outstanding);
+    const pctRepaid = l.principal > 0 ? repaidPrincipal / l.principal : 0;
+    // Months elapsed inferred from how much principal has amortised vs EMI count.
+    const monthsElapsed = l.monthlyEmi > 0 ? Math.min(l.termMonths, Math.round((l.principal - l.outstanding) / l.monthlyEmi)) : 0;
+    const monthsLeft = Math.max(0, l.termMonths - monthsElapsed);
+    return { ...l, repaidPrincipal, pctRepaid, monthsElapsed, monthsLeft };
+  });
+
+  const totalPrincipal = rows.reduce((s, r) => s + r.principal, 0);
+  const totalRepaid    = rows.reduce((s, r) => s + r.repaidPrincipal, 0);
+  const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Repayment Track-Record</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How far through each active loan you are, built from your synced debt schedule — the credibility sheet a new lender asks for before pricing.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total borrowed", value: formatCurrency(totalPrincipal), color: "text-[var(--color-text)]" },
+          { label: "Principal repaid", value: formatCurrency(totalRepaid), color: "text-green-400" },
+          { label: "Still outstanding", value: formatCurrency(totalOutstanding), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <History size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No active loans in your synced debt schedule yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(r => (
+            <div key={r.id} className={`${card} p-4`}>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-sm font-semibold">{r.lender}</p>
+                  <p className="text-xs text-[var(--color-muted)]">{formatCurrency(r.principal)} @ {r.rate.toFixed(2)}% · {r.termMonths}m term · EMI {formatCurrency(r.monthlyEmi)}</p>
+                </div>
+                <span className="text-sm font-bold tabular-nums text-green-400">{(r.pctRepaid * 100).toFixed(0)}% repaid</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-[var(--color-border)] overflow-hidden mb-2">
+                <div className="h-full bg-[var(--color-primary)]" style={{ width: `${Math.min(100, r.pctRepaid * 100)}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-3 text-[11px] text-[var(--color-muted)]">
+                <span>Repaid: <span className="text-[var(--color-text)] font-medium">{formatCurrency(r.repaidPrincipal)}</span></span>
+                <span>Outstanding: <span className="text-[var(--color-text)] font-medium">{formatCurrency(r.outstanding)}</span></span>
+                <span>~{r.monthsElapsed} of {r.termMonths} months in</span>
+                <span>{r.monthsLeft} months to go</span>
+                <span>Next EMI: {format(new Date(r.nextPaymentDate), "d MMM yyyy")}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Months elapsed is inferred from principal amortised against the EMI and may differ from the actual schedule for irregular or interest-only loans. Pair with your bank statement for a lender-ready record.
       </div>
     </div>
   );

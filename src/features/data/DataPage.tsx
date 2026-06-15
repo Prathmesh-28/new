@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { generateDemoData } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/utils";
-import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock } from "lucide-react";
+import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -22,7 +22,7 @@ export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
-  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup">("overview");
+  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive">("overview");
 
   if (!canAccess("data")) return <Navigate to="/dashboard" replace />;
 
@@ -85,7 +85,7 @@ export default function DataPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -97,6 +97,12 @@ export default function DataPage() {
       {tab === "mapper" && <CsvMapper editable={editable} onImport={handleImport} importAccountId={importAccountId} />}
       {tab === "consolidate" && <MultiEntityConsolidation />}
       {tab === "backup" && <ScheduledBackup />}
+      {tab === "quality" && <DataQualityChecker />}
+      {tab === "dedupe" && <TransactionDedupe editable={editable} />}
+      {tab === "replace" && <BulkFindReplace editable={editable} />}
+      {tab === "templates-store" && <MappingTemplateStore />}
+      {tab === "filings" && <FilingTemplates />}
+      {tab === "archive" && <ArchivePurge editable={editable} />}
 
       {tab === "overview" && <>
       {/* Current data snapshot */}
@@ -752,6 +758,479 @@ function ScheduledBackup() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── #166 Data Quality Checker ──────────────────────────────────────────────────
+// Scans live transactions for missing fields, blank dates, zero amounts, and
+// likely duplicates; surfaces a health score + per-issue counts. Read-only.
+function DataQualityChecker() {
+  const { store } = useApp();
+  const report = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const total = txns.length;
+    const missingDesc = txns.filter(t => !t.description?.trim()).length;
+    const missingCp = txns.filter(t => !t.counterparty?.trim()).length;
+    const blankDate = txns.filter(t => !t.date || isNaN(new Date(t.date).getTime())).length;
+    const zeroAmt = txns.filter(t => !t.amount || t.amount === 0).length;
+    const future = txns.filter(t => new Date(t.date).getTime() > Date.now()).length;
+    const noBank = txns.filter(t => !t.bankAccountId?.trim()).length;
+    // Duplicate signature: same date + amount + counterparty.
+    const seen = new Map<string, number>();
+    txns.forEach(t => {
+      const k = `${t.date}|${t.amount}|${(t.counterparty || "").toLowerCase()}`;
+      seen.set(k, (seen.get(k) ?? 0) + 1);
+    });
+    const dupes = Array.from(seen.values()).filter(n => n > 1).reduce((a, n) => a + (n - 1), 0);
+    const issues = missingDesc + missingCp + blankDate + zeroAmt + noBank + dupes;
+    const score = total === 0 ? 100 : Math.max(0, Math.round(100 - (issues / total) * 100));
+    return { total, missingDesc, missingCp, blankDate, zeroAmt, future, noBank, dupes, issues, score };
+  }, [store.transactions]);
+
+  const rows: { label: string; count: number; tone: string }[] = [
+    { label: "Missing description", count: report.missingDesc, tone: "text-orange-400" },
+    { label: "Missing counterparty", count: report.missingCp, tone: "text-orange-400" },
+    { label: "Invalid / blank date", count: report.blankDate, tone: "text-red-400" },
+    { label: "Zero amount", count: report.zeroAmt, tone: "text-red-400" },
+    { label: "Future-dated", count: report.future, tone: "text-[var(--color-muted)]" },
+    { label: "No bank account linked", count: report.noBank, tone: "text-orange-400" },
+    { label: "Likely duplicates", count: report.dupes, tone: "text-red-400" },
+  ];
+  const scoreTone = report.score >= 90 ? "text-green-400" : report.score >= 70 ? "text-orange-400" : "text-red-400";
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle2 size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Data Quality Checker</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A quick health scan of your {report.total} transactions before you file or forecast. Fix anything flagged in red on the Transactions page.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Health score</p>
+            <p className={`text-2xl font-bold tabular-nums ${scoreTone}`}>{report.score}%</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Total rows</p>
+            <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{report.total}</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Total issues</p>
+            <p className="text-2xl font-bold tabular-nums text-orange-400">{report.issues}</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Clean rows</p>
+            <p className="text-2xl font-bold tabular-nums text-green-400">{Math.max(0, report.total - report.issues)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[320px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Check", "Affected rows", "Status"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${r.count > 0 ? r.tone : ""}`}>{r.count}</td>
+                <td className="px-4 py-2.5">{r.count === 0
+                  ? <span className="text-green-400 text-xs">OK</span>
+                  : <span className={`text-xs ${r.tone}`}>Review</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Duplicates are flagged on matching date + amount + counterparty. Use the Dedupe tool to remove them.</p>
+    </div>
+  );
+}
+
+// ── #167 Transaction Dedupe ────────────────────────────────────────────────────
+// Detects duplicate transactions (same date + amount + counterparty) and removes
+// all but the first occurrence of each group from the store.
+function TransactionDedupe({ editable }: { editable: boolean }) {
+  const { store, setStore } = useApp();
+  const groups = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const map = new Map<string, Transaction[]>();
+    txns.forEach(t => {
+      const k = `${t.date}|${t.amount}|${(t.counterparty || "").toLowerCase()}|${(t.description || "").toLowerCase()}`;
+      const arr = map.get(k) ?? [];
+      arr.push(t);
+      map.set(k, arr);
+    });
+    return Array.from(map.values()).filter(g => g.length > 1);
+  }, [store.transactions]);
+
+  const removable = groups.reduce((a, g) => a + (g.length - 1), 0);
+
+  const dedupe = () => {
+    if (removable === 0) { toast.error("No duplicates found"); return; }
+    if (!window.confirm(`Remove ${removable} duplicate transaction(s)? The first of each group is kept.`)) return;
+    setStore(s => {
+      const seen = new Set<string>();
+      const kept = (s.transactions ?? []).filter(t => {
+        const k = `${t.date}|${t.amount}|${(t.counterparty || "").toLowerCase()}|${(t.description || "").toLowerCase()}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      return { ...s, transactions: kept };
+    });
+    toast.success(`Removed ${removable} duplicate transaction(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Copy size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Transaction Dedupe</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Re-importing a bank statement often double-books rows. We group transactions with the same date, amount, counterparty and description, then keep one of each. Found {groups.length} duplicate group(s) covering {removable} removable row(s).</p>
+        <button disabled={!editable || removable === 0} onClick={dedupe} className={primaryBtn}>
+          <Trash2 size={13} /> Remove {removable} duplicate{removable === 1 ? "" : "s"}
+        </button>
+      </div>
+
+      {groups.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Date", "Counterparty", "Description", "Amount", "Copies"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.slice(0, 50).map(g => (
+                <tr key={g[0].id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2 tabular-nums">{g[0].date}</td>
+                  <td className="px-4 py-2">{g[0].counterparty || "—"}</td>
+                  <td className="px-4 py-2 text-[var(--color-muted)]">{g[0].description || "—"}</td>
+                  <td className={`px-4 py-2 tabular-nums ${g[0].amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(g[0].amount)}</td>
+                  <td className="px-4 py-2 tabular-nums text-orange-400">×{g.length}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {groups.length > 50 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 50 of {groups.length} groups.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #168 Bulk Find & Replace ───────────────────────────────────────────────────
+// Find a string in transaction description or counterparty and replace it across
+// all matching rows in one pass. Case-insensitive match, preview count first.
+function BulkFindReplace({ editable }: { editable: boolean }) {
+  const { store, setStore } = useApp();
+  const [field, setField] = useState<"counterparty" | "description">("counterparty");
+  const [find, setFind] = useState("");
+  const [repl, setRepl] = useState("");
+  const [whole, setWhole] = useState(false);
+
+  const matches = useMemo(() => {
+    const q = find.trim().toLowerCase();
+    if (!q) return [];
+    return (store.transactions ?? []).filter(t => {
+      const v = (t[field] || "").toLowerCase();
+      return whole ? v === q : v.includes(q);
+    });
+  }, [store.transactions, field, find, whole]);
+
+  const apply = () => {
+    if (!find.trim()) { toast.error("Enter text to find"); return; }
+    if (matches.length === 0) { toast.error("No matching rows"); return; }
+    if (!window.confirm(`Replace "${find}" in ${matches.length} transaction(s)' ${field}?`)) return;
+    const q = find.trim();
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    setStore(s => ({
+      ...s,
+      transactions: (s.transactions ?? []).map(t => {
+        const v = t[field] || "";
+        if (whole) {
+          if (v.toLowerCase() !== q.toLowerCase()) return t;
+          return { ...t, [field]: repl };
+        }
+        if (!v.toLowerCase().includes(q.toLowerCase())) return t;
+        return { ...t, [field]: v.replace(re, repl) };
+      }),
+    }));
+    toast.success(`Updated ${matches.length} transaction(s)`);
+    setFind(""); setRepl("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Replace size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Bulk Find &amp; Replace</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Standardise messy bank narrations — e.g. rename every "MEHTA CORP LTD" to "Mehta Corp" across all transactions at once. Match is case-insensitive.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Field</label>
+            <select value={field} onChange={e => setField(e.target.value as "counterparty" | "description")} className={inpCls}>
+              <option value="counterparty">Counterparty</option>
+              <option value="description">Description</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Find</label>
+            <input value={find} onChange={e => setFind(e.target.value)} className={inpCls} placeholder="MEHTA CORP LTD" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Replace with</label>
+            <input value={repl} onChange={e => setRepl(e.target.value)} className={inpCls} placeholder="Mehta Corp" />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer text-xs mt-3">
+          <input type="checkbox" checked={whole} onChange={e => setWhole(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Match whole value only (replace entire field)
+        </label>
+        <div className="flex items-center gap-3 mt-4">
+          <button disabled={!editable || matches.length === 0} onClick={apply} className={primaryBtn}>
+            <Search size={13} /> Replace in {matches.length} row{matches.length === 1 ? "" : "s"}
+          </button>
+          {find.trim() && <span className="text-xs text-[var(--color-muted)]">{matches.length} match{matches.length === 1 ? "" : "es"} found</span>}
+        </div>
+      </div>
+
+      {matches.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Date", "Current value", "Amount"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matches.slice(0, 50).map(t => (
+                <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2 tabular-nums">{t.date}</td>
+                  <td className="px-4 py-2">{t[field] || "—"}</td>
+                  <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {matches.length > 50 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 50 of {matches.length}.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #169 Mapping Template Store ────────────────────────────────────────────────
+// Save reusable column-mapping presets (durable) for recurring bank/ERP CSV
+// layouts, and export/import them as JSON to share between users.
+interface MapTemplate { id: string; name: string; columns: string; createdAt: string; }
+function MappingTemplateStore() {
+  const [templates, setTemplates] = useFeatureState<MapTemplate[]>("data-mapping-templates", []);
+  const [name, setName] = useState("");
+  const [cols, setCols] = useState("");
+
+  const save = () => {
+    if (!name.trim()) { toast.error("Template name required"); return; }
+    if (!cols.trim()) { toast.error("Describe the column order"); return; }
+    setTemplates(prev => [{ id: `tpl-${Date.now()}`, name: name.trim(), columns: cols.trim(), createdAt: new Date().toISOString() }, ...prev]);
+    toast.success(`Saved template "${name.trim()}"`);
+    setName(""); setCols("");
+  };
+  const remove = (id: string) => setTemplates(prev => prev.filter(t => t.id !== id));
+  const exportAll = () => {
+    if (templates.length === 0) { toast.error("No templates to export"); return; }
+    downloadBlob("mapping-templates.json", JSON.stringify(templates, null, 2), "application/json");
+    toast.success(`Exported ${templates.length} template(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Bookmark size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Mapping Templates</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Your HDFC, ICICI or Tally export always uses the same column order. Save that layout once so you (or your CA) can re-apply it on every import instead of re-mapping by hand.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Template name</label>
+            <input value={name} onChange={e => setName(e.target.value)} className={inpCls} placeholder="HDFC current account" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Column order (comma-separated)</label>
+            <input value={cols} onChange={e => setCols(e.target.value)} className={inpCls} placeholder="date, description, counterparty, amount" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={save} className={primaryBtn}><Plus size={13} /> Save template</button>
+          <button onClick={exportAll} className={ghostBtn}><Download size={13} /> Export all (JSON)</button>
+        </div>
+      </div>
+
+      {templates.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Name", "Column order", "Saved", ""].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {templates.map(t => (
+                <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 font-medium">{t.name}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] font-mono text-xs">{t.columns}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{format(new Date(t.createdAt), "dd MMM yyyy")}</td>
+                  <td className="px-4 py-2.5"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #170 Filing Templates ──────────────────────────────────────────────────────
+// One-click download of correctly-formatted CSV templates for common Indian
+// filings/imports (GSTR-1, opening balances, fixed-asset register, vendor master).
+function FilingTemplates() {
+  const TEMPLATES: { id: string; name: string; desc: string; file: string; content: string }[] = [
+    {
+      id: "gstr1", name: "GSTR-1 (B2B outward supplies)",
+      desc: "Outward B2B invoices for monthly GST return — GSTIN, invoice no, taxable value and rate.",
+      file: "gstr1-b2b-template.csv",
+      content: "gstin,invoice_no,invoice_date,invoice_value,taxable_value,rate,igst,cgst,sgst\n27ABCDE1234F1Z5,INV-001,01/06/2026,295000,250000,18,0,22500,22500\n",
+    },
+    {
+      id: "opening", name: "Opening balances",
+      desc: "Ledger opening balances to seed a new financial year — account, debit and credit.",
+      file: "opening-balances-template.csv",
+      content: "ledger,opening_debit,opening_credit\nCash,50000,0\nBank,1200000,0\nSundry Creditors,0,340000\n",
+    },
+    {
+      id: "fixed-assets", name: "Fixed-asset register",
+      desc: "Asset master for depreciation — name, category, purchase date, cost and rate.",
+      file: "fixed-asset-register-template.csv",
+      content: "asset,category,purchase_date,cost,depreciation_rate\nLaptops,Computers,01/04/2026,450000,40\nOffice furniture,Furniture,01/04/2026,180000,10\n",
+    },
+    {
+      id: "vendor-master", name: "Vendor / counterparty master",
+      desc: "Bulk-load suppliers and customers — name, GSTIN, PAN and payment terms.",
+      file: "vendor-master-template.csv",
+      content: "name,gstin,pan,payment_terms_days,category\nMehta Corp,27ABCDE1234F1Z5,ABCDE1234F,30,Customer\nLandlord,,XYZAB6789K,0,Vendor\n",
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <FileDown size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Filing &amp; Import Templates</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Start from a correctly-structured CSV for the filings and bulk-loads SMBs do most often. Fill in Excel, save as CSV, then bring it back via the CSV Mapper.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {TEMPLATES.map(t => (
+          <div key={t.id} className={cardCls}>
+            <p className="text-sm font-semibold mb-1">{t.name}</p>
+            <p className="text-xs text-[var(--color-muted)] mb-4">{t.desc}</p>
+            <button onClick={() => { downloadBlob(t.file, t.content, "text/csv"); toast.success(`Downloaded ${t.file}`); }} className={ghostBtn}>
+              <Download size={13} /> Download CSV
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Templates are indicative formats — confirm exact column requirements with the GST portal or your accounting software before filing.</p>
+    </div>
+  );
+}
+
+// ── #171 Archive & Purge ───────────────────────────────────────────────────────
+// Download a CSV of transactions older than a chosen FY cut-off, then optionally
+// purge them from the store to keep the working set lean.
+function ArchivePurge({ editable }: { editable: boolean }) {
+  const { store, setStore } = useApp();
+  const [cutoff, setCutoff] = useState("2024-04-01");
+
+  const { older, newer } = useMemo(() => {
+    const t = new Date(cutoff).getTime();
+    const txns = store.transactions ?? [];
+    const older = txns.filter(x => new Date(x.date).getTime() < t);
+    return { older, newer: txns.length - older.length };
+  }, [store.transactions, cutoff]);
+
+  const oldValue = older.reduce((a, t) => a + Math.abs(t.amount), 0);
+
+  const archive = () => {
+    if (older.length === 0) { toast.error("Nothing older than the cut-off"); return; }
+    const header = "date,amount,description,counterparty,category,bankAccountId";
+    const esc = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const body = older.map(t => [t.date, t.amount, esc(t.description || ""), esc(t.counterparty || ""), t.category, t.bankAccountId].join(",")).join("\n");
+    downloadBlob(`archive-before-${cutoff}.csv`, `${header}\n${body}`, "text/csv");
+    toast.success(`Archived ${older.length} transaction(s) to CSV`);
+  };
+
+  const purge = () => {
+    if (older.length === 0) { toast.error("Nothing older than the cut-off"); return; }
+    if (!window.confirm(`Permanently remove ${older.length} transaction(s) dated before ${cutoff}? Download the archive first — this cannot be undone.`)) return;
+    const t = new Date(cutoff).getTime();
+    setStore(s => ({ ...s, transactions: (s.transactions ?? []).filter(x => new Date(x.date).getTime() >= t) }));
+    toast.success(`Purged ${older.length} old transaction(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Archive size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Archive &amp; Purge Old Data</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Years of stale transactions slow down charts and reports. Pick a cut-off, download everything older as a CSV archive, then purge it from the working set. Statutory records should be kept 8 years — store the archive safely.</p>
+        <div className="max-w-xs mb-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Cut-off date (remove transactions before)</label>
+          <input type="date" value={cutoff} onChange={e => setCutoff(e.target.value)} className={inpCls} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Older than cut-off</p>
+            <p className="text-xl font-bold tabular-nums text-orange-400">{older.length}</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Kept</p>
+            <p className="text-xl font-bold tabular-nums text-green-400">{newer}</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Archived value</p>
+            <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(oldValue)}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={older.length === 0} onClick={archive} className={primaryBtn}><Download size={13} /> Download archive CSV</button>
+          <button disabled={!editable || older.length === 0} onClick={purge} className={ghostBtn}><Trash2 size={13} /> Purge {older.length} old row{older.length === 1 ? "" : "s"}</button>
+        </div>
+      </div>
     </div>
   );
 }

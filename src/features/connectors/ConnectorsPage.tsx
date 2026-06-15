@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { generateId, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
-import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -318,13 +318,19 @@ export default function ConnectorsPage() {
       </div>
 
       {/* #166–#169 — Connector tools */}
-      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity]] as const).map(([id, label, Icon]) => (
+      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History]] as const).map(([id, label, Icon]) => (
         <a key={id} href={`#${id}`} className="sr-only">{label} <Icon size={10} /></a>
       ))}
       <BankUpiFeedConnector />
       <PaymentGatewayReconciliation />
       <EcommerceMarketplaceSync />
       <ConnectorHealthMonitor />
+      <ConnectorCatalog />
+      <SyncScheduleConfig />
+      <FieldMappingStudio />
+      <CredentialVault />
+      <WebhookRegistry />
+      <SyncHistoryTimeline />
     </div>
   );
 }
@@ -893,6 +899,524 @@ function ConnectorHealthMonitor() {
         <AlertCircle size={12} className="shrink-0 mt-px" />
         Demo: failures &amp; retries are simulated. In production this surfaces real webhook errors and AA consent expiries.
       </div>
+    </section>
+  );
+}
+
+const DemoNote = ({ children }: { children: ReactNode }) => (
+  <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-3 py-2 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+    <AlertCircle size={12} className="shrink-0 mt-px" />
+    {children}
+  </div>
+);
+
+// ── Connector Catalog / Marketplace ───────────────────────────────────────────────
+// Browse a catalogue of integrations and "connect" them. Connection state is durable
+// per-app (useFeatureState) but entirely simulated — no real OAuth handshake.
+type CatalogItem = { id: string; name: string; category: string; icon: string; desc: string };
+const CATALOG: CatalogItem[] = [
+  { id: "shopify", name: "Shopify", category: "E-commerce", icon: "🛍️", desc: "Sync store orders, refunds & payouts." },
+  { id: "woocommerce", name: "WooCommerce", category: "E-commerce", icon: "🟣", desc: "Pull WordPress store sales." },
+  { id: "cashfree", name: "Cashfree", category: "Payments", icon: "🟢", desc: "Settlements & payout reconciliation." },
+  { id: "payu", name: "PayU", category: "Payments", icon: "🟡", desc: "Import gateway transactions." },
+  { id: "icici_corp", name: "ICICI Corporate API", category: "Banking", icon: "🏦", desc: "Direct corporate bank statement feed." },
+  { id: "hdfc_corp", name: "HDFC Corporate API", category: "Banking", icon: "🏛️", desc: "Live current-account balances." },
+  { id: "xero", name: "Xero", category: "Accounting", icon: "🔵", desc: "Two-way ledger & invoice sync." },
+  { id: "sap_b1", name: "SAP Business One", category: "ERP", icon: "🟦", desc: "Push journal entries to SAP." },
+  { id: "shiprocket", name: "Shiprocket", category: "Logistics", icon: "🚚", desc: "COD remittance reconciliation." },
+  { id: "gsuite_sheets", name: "Google Sheets", category: "Data", icon: "📗", desc: "Export ledgers to a live sheet." },
+];
+
+function ConnectorCatalog() {
+  const [connected, setConnected] = useFeatureState<Record<string, string>>("conn-catalog-connected", {});
+  const [filter, setFilter] = useState<string>("All");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const categories = ["All", ...Array.from(new Set(CATALOG.map(c => c.category)))];
+  const shown = CATALOG.filter(c => filter === "All" || c.category === filter);
+
+  const connect = async (item: CatalogItem) => {
+    setBusy(item.id);
+    await new Promise(r => setTimeout(r, 900));
+    setConnected(prev => ({ ...prev, [item.id]: new Date().toISOString() }));
+    setBusy(null);
+    toast.success(`${item.name} connected (simulated).`);
+  };
+  const disconnect = (item: CatalogItem) => {
+    setConnected(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+    toast.success(`${item.name} disconnected.`);
+  };
+
+  const connectedCount = Object.keys(connected).length;
+
+  return (
+    <section id="conn-catalog" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Store size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Connector Catalog</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{connectedCount} connected</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Browse Headroom's integration marketplace. Tap connect to add an integration — connections are remembered on this device.
+      </p>
+
+      <div className="flex gap-2 flex-wrap">
+        {categories.map(cat => (
+          <button key={cat} onClick={() => setFilter(cat)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${filter === cat ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {shown.map(item => {
+          const isConnected = !!connected[item.id];
+          return (
+            <div key={item.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 flex items-start gap-3">
+              <span className="text-2xl mt-0.5">{item.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-semibold">{item.name}</p>
+                  <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{item.category}</span>
+                  {isConnected && <span className="flex items-center gap-1 text-[10px] text-green-400"><CheckCircle2 size={10} />Connected</span>}
+                </div>
+                <p className="text-xs text-[var(--color-muted)] mb-2 leading-relaxed">{item.desc}</p>
+                {isConnected ? (
+                  <button onClick={() => disconnect(item)} className="text-[11px] text-[var(--color-muted)] border border-[var(--color-border)] px-2.5 py-1 rounded-lg hover:text-red-400">Disconnect</button>
+                ) : (
+                  <button onClick={() => connect(item)} disabled={busy === item.id}
+                    className="flex items-center gap-1 text-[11px] bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2.5 py-1 rounded-lg hover:opacity-90">
+                    {busy === item.id ? <RefreshCw size={11} className="animate-spin" /> : <PlugZap size={11} />} Connect
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <DemoNote>Demo: the marketplace is a static catalogue; "connect" stores a flag locally — no real OAuth or API handshake happens.</DemoNote>
+    </section>
+  );
+}
+
+// ── Sync Schedule Config ──────────────────────────────────────────────────────────
+// Per-connector sync cadence + window. Computes the next run client-side. Nothing is
+// actually scheduled on a server.
+type SyncSchedule = { freq: "manual" | "hourly" | "daily" | "weekly"; hour: number; enabled: boolean };
+const FREQ_LABEL: Record<SyncSchedule["freq"], string> = { manual: "Manual only", hourly: "Every hour", daily: "Once a day", weekly: "Once a week" };
+
+function nextRun(s: SyncSchedule): string {
+  if (!s.enabled || s.freq === "manual") return "—";
+  const now = new Date();
+  const next = new Date(now);
+  if (s.freq === "hourly") { next.setHours(now.getHours() + 1, 0, 0, 0); }
+  else { next.setHours(s.hour, 0, 0, 0); if (next <= now) next.setDate(next.getDate() + (s.freq === "weekly" ? 7 : 1)); }
+  return next.toLocaleString("en-IN", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function SyncScheduleConfig() {
+  const { store } = useApp();
+  const { connectors } = store;
+  const [schedules, setSchedules] = useFeatureState<Record<string, SyncSchedule>>("conn-schedules", {});
+
+  const get = (id: string): SyncSchedule => schedules[id] ?? { freq: "daily", hour: 9, enabled: false };
+  const set = (id: string, patch: Partial<SyncSchedule>) =>
+    setSchedules(prev => ({ ...prev, [id]: { ...get(id), ...patch } }));
+
+  return (
+    <section id="conn-schedule" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <CalendarClock size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Sync Schedule</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">Auto-pull cadence per connector</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Set how often each connected source pulls fresh data and when the daily/weekly window opens.
+      </p>
+
+      {connectors.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No active connectors — connect one above to schedule its syncs.</p>
+      ) : (
+        <div className="space-y-2">
+          {connectors.map(c => {
+            const s = get(c.id);
+            return (
+              <div key={c.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold truncate">{c.label}</p>
+                  <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] cursor-pointer">
+                    <input type="checkbox" checked={s.enabled} onChange={e => set(c.id, { enabled: e.target.checked })} />
+                    Auto-sync
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="text-[10px] text-[var(--color-muted)] block mb-1">Frequency</label>
+                    <select value={s.freq} onChange={e => set(c.id, { freq: e.target.value as SyncSchedule["freq"] })} className={FC_INP}>
+                      {(Object.keys(FREQ_LABEL) as SyncSchedule["freq"][]).map(f => <option key={f} value={f}>{FREQ_LABEL[f]}</option>)}
+                    </select>
+                  </div>
+                  {(s.freq === "daily" || s.freq === "weekly") && (
+                    <div>
+                      <label className="text-[10px] text-[var(--color-muted)] block mb-1">Hour of day</label>
+                      <select value={s.hour} onChange={e => set(c.id, { hour: Number(e.target.value) })} className={FC_INP}>
+                        {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-[var(--color-muted)] pb-2">
+                    Next run: <span className="font-semibold text-[var(--color-text)]">{nextRun(s)}</span>
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <DemoNote>Demo: schedules are stored locally and the next-run time is computed in-browser. No background job actually runs.</DemoNote>
+    </section>
+  );
+}
+
+// ── Field Mapping Studio ──────────────────────────────────────────────────────────
+// Map incoming connector fields to Headroom's canonical transaction schema.
+type FieldMap = Record<string, string>;
+const HEADROOM_FIELDS = ["date", "amount", "description", "counterparty", "category", "reference"] as const;
+
+function FieldMappingStudio() {
+  const [maps, setMaps] = useFeatureState<Record<string, FieldMap>>("conn-field-maps", {});
+  const [connector, setConnector] = useState("Razorpay");
+  const [sourceField, setSourceField] = useState("");
+  const [target, setTarget] = useState<typeof HEADROOM_FIELDS[number]>("amount");
+
+  const current = maps[connector] ?? {};
+  const addMapping = () => {
+    if (!sourceField.trim()) { toast.error("Enter the source field name"); return; }
+    setMaps(prev => ({ ...prev, [connector]: { ...(prev[connector] ?? {}), [sourceField.trim()]: target } }));
+    setSourceField("");
+    toast.success(`Mapped "${sourceField.trim()}" → ${target}`);
+  };
+  const removeMapping = (src: string) =>
+    setMaps(prev => { const n = { ...(prev[connector] ?? {}) }; delete n[src]; return { ...prev, [connector]: n }; });
+
+  const mapped = Object.entries(current);
+  const coveredTargets = new Set(Object.values(current));
+  const missing = HEADROOM_FIELDS.filter(f => !coveredTargets.has(f));
+
+  return (
+    <section id="conn-mapping" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Workflow size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Field Mapping Studio</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">Source → Headroom schema</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Map the column names a connector sends to Headroom's canonical transaction fields, so imports land in the right place.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Connector</label>
+          <input value={connector} onChange={e => setConnector(e.target.value)} placeholder="Razorpay" className={FC_INP} />
+        </div>
+        <div className="flex-1 min-w-[140px]">
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Source field</label>
+          <input value={sourceField} onChange={e => setSourceField(e.target.value)} placeholder="e.g. settlement_amount" className={FC_INP} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Maps to</label>
+          <select value={target} onChange={e => setTarget(e.target.value as typeof HEADROOM_FIELDS[number])} className={FC_INP}>
+            {HEADROOM_FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+        <button onClick={addMapping} className="flex items-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">
+          <Plus size={13} /> Map
+        </button>
+      </div>
+
+      {missing.length > 0 && (
+        <p className="text-[11px] text-yellow-400 flex items-center gap-1.5">
+          <AlertCircle size={12} /> Unmapped Headroom fields for {connector || "this connector"}: {missing.join(", ")}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {mapped.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No mappings yet for "{connector}".</p>
+        ) : mapped.map(([src, tgt]) => (
+          <div key={src} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <code className="font-mono text-xs truncate">{src}</code>
+              <ArrowDownUp size={12} className="text-[var(--color-muted)] shrink-0 rotate-90" />
+              <span className="font-semibold text-[var(--color-primary)]">{tgt}</span>
+            </div>
+            <button onClick={() => removeMapping(src)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 transition-colors shrink-0">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: mappings are saved locally for reference. They are not yet applied to a live import pipeline.</DemoNote>
+    </section>
+  );
+}
+
+// ── Credential Vault ──────────────────────────────────────────────────────────────
+// Store API keys/secrets per connector, masked by default. Stored in-browser only —
+// honest warning that this is NOT a production secret store.
+type Credential = { id: string; connector: string; keyName: string; secret: string; addedAt: string };
+
+function maskSecret(s: string): string {
+  if (s.length <= 4) return "•".repeat(s.length);
+  return s.slice(0, 2) + "•".repeat(Math.max(4, s.length - 6)) + s.slice(-4);
+}
+
+function CredentialVault() {
+  const [creds, setCreds] = useFeatureState<Credential[]>("conn-credentials", []);
+  const [connector, setConnector] = useState("");
+  const [keyName, setKeyName] = useState("");
+  const [secret, setSecret] = useState("");
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+
+  const add = () => {
+    if (!connector.trim() || !keyName.trim() || !secret.trim()) { toast.error("Fill connector, key name and secret"); return; }
+    setCreds(prev => [{ id: generateId(), connector: connector.trim(), keyName: keyName.trim(), secret: secret.trim(), addedAt: new Date().toISOString() }, ...prev]);
+    setConnector(""); setKeyName(""); setSecret("");
+    toast.success("Credential stored (masked).");
+  };
+  const remove = (id: string) => { setCreds(prev => prev.filter(c => c.id !== id)); setRevealed(prev => { const n = new Set(prev); n.delete(id); return n; }); };
+  const toggle = (id: string) => setRevealed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const copy = (c: Credential) => { navigator.clipboard?.writeText(c.secret); toast.success("Secret copied to clipboard."); };
+
+  return (
+    <section id="conn-vault" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <KeyRound size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Credential Vault</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{creds.length} stored · masked</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Keep API keys and webhook secrets for your connectors in one place. Values are masked by default; reveal or copy when needed.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input value={connector} onChange={e => setConnector(e.target.value)} placeholder="Connector (Stripe)" className={FC_INP} />
+        <input value={keyName} onChange={e => setKeyName(e.target.value)} placeholder="Key name (Secret key)" className={FC_INP} />
+        <input type="password" value={secret} onChange={e => setSecret(e.target.value)} placeholder="sk_live_…" className={FC_INP} />
+        <button onClick={add} className="flex items-center justify-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">
+          <Plus size={13} /> Store key
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {creds.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No credentials stored yet.</p>
+        ) : creds.map(c => {
+          const open = revealed.has(c.id);
+          return (
+            <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{c.connector} · <span className="font-normal text-[var(--color-muted)]">{c.keyName}</span></p>
+                <code className="text-[11px] font-mono text-[var(--color-muted)] break-all">{open ? c.secret : maskSecret(c.secret)}</code>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => toggle(c.id)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] transition-colors">
+                  {open ? <EyeOff size={13} /> : <Eye size={13} />}
+                </button>
+                <button onClick={() => copy(c)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] transition-colors">
+                  <Copy size={13} />
+                </button>
+                <button onClick={() => remove(c.id)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <DemoNote>Security note: this demo stores secrets in your browser's local state only — NOT encrypted or production-safe. Never paste real live keys here.</DemoNote>
+    </section>
+  );
+}
+
+// ── Webhook Endpoint Registry ───────────────────────────────────────────────────────
+// Register inbound webhook endpoints and fire a simulated test ping with a 2xx/timeout
+// result. No actual HTTP request is made.
+type WebhookEntry = { id: string; label: string; url: string; events: string; lastPing: string | null; lastStatus: number | null };
+
+function WebhookRegistry() {
+  const [hooks, setHooks] = useFeatureState<WebhookEntry[]>("conn-webhooks", []);
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState("payment.captured");
+  const [pinging, setPinging] = useState<string | null>(null);
+
+  const add = () => {
+    if (!url.trim()) { toast.error("Enter a webhook URL"); return; }
+    if (!/^https?:\/\//i.test(url.trim())) { toast.error("URL must start with http(s)://"); return; }
+    setHooks(prev => [{ id: generateId(), label: label.trim() || "Endpoint", url: url.trim(), events: events.trim(), lastPing: null, lastStatus: null }, ...prev]);
+    setLabel(""); setUrl("");
+    toast.success("Webhook endpoint registered.");
+  };
+  const remove = (id: string) => setHooks(prev => prev.filter(h => h.id !== id));
+  const testPing = async (id: string) => {
+    setPinging(id);
+    await new Promise(r => setTimeout(r, 1000));
+    const ok = Math.random() > 0.25;
+    const status = ok ? 200 : (Math.random() > 0.5 ? 500 : 0);
+    setHooks(prev => prev.map(h => h.id === id ? { ...h, lastPing: new Date().toISOString(), lastStatus: status } : h));
+    setPinging(null);
+    if (status === 200) toast.success("Test ping delivered — 200 OK (simulated).");
+    else if (status === 0) toast.error("Test ping failed — connection timed out (simulated).");
+    else toast.error(`Test ping failed — ${status} from endpoint (simulated).`);
+  };
+
+  return (
+    <section id="conn-webhooks" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Webhook size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Webhook Registry</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{hooks.length} endpoints</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Register endpoints that should receive connector events, then fire a test ping to check delivery.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Label (Orders hook)" className={FC_INP} />
+        <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://api.you.com/hook" className={`${FC_INP} md:col-span-2`} />
+        <button onClick={add} className="flex items-center justify-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">
+          <Plus size={13} /> Register
+        </button>
+      </div>
+      <div className="max-w-md">
+        <label className="text-[10px] text-[var(--color-muted)] block mb-1">Subscribed events (comma-separated)</label>
+        <input value={events} onChange={e => setEvents(e.target.value)} placeholder="payment.captured, refund.created" className={FC_INP} />
+      </div>
+
+      <div className="space-y-2">
+        {hooks.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No webhook endpoints registered.</p>
+        ) : hooks.map(h => {
+          const statusColor = h.lastStatus === 200 ? "text-green-400" : h.lastStatus === null ? "text-[var(--color-muted)]" : "text-red-400";
+          const statusText = h.lastStatus === null ? "Never pinged" : h.lastStatus === 0 ? "Timed out" : `${h.lastStatus}`;
+          return (
+            <div key={h.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold truncate">{h.label}</p>
+                  <span className={`text-[10px] font-medium ${statusColor}`}>{statusText}</span>
+                </div>
+                <code className="text-[11px] font-mono text-[var(--color-muted)] break-all">{h.url}</code>
+                <p className="text-[10px] text-[var(--color-muted)] truncate">{h.events || "all events"}{h.lastPing ? ` · pinged ${new Date(h.lastPing).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => testPing(h.id)} disabled={pinging === h.id}
+                  className="flex items-center gap-1 text-[10px] text-[var(--color-primary)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:bg-[var(--color-accent)]">
+                  {pinging === h.id ? <RefreshCw size={11} className="animate-spin" /> : <Send size={11} />} Test
+                </button>
+                <button onClick={() => remove(h.id)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <DemoNote>Demo: test pings do not make a real HTTP request — the 200/500/timeout outcome is simulated client-side.</DemoNote>
+    </section>
+  );
+}
+
+// ── Sync History Timeline ───────────────────────────────────────────────────────────
+// Append-only log of sync events across connectors. Lets you record a simulated run
+// and review the recent timeline. Persisted locally.
+type SyncEvent = { id: string; connector: string; at: string; records: number; outcome: "success" | "partial" | "failed" };
+
+function SyncHistoryTimeline() {
+  const { store } = useApp();
+  const { connectors } = store;
+  const [events, setEvents] = useFeatureState<SyncEvent[]>("conn-sync-history", []);
+  const [connector, setConnector] = useState("");
+
+  const options = Array.from(new Set([...connectors.map(c => c.label), "Razorpay", "Stripe", "AA Network", "Tally ERP"]));
+
+  const record = async () => {
+    const name = connector || options[0] || "Connector";
+    const roll = Math.random();
+    const outcome: SyncEvent["outcome"] = roll > 0.8 ? "failed" : roll > 0.6 ? "partial" : "success";
+    const records = outcome === "failed" ? 0 : 3 + Math.floor(Math.random() * 60);
+    setEvents(prev => [{ id: generateId(), connector: name, at: new Date().toISOString(), records, outcome }, ...prev].slice(0, 50));
+    if (outcome === "success") toast.success(`${name}: pulled ${records} records.`);
+    else if (outcome === "partial") toast(`${name}: partial sync — ${records} records, some skipped.`);
+    else toast.error(`${name}: sync failed.`);
+  };
+  const clear = () => { setEvents([]); toast.success("History cleared."); };
+
+  const OUTCOME_UI: Record<SyncEvent["outcome"], { color: string; Icon: typeof CheckCircle2; label: string }> = {
+    success: { color: "text-green-400", Icon: CheckCircle2, label: "Success" },
+    partial: { color: "text-yellow-400", Icon: AlertCircle, label: "Partial" },
+    failed: { color: "text-red-400", Icon: XCircle, label: "Failed" },
+  };
+
+  const totalRecords = events.reduce((s, e) => s + e.records, 0);
+
+  return (
+    <section id="conn-history" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <History size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Sync History</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{events.length} runs · {totalRecords} records</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        A running timeline of every sync run across your connectors. Record a run to see how success, partial and failed outcomes appear.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[160px]">
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Connector</label>
+          <select value={connector} onChange={e => setConnector(e.target.value)} className={FC_INP}>
+            {options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <button onClick={record} className="flex items-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">
+          <RefreshCw size={13} /> Record sync run
+        </button>
+        {events.length > 0 && (
+          <button onClick={clear} className="text-xs text-[var(--color-muted)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:text-red-400">Clear</button>
+        )}
+      </div>
+
+      <div className="space-y-0">
+        {events.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No sync runs recorded yet.</p>
+        ) : (
+          <ol className="relative border-l border-[var(--color-border)] ml-2 space-y-3 py-1">
+            {events.map(e => {
+              const ui = OUTCOME_UI[e.outcome];
+              const Icon = ui.Icon;
+              return (
+                <li key={e.id} className="ml-4">
+                  <span className={`absolute -left-[7px] mt-0.5 ${ui.color}`}><Icon size={13} /></span>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">{e.connector} <span className={`text-[10px] font-medium ${ui.color}`}>{ui.label}</span></p>
+                    <span className="text-[10px] text-[var(--color-muted)]">{new Date(e.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-muted)]">{e.outcome === "failed" ? "No records pulled" : `${e.records} records pulled`}</p>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+
+      <DemoNote>Demo: sync runs here are simulated and logged locally. Production wires this to real connector run events.</DemoNote>
     </section>
   );
 }

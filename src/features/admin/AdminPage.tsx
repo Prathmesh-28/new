@@ -3,13 +3,13 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 
-type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention";
+type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
 type Company = {
@@ -100,14 +100,20 @@ export default function AdminPage() {
     navigate("/dashboard");
   };
 
-  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  const TABS = [
     { id: "overview",     label: "Platform Overview", icon: ShieldCheck },
     { id: "companies",    label: "Companies",          icon: Building2 },
     { id: "users",        label: "Users",              icon: Users },
     { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
     { id: "usage",        label: "Usage Analytics",    icon: Activity },
     { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
-  ];
+    { id: "flags",        label: "Feature Flags",      icon: Flag },
+    { id: "announce",     label: "Announcements",      icon: Megaphone },
+    { id: "audit-log",    label: "Audit Log",          icon: ScrollText },
+    { id: "quotas",       label: "Seats & Quotas",     icon: Gauge },
+    { id: "health",       label: "System Health",      icon: HeartPulse },
+    { id: "maintenance",  label: "Maintenance",        icon: Wrench },
+  ] as const satisfies { id: Tab; label: string; icon: React.ElementType }[];
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
   const filteredUsers = users.filter(u =>
@@ -323,6 +329,12 @@ export default function AdminPage() {
       {tab === "ca-workspace" && <CaWorkspace companies={companies} loadCompanies={loadCompanies} />}
       {tab === "usage" && <UsageAnalytics />}
       {tab === "retention" && <RetentionSettings />}
+      {tab === "flags" && <FeatureFlagManager />}
+      {tab === "announce" && <AnnouncementComposer />}
+      {tab === "audit-log" && <AuditLogViewer />}
+      {tab === "quotas" && <SeatQuotaTracker stats={stats} companies={companies} loadCompanies={loadCompanies} />}
+      {tab === "health" && <SystemHealthBoard stats={stats} />}
+      {tab === "maintenance" && <MaintenanceMode />}
     </div>
   );
 }
@@ -689,6 +701,433 @@ function RetentionSettings() {
         </button>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Indicative controls aligned with the DPDP Act 2023 and Indian tax/GST record-keeping rules. Confirm statutory retention periods with your CA / legal counsel before enabling auto-purge.</p>
+    </div>
+  );
+}
+
+// ── #177 Platform Feature-Flag Manager ─────────────────────────────────────
+type FeatureFlag = { key: string; label: string; desc: string; enabled: boolean; rollout: number };
+
+const DEFAULT_FLAGS: FeatureFlag[] = [
+  { key: "ai-copilot",      label: "AI Copilot",          desc: "Conversational finance assistant for all tenants",  enabled: true,  rollout: 100 },
+  { key: "whatsapp-bot",    label: "WhatsApp Bot",         desc: "Inbound/outbound WhatsApp finance updates",          enabled: true,  rollout: 100 },
+  { key: "aa-underwriting", label: "Account Aggregator",   desc: "Pull bank data via AA framework for underwriting",   enabled: false, rollout: 25 },
+  { key: "b2b-bnpl",        label: "B2B BNPL",             desc: "Buy-now-pay-later on supplier invoices",             enabled: false, rollout: 10 },
+  { key: "tally-plugin",    label: "Tally Sync Plugin",    desc: "Two-way sync with Tally desktop ledgers",            enabled: true,  rollout: 60 },
+  { key: "multi-currency",  label: "Multi-currency",       desc: "Foreign-currency invoices & FX gain/loss",           enabled: false, rollout: 0  },
+];
+
+function FeatureFlagManager() {
+  const [flags, setFlags] = useFeatureState<FeatureFlag[]>("adm-feature-flags", DEFAULT_FLAGS);
+
+  const toggle = (key: string) =>
+    setFlags(prev => prev.map(f => f.key === key ? { ...f, enabled: !f.enabled, rollout: !f.enabled ? (f.rollout || 100) : f.rollout } : f));
+  const setRollout = (key: string, rollout: number) =>
+    setFlags(prev => prev.map(f => f.key === key ? { ...f, rollout: Math.max(0, Math.min(100, rollout)) } : f));
+  const onCount = flags.filter(f => f.enabled).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Flags", value: flags.length.toString(), sub: "platform capabilities" },
+          { label: "Enabled", value: onCount.toString(), sub: "live for tenants" },
+          { label: "Disabled", value: (flags.length - onCount).toString(), sub: "hidden / dark-launch" },
+          { label: "Avg Rollout", value: `${flags.length ? Math.round(flags.filter(f => f.enabled).reduce((s, f) => s + f.rollout, 0) / Math.max(onCount, 1)) : 0}%`, sub: "of enabled flags" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Flag size={14} className="text-[var(--color-primary)]" /> Feature Flags</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Toggle capabilities platform-wide and stage gradual rollouts. Changes sync instantly across your devices.</p>
+        <div className="space-y-2">
+          {flags.map(f => (
+            <div key={f.key} className="flex items-start justify-between gap-4 py-3 border-b border-[var(--color-border)] last:border-0">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">{f.label}<code className="text-[10px] font-mono text-[var(--color-muted)] bg-[var(--color-bg)] px-1.5 py-0.5 rounded">{f.key}</code></p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">{f.desc}</p>
+                {f.enabled && (
+                  <div className="flex items-center gap-2 mt-2 max-w-[280px]">
+                    <input type="range" min={0} max={100} step={5} value={f.rollout} onChange={e => setRollout(f.key, parseInt(e.target.value) || 0)} className="flex-1 accent-[var(--color-primary)]" />
+                    <span className="text-[10px] tabular-nums text-[var(--color-muted)] w-9 text-right">{f.rollout}%</span>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => toggle(f.key)}
+                className={`shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${f.enabled ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {f.enabled ? "Enabled" : "Disabled"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #178 Announcement / Banner Composer ────────────────────────────────────
+type Announcement = { id: string; title: string; body: string; level: "info" | "warning" | "critical"; active: boolean; createdAt: string };
+
+function AnnouncementComposer() {
+  const [items, setItems] = useFeatureState<Announcement[]>("adm-announcements", []);
+  const [title, setTitle] = useState("");
+  const [body, setBody]   = useState("");
+  const [level, setLevel] = useState<Announcement["level"]>("info");
+
+  const publish = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !body.trim()) { toast.error("Title and message required"); return; }
+    const a: Announcement = { id: crypto.randomUUID(), title: title.trim(), body: body.trim(), level, active: true, createdAt: new Date().toISOString() };
+    setItems(prev => [a, ...prev]);
+    setTitle(""); setBody(""); setLevel("info");
+    toast.success("Announcement published to all tenants");
+  };
+  const toggle = (id: string) => setItems(prev => prev.map(a => a.id === id ? { ...a, active: !a.active } : a));
+  const remove = (id: string) => setItems(prev => prev.filter(a => a.id !== id));
+
+  const LEVELS: Record<Announcement["level"], string> = {
+    info: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    warning: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    critical: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const liveCount = items.filter(a => a.active).length;
+
+  return (
+    <div className="space-y-5">
+      <form onSubmit={publish} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Megaphone size={14} className="text-[var(--color-primary)]" /> Compose Announcement</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Broadcast a banner to every tenant — outages, new features, billing notices. {liveCount} currently live.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Title</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Scheduled maintenance Sunday 2am" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Severity</label>
+            <select value={level} onChange={e => setLevel(e.target.value as Announcement["level"])} className={inp}>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Message</label>
+          <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} placeholder="Details shown in the banner…" className={`${inp} resize-none`} />
+        </div>
+        <button type="submit" className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={13} /> Publish
+        </button>
+      </form>
+
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <Megaphone size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No announcements yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map(a => (
+            <div key={a.id} className={`rounded-lg p-4 border ${a.active ? LEVELS[a.level] : "border-[var(--color-border)] bg-[var(--color-surface)] opacity-60"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold flex items-center gap-2">{a.title}<span className="text-[10px] uppercase tracking-wide font-bold">{a.level}</span></p>
+                  <p className="text-xs mt-1 opacity-90">{a.body}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-1.5">{format(new Date(a.createdAt), "d MMM yyyy, HH:mm")}</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button onClick={() => toggle(a.id)} className="text-xs hover:underline">{a.active ? "Unpublish" : "Republish"}</button>
+                  <button onClick={() => remove(a.id)} title="Delete" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #179 Platform Audit-Log Viewer ─────────────────────────────────────────
+function AuditLogViewer() {
+  const { store } = useApp();
+  const [filter, setFilter] = useState<"all" | "txn" | "invoice">("all");
+
+  type Entry = { id: string; ts: string; kind: "txn" | "invoice"; actor: string; summary: string };
+  const entries: Entry[] = [];
+  for (const t of store.transactions ?? []) {
+    entries.push({
+      id: `t-${t.id}`, ts: t.date, kind: "txn",
+      actor: t.category,
+      summary: `${formatCurrency(Math.abs(t.amount))} — ${t.description || t.counterparty || t.category}`,
+    });
+  }
+  for (const inv of store.invoices ?? []) {
+    entries.push({
+      id: `i-${inv.id}`, ts: inv.invoiceDate ?? inv.dueDate, kind: "invoice",
+      actor: inv.source ?? "manual",
+      summary: `Invoice ${inv.invoiceNumber ?? inv.id.slice(0, 6)} ${formatCurrency(inv.amount)} — ${inv.customer} (${inv.status})`,
+    });
+  }
+  const filtered = entries
+    .filter(e => filter === "all" || e.kind === filter)
+    .filter(e => e.ts)
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, 200);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Audit Log</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Reconstructed from synced store activity — financial events newest-first (max 200).</p>
+        </div>
+        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {([["all", "All"], ["txn", "Transactions"], ["invoice", "Invoices"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setFilter(id)}
+              className={`text-xs px-3 py-1 rounded font-medium ${filter === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <ScrollText size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No activity to show.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["When", "Type", "Actor", "Event"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {filtered.map(e => (
+                <tr key={e.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(new Date(e.ts), "d MMM yy, HH:mm")}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${e.kind === "txn" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-purple-900/30 text-purple-400 border-purple-800/40"}`}>{e.kind === "txn" ? "Transaction" : "Invoice"}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs font-mono text-[var(--color-muted)] truncate max-w-[140px]">{e.actor}</td>
+                  <td className="px-4 py-2.5">{e.summary}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #180 Seat & Usage Quota Tracker ────────────────────────────────────────
+function SeatQuotaTracker({ stats, companies, loadCompanies }: { stats: Stats | null; companies: Company[]; loadCompanies: () => void }) {
+  const [seatLimit, setSeatLimit] = useFeatureState<number>("adm-seat-limit", 50);
+  const [txnLimit, setTxnLimit]   = useFeatureState<number>("adm-txn-quota", 100000);
+  const [companyLimit, setCompanyLimit] = useFeatureState<number>("adm-company-limit", 25);
+
+  useEffect(() => { if (companies.length === 0) loadCompanies(); }, [companies.length, loadCompanies]);
+
+  const usedSeats = stats?.users ?? 0;
+  const usedTxns  = stats?.totalTransactions ?? 0;
+  const usedCompanies = stats?.companies ?? 0;
+
+  const meters: { label: string; used: number; limit: number; set: (n: number) => void }[] = [
+    { label: "User seats", used: usedSeats, limit: seatLimit, set: n => setSeatLimit(n) },
+    { label: "Companies / tenants", used: usedCompanies, limit: companyLimit, set: n => setCompanyLimit(n) },
+    { label: "Transactions logged", used: usedTxns, limit: txnLimit, set: n => setTxnLimit(n) },
+  ];
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Seats & Usage Quotas</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track live consumption against your plan limits. Edit a limit to model headroom; usage is computed from platform stats.</p>
+        <div className="space-y-5">
+          {meters.map(m => {
+            const pct = m.limit > 0 ? Math.min(100, Math.round((m.used / m.limit) * 100)) : 0;
+            const over = m.used > m.limit;
+            const bar = over ? "bg-red-500" : pct >= 80 ? "bg-yellow-500" : "bg-[var(--color-primary)]";
+            return (
+              <div key={m.label}>
+                <div className="flex items-center justify-between mb-1.5 gap-3 flex-wrap">
+                  <span className="text-sm font-medium">{m.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-muted)]"}`}>{m.used.toLocaleString("en-IN")} / {m.limit.toLocaleString("en-IN")} ({pct}%)</span>
+                    <input type="number" min={0} value={m.limit} onChange={e => m.set(parseInt(e.target.value) || 0)}
+                      className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                  </div>
+                </div>
+                <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-700 ${bar}`} style={{ width: `${pct}%` }} />
+                </div>
+                {over && <p className="text-[10px] text-red-400 mt-1">Over limit — raise the quota or contact billing.</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Limits are stored locally and synced across your devices; enforcement happens server-side on the billing plan. Use this to forecast when you will need an upgrade.</p>
+    </div>
+  );
+}
+
+// ── #181 System Health Status Board ────────────────────────────────────────
+function SystemHealthBoard({ stats }: { stats: Stats | null }) {
+  const [checks, setChecks] = useState<{ name: string; ok: boolean; ms: number }[] | null>(null);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const run = useCallback(async () => {
+    setRunning(true);
+    const headers = { Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` };
+    const probes: { name: string; path: string }[] = [
+      { name: "Admin stats API", path: "/api/admin/stats" },
+      { name: "Companies API", path: "/api/admin/companies" },
+      { name: "Users / auth API", path: "/api/users" },
+    ];
+    const results = await Promise.all(probes.map(async p => {
+      const t0 = performance.now();
+      try {
+        const r = await fetch(`${BASE}${p.path}`, { headers });
+        return { name: p.name, ok: r.ok, ms: Math.round(performance.now() - t0) };
+      } catch {
+        return { name: p.name, ok: false, ms: Math.round(performance.now() - t0) };
+      }
+    }));
+    setChecks(results);
+    setCheckedAt(new Date());
+    setRunning(false);
+  }, []);
+
+  useEffect(() => { run(); }, [run]);
+
+  const allOk = checks?.every(c => c.ok) ?? false;
+  const avgMs = checks && checks.length ? Math.round(checks.reduce((s, c) => s + c.ms, 0) / checks.length) : 0;
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2"><HeartPulse size={14} className="text-[var(--color-primary)]" /> System Health</h2>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Live probes against core platform APIs.</p>
+          </div>
+          <button onClick={run} disabled={running} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
+            {running ? "Checking…" : "Re-run checks"}
+          </button>
+        </div>
+        <div className={`rounded-lg p-4 border mb-4 ${checks === null ? "border-[var(--color-border)]" : allOk ? "bg-green-900/20 border-green-800/40" : "bg-red-900/20 border-red-800/40"}`}>
+          <p className={`text-sm font-semibold ${checks === null ? "" : allOk ? "text-green-400" : "text-red-400"}`}>
+            {checks === null ? "Running checks…" : allOk ? "All systems operational" : "Degraded — one or more checks failing"}
+          </p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+            {checkedAt ? `Last checked ${format(checkedAt, "d MMM yyyy, HH:mm:ss")} · avg ${avgMs}ms` : ""}
+          </p>
+        </div>
+        <div className="space-y-2">
+          {(checks ?? []).map(c => (
+            <div key={c.name} className="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0">
+              <span className="text-sm flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${c.ok ? "bg-green-400" : "bg-red-400"}`} />
+                {c.name}
+              </span>
+              <span className="text-xs tabular-nums text-[var(--color-muted)]">{c.ok ? "OK" : "FAIL"} · {c.ms}ms</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Data Footprint</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Companies", value: stats ? stats.companies.toLocaleString("en-IN") : "—" },
+            { label: "Users", value: stats ? stats.users.toLocaleString("en-IN") : "—" },
+            { label: "Transactions", value: stats ? stats.totalTransactions.toLocaleString("en-IN") : "—" },
+            { label: "Active companies", value: stats ? stats.activeCompanies.toLocaleString("en-IN") : "—" },
+          ].map(s => (
+            <div key={s.label}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+              <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #182 Maintenance-Mode Toggle ───────────────────────────────────────────
+type MaintenanceState = { enabled: boolean; message: string; allowAdmins: boolean; since: string };
+const DEFAULT_MAINT: MaintenanceState = { enabled: false, message: "We're performing scheduled maintenance and will be back shortly.", allowAdmins: true, since: "" };
+
+function MaintenanceMode() {
+  const [m, setM] = useFeatureState<MaintenanceState>("adm-maintenance", DEFAULT_MAINT);
+  const set = <K extends keyof MaintenanceState>(k: K, v: MaintenanceState[K]) => setM(prev => ({ ...prev, [k]: v }));
+
+  const toggle = () => {
+    const next = !m.enabled;
+    setM(prev => ({ ...prev, enabled: next, since: next ? new Date().toISOString() : "" }));
+    toast[next ? "warning" : "success"](next ? "Maintenance mode ENABLED — tenants will see the notice" : "Maintenance mode disabled — platform live");
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <div className={`rounded-lg p-5 border ${m.enabled ? "bg-red-900/20 border-red-800/40" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${m.enabled ? "bg-red-900/40 border border-red-800/50" : "bg-[var(--color-accent)] border border-[var(--color-border)]"}`}>
+              <Power size={18} className={m.enabled ? "text-red-400" : "text-[var(--color-muted)]"} />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold flex items-center gap-2"><Wrench size={14} className="text-[var(--color-primary)]" /> Maintenance Mode</h2>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                {m.enabled ? `ON since ${m.since ? format(new Date(m.since), "d MMM yyyy, HH:mm") : "—"}` : "Platform is live for all tenants"}
+              </p>
+            </div>
+          </div>
+          <button onClick={toggle}
+            className={`text-xs font-semibold px-4 py-2 rounded-lg ${m.enabled ? "bg-red-500 text-white hover:opacity-90" : "bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"}`}>
+            {m.enabled ? "Disable & go live" : "Enable maintenance"}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Notice shown to tenants</label>
+          <textarea value={m.message} onChange={e => set("message", e.target.value)} rows={3} className={`${inp} resize-none`} />
+        </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" checked={m.allowAdmins} onChange={e => set("allowAdmins", e.target.checked)} className="accent-[var(--color-primary)] mt-0.5" />
+          <div>
+            <p className="text-sm font-medium">Allow super-admins through</p>
+            <p className="text-xs text-[var(--color-muted)]">Admins keep access during maintenance so you can verify fixes before going live.</p>
+          </div>
+        </label>
+      </div>
+
+      <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wide mb-2">Preview</p>
+        <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex items-center gap-2">
+          <Wrench size={14} className="text-yellow-400 shrink-0" />
+          <p className="text-sm text-yellow-300">{m.message}</p>
+        </div>
+      </div>
     </div>
   );
 }

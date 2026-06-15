@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { termSheetMath, type RoundType } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users } from "lucide-react";
+import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles } from "lucide-react";
 
-type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup";
+type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist";
 
 const ROUND_LABELS: Record<RoundType, string> = {
   priced:      "Priced Equity Round",
@@ -71,7 +72,7 @@ export default function TermSheetPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users]] as const).map(([id, label, Icon]) => (
+        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users], ["clause-explainer", "Clause Explainer", BookOpen], ["anti-dilution", "Anti-Dilution", Layers], ["pro-rata", "Pro-Rata Rights", Percent], ["safe-vs-priced", "SAFE vs Priced", Scale], ["vesting", "Vesting Schedule", CalendarClock], ["checklist", "Term-Sheet Checklist", ListChecks]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -79,9 +80,15 @@ export default function TermSheetPage() {
         ))}
       </div>
 
-      {tab === "comparator"  && <TermSheetComparator />}
-      {tab === "liq-pref"    && <LiquidationPrefModeller />}
-      {tab === "esop-topup"  && <EsopTopupImpact />}
+      {tab === "comparator"      && <TermSheetComparator />}
+      {tab === "liq-pref"        && <LiquidationPrefModeller />}
+      {tab === "esop-topup"      && <EsopTopupImpact />}
+      {tab === "clause-explainer" && <ClauseExplainer />}
+      {tab === "anti-dilution"   && <AntiDilutionCalc />}
+      {tab === "pro-rata"        && <ProRataCalc />}
+      {tab === "safe-vs-priced"  && <SafeVsPriced />}
+      {tab === "vesting"         && <VestingSchedule />}
+      {tab === "checklist"       && <TermSheetChecklist />}
 
       {tab === "generator" && <>
       {/* Round type selector */}
@@ -631,6 +638,498 @@ function EsopTopupImpact() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
         A pre-money pool top-up effectively lowers the founders' real pre-money price — the &quot;option pool shuffle.&quot; Negotiating the pool post-money, or sizing it to the actual hiring plan, preserves founder ownership. Single-round model; convert existing pool too if it carries over.
+      </div>
+    </div>
+  );
+}
+
+// ── #123 Term-Sheet Clause Explainer — plain-language clause library with founder/investor impact ──
+interface ClauseInfo {
+  id: string;
+  name: string;
+  founderFriendly: "good" | "neutral" | "watch";
+  what: string;
+  impact: string;
+  negotiate: string;
+}
+
+const CLAUSES: ClauseInfo[] = [
+  { id: "liq-pref", name: "Liquidation Preference", founderFriendly: "watch",
+    what: "Defines how sale/wind-up proceeds are split. A 1× preference returns the investor's money first; participating preferred then also shares the remainder.",
+    impact: "Higher multiples (2×, 3×) or 'participating' terms cut founder/common payout sharply on modest exits.",
+    negotiate: "Hold to 1× non-participating. Resist participation, or cap it at 2-3×." },
+  { id: "anti-dilution", name: "Anti-Dilution Protection", founderFriendly: "watch",
+    what: "Re-prices investor shares if you raise a later round at a lower price (a down round).",
+    impact: "Full-ratchet repriced everything to the new low price — brutal dilution for founders. Weighted-average is gentler.",
+    negotiate: "Always push for broad-based weighted-average, never full-ratchet." },
+  { id: "drag-tag", name: "Drag-Along / Tag-Along", founderFriendly: "neutral",
+    what: "Drag-along lets a majority force minority holders to join a sale; tag-along lets minorities join a majority's sale on the same terms.",
+    impact: "Drag can force a sale founders dislike; tag protects small holders from being left behind.",
+    negotiate: "Set a sensible drag threshold (e.g. majority of preferred + founders) and a minimum price floor." },
+  { id: "rofr", name: "Right of First Refusal (ROFR)", founderFriendly: "neutral",
+    what: "Before selling shares to an outsider, you must first offer them to existing investors/company on the same terms.",
+    impact: "Slows secondary sales and can deter outside buyers, but keeps the cap table clean.",
+    negotiate: "Agree a clear notice window and exemptions for estate/affiliate transfers." },
+  { id: "board", name: "Board Composition", founderFriendly: "watch",
+    what: "Sets how many board seats the investor gets and who controls votes.",
+    impact: "Loss of board majority means founders can be overruled on hiring, budgets, even removal.",
+    negotiate: "Keep founder/independent majority at seed; offer one investor seat, not control." },
+  { id: "protective", name: "Protective Provisions / Veto Rights", founderFriendly: "neutral",
+    what: "Lists corporate actions (new debt, new shares, sale, budget) that need investor consent.",
+    impact: "Broad vetoes let a minority investor block ordinary operating decisions.",
+    negotiate: "Narrow the list to genuinely major events; add materiality thresholds." },
+  { id: "prorata", name: "Pro-Rata Rights", founderFriendly: "good",
+    what: "Lets the investor invest enough in future rounds to keep their ownership percentage.",
+    impact: "Standard and usually fine, but heavy pro-rata can crowd out new lead investors later.",
+    negotiate: "Grant to major investors; consider a super-pro-rata cap." },
+  { id: "founder-vest", name: "Founder Vesting / Reverse Vesting", founderFriendly: "neutral",
+    what: "Founders' own shares re-vest over time, so a departing founder forfeits unvested equity.",
+    impact: "Protects the cap table if a co-founder leaves, but resets your earned ownership clock.",
+    negotiate: "Credit time already served and seek acceleration on involuntary exit/acquisition." },
+];
+
+function ClauseExplainer() {
+  const [openId, setOpenId] = useState<string | null>(CLAUSES[0].id);
+  const tone: Record<ClauseInfo["founderFriendly"], { label: string; cls: string }> = {
+    good:    { label: "Founder-friendly", cls: "text-green-400" },
+    neutral: { label: "Standard / neutral", cls: "text-blue-400" },
+    watch:   { label: "Watch closely", cls: "text-orange-400" },
+  };
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /> Term-Sheet Clause Explainer</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Plain-language guide to the clauses that decide control and payout. Tap any clause to see what it means, why it matters, and how to negotiate it.</p>
+      </div>
+      <div className="space-y-2">
+        {CLAUSES.map(c => {
+          const open = openId === c.id;
+          return (
+            <div key={c.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <button onClick={() => setOpenId(open ? null : c.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left">
+                <span className="text-sm font-medium">{c.name}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[10px] font-semibold ${tone[c.founderFriendly].cls}`}>{tone[c.founderFriendly].label}</span>
+                  <span className="text-[var(--color-muted)] text-xs">{open ? "−" : "+"}</span>
+                </span>
+              </button>
+              {open && (
+                <div className="px-4 pb-4 space-y-2.5 border-t border-[var(--color-border)] pt-3">
+                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-0.5">What it is</p><p className="text-xs leading-relaxed">{c.what}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-0.5">Why it matters</p><p className="text-xs leading-relaxed">{c.impact}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-0.5">How to negotiate</p><p className="text-xs leading-relaxed text-green-400">{c.negotiate}</p></div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Educational summary only — not legal advice. Always have a lawyer review your definitive documents before signing.
+      </div>
+    </div>
+  );
+}
+
+// ── #124 Anti-Dilution Calculator — full-ratchet vs broad-based weighted-average on a down round ──
+function AntiDilutionCalc() {
+  const [origPrice, setOrigPrice]   = useState(100);     // ₹ per share investor paid
+  const [origShares, setOrigShares] = useState(100_000); // preferred shares held by investor
+  const [newPrice, setNewPrice]     = useState(60);      // ₹ per share in down round
+  const [newMoney, setNewMoney]     = useState(20_000_000);
+  const [preShares, setPreShares]   = useState(1_000_000); // total shares outstanding before new round (fully diluted)
+
+  const np = Math.max(0.0001, newPrice);
+  const newSharesIssued = newMoney / np;
+
+  // Full ratchet: conversion price drops to the new round price
+  const ratchetPrice = np;
+  // Broad-based weighted average: CP2 = CP1 × (A + B) / (A + C)
+  // A = shares outstanding before new issue, B = money raised / old price, C = actual new shares issued
+  const A = Math.max(1, preShares);
+  const B = origPrice > 0 ? newMoney / origPrice : 0;
+  const C = newSharesIssued;
+  const waPrice = origPrice * ((A + B) / (A + C));
+
+  const conv = (cp: number) => {
+    const price = Math.max(0.0001, cp);
+    const asConvertedShares = (origShares * origPrice) / price; // shares investor gets after adjustment
+    const bonus = asConvertedShares - origShares;
+    return { asConvertedShares, bonus };
+  };
+  const noneCase    = { asConvertedShares: origShares, bonus: 0 };
+  const ratchetCase = conv(ratchetPrice);
+  const waCase      = conv(waPrice);
+
+  const rows = [
+    { label: "No protection", cp: origPrice, ...noneCase, color: "text-[var(--color-muted)]" },
+    { label: "Weighted-average (broad-based)", cp: waPrice, ...waCase, color: "text-blue-400" },
+    { label: "Full ratchet", cp: ratchetPrice, ...ratchetCase, color: "text-orange-400" },
+  ];
+  const down = newPrice < origPrice;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Anti-Dilution Calculator</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">When you raise a down round, anti-dilution gives earlier investors bonus shares. Compare the brutal full-ratchet against the standard broad-based weighted-average.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Original price / share (₹)
+            <input type="number" value={origPrice} onChange={e => setOrigPrice(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Investor preferred shares
+            <input type="number" value={origShares} onChange={e => setOrigShares(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Shares outstanding (pre, fully diluted)
+            <input type="number" value={preShares} onChange={e => setPreShares(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">New round price / share (₹)
+            <input type="number" value={newPrice} onChange={e => setNewPrice(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">New money raised (₹)
+            <input type="number" value={newMoney} onChange={e => setNewMoney(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+        {!down && <p className="text-[11px] text-green-400">New price ≥ original — no down round, so anti-dilution does not trigger.</p>}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Mechanism", "Adjusted conv. price", "Shares after adj.", "Bonus shares"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className={`px-4 py-2.5 font-medium ${r.color}`}>{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.cp))}</td>
+                <td className="px-4 py-2.5 tabular-nums">{Math.round(r.asConvertedShares).toLocaleString("en-IN")}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.bonus > 0.5 ? `+${Math.round(r.bonus).toLocaleString("en-IN")}` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Full ratchet resets the investor's conversion price to the new low price regardless of how few shares are sold — maximal founder dilution. Broad-based weighted-average blends old and new prices by volume, so a small down round causes only a small adjustment. Always negotiate for weighted-average.
+      </div>
+    </div>
+  );
+}
+
+// ── #125 Pro-Rata Rights Calculator — what an investor must invest to hold their % in the next round ──
+function ProRataCalc() {
+  const [currentPct, setCurrentPct] = useState(15);
+  const [roundSize, setRoundSize]   = useState(50_000_000);
+  const [preMoney, setPreMoney]     = useState(150_000_000);
+
+  const postMoney = preMoney + roundSize;
+  const ownership = Math.min(100, Math.max(0, currentPct)) / 100;
+  // To maintain ownership the investor must buy `ownership` of the NEW round
+  const proRataInvestment = roundSize * ownership;
+  // If they skip it, their stake is diluted by the round
+  const dilutedPct = postMoney > 0 ? (ownership * preMoney) / postMoney * 100 : 0;
+  const dilutionLost = currentPct - dilutedPct;
+  const fc = formatCurrency;
+
+  const cards = [
+    { label: "Pro-rata cheque to hold %", value: fc(Math.round(proRataInvestment)), color: "text-[var(--color-primary)]" },
+    { label: "Ownership if maintained", value: `${currentPct.toFixed(1)}%`, color: "text-green-400" },
+    { label: "Ownership if they skip", value: `${dilutedPct.toFixed(1)}%`, color: "text-orange-400" },
+    { label: "Dilution from skipping", value: `−${dilutionLost.toFixed(1)}%`, color: "text-red-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Pro-Rata Rights Calculator</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">An investor with pro-rata rights can buy enough of the next round to keep their ownership %. See the cheque size required — and the dilution if they pass.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Current ownership %
+            <input type="number" value={currentPct} onChange={e => setCurrentPct(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">New round size (₹)
+            <input type="number" value={roundSize} onChange={e => setRoundSize(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Pre-money of new round (₹)
+            <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)]">Post-money: <span className="tabular-nums text-[var(--color-text)]">{formatAmount(postMoney)}</span></p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {cards.map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Pro-rata simply means buying your ownership share of the new round. Exercising keeps your % flat; skipping dilutes you by the round's own dilution. Founders: heavy pro-rata commitments from earlier investors can leave little room for a new lead — manage the allocation.
+      </div>
+    </div>
+  );
+}
+
+// ── #126 SAFE vs Priced-Round Comparator — dilution & ownership of a SAFE (post-money cap) vs a priced round ──
+function SafeVsPriced() {
+  const [raise, setRaise]       = useState(5_000_000);
+  const [cap, setCap]           = useState(50_000_000);   // SAFE post-money cap
+  const [discount, setDiscount] = useState(20);           // SAFE discount %
+  const [preMoney, setPreMoney] = useState(45_000_000);   // priced-round pre-money
+  const [nextPre, setNextPre]   = useState(80_000_000);   // priced round at which SAFE converts
+
+  // SAFE (post-money cap): ownership = raise / cap, but if discounted price on next round is lower, use that.
+  const safeByCap = cap > 0 ? raise / cap : 0;
+  const discountPrice = nextPre * (1 - Math.min(99, Math.max(0, discount)) / 100);
+  const safeByDiscount = discountPrice > 0 ? raise / (discountPrice + raise) : 0;
+  const safePct = Math.max(safeByCap, safeByDiscount) * 100;
+  const safeBasis = safeByCap >= safeByDiscount ? "valuation cap" : "discount";
+
+  // Priced round: ownership = raise / (pre + raise)
+  const pricedPct = (preMoney + raise) > 0 ? raise / (preMoney + raise) * 100 : 0;
+
+  const fc = formatCurrency;
+  const cards = [
+    { label: "SAFE investor ownership", value: `${safePct.toFixed(1)}%`, sub: `converts on ${safeBasis}`, color: "text-blue-400" },
+    { label: "Priced-round ownership", value: `${pricedPct.toFixed(1)}%`, sub: `at ${formatAmount(preMoney)} pre`, color: "text-[var(--color-primary)]" },
+    { label: "Founder dilution — SAFE", value: `−${safePct.toFixed(1)}%`, sub: "deferred to conversion", color: "text-orange-400" },
+    { label: "Founder dilution — Priced", value: `−${pricedPct.toFixed(1)}%`, sub: "immediate", color: "text-orange-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> SAFE vs Priced-Round Comparator</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Raising the same money on a post-money SAFE versus a priced round gives different dilution. SAFE converts on the better of its cap or discount at the next round.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Amount to raise (₹)
+            <input type="number" value={raise} onChange={e => setRaise(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">SAFE post-money cap (₹)
+            <input type="number" value={cap} onChange={e => setCap(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">SAFE discount %
+            <input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Priced-round pre-money (₹)
+            <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Next round pre (SAFE converts) (₹)
+            <input type="number" value={nextPre} onChange={e => setNextPre(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {cards.map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-2">Verdict</p>
+        <p className="text-xs leading-relaxed text-[var(--color-muted)]">
+          {safePct < pricedPct
+            ? <>The <span className="text-blue-400 font-medium">SAFE</span> dilutes you less here ({safePct.toFixed(1)}% vs {pricedPct.toFixed(1)}%) and is faster/cheaper to close — but note India's FEMA rules make priced rounds / CCPS the compliant default for many situations.</>
+            : <>The <span className="text-[var(--color-primary)] font-medium">priced round</span> dilutes you less here ({pricedPct.toFixed(1)}% vs {safePct.toFixed(1)}%) and gives a firm valuation today, at the cost of slower, more expensive legals.</>}
+          {" "}Raise: {fc(raise)}.
+        </p>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Post-money SAFE ownership is fixed at raise ÷ cap (the founder bears all subsequent dilution), unless the discounted next-round price beats the cap. Estimate only — actual conversion depends on the priced round's final terms and pool.
+      </div>
+    </div>
+  );
+}
+
+// ── #127 Vesting / Cliff Schedule — month-by-month equity accrual with cliff ──
+function VestingSchedule() {
+  const [totalShares, setTotalShares] = useState(400_000);
+  const [years, setYears]             = useState(4);
+  const [cliffMonths, setCliffMonths] = useState(12);
+  const [elapsed, setElapsed]         = useState(18);
+
+  const totalMonths = Math.max(1, Math.round(years * 12));
+  const cliff = Math.min(cliffMonths, totalMonths);
+  const monthsServed = Math.min(Math.max(0, elapsed), totalMonths);
+
+  const vestedAt = (m: number) => {
+    if (m < cliff) return 0;
+    return Math.round(totalShares * (Math.min(m, totalMonths) / totalMonths));
+  };
+  const vestedNow = vestedAt(monthsServed);
+  const vestedPct = totalShares > 0 ? (vestedNow / totalShares) * 100 : 0;
+  const perMonth = totalShares / totalMonths;
+
+  // Build a sparse milestone table: cliff, then yearly + current
+  const milestones = Array.from(new Set([cliff, ...Array.from({ length: years }, (_, i) => (i + 1) * 12), monthsServed, totalMonths]))
+    .filter(m => m >= 0 && m <= totalMonths)
+    .sort((a, b) => a - b);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Vesting / Cliff Schedule</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Model founder or employee vesting: nothing vests before the cliff, then it accrues monthly to the full grant. Standard is 4 years with a 1-year cliff.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Total grant (shares)
+            <input type="number" value={totalShares} onChange={e => setTotalShares(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Vesting period (years)
+            <input type="number" value={years} onChange={e => setYears(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Cliff (months)
+            <input type="number" value={cliffMonths} onChange={e => setCliffMonths(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Months served
+            <input type="number" value={elapsed} onChange={e => setElapsed(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Vested now", value: vestedNow.toLocaleString("en-IN"), color: "text-green-400" },
+          { label: "Vested %", value: `${vestedPct.toFixed(1)}%`, color: "text-[var(--color-primary)]" },
+          { label: "Unvested", value: (totalShares - vestedNow).toLocaleString("en-IN"), color: "text-orange-400" },
+          { label: "Monthly accrual", value: `${Math.round(perMonth).toLocaleString("en-IN")}/mo`, color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="font-medium">Vesting progress</span>
+          <span className="tabular-nums text-[var(--color-muted)]">{monthsServed} / {totalMonths} months</span>
+        </div>
+        <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${vestedPct}%` }} />
+        </div>
+        {monthsServed < cliff && <p className="text-[11px] text-orange-400 mt-2">Still in the cliff — 0 vested until month {cliff}.</p>}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[360px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Milestone", "Vested shares", "Vested %"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {milestones.map(m => {
+              const v = vestedAt(m);
+              const isNow = m === monthsServed;
+              const label = m === cliff ? `Month ${m} (cliff)` : m === totalMonths ? `Month ${m} (fully vested)` : `Month ${m}`;
+              return (
+                <tr key={m} className={`border-b border-[var(--color-border)] last:border-0 ${isNow ? "bg-[var(--color-accent)]/30" : ""}`}>
+                  <td className="px-4 py-2 font-medium">{label}{isNow ? " · now" : ""}</td>
+                  <td className="px-4 py-2 tabular-nums">{v.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-2 tabular-nums">{totalShares > 0 ? ((v / totalShares) * 100).toFixed(1) : "0.0"}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── #128 Term-Sheet Readiness Checklist — durable, persisted across devices ──
+interface CheckItem { id: string; label: string; done: boolean; }
+
+const DEFAULT_CHECKLIST: CheckItem[] = [
+  { id: "valuation", label: "Agreed pre-money valuation and round size", done: false },
+  { id: "liqpref", label: "Liquidation preference capped at 1× non-participating", done: false },
+  { id: "antidilution", label: "Anti-dilution is broad-based weighted-average (not full-ratchet)", done: false },
+  { id: "board", label: "Board composition keeps founder/independent majority", done: false },
+  { id: "pool", label: "Option pool sized to hiring plan and pool-shuffle understood", done: false },
+  { id: "vetoes", label: "Protective provisions narrowed to genuinely major events", done: false },
+  { id: "vesting", label: "Founder reverse-vesting terms reviewed (credit time served)", done: false },
+  { id: "drag", label: "Drag-along threshold and price floor acceptable", done: false },
+  { id: "fema", label: "FEMA / instrument type (CCPS vs SAFE) confirmed for India", done: false },
+  { id: "angeltax", label: "Section 56(2)(viib) angel-tax exposure checked", done: false },
+  { id: "lawyer", label: "Definitive agreements reviewed by a lawyer", done: false },
+];
+
+function TermSheetChecklist() {
+  const [items, setItems] = useFeatureState<CheckItem[]>("ts-readiness-checklist", DEFAULT_CHECKLIST);
+
+  const toggle = (id: string) => setItems(prev => prev.map(i => (i.id === id ? { ...i, done: !i.done } : i)));
+  const reset  = () => setItems(DEFAULT_CHECKLIST.map(i => ({ ...i, done: false })));
+
+  const doneCount = items.filter(i => i.done).length;
+  const pct = items.length > 0 ? (doneCount / items.length) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Term-Sheet Readiness Checklist</h3>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Tick off each negotiation point before you sign. Your progress is saved and synced across devices.</p>
+          </div>
+          <button onClick={reset} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 shrink-0">Reset</button>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium">{doneCount} of {items.length} reviewed</span>
+          <span className="tabular-nums text-[var(--color-muted)]">{pct.toFixed(0)}%</span>
+        </div>
+        <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full rounded-full bg-green-400 transition-all duration-500" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {items.map(i => (
+          <label key={i.id} className="flex items-start gap-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
+            <input type="checkbox" checked={i.done} onChange={() => toggle(i.id)} className="accent-[var(--color-primary)] mt-0.5" />
+            <span className={`text-sm leading-snug ${i.done ? "line-through text-[var(--color-muted)]" : ""}`}>{i.label}</span>
+          </label>
+        ))}
+      </div>
+
+      {pct === 100 && (
+        <div className="bg-green-500/10 border border-green-500/40 rounded-lg px-4 py-2.5 text-[11px] text-green-400 flex items-start gap-2">
+          <Sparkles size={12} className="shrink-0 mt-px" /> All points reviewed — you are ready to sign with eyes open. Keep your lawyer in the loop on the definitive docs.
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        A general founder checklist, not legal advice. Add your own deal-specific items in discussion with your advisor and lawyer.
       </div>
     </div>
   );
