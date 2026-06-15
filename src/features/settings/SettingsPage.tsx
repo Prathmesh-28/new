@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -1085,6 +1085,363 @@ function WorkspaceDefaultsCard() {
   );
 }
 
+/* ── #185 Late-Fee / Overdue-Interest Policy ───────────────────────────────
+   How much interest or flat fee accrues on invoices that go past their due
+   date, with a grace period before charges start. */
+type LateFeeCfg = {
+  enabled: boolean;
+  mode: "percent_month" | "percent_annum" | "flat";
+  rate: number;
+  flatAmount: number;
+  graceDays: number;
+};
+
+function LateFeePolicyCard() {
+  const [cfg, setCfg] = useFeatureState<LateFeeCfg>("set-late-fee-policy", {
+    enabled: false, mode: "percent_month", rate: 1.5, flatAmount: 500, graceDays: 7,
+  });
+  const set = <K extends keyof LateFeeCfg>(k: K, v: LateFeeCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  const example = (() => {
+    const principal = 100000;
+    if (cfg.mode === "flat") return formatCurrency(cfg.flatAmount);
+    const monthly = cfg.mode === "percent_annum" ? cfg.rate / 12 : cfg.rate;
+    return formatCurrency(Math.round(principal * (monthly / 100)));
+  })();
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Percent size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Late-Fee &amp; Overdue Interest</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Charges applied automatically once an invoice crosses its due date.</p>
+        </div>
+      </div>
+
+      <label className="mt-5 flex items-center gap-3 cursor-pointer">
+        <div onClick={() => set("enabled", !cfg.enabled)}
+          className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${cfg.enabled ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+        </div>
+        <span className="text-sm">Charge a late fee on overdue invoices</span>
+      </label>
+
+      {cfg.enabled && (
+        <>
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Fee type</label>
+              <select value={cfg.mode} onChange={e => set("mode", e.target.value as LateFeeCfg["mode"])}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                <option value="percent_month">% per month</option>
+                <option value="percent_annum">% per annum</option>
+                <option value="flat">Flat amount</option>
+              </select>
+            </div>
+            {cfg.mode === "flat" ? (
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Flat fee (₹)</label>
+                <input type="number" min="0" value={cfg.flatAmount}
+                  onChange={e => set("flatAmount", Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (%)</label>
+                <input type="number" min="0" step="0.1" value={cfg.rate}
+                  onChange={e => set("rate", Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Grace period (days)</label>
+              <input type="number" min="0" max="60" value={cfg.graceDays}
+                onChange={e => set("graceDays", Math.max(0, Number(e.target.value) || 0))}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+            On a {formatCurrency(100000)} invoice unpaid past {cfg.graceDays} grace day{cfg.graceDays === 1 ? "" : "s"}, the first charge would be{" "}
+            <strong className="text-[var(--color-text)]">{example}</strong>{cfg.mode === "flat" ? "" : " per month"}. Saved automatically.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── #186 Tax-Code Defaults (HSN/SAC & TDS) ────────────────────────────────
+   Default HSN/SAC code for new line items and the TDS section applied when a
+   payment qualifies for tax deduction at source. */
+type TaxCodeCfg = {
+  defaultHsn: string;
+  itemType: "goods" | "services";
+  tdsEnabled: boolean;
+  tdsSection: "194C" | "194J" | "194H" | "194Q";
+  tdsRate: number;
+};
+const TDS_SECTIONS = [
+  { id: "194C", label: "194C — Contractors" },
+  { id: "194J", label: "194J — Professional / technical" },
+  { id: "194H", label: "194H — Commission / brokerage" },
+  { id: "194Q", label: "194Q — Purchase of goods" },
+] as const;
+
+function TaxCodeDefaultsCard() {
+  const [cfg, setCfg] = useFeatureState<TaxCodeCfg>("set-tax-code-defaults", {
+    defaultHsn: "", itemType: "goods", tdsEnabled: false, tdsSection: "194C", tdsRate: 1,
+  });
+  const set = <K extends keyof TaxCodeCfg>(k: K, v: TaxCodeCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Tags size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Tax-Code Defaults (HSN/SAC &amp; TDS)</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Default classification codes pre-filled on line items and the TDS section for deductions.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Default HSN / SAC code</label>
+          <input value={cfg.defaultHsn} onChange={e => set("defaultHsn", e.target.value.replace(/\D/g, "").slice(0, 8))}
+            placeholder={cfg.itemType === "goods" ? "e.g. 6109 (T-shirts)" : "e.g. 9983 (consultancy)"} inputMode="numeric"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-wide" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">HSN for goods, SAC for services — used as the default on new invoice lines.</p>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Primary item type</label>
+          <select value={cfg.itemType} onChange={e => set("itemType", e.target.value as TaxCodeCfg["itemType"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="goods">Goods (HSN)</option>
+            <option value="services">Services (SAC)</option>
+          </select>
+        </div>
+      </div>
+
+      <label className="mt-5 flex items-center gap-3 cursor-pointer">
+        <div onClick={() => set("tdsEnabled", !cfg.tdsEnabled)}
+          className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${cfg.tdsEnabled ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.tdsEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+        </div>
+        <span className="text-sm">Deduct TDS on qualifying vendor payments</span>
+      </label>
+
+      {cfg.tdsEnabled && (
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">TDS section</label>
+            <select value={cfg.tdsSection} onChange={e => set("tdsSection", e.target.value as TaxCodeCfg["tdsSection"])}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+              {TDS_SECTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">TDS rate (%)</label>
+            <input type="number" min="0" max="30" step="0.1" value={cfg.tdsRate}
+              onChange={e => set("tdsRate", Math.max(0, Number(e.target.value) || 0))}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        New lines default to {cfg.itemType === "goods" ? "HSN" : "SAC"}{" "}
+        <strong className="text-[var(--color-text)] font-mono">{cfg.defaultHsn || "—"}</strong>
+        {cfg.tdsEnabled ? <>; payments deduct <strong className="text-[var(--color-text)]">{cfg.tdsRate}%</strong> under {cfg.tdsSection}</> : null}. Saved automatically.
+      </div>
+    </div>
+  );
+}
+
+/* ── #187 Locations / Branches ─────────────────────────────────────────────
+   Business places-of-supply / branches, each with its own GSTIN, so invoices
+   and reports can be tagged per location. */
+type Branch = { id: string; name: string; city: string; gstin: string };
+
+function LocationsCard() {
+  const [branches, setBranches] = useFeatureState<Branch[]>("set-locations", []);
+  const [primaryId, setPrimaryId] = useFeatureState<string | null>("set-locations-primary", null);
+  const [name, setName] = useState("");
+  const [city, setCity] = useState("");
+  const [gstin, setGstin] = useState("");
+
+  const addBranch = () => {
+    if (!name.trim() || !city.trim()) { toast.error("Enter at least a branch name and city"); return; }
+    const b: Branch = { id: crypto.randomUUID(), name: name.trim(), city: city.trim(), gstin: gstin.trim().toUpperCase() };
+    setBranches(list => [...list, b]);
+    setPrimaryId(cur => cur ?? b.id);
+    setName(""); setCity(""); setGstin("");
+    toast.success(`${b.name} added`);
+  };
+  const removeBranch = (id: string) => {
+    setBranches(list => list.filter(b => b.id !== id));
+    setPrimaryId(cur => (cur === id ? null : cur));
+  };
+  const makePrimary = (id: string) => {
+    setPrimaryId(id);
+    const b = branches.find(x => x.id === id);
+    if (b) toast.success(`${b.name} is now your primary location`);
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <MapPin size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Locations &amp; Branches</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Add each place of business — invoices and reports can be tagged per branch GSTIN.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Branch name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Head Office"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">City / state</label>
+          <input value={city} onChange={e => setCity(e.target.value)} placeholder="Mumbai, MH"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="md:col-span-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN (optional)</label>
+          <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase())} placeholder="27AAAAA0000A1Z5" maxLength={15}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-wide" />
+        </div>
+      </div>
+      <button onClick={addBranch}
+        className="mt-3 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+        <Plus size={13} /> Add location
+      </button>
+
+      <div className="mt-5 space-y-2">
+        {branches.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+            No locations yet — add your head office so invoices show the right place of supply.
+          </p>
+        ) : branches.map(b => {
+          const isPrimary = b.id === primaryId;
+          return (
+            <div key={b.id} className="flex items-center justify-between gap-3 p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  {b.name}
+                  {isPrimary && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)]">Primary</span>}
+                </p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">
+                  {b.city}{b.gstin ? <span className="font-mono"> · {b.gstin}</span> : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isPrimary && (
+                  <button onClick={() => makePrimary(b.id)}
+                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors">
+                    Set primary
+                  </button>
+                )}
+                <button onClick={() => removeBranch(b.id)} title="Remove location"
+                  className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── #188 Customer-Statement Template ──────────────────────────────────────
+   How the periodic account statement sent to customers is composed — opening
+   balance, ageing, and an intro / sign-off line. */
+type StatementCfg = {
+  frequency: "monthly" | "fortnightly" | "weekly";
+  showOpeningBalance: boolean;
+  showAgeing: boolean;
+  introLine: string;
+  signOff: string;
+};
+
+function StatementTemplateCard() {
+  const { store } = useApp();
+  const [cfg, setCfg] = useFeatureState<StatementCfg>("set-statement-template", {
+    frequency: "monthly", showOpeningBalance: true, showAgeing: true,
+    introLine: "Here is your account statement for the period.",
+    signOff: store.firm.name ? `Regards, ${store.firm.name}` : "Regards",
+  });
+  const set = <K extends keyof StatementCfg>(k: K, v: StatementCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <ClipboardList size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Customer-Statement Template</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">How periodic account statements sent to your customers are composed.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Send frequency</label>
+          <select value={cfg.frequency} onChange={e => set("frequency", e.target.value as StatementCfg["frequency"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="weekly">Weekly</option>
+            <option value="fortnightly">Fortnightly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div className="flex flex-col justify-center gap-2 pt-1">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={cfg.showOpeningBalance} onChange={e => set("showOpeningBalance", e.target.checked)}
+              className="accent-[var(--color-primary)] w-4 h-4" />
+            Show opening balance
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={cfg.showAgeing} onChange={e => set("showAgeing", e.target.checked)}
+              className="accent-[var(--color-primary)] w-4 h-4" />
+            Include ageing breakup (0–30 / 30–60 / 60+)
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Intro line</label>
+          <input value={cfg.introLine} onChange={e => set("introLine", e.target.value)}
+            placeholder="Here is your account statement for the period."
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Sign-off</label>
+          <input value={cfg.signOff} onChange={e => set("signOff", e.target.value)}
+            placeholder="Regards, your business"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        A <strong className="text-[var(--color-text)]">{cfg.frequency}</strong> statement will open with "{cfg.introLine || "…"}"
+        {cfg.showAgeing ? ", include an ageing breakup," : ""} and close with "{cfg.signOff || "…"}". Saved automatically.
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -1313,6 +1670,18 @@ export default function SettingsPage() {
 
       {/* #184 Dashboard default & export format */}
       <WorkspaceDefaultsCard />
+
+      {/* #185 Late-fee / overdue interest policy */}
+      <LateFeePolicyCard />
+
+      {/* #186 Tax-code defaults (HSN/SAC & TDS) */}
+      <TaxCodeDefaultsCard />
+
+      {/* #187 Locations & branches */}
+      <LocationsCard />
+
+      {/* #188 Customer-statement template */}
+      <StatementTemplateCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

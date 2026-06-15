@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { generateId, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
-import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus, Server, FileCheck2, Calculator, ShieldCheck, FlaskConical } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus, Server, FileCheck2, Calculator, ShieldCheck, FlaskConical, CreditCard, Users, Truck, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -318,7 +318,7 @@ export default function ConnectorsPage() {
       </div>
 
       {/* #166–#169 — Connector tools */}
-      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical]] as const).map(([id, label, Icon]) => (
+      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical], ["conn-pos", "POS System", CreditCard], ["conn-payroll", "Payroll Software", Wallet], ["conn-crm", "CRM", Users], ["conn-shipping", "Shipping / Logistics", Truck]] as const).map(([id, label, Icon]) => (
         <a key={id} href={`#${id}`} className="sr-only">{label} <Icon size={10} /></a>
       ))}
       <BankUpiFeedConnector />
@@ -336,6 +336,10 @@ export default function ConnectorsPage() {
       <IntegrationCostEstimator />
       <DataFlowAudit />
       <EnvironmentToggle />
+      <PosSystemConnector />
+      <PayrollSoftwareConnector />
+      <CrmConnector />
+      <ShippingLogisticsConnector />
     </div>
   );
 }
@@ -1930,6 +1934,380 @@ function EnvironmentToggle() {
       </div>
 
       <DemoNote>Demo: the environment switch is stored locally for planning only — no connector actually changes between test and live endpoints.</DemoNote>
+    </section>
+  );
+}
+
+// ── #185 POS System Connector ──────────────────────────────────────────────
+// Link a point-of-sale system to auto-import daily sales into Headroom. Simulated import.
+type PosLink = {
+  id: string;
+  provider: string;
+  outletName: string;
+  status: "connected" | "paused";
+  lastImport: string | null;
+  salesImported: number;
+  connectedAt: string;
+};
+const POS_PROVIDERS = ["Petpooja", "PineLabs", "Posist", "Square", "Zomato POS", "Custom / CSV"] as const;
+
+function PosSystemConnector() {
+  const [links, setLinks] = useFeatureState<PosLink[]>("conn-pos-links", []);
+  const [provider, setProvider] = useState<string>(POS_PROVIDERS[0]);
+  const [outletName, setOutletName] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const connect = () => {
+    if (!outletName.trim()) { toast.error("Enter the outlet / store name"); return; }
+    const link: PosLink = {
+      id: generateId(), provider, outletName: outletName.trim(),
+      status: "connected", lastImport: null, salesImported: 0,
+      connectedAt: new Date().toISOString(),
+    };
+    setLinks(prev => [link, ...prev]);
+    setOutletName("");
+    toast.success(`${provider} linked for ${link.outletName} (simulated).`);
+  };
+
+  const importNow = async (id: string) => {
+    setBusy(id);
+    await new Promise(r => setTimeout(r, 1100));
+    const amt = 5000 + Math.floor(Math.random() * 60000);
+    setLinks(prev => prev.map(l => l.id === id
+      ? { ...l, lastImport: new Date().toISOString(), salesImported: l.salesImported + amt } : l));
+    setBusy(null);
+    toast.success(`Imported ${formatCurrency(amt)} of sales (simulated).`);
+  };
+
+  const togglePause = (id: string) => setLinks(prev => prev.map(l => l.id === id
+    ? { ...l, status: l.status === "connected" ? "paused" : "connected" } : l));
+  const remove = (id: string) => setLinks(prev => prev.filter(l => l.id !== id));
+
+  const totalImported = links.reduce((s, l) => s + l.salesImported, 0);
+
+  return (
+    <section id="conn-pos" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <CreditCard size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">POS System Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalImported)} imported · #185</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Link your point-of-sale to auto-import daily sales totals into Headroom — keeping revenue and cash reconciliation current per outlet.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={provider} onChange={e => setProvider(e.target.value)} className={FC_INP}>
+          {POS_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={outletName} onChange={e => setOutletName(e.target.value)} placeholder="Outlet / store name" className={FC_INP} />
+        <button onClick={connect} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+          <PlugZap size={14} /> Connect POS
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {links.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No POS systems linked yet.</p>}
+        {links.map(l => (
+          <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{l.outletName} <span className="text-[var(--color-muted)] font-normal">· {l.provider}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {l.status === "connected" ? "Connected" : "Paused"} · {l.lastImport ? `last import ${new Date(l.lastImport).toLocaleString()}` : "no imports yet"} · {formatCurrency(l.salesImported)}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => importNow(l.id)} disabled={busy === l.id || l.status === "paused"} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5 disabled:opacity-40">
+                <RefreshCw size={12} className={busy === l.id ? "animate-spin" : ""} /> Import
+              </button>
+              <button onClick={() => togglePause(l.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">{l.status === "connected" ? "Pause" : "Resume"}</button>
+              <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: POS links and imported sales totals are simulated and stored locally — no real POS API is called.</DemoNote>
+    </section>
+  );
+}
+
+// ── #186 Payroll Software Connector ─────────────────────────────────────────
+// Sync employee count & monthly payroll cost from external payroll tools. Simulated.
+type PayrollLink = {
+  id: string;
+  provider: string;
+  status: "connected" | "error";
+  headcount: number;
+  monthlyCost: number;
+  lastSync: string | null;
+  connectedAt: string;
+};
+const PAYROLL_PROVIDERS = ["RazorpayX Payroll", "Keka", "GreytHR", "Zoho Payroll", "Quikchex", "Manual / Spreadsheet"] as const;
+
+function PayrollSoftwareConnector() {
+  const [links, setLinks] = useFeatureState<PayrollLink[]>("conn-payroll-links", []);
+  const [provider, setProvider] = useState<string>(PAYROLL_PROVIDERS[0]);
+  const [apiKey, setApiKey] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const connect = () => {
+    if (!apiKey.trim()) { toast.error("Enter an API key / token"); return; }
+    if (links.some(l => l.provider === provider)) { toast.error("That payroll provider is already linked"); return; }
+    const link: PayrollLink = {
+      id: generateId(), provider, status: "connected",
+      headcount: 0, monthlyCost: 0, lastSync: null, connectedAt: new Date().toISOString(),
+    };
+    setLinks(prev => [link, ...prev]);
+    setApiKey("");
+    toast.success(`${provider} connected (simulated — key not stored).`);
+  };
+
+  const syncNow = async (id: string) => {
+    setBusy(id);
+    await new Promise(r => setTimeout(r, 1100));
+    const headcount = 4 + Math.floor(Math.random() * 30);
+    const monthlyCost = headcount * (25000 + Math.floor(Math.random() * 40000));
+    setLinks(prev => prev.map(l => l.id === id
+      ? { ...l, headcount, monthlyCost, status: "connected", lastSync: new Date().toISOString() } : l));
+    setBusy(null);
+    toast.success(`Synced ${headcount} employees · ${formatCurrency(monthlyCost)}/mo (simulated).`);
+  };
+
+  const remove = (id: string) => setLinks(prev => prev.filter(l => l.id !== id));
+  const totalCost = links.reduce((s, l) => s + l.monthlyCost, 0);
+
+  return (
+    <section id="conn-payroll" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Wallet size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Payroll Software Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalCost)}/mo · #186</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Pull headcount and monthly payroll cost from your payroll platform so salary outflow flows straight into cash-flow and burn calculations.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={provider} onChange={e => setProvider(e.target.value)} className={FC_INP}>
+          {PAYROLL_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="API key / token" type="password" className={FC_INP} />
+        <button onClick={connect} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+          <PlugZap size={14} /> Connect
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {links.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No payroll software linked yet.</p>}
+        {links.map(l => (
+          <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{l.provider}</p>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {l.headcount} employees · {formatCurrency(l.monthlyCost)}/mo · {l.lastSync ? `synced ${new Date(l.lastSync).toLocaleString()}` : "not synced yet"}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => syncNow(l.id)} disabled={busy === l.id} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5 disabled:opacity-40">
+                <RefreshCw size={12} className={busy === l.id ? "animate-spin" : ""} /> Sync
+              </button>
+              <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: payroll provider links, headcount and cost figures are simulated locally — no real payroll API is contacted and no key is stored.</DemoNote>
+    </section>
+  );
+}
+
+// ── #187 CRM Connector ──────────────────────────────────────────────────────
+// Link a CRM to sync the sales pipeline value into revenue forecasting. Simulated.
+type CrmLink = {
+  id: string;
+  provider: string;
+  status: "connected" | "paused";
+  openDeals: number;
+  pipelineValue: number;
+  lastSync: string | null;
+  connectedAt: string;
+};
+const CRM_PROVIDERS = ["Zoho CRM", "HubSpot", "Salesforce", "Freshsales", "Pipedrive", "LeadSquared"] as const;
+
+function CrmConnector() {
+  const [links, setLinks] = useFeatureState<CrmLink[]>("conn-crm-links", []);
+  const [provider, setProvider] = useState<string>(CRM_PROVIDERS[0]);
+  const [domain, setDomain] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const connect = () => {
+    if (!domain.trim()) { toast.error("Enter your CRM workspace / domain"); return; }
+    const link: CrmLink = {
+      id: generateId(), provider, status: "connected",
+      openDeals: 0, pipelineValue: 0, lastSync: null, connectedAt: new Date().toISOString(),
+    };
+    setLinks(prev => [link, ...prev]);
+    setDomain("");
+    toast.success(`${provider} linked (simulated OAuth).`);
+  };
+
+  const syncNow = async (id: string) => {
+    setBusy(id);
+    await new Promise(r => setTimeout(r, 1100));
+    const openDeals = 5 + Math.floor(Math.random() * 40);
+    const pipelineValue = openDeals * (50000 + Math.floor(Math.random() * 300000));
+    setLinks(prev => prev.map(l => l.id === id
+      ? { ...l, openDeals, pipelineValue, lastSync: new Date().toISOString() } : l));
+    setBusy(null);
+    toast.success(`Synced ${openDeals} open deals · ${formatCurrency(pipelineValue)} pipeline (simulated).`);
+  };
+
+  const togglePause = (id: string) => setLinks(prev => prev.map(l => l.id === id
+    ? { ...l, status: l.status === "connected" ? "paused" : "connected" } : l));
+  const remove = (id: string) => setLinks(prev => prev.filter(l => l.id !== id));
+
+  const totalPipeline = links.reduce((s, l) => s + l.pipelineValue, 0);
+
+  return (
+    <section id="conn-crm" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Users size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">CRM Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalPipeline)} pipeline · #187</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Connect your CRM to pull open-deal count and pipeline value into Headroom's revenue forecast — so projected cash reflects your real sales funnel.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={provider} onChange={e => setProvider(e.target.value)} className={FC_INP}>
+          {CRM_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={domain} onChange={e => setDomain(e.target.value)} placeholder="Workspace / domain" className={FC_INP} />
+        <button onClick={connect} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+          <PlugZap size={14} /> Connect CRM
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {links.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No CRM linked yet.</p>}
+        {links.map(l => (
+          <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{l.provider} <span className={`font-normal ${l.status === "paused" ? "text-[var(--color-muted)]" : "text-emerald-400"}`}>· {l.status}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {l.openDeals} open deals · {formatCurrency(l.pipelineValue)} · {l.lastSync ? `synced ${new Date(l.lastSync).toLocaleString()}` : "not synced yet"}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => syncNow(l.id)} disabled={busy === l.id || l.status === "paused"} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5 disabled:opacity-40">
+                <RefreshCw size={12} className={busy === l.id ? "animate-spin" : ""} /> Sync
+              </button>
+              <button onClick={() => togglePause(l.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">{l.status === "connected" ? "Pause" : "Resume"}</button>
+              <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: CRM links, deal counts and pipeline values are simulated and stored locally — no real CRM OAuth or API call happens.</DemoNote>
+    </section>
+  );
+}
+
+// ── #188 Shipping / Logistics Connector ─────────────────────────────────────
+// Link a courier aggregator to track shipments & COD remittance owed. Simulated.
+type ShipLink = {
+  id: string;
+  provider: string;
+  status: "connected" | "paused";
+  activeShipments: number;
+  codPending: number;
+  lastSync: string | null;
+  connectedAt: string;
+};
+const SHIP_PROVIDERS = ["Shiprocket", "Delhivery", "Blue Dart", "DTDC", "Ekart", "XpressBees"] as const;
+
+function ShippingLogisticsConnector() {
+  const [links, setLinks] = useFeatureState<ShipLink[]>("conn-shipping-links", []);
+  const [provider, setProvider] = useState<string>(SHIP_PROVIDERS[0]);
+  const [account, setAccount] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const connect = () => {
+    if (!account.trim()) { toast.error("Enter your courier account / seller ID"); return; }
+    if (links.some(l => l.provider === provider)) { toast.error("That courier is already linked"); return; }
+    const link: ShipLink = {
+      id: generateId(), provider, status: "connected",
+      activeShipments: 0, codPending: 0, lastSync: null, connectedAt: new Date().toISOString(),
+    };
+    setLinks(prev => [link, ...prev]);
+    setAccount("");
+    toast.success(`${provider} linked (simulated).`);
+  };
+
+  const syncNow = async (id: string) => {
+    setBusy(id);
+    await new Promise(r => setTimeout(r, 1100));
+    const activeShipments = Math.floor(Math.random() * 120);
+    const codPending = activeShipments * (300 + Math.floor(Math.random() * 2000));
+    setLinks(prev => prev.map(l => l.id === id
+      ? { ...l, activeShipments, codPending, lastSync: new Date().toISOString() } : l));
+    setBusy(null);
+    toast.success(`${activeShipments} shipments in transit · ${formatCurrency(codPending)} COD owed (simulated).`);
+  };
+
+  const togglePause = (id: string) => setLinks(prev => prev.map(l => l.id === id
+    ? { ...l, status: l.status === "connected" ? "paused" : "connected" } : l));
+  const remove = (id: string) => setLinks(prev => prev.filter(l => l.id !== id));
+
+  const totalCod = links.reduce((s, l) => s + l.codPending, 0);
+
+  return (
+    <section id="conn-shipping" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Truck size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Shipping / Logistics Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalCod)} COD owed · #188</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Link a courier aggregator to track in-transit shipments and COD remittance owed back to you — surfacing cash that's stuck in delivery as a receivable.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={provider} onChange={e => setProvider(e.target.value)} className={FC_INP}>
+          {SHIP_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={account} onChange={e => setAccount(e.target.value)} placeholder="Courier account / seller ID" className={FC_INP} />
+        <button onClick={connect} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+          <PlugZap size={14} /> Connect
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {links.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No courier linked yet.</p>}
+        {links.map(l => (
+          <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{l.provider} <span className={`font-normal ${l.status === "paused" ? "text-[var(--color-muted)]" : "text-emerald-400"}`}>· {l.status}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {l.activeShipments} in transit · {formatCurrency(l.codPending)} COD owed · {l.lastSync ? `synced ${new Date(l.lastSync).toLocaleString()}` : "not synced yet"}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => syncNow(l.id)} disabled={busy === l.id || l.status === "paused"} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5 disabled:opacity-40">
+                <RefreshCw size={12} className={busy === l.id ? "animate-spin" : ""} /> Sync
+              </button>
+              <button onClick={() => togglePause(l.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">{l.status === "connected" ? "Pause" : "Resume"}</button>
+              <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: courier links, shipment counts and COD figures are simulated and stored locally — no real logistics API is contacted.</DemoNote>
     </section>
   );
 }

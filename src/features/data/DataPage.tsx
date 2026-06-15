@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { generateDemoData } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/utils";
-import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search, BarChart3, Braces, Coins, BadgeCheck, Table2 } from "lucide-react";
+import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search, BarChart3, Braces, Coins, BadgeCheck, Table2, ReceiptText, CalendarRange, ScanSearch, FileJson } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -22,7 +22,7 @@ export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
-  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive" | "profiler" | "csv-json" | "number-clean" | "gstin-check" | "pivot">("overview");
+  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive" | "profiler" | "csv-json" | "number-clean" | "gstin-check" | "pivot" | "statement-parse" | "range-export" | "paste-dupes" | "json-fmt">("overview");
 
   if (!canAccess("data")) return <Navigate to="/dashboard" replace />;
 
@@ -85,7 +85,7 @@ export default function DataPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive], ["profiler", "Column Profiler", BarChart3], ["csv-json", "CSV ↔ JSON", Braces], ["number-clean", "Number Cleanup", Coins], ["gstin-check", "GSTIN Validator", BadgeCheck], ["pivot", "Pivot Builder", Table2]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive], ["profiler", "Column Profiler", BarChart3], ["csv-json", "CSV ↔ JSON", Braces], ["number-clean", "Number Cleanup", Coins], ["gstin-check", "GSTIN Validator", BadgeCheck], ["pivot", "Pivot Builder", Table2], ["statement-parse", "Statement Parser", ReceiptText], ["range-export", "Date-Range Export", CalendarRange], ["paste-dupes", "Paste Dedupe", ScanSearch], ["json-fmt", "JSON Formatter", FileJson]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -108,6 +108,10 @@ export default function DataPage() {
       {tab === "number-clean" && <NumberCleanup />}
       {tab === "gstin-check" && <GstinValidator />}
       {tab === "pivot" && <PivotBuilder />}
+      {tab === "statement-parse" && <StatementParser editable={editable} onImport={handleImport} importAccountId={importAccountId} />}
+      {tab === "range-export" && <DateRangeExport />}
+      {tab === "paste-dupes" && <PasteDuplicateFinder />}
+      {tab === "json-fmt" && <JsonFormatter />}
 
       {tab === "overview" && <>
       {/* Current data snapshot */}
@@ -1733,6 +1737,335 @@ function PivotBuilder() {
           </div>
           <button onClick={downloadPivot} className={primaryBtn}><Download size={13} /> Download pivot CSV</button>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── #178 Bank Statement Parser ─────────────────────────────────────────────────
+// Paste a free-text/columnar bank statement (Debit/Credit columns or signed
+// amount). We sniff the layout per line, build transactions and let you import.
+function StatementParser({ editable, onImport, importAccountId }: { editable: boolean; onImport: (t: Transaction[]) => void; importAccountId: string }) {
+  const [raw, setRaw] = useState("");
+
+  const parsed = useMemo<Transaction[]>(() => {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const out: Transaction[] = [];
+    lines.forEach((line, i) => {
+      // Need a leading date token to treat the line as a statement row.
+      const dm = line.match(/^(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})/);
+      if (!dm) return;
+      const iso = toIsoDate(dm[1]);
+      const rest = line.slice(dm[1].length).trim();
+      // Collect all money-looking numbers on the line (commas allowed).
+      const nums = (rest.match(/-?\d[\d,]*\.?\d{0,2}/g) ?? []).map(n => parseFloat(n.replace(/,/g, ""))).filter(n => !isNaN(n));
+      if (nums.length === 0) return;
+      const lower = rest.toLowerCase();
+      const isDebit = /\b(dr|debit|withdrawal|paid|wd)\b/.test(lower);
+      const isCredit = /\b(cr|credit|deposit|received|recd)\b/.test(lower);
+      // Amount = the largest-magnitude number (drop a trailing running balance heuristically when 3+ numbers).
+      const candidates = nums.length >= 3 ? nums.slice(0, nums.length - 1) : nums;
+      let amt = candidates.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, candidates[0] ?? 0);
+      if (isDebit) amt = -Math.abs(amt);
+      else if (isCredit) amt = Math.abs(amt);
+      const desc = rest.replace(/-?\d[\d,]*\.?\d{0,2}/g, "").replace(/\b(dr|cr|debit|credit|withdrawal|deposit)\b/gi, "").replace(/\s+/g, " ").trim();
+      const category: Transaction["category"] = amt >= 0 ? "revenue" : "expense";
+      out.push({
+        id: `stmt-${Date.now()}-${i}`,
+        date: iso,
+        amount: amt,
+        description: desc || "Statement row",
+        category,
+        counterparty: desc.split(/\s{2,}|,/)[0]?.slice(0, 40) ?? "",
+        isRecurring: false,
+        bankAccountId: importAccountId,
+      });
+    });
+    return out;
+  }, [raw, importAccountId]);
+
+  const credits = parsed.filter(t => t.amount >= 0).reduce((s, t) => s + t.amount, 0);
+  const debits = parsed.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const commit = () => {
+    if (parsed.length === 0) { toast.error("Nothing parsed — paste statement lines with a leading date"); return; }
+    onImport(parsed);
+    toast.success(`Imported ${parsed.length} statement row(s)`);
+    setRaw("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <ReceiptText size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Bank Statement Parser</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste raw statement text — one transaction per line starting with a date. We detect Dr/Cr keywords, pick the transaction amount (ignoring a trailing running balance) and build importable rows. No fixed format needed.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"01/06/2026  NEFT Mehta Corp  250,000 Cr  1,250,000\n03/06/2026  Office rent Landlord  120,000 Dr  1,130,000"}
+          className={taCls} />
+      </div>
+
+      {parsed.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Rows parsed", value: String(parsed.length), color: "text-[var(--color-primary)]" },
+              { label: "Total credits", value: formatCurrency(credits), color: "text-green-400" },
+              { label: "Total debits", value: formatCurrency(debits), color: "text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Date", "Counterparty", "Description", "Amount"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.slice(0, 50).map(t => (
+                  <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2 tabular-nums">{t.date}</td>
+                    <td className="px-4 py-2">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
+                    <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {parsed.length > 50 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 50 of {parsed.length}.</p>}
+          </div>
+          <button disabled={!editable} onClick={commit} className={primaryBtn}>
+            <Plus size={13} /> Import {parsed.length} row(s)
+          </button>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic parser — verify amounts and Dr/Cr direction before importing. Lines without a leading date are skipped.</p>
+    </div>
+  );
+}
+
+// ── #179 Date-Range Export ─────────────────────────────────────────────────────
+// Slice live transactions to a from/to window and export the subset as CSV.
+function DateRangeExport() {
+  const { store } = useApp();
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState(today);
+
+  const matched = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const fromT = from ? new Date(from).getTime() : -Infinity;
+    const toT = to ? new Date(to).getTime() + 86399999 : Infinity;
+    return txns.filter(t => {
+      const d = new Date(t.date).getTime();
+      return !isNaN(d) && d >= fromT && d <= toT;
+    });
+  }, [store.transactions, from, to]);
+
+  const net = matched.reduce((s, t) => s + t.amount, 0);
+
+  const exportCsv = () => {
+    if (matched.length === 0) { toast.error("No transactions in this range"); return; }
+    const header = "date,amount,description,counterparty,category";
+    const esc = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const body = matched.map(t => [t.date, t.amount, esc(t.description || ""), esc(t.counterparty || ""), t.category].join(",")).join("\n");
+    downloadBlob(`transactions-${from || "start"}_to_${to || "end"}.csv`, `${header}\n${body}`, "text/csv");
+    toast.success(`Exported ${matched.length} transaction(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <CalendarRange size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Date-Range Export</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pull a clean CSV of just the transactions in a chosen window — handy for a quarter, a financial year, or an audit request. Leave "from" blank to start at the earliest record.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">From</label><input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inpCls} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">To</label><input type="date" value={to} onChange={e => setTo(e.target.value)} className={inpCls} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-4 max-w-md">
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Matched rows</p>
+            <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{matched.length}</p>
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Net amount</p>
+            <p className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(net)}</p>
+          </div>
+        </div>
+        <button onClick={exportCsv} className={`${primaryBtn} mt-4`}>
+          <Download size={13} /> Export {matched.length} row(s) CSV
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── #180 Paste Duplicate Finder ────────────────────────────────────────────────
+// Paste any list (one value per line) and surface repeated values + counts.
+// Pure client-side analysis; export the deduped/unique list as CSV.
+function PasteDuplicateFinder() {
+  const [raw, setRaw] = useState("");
+  const [caseSensitive, setCaseSensitive] = useState(false);
+
+  const { dupes, uniqueCount, total } = useMemo(() => {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const counts = new Map<string, { display: string; n: number }>();
+    lines.forEach(l => {
+      const key = caseSensitive ? l : l.toLowerCase();
+      const existing = counts.get(key);
+      if (existing) existing.n += 1;
+      else counts.set(key, { display: l, n: 1 });
+    });
+    const dupes = Array.from(counts.values()).filter(v => v.n > 1).sort((a, b) => b.n - a.n);
+    return { dupes, uniqueCount: counts.size, total: lines.length };
+  }, [raw, caseSensitive]);
+
+  const exportUnique = () => {
+    if (total === 0) { toast.error("Paste some values first"); return; }
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    lines.forEach(l => {
+      const key = caseSensitive ? l : l.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); unique.push(l); }
+    });
+    const esc = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    downloadBlob("unique-values.csv", `value\n${unique.map(esc).join("\n")}`, "text/csv");
+    toast.success(`Exported ${unique.length} unique value(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <ScanSearch size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Paste Duplicate Finder</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any list — invoice numbers, GSTINs, emails, vendor names (one per line). We count repeats so you can spot double entries before they reach your books, then export the de-duplicated list.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"INV-001\nINV-002\nINV-001\nmehta@corp.in"}
+          className={taCls} />
+        <label className="flex items-center gap-2 cursor-pointer text-xs mt-3">
+          <input type="checkbox" checked={caseSensitive} onChange={e => setCaseSensitive(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Case-sensitive matching
+        </label>
+      </div>
+
+      {total > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total values", value: total, color: "text-[var(--color-primary)]" },
+              { label: "Unique", value: uniqueCount, color: "text-green-400" },
+              { label: "Duplicated", value: total - uniqueCount, color: "text-orange-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          {dupes.length > 0 && (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+              <table className="w-full text-sm min-w-[280px]">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)]">
+                    {["Value", "Occurrences"].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {dupes.slice(0, 100).map((d, i) => (
+                    <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
+                      <td className="px-4 py-2 font-mono text-xs">{d.display}</td>
+                      <td className="px-4 py-2 tabular-nums text-orange-400">×{d.n}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {dupes.length > 100 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 100 of {dupes.length}.</p>}
+            </div>
+          )}
+          <button onClick={exportUnique} className={primaryBtn}>
+            <Download size={13} /> Export {uniqueCount} unique value(s)
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #181 JSON Formatter ────────────────────────────────────────────────────────
+// Validate, pretty-print or minify pasted JSON; copy or download the result.
+function JsonFormatter() {
+  const [raw, setRaw] = useState("");
+  const [out, setOut] = useState("");
+  const [err, setErr] = useState("");
+
+  const run = (mode: "pretty" | "minify") => {
+    setErr(""); setOut("");
+    if (!raw.trim()) { setErr("Paste some JSON first."); return; }
+    try {
+      const parsed = JSON.parse(raw);
+      setOut(JSON.stringify(parsed, null, mode === "pretty" ? 2 : 0));
+      toast.success(mode === "pretty" ? "Formatted" : "Minified");
+    } catch (e) {
+      setErr(e instanceof Error ? `Invalid JSON: ${e.message}` : "Invalid JSON");
+    }
+  };
+
+  const copy = () => {
+    if (!out) return;
+    navigator.clipboard?.writeText(out);
+    toast.success("Copied to clipboard");
+  };
+  const download = () => {
+    if (!out) return;
+    downloadBlob("formatted.json", out, "application/json");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <FileJson size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">JSON Formatter</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste JSON from an API response, a webhook payload or an export. Validate it, pretty-print for reading, or minify for sending — entirely in your browser.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={'{"invoice":"INV-001","amount":250000}'}
+          className={taCls} />
+        {err && <p className="text-xs text-red-400 mt-2">{err}</p>}
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={() => run("pretty")} className={primaryBtn}><Braces size={13} /> Pretty-print</button>
+          <button onClick={() => run("minify")} className={ghostBtn}><Braces size={13} /> Minify</button>
+        </div>
+      </div>
+
+      {out && (
+        <div className={cardCls}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold">Result</p>
+            <div className="flex gap-2">
+              <button onClick={copy} className={ghostBtn}><Copy size={13} /> Copy</button>
+              <button onClick={download} className={ghostBtn}><Download size={13} /> Download</button>
+            </div>
+          </div>
+          <pre className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-[400px] whitespace-pre-wrap">{out}</pre>
+        </div>
       )}
     </div>
   );
