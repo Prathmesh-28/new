@@ -1221,6 +1221,333 @@ function SpendByPayeeDonut() {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD WIDGETS — 2nd pass additions (additive, self-contained).
+// Net-flow trend, expense biggest-movers, customer payment status, burn gauge,
+// weekday inflow pattern. Each computes from the live store. Do not disturb
+// existing widgets. Durable picks (none needed here) would use "dash-" keys.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Net Cash Flow · last 6 months ─────────────────────────────────────────────
+// Monthly net (inflow − outflow) as a signed bar chart — distinct from the
+// 30-day balance sparkline and the current-month mini P&L.
+function NetCashFlowTrend() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const now = new Date();
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const inMo = transactions.filter(t => t.date.startsWith(key) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const outMo = transactions.filter(t => t.date.startsWith(key) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      const net = inMo - outMo;
+      return { label: format(d, "MMM"), net: Math.round(net / 1000), raw: net };
+    });
+    return months;
+  }, [transactions]);
+
+  const hasData = data.some(d => d.raw !== 0);
+  if (!hasData) return null;
+
+  const positives = data.filter(d => d.net >= 0).length;
+  const avg = Math.round(data.reduce((s, d) => s + d.raw, 0) / data.length);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <BarChart3 size={13} className="text-[var(--color-primary)]" />
+          Net Cash Flow · 6 months
+        </h2>
+        <button onClick={() => navigate("/analytics")} className="text-xs text-[var(--color-primary)] hover:underline">Details →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Inflow minus outflow per month · ₹ thousands · {positives}/6 cash-positive · avg {avg >= 0 ? "+" : "−"}{formatCurrency(Math.abs(avg))}</p>
+      <ResponsiveContainer width="100%" height={150}>
+        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
+          <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}K`, "Net"]} />
+          <Bar dataKey="net" radius={[3, 3, 0, 0]} animationDuration={400}>
+            {data.map((d, i) => <Cell key={i} fill={d.net >= 0 ? "#2EA882" : "#ef4444"} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── Expense biggest movers (this month vs last) ───────────────────────────────
+// Per-category outflow change MoM — surfaces what is growing/shrinking, distinct
+// from the static burn-by-category bar.
+function ExpenseMoversWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const movers = useMemo(() => {
+    const now = new Date();
+    const thisM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const lastD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastM = `${lastD.getFullYear()}-${String(lastD.getMonth() + 1).padStart(2, "0")}`;
+
+    const sumByCat = (month: string) => {
+      const map: Record<string, number> = {};
+      transactions.filter(t => t.amount < 0 && t.date.startsWith(month)).forEach(t => {
+        const c = t.category || "other";
+        map[c] = (map[c] ?? 0) + Math.abs(t.amount);
+      });
+      return map;
+    };
+    const cur = sumByCat(thisM);
+    const prev = sumByCat(lastM);
+    const cats = Array.from(new Set([...Object.keys(cur), ...Object.keys(prev)]));
+    return cats
+      .map(c => {
+        const now2 = cur[c] ?? 0;
+        const was = prev[c] ?? 0;
+        const delta = now2 - was;
+        const pct = was > 0 ? (delta / was) * 100 : now2 > 0 ? 100 : 0;
+        return { cat: c, now: now2, was, delta, pct };
+      })
+      .filter(m => Math.abs(m.delta) > 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 5);
+  }, [transactions]);
+
+  if (movers.length === 0) return null;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <TrendingUp size={13} className="text-[var(--color-primary)]" />
+          Biggest Movers · spend
+        </h2>
+        <button onClick={() => navigate("/spend")} className="text-xs text-[var(--color-primary)] hover:underline">Review →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Category spend change vs last month</p>
+      <div className="space-y-2">
+        {movers.map(m => {
+          const up = m.delta > 0;
+          return (
+            <div key={m.cat} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${up ? "bg-red-950/40 text-red-400" : "bg-green-950/40 text-green-400"}`}>
+                  {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium capitalize truncate">{m.cat}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] tabular-nums">{formatCurrency(m.was)} → {formatCurrency(m.now)}</p>
+                </div>
+              </div>
+              <span className={`text-xs font-semibold tabular-nums shrink-0 ml-3 ${up ? "text-red-400" : "text-green-400"}`}>
+                {up ? "▲" : "▼"} {m.was > 0 ? `${Math.abs(m.pct).toFixed(0)}%` : "new"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Customer payment status ───────────────────────────────────────────────────
+// Receivables split into paid / due-soon / overdue — a status summary (donut +
+// counts), distinct from the overdue-only list and the dues timeline.
+const PAY_STATUS_COLORS = ["#2EA882", "#eab308", "#ef4444"] as const;
+
+function CustomerPaymentStatus() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const invoices = store.invoices ?? [];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const buckets = useMemo(() => {
+    let paid = 0, pending = 0, overdue = 0;
+    let paidAmt = 0, pendingAmt = 0, overdueAmt = 0;
+    invoices.forEach(i => {
+      if (i.status === "paid") { paid++; paidAmt += i.amount; }
+      else if (i.dueDate < todayStr) { overdue++; overdueAmt += i.amount; }
+      else { pending++; pendingAmt += i.amount; }
+    });
+    return { paid, pending, overdue, paidAmt, pendingAmt, overdueAmt };
+  }, [invoices, todayStr]);
+
+  if (invoices.length === 0) return null;
+
+  const data = [
+    { name: "Paid", value: buckets.paid, amt: buckets.paidAmt },
+    { name: "Pending", value: buckets.pending, amt: buckets.pendingAmt },
+    { name: "Overdue", value: buckets.overdue, amt: buckets.overdueAmt },
+  ].filter(d => d.value > 0);
+
+  const totalCount = buckets.paid + buckets.pending + buckets.overdue;
+  const colorFor = (name: string) => name === "Paid" ? PAY_STATUS_COLORS[0] : name === "Pending" ? PAY_STATUS_COLORS[1] : PAY_STATUS_COLORS[2];
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Receipt size={13} className="text-[var(--color-primary)]" />
+          Customer Payment Status
+        </h2>
+        <button onClick={() => navigate("/receivables")} className="text-xs text-[var(--color-primary)] hover:underline">Receivables →</button>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={36} outerRadius={56} paddingAngle={2} stroke="none">
+                {data.map(d => <Cell key={d.name} fill={colorFor(d.name)} />)}
+              </Pie>
+              <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number, n: string) => [`${v} invoice${v > 1 ? "s" : ""}`, n]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-[9px] text-[var(--color-muted)]">Invoices</span>
+            <span className="text-sm font-bold tabular-nums">{totalCount}</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          {data.map(d => (
+            <div key={d.name} className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: colorFor(d.name) }} />
+                <span className="font-medium">{d.name}</span>
+                <span className="text-[var(--color-muted)]">· {d.value}</span>
+              </span>
+              <span className="text-[var(--color-muted)] tabular-nums shrink-0 ml-2">{formatCurrency(d.amt)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Days-of-cash gauge + savings rate ─────────────────────────────────────────
+// A half-circle gauge of days of cash on hand plus the share of inflow retained
+// this month (savings rate) — a distinct framing from the runway stat card.
+function CashGaugeWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions, bankAccounts } = store;
+
+  const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const burn = monthlyBurn(transactions);
+  const daysCash = burn > 0 ? Math.round((balance / burn) * 30) : 999;
+
+  const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const inMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const outMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const savingsRate = inMo > 0 ? ((inMo - outMo) / inMo) * 100 : 0;
+
+  // Cap the gauge at 180 days for the visual sweep.
+  const capped = Math.min(daysCash, 180);
+  const pct = capped / 180; // 0..1
+  const color = daysCash < 30 ? "#ef4444" : daysCash < 90 ? "#eab308" : "#22c55e";
+  const label = daysCash < 30 ? "Critical" : daysCash < 90 ? "Watch" : "Comfortable";
+
+  // Half-circle arc maths: dasharray over a semicircle (radius 40, length ≈ 125.6).
+  const arcLen = Math.PI * 40;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Target size={13} className="text-[var(--color-primary)]" />
+          Days of Cash
+        </h2>
+        <button onClick={() => navigate("/forecast")} className="text-xs text-[var(--color-primary)] hover:underline">Forecast →</button>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative shrink-0" style={{ width: 120, height: 70 }}>
+          <svg viewBox="0 0 100 54" className="w-full h-full">
+            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="var(--color-border)" strokeWidth="8" strokeLinecap="round" />
+            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+              strokeDasharray={`${pct * arcLen} ${arcLen}`} />
+          </svg>
+          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
+            <span className="text-lg font-bold tabular-nums" style={{ color }}>{daysCash >= 999 ? "∞" : daysCash}</span>
+            <span className="text-[9px] text-[var(--color-muted)]">days</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div>
+            <p className="text-[10px] text-[var(--color-muted)]">Cash position</p>
+            <p className="text-sm font-semibold" style={{ color }}>{label}</p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-[10px] text-[var(--color-muted)] mb-0.5">
+              <span>Savings rate (MTD)</span>
+              <span className={`font-semibold tabular-nums ${savingsRate >= 0 ? "text-green-400" : "text-red-400"}`}>{savingsRate >= 0 ? "" : "−"}{Math.abs(savingsRate).toFixed(0)}%</span>
+            </div>
+            <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(0, Math.min(100, savingsRate))}%`, background: savingsRate >= 0 ? "#2EA882" : "#ef4444" }} />
+            </div>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{inMo > 0 ? `${formatCurrency(inMo - outMo)} kept of ${formatCurrency(inMo)} earned` : "No inflow this month yet"}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inflow by weekday ─────────────────────────────────────────────────────────
+// Which weekday brings the most money in — a 7-bar pattern over all history,
+// distinct from the forward-looking 7-day Cash This Week view.
+function WeekdayInflowWidget() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const totals = new Array<number>(7).fill(0);
+    const counts = new Array<number>(7).fill(0);
+    transactions.filter(t => t.amount > 0).forEach(t => {
+      const dow = new Date(t.date).getDay(); // 0=Sun..6=Sat
+      const idx = dow === 0 ? 6 : dow - 1; // Mon-first
+      totals[idx] += t.amount;
+      counts[idx] += 1;
+    });
+    return names.map((label, i) => ({ label, total: totals[i], count: counts[i] }));
+  }, [transactions]);
+
+  const hasData = data.some(d => d.total > 0);
+  if (!hasData) return null;
+
+  const max = Math.max(...data.map(d => d.total), 1);
+  const best = data.reduce((b, d) => (d.total > b.total ? d : b), data[0]);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <h2 className="text-sm font-semibold flex items-center gap-1.5 mb-1">
+        <Calendar size={13} className="text-[var(--color-primary)]" />
+        Inflow by Weekday
+      </h2>
+      <p className="text-xs text-[var(--color-muted)] mb-3">When customers tend to pay · <span className="text-[var(--color-primary)] font-semibold">{best.label}</span> is your strongest day</p>
+      <div className="grid grid-cols-7 gap-1.5">
+        {data.map(d => {
+          const h = (d.total / max) * 100;
+          const isBest = d.label === best.label && d.total > 0;
+          return (
+            <div key={d.label} className="flex flex-col items-center gap-1">
+              <div className="relative w-full h-20 flex items-end">
+                <div className="w-full rounded-t transition-all duration-500" title={`${formatCurrency(d.total)} · ${d.count} payment${d.count === 1 ? "" : "s"}`}
+                  style={{ height: `${Math.max(4, h)}%`, background: isBest ? "#2EA882" : "var(--color-primary)", opacity: d.total > 0 ? (isBest ? 1 : 0.45) : 0.12 }} />
+              </div>
+              <span className={`text-[9px] ${isBest ? "text-[var(--color-primary)] font-semibold" : "text-[var(--color-muted)]"}`}>{d.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
@@ -1491,6 +1818,17 @@ export default function DashboardPage() {
             <SpendByPayeeDonut />
           </div>
           <CashTrendSparkline />
+
+          {/* ── 2nd-pass widgets: net flow, movers, payment status, gauge, weekday ── */}
+          <NetCashFlowTrend />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ExpenseMoversWidget />
+            <CustomerPaymentStatus />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <CashGaugeWidget />
+            <WeekdayInflowWidget />
+          </div>
 
           {/* Credit rescue CTA */}
           {runway > 0 && runway < 45 && (

@@ -9,6 +9,7 @@ import {
   ShieldCheck, TrendingUp, Landmark, CheckCircle2, X,
   Gauge, FileSpreadsheet, ClipboardList, AlertTriangle, Plus, Trash2,
   Users, Scale, ListChecks, CalendarClock, Handshake, History, Star,
+  Layers, Lock, Repeat, Phone, Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -92,7 +93,8 @@ function BidModal({ app, onClose, onBid }: { app: Application; onClose: () => vo
 }
 
 type LenderTab = "marketplace" | "covenants" | "borrowing-base" | "mis-pack"
-  | "lender-shortlist" | "offer-compare" | "app-tracker" | "disbursement" | "rate-prep" | "repayment-record";
+  | "lender-shortlist" | "offer-compare" | "app-tracker" | "disbursement" | "rate-prep" | "repayment-record"
+  | "syndication" | "collateral-register" | "refinance-scanner" | "lender-crm" | "utilization-trend";
 
 export default function LendersPage() {
   const { user } = useAuth();
@@ -108,7 +110,7 @@ export default function LendersPage() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">AA-verified applications · Covenants · Borrowing base · Recurring MIS</p>
         </div>
         <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History]] as const).map(([id, label, Icon]) => (
+          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History], ["syndication", "Syndication Split", Layers], ["collateral-register", "Collateral Register", Lock], ["refinance-scanner", "Refinance Scanner", Repeat], ["lender-crm", "Lender CRM", Phone], ["utilization-trend", "Utilization Trend", Activity]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -127,6 +129,11 @@ export default function LendersPage() {
       {tab === "disbursement" && <DisbursementPlanner />}
       {tab === "rate-prep" && <RateNegotiationPrep />}
       {tab === "repayment-record" && <RepaymentRecord />}
+      {tab === "syndication" && <SyndicationSplit />}
+      {tab === "collateral-register" && <CollateralRegister />}
+      {tab === "refinance-scanner" && <RefinanceScanner />}
+      {tab === "lender-crm" && <LenderCrm />}
+      {tab === "utilization-trend" && <UtilizationTrend />}
     </div>
   );
 }
@@ -1225,6 +1232,527 @@ function RepaymentRecord() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
         Months elapsed is inferred from principal amortised against the EMI and may differ from the actual schedule for irregular or interest-only loans. Pair with your bank statement for a lender-ready record.
+      </div>
+    </div>
+  );
+}
+
+// ── #126 SYNDICATION / MULTI-LENDER SPLIT ────────────────────────────────────────
+// Split one facility across several lenders, each with its own share and rate, then
+// see the blended cost of the whole syndicate and whether the shares add to 100%.
+interface SyndPart { id: string; lender: string; sharePct: number; rate: number; }
+
+function SyndicationSplit() {
+  const [facility, setFacility] = useState("10000000");
+  const [parts, setParts]       = useFeatureState<SyndPart[]>("lnd-syndication", [
+    { id: "s1", lender: "Lead Bank (HDFC)", sharePct: 50, rate: 12.5 },
+    { id: "s2", lender: "NBFC participant",  sharePct: 30, rate: 15 },
+    { id: "s3", lender: "Fintech participant", sharePct: 20, rate: 17 },
+  ]);
+  const [lender, setLender] = useState("");
+  const [share, setShare]   = useState("");
+  const [rate, setRate]     = useState("");
+
+  const facilityAmt = parseFloat(facility) || 0;
+  const totalShare   = parts.reduce((s, p) => s + p.sharePct, 0);
+  const blendedRate  = totalShare > 0 ? parts.reduce((s, p) => s + p.sharePct * p.rate, 0) / totalShare : 0;
+  const rows = parts.map(p => ({ ...p, amount: facilityAmt * p.sharePct / 100 }));
+  const balanced = Math.abs(totalShare - 100) < 0.01;
+
+  const add = () => {
+    const sh = parseFloat(share), r = parseFloat(rate);
+    if (!lender.trim() || isNaN(sh) || sh <= 0 || isNaN(r)) { toast.error("Enter lender, share % and rate"); return; }
+    setParts(prev => [...prev, { id: crypto.randomUUID(), lender: lender.trim(), sharePct: sh, rate: r }]);
+    setLender(""); setShare(""); setRate("");
+    toast.success("Participant added");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Syndication / Multi-Lender Split</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Spread one facility across several lenders under RBI co-lending. Each participant's share and rate roll up into a blended cost for the whole syndicate.</p>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Total facility (₹)</label>
+          <input type="number" value={facility} onChange={e => setFacility(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Participants", value: parts.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Share allocated", value: `${totalShare.toFixed(1)}%`, color: balanced ? "text-green-400" : "text-yellow-400" },
+          { label: "Blended rate", value: `${blendedRate.toFixed(2)}%`, color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Participant", "Share", "Amount", "Rate", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No participants yet — add one below.</td></tr>
+            )}
+            {rows.map(p => (
+              <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{p.lender}</td>
+                <td className="px-4 py-2.5 tabular-nums">{p.sharePct.toFixed(1)}%</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(p.amount))}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{p.rate.toFixed(2)}%</td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => setParts(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!balanced && parts.length > 0 && (
+        <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-px" />
+          <p className="text-xs text-yellow-300">Shares total {totalShare.toFixed(1)}%, not 100%. {totalShare < 100 ? `${(100 - totalShare).toFixed(1)}% of the facility is still unallocated.` : `Over-allocated by ${(totalShare - 100).toFixed(1)}% — trim a participant's share.`}</p>
+        </div>
+      )}
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add participant</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={lender} onChange={e => setLender(e.target.value)} placeholder="Lender" className={inp} />
+          <input type="number" step="0.5" value={share} onChange={e => setShare(e.target.value)} placeholder="Share %" className={inp} />
+          <input type="number" step="0.25" value={rate} onChange={e => setRate(e.target.value)} placeholder="Rate % p.a." className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add participant</button>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Blended rate is share-weighted across participants. Co-lending under RBI norms typically requires the originating lender to retain a minimum share — confirm the split against the inter-lender agreement.
+      </div>
+    </div>
+  );
+}
+
+// ── #127 SECURITY / COLLATERAL REGISTER ──────────────────────────────────────────
+// Every asset pledged as security, its value net of a lender haircut, summed into
+// total realisable cover, then tested against the exposure it secures.
+interface Collateral { id: string; asset: string; type: "Property" | "Plant & Machinery" | "Stock" | "Receivables" | "Fixed Deposit" | "Other"; value: number; haircutPct: number; }
+
+function CollateralRegister() {
+  const [exposure, setExposure] = useState("8000000");
+  const [items, setItems]       = useFeatureState<Collateral[]>("lnd-collateral-register", [
+    { id: "k1", asset: "Factory premises", type: "Property", value: 9000000, haircutPct: 25 },
+    { id: "k2", asset: "CNC machinery",    type: "Plant & Machinery", value: 3000000, haircutPct: 40 },
+    { id: "k3", asset: "Pledged FD",       type: "Fixed Deposit", value: 1000000, haircutPct: 10 },
+  ]);
+  const [asset, setAsset]   = useState("");
+  const [type, setType]     = useState<Collateral["type"]>("Property");
+  const [value, setValue]   = useState("");
+  const [haircut, setHaircut] = useState("");
+
+  const exposureAmt = parseFloat(exposure) || 0;
+  const rows = items.map(c => ({ ...c, realisable: Math.round(c.value * (1 - Math.min(100, Math.max(0, c.haircutPct)) / 100)) }));
+  const grossValue   = rows.reduce((s, r) => s + r.value, 0);
+  const realisable   = rows.reduce((s, r) => s + r.realisable, 0);
+  const coverage     = exposureAmt > 0 ? realisable / exposureAmt : realisable > 0 ? 99 : 0;
+  const shortfall    = Math.max(0, exposureAmt - realisable);
+
+  const add = () => {
+    const v = parseFloat(value), h = parseFloat(haircut || "0");
+    if (!asset.trim() || isNaN(v) || v <= 0) { toast.error("Enter asset and a positive value"); return; }
+    setItems(prev => [...prev, { id: crypto.randomUUID(), asset: asset.trim(), type, value: v, haircutPct: isNaN(h) ? 0 : h }]);
+    setAsset(""); setValue(""); setHaircut("");
+    toast.success("Collateral added");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Lock size={14} className="text-[var(--color-primary)]" /> Security / Collateral Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Every asset pledged as security, valued net of the lender's haircut, summed into realisable cover and tested against the exposure it secures.</p>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Secured exposure (₹)</label>
+          <input type="number" value={exposure} onChange={e => setExposure(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Gross security value", value: formatCurrency(grossValue), color: "text-[var(--color-text)]" },
+          { label: "Realisable cover", value: formatCurrency(realisable), color: "text-[var(--color-primary)]" },
+          { label: "Cover ratio", value: coverage >= 99 ? "n/a" : `${(coverage * 100).toFixed(0)}%`, color: coverage >= 1 || coverage >= 99 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Asset", "Type", "Value", "Haircut", "Realisable", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No collateral recorded yet — add one below.</td></tr>
+            )}
+            {rows.map(c => (
+              <tr key={c.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{c.asset}</td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)]">{c.type}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(c.value)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{c.haircutPct.toFixed(0)}%</td>
+                <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(c.realisable)}</td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {shortfall > 0 && (
+        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
+          <p className="text-xs text-red-300">Realisable cover falls short of the exposure by {formatCurrency(shortfall)}. Expect a top-up security demand or a margin shortfall notice — pledge an additional asset or reduce the outstanding.</p>
+        </div>
+      )}
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add collateral</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={asset} onChange={e => setAsset(e.target.value)} placeholder="Asset" className={inp} />
+          <select value={type} onChange={e => setType(e.target.value as Collateral["type"])} className={inp}>
+            {(["Property", "Plant & Machinery", "Stock", "Receivables", "Fixed Deposit", "Other"] as const).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Value ₹" className={inp} />
+          <input type="number" step="1" value={haircut} onChange={e => setHaircut(e.target.value)} placeholder="Haircut %" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add collateral</button>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Haircuts are your estimate of the lender's discount to forced-sale value; banks apply their own valuation and may exclude certain asset classes. "n/a" cover appears when no exposure is entered. Confirm against the hypothecation deed.
+      </div>
+    </div>
+  );
+}
+
+// ── #128 REFINANCE-OPPORTUNITY SCANNER ───────────────────────────────────────────
+// Scans the live debt schedule for loans priced above a benchmark market rate and
+// estimates the annual interest you would save by refinancing each to that rate.
+function RefinanceScanner() {
+  const { store } = useApp();
+  const loans = store.activeLoans ?? [];
+  const [marketRate, setMarketRate] = useState("13");
+
+  const target = parseFloat(marketRate) || 0;
+  const rows = loans.map(l => {
+    const gap = l.rate - target;                       // % points above market
+    const annualSaving = gap > 0 ? l.outstanding * gap / 100 : 0;
+    return { ...l, gap, annualSaving, candidate: gap > 0.5 };
+  }).sort((a, b) => b.annualSaving - a.annualSaving);
+
+  const candidates  = rows.filter(r => r.candidate);
+  const totalSaving = candidates.reduce((s, r) => s + r.annualSaving, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Refinance-Opportunity Scanner</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Scans your synced debt schedule for loans priced above the current market rate and estimates the annual interest you would save by refinancing each.</p>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Benchmark market rate (% p.a.)</label>
+          <input type="number" step="0.25" value={marketRate} onChange={e => setMarketRate(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Loans scanned", value: loans.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Refinance candidates", value: candidates.length.toString(), color: candidates.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Est. annual saving", value: formatCurrency(Math.round(totalSaving)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Repeat size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No active loans in your synced debt schedule to scan.</p>
+        </div>
+      ) : (
+        <div className={`${card} overflow-x-auto`}>
+          <table className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Loan", "Outstanding", "Current rate", "vs Market", "Est. annual saving", "Status"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${r.candidate ? "bg-yellow-950/10" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.outstanding)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.rate.toFixed(2)}%</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.gap > 0 ? "text-red-400" : "text-green-400"}`}>{r.gap > 0 ? "+" : ""}{r.gap.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{r.annualSaving > 0 ? formatCurrency(Math.round(r.annualSaving)) : "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${r.candidate ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>{r.candidate ? "REFINANCE" : "AT MARKET"}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Saving is the first-year interest gap on the current outstanding; it ignores foreclosure charges, processing fees on the new loan and the residual tenure. A loan is flagged only when it sits more than 0.5% above your benchmark. Run the numbers net of switching costs before acting.
+      </div>
+    </div>
+  );
+}
+
+// ── #129 LENDER-RELATIONSHIP CRM ─────────────────────────────────────────────────
+// A light CRM for the lender relationships you are managing — owner, last contact,
+// next action and date — surfacing follow-ups that are due or overdue today.
+interface LenderContact { id: string; lender: string; contact: string; lastContacted: string; nextAction: string; nextDate: string; }
+
+function LenderCrm() {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [contacts, setContacts] = useFeatureState<LenderContact[]>("lnd-relationship-crm", [
+    { id: "r1", lender: "HDFC Bank",   contact: "RM — Priya Nair",  lastContacted: "2026-06-05", nextAction: "Submit Q1 stock statement", nextDate: "2026-06-12" },
+    { id: "r2", lender: "Bajaj Finserv", contact: "Credit — Amit Shah", lastContacted: "2026-06-10", nextAction: "Renewal review call",     nextDate: "2026-06-25" },
+  ]);
+  const [lender, setLender]   = useState("");
+  const [contact, setContact] = useState("");
+  const [action, setAction]   = useState("");
+  const [nextDate, setNextDate] = useState("");
+
+  const rows = contacts.map(c => {
+    const overdue = !!c.nextDate && c.nextDate < today;
+    const dueToday = c.nextDate === today;
+    return { ...c, overdue, dueToday };
+  }).sort((a, b) => (a.nextDate || "9999").localeCompare(b.nextDate || "9999"));
+
+  const overdueCount = rows.filter(r => r.overdue).length;
+  const dueTodayCount = rows.filter(r => r.dueToday).length;
+
+  const add = () => {
+    if (!lender.trim() || !action.trim()) { toast.error("Enter lender and next action"); return; }
+    setContacts(prev => [...prev, { id: crypto.randomUUID(), lender: lender.trim(), contact: contact.trim(), lastContacted: today, nextAction: action.trim(), nextDate: nextDate || today }]);
+    setLender(""); setContact(""); setAction(""); setNextDate("");
+    toast.success("Relationship added");
+  };
+
+  const logTouch = (id: string) =>
+    setContacts(prev => prev.map(x => x.id === id ? { ...x, lastContacted: today } : x));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Phone size={14} className="text-[var(--color-primary)]" /> Lender-Relationship CRM</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Keep every lender relationship warm — who you spoke to, when, and the next action due. Follow-ups that have slipped past their date are flagged in red.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Relationships", value: contacts.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Due today", value: dueTodayCount.toString(), color: dueTodayCount > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Overdue follow-ups", value: overdueCount.toString(), color: overdueCount > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[760px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Lender", "Contact", "Last touched", "Next action", "Due", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No relationships yet — add one below.</td></tr>
+            )}
+            {rows.map(c => (
+              <tr key={c.id} className={`border-b border-[var(--color-border)] last:border-0 ${c.overdue ? "bg-red-950/10" : ""}`}>
+                <td className="px-4 py-2.5 font-medium">{c.lender}</td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)]">{c.contact || "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{c.lastContacted ? format(new Date(c.lastContacted), "d MMM") : "—"}</td>
+                <td className="px-4 py-2.5">{c.nextAction}</td>
+                <td className="px-4 py-2.5 tabular-nums">
+                  <span className={c.overdue ? "text-red-400 font-semibold" : c.dueToday ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}>
+                    {c.nextDate ? format(new Date(c.nextDate), "d MMM") : "—"}{c.overdue ? " · overdue" : c.dueToday ? " · today" : ""}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => logTouch(c.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Log touch</button>
+                    <button onClick={() => setContacts(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add relationship</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={lender} onChange={e => setLender(e.target.value)} placeholder="Lender" className={inp} />
+          <input value={contact} onChange={e => setContact(e.target.value)} placeholder="Contact / RM" className={inp} />
+          <input value={action} onChange={e => setAction(e.target.value)} placeholder="Next action" className={inp} />
+          <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add relationship</button>
+      </div>
+    </div>
+  );
+}
+
+// ── #130 DRAWDOWN-VS-SANCTION UTILIZATION TREND ──────────────────────────────────
+// A month-by-month record of how much of a sanctioned limit was drawn, plotted as a
+// utilization-% trend so you can show a lender disciplined, headroom-aware drawing.
+interface UtilPoint { id: string; month: string; sanctioned: number; drawn: number; }
+
+function UtilizationTrend() {
+  const [points, setPoints] = useFeatureState<UtilPoint[]>("lnd-utilization-trend", [
+    { id: "u1", month: "2026-02", sanctioned: 5000000, drawn: 3200000 },
+    { id: "u2", month: "2026-03", sanctioned: 5000000, drawn: 4100000 },
+    { id: "u3", month: "2026-04", sanctioned: 5000000, drawn: 3600000 },
+    { id: "u4", month: "2026-05", sanctioned: 5000000, drawn: 2900000 },
+  ]);
+  const [month, setMonth]           = useState("");
+  const [sanctioned, setSanctioned] = useState("");
+  const [drawn, setDrawn]           = useState("");
+
+  const sorted = [...points].sort((a, b) => a.month.localeCompare(b.month));
+  const rows = sorted.map(p => ({ ...p, util: p.sanctioned > 0 ? p.drawn / p.sanctioned : 0 }));
+  const avgUtil = rows.length ? rows.reduce((s, r) => s + r.util, 0) / rows.length : 0;
+  const peakUtil = rows.reduce((m, r) => Math.max(m, r.util), 0);
+  const latest = rows.length ? rows[rows.length - 1].util : 0;
+
+  const add = () => {
+    const s = parseFloat(sanctioned), d = parseFloat(drawn);
+    if (!month || isNaN(s) || s <= 0 || isNaN(d)) { toast.error("Pick a month and enter sanctioned + drawn"); return; }
+    setPoints(prev => [...prev.filter(p => p.month !== month), { id: crypto.randomUUID(), month, sanctioned: s, drawn: d }]);
+    setMonth(""); setSanctioned(""); setDrawn("");
+    toast.success("Data point saved");
+  };
+
+  const barColor = (u: number) => u > 0.9 ? "bg-red-400" : u > 0.75 ? "bg-yellow-400" : "bg-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${card} p-4`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Drawdown-vs-Sanction Utilization Trend</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Track how much of your sanctioned limit you actually draw each month. A steady mid-range utilization signals disciplined, headroom-aware borrowing to a lender.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Latest utilization", value: `${(latest * 100).toFixed(0)}%`, color: latest > 0.9 ? "text-red-400" : "text-[var(--color-primary)]" },
+          { label: "Average", value: `${(avgUtil * 100).toFixed(0)}%`, color: "text-[var(--color-text)]" },
+          { label: "Peak", value: `${(peakUtil * 100).toFixed(0)}%`, color: peakUtil > 0.9 ? "text-red-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className={`${card} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${card} p-4`}>
+        {rows.length === 0 ? (
+          <p className="py-6 text-center text-xs text-[var(--color-muted)]">No data points yet — add one below.</p>
+        ) : (
+          <div className="flex items-end gap-2 h-40">
+            {rows.map(r => (
+              <div key={r.id} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+                <span className="text-[10px] tabular-nums text-[var(--color-muted)]">{(r.util * 100).toFixed(0)}%</span>
+                <div className="w-full bg-[var(--color-border)] rounded-t flex items-end" style={{ height: "100%" }}>
+                  <div className={`w-full rounded-t ${barColor(r.util)}`} style={{ height: `${Math.min(100, r.util * 100)}%` }} />
+                </div>
+                <span className="text-[9px] text-[var(--color-muted)]">{format(new Date(r.month + "-01"), "MMM")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={`${card} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Month", "Sanctioned", "Drawn", "Utilization", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 tabular-nums">{format(new Date(r.month + "-01"), "MMM yyyy")}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.sanctioned)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.drawn)}</td>
+                <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.util > 0.9 ? "text-red-400" : r.util > 0.75 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{(r.util * 100).toFixed(0)}%</td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => setPoints(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`${card} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold">Add / update month</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={inp} />
+          <input type="number" value={sanctioned} onChange={e => setSanctioned(e.target.value)} placeholder="Sanctioned ₹" className={inp} />
+          <input type="number" value={drawn} onChange={e => setDrawn(e.target.value)} placeholder="Drawn ₹" className={inp} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Save month</button>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Adding a month already present overwrites it. Bars turn amber above 75% and red above 90% utilization — sustained high utilization can prompt a lender to review or reprice the limit.
       </div>
     </div>
   );

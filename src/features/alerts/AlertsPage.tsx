@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet } from "lucide-react";
+import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 const INP = "w-full text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]";
@@ -19,7 +19,7 @@ export default function AlertsPage() {
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 
-  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi">("active");
+  const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi" | "inventory" | "largetxn" | "budget" | "concentration" | "inbox">("active");
   const [showConfig,  setShowConfig]  = useState(false);
   const [newThreshold, setNewThreshold] = useState(String(safetyDays));
   const [actionText,  setActionText]  = useState<Record<string, string>>({});
@@ -166,6 +166,11 @@ export default function AlertsPage() {
           ["receivables","Overdue Receivables",           FileText],
           ["payables",   "Payment-Due Alerts",            Wallet],
           ["kpi",        "KPI Target Alerts",             SlidersHorizontal],
+          ["inventory",  "Low-Stock Alerts",              Boxes],
+          ["largetxn",   "Large-Transaction",             ArrowUpRight],
+          ["budget",     "Budget-Overrun",                Layers],
+          ["concentration", "Customer Concentration",     PieChart],
+          ["inbox",      "Priority Inbox",                Inbox],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -235,6 +240,11 @@ export default function AlertsPage() {
       {tab === "receivables" && <OverdueReceivablesAlerts />}
       {tab === "payables"    && <PaymentDueAlerts />}
       {tab === "kpi"         && <KpiTargetAlerts />}
+      {tab === "inventory"   && <LowStockAlerts />}
+      {tab === "largetxn"    && <LargeTransactionAlerts />}
+      {tab === "budget"      && <BudgetOverrunAlerts />}
+      {tab === "concentration" && <CustomerConcentrationAlerts />}
+      {tab === "inbox"       && <PriorityInbox />}
     </div>
   );
 }
@@ -1185,6 +1195,409 @@ function KpiTargetAlerts() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">KPIs use a rolling 30-day transaction window — margin and ratios need revenue in that window to be meaningful. Targets persist and sync across devices.</p>
+    </div>
+  );
+}
+
+// ── Low-Stock Alerts ─────────────────────────────────────────────────────────────
+// Watches inventory quantity against each item's reorder level, with an optional
+// safety-buffer multiplier so you re-order before you actually hit the floor.
+function LowStockAlerts() {
+  const { store } = useApp();
+  const [bufferInput, setBufferInput] = useFeatureState<string>("alr-stock-buffer", "1");
+  const fc = formatCurrency;
+  const buffer = Math.max(parseFloat(bufferInput) || 1, 1);
+
+  const data = useMemo(() => {
+    const items = store.inventory ?? [];
+    const rows = items.map(i => {
+      const trigger = (i.reorderLevel || 0) * buffer;
+      const out = i.quantity <= 0;
+      const low = !out && i.quantity <= trigger && trigger > 0;
+      const shortfall = Math.max(trigger - i.quantity, 0);
+      return { ...i, trigger, out, low, shortfall, exposure: shortfall * (i.unitCost || 0) };
+    });
+    const flagged = rows.filter(r => r.out || r.low).sort((a, b) => (a.out === b.out ? a.quantity - b.quantity : a.out ? -1 : 1));
+    const reorderCost = flagged.reduce((s, r) => s + r.exposure, 0);
+    return { total: items.length, flagged, outCount: rows.filter(r => r.out).length, reorderCost };
+  }, [store.inventory, buffer]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Low-Stock Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Flags every SKU that has fallen to or below its reorder level so you replenish before a stock-out costs you a sale. Add a safety multiplier to trigger earlier when lead times are long.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Safety multiplier on reorder level: {buffer}×</label>
+          <input type="range" min="1" max="3" step="0.25" value={bufferInput} onChange={e => setBufferInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+          <p className="text-[11px] text-[var(--color-muted)] mt-1">An item with reorder level 50 alerts at quantity ≤ {Math.round(50 * buffer)}.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Items tracked", value: String(data.total), color: "text-[var(--color-text)]" },
+          { label: "Need re-order", value: String(data.flagged.length), color: data.flagged.length > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Out of stock", value: String(data.outCount), color: data.outCount > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {data.flagged.length > 0 ? (
+        <>
+          <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+            <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {data.flagged.length} SKU{data.flagged.length > 1 ? "s" : ""} at or below reorder level · est. re-order cost {fc(Math.round(data.reorderCost))}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "SKU", "On hand", "Reorder at", "Status"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {data.flagged.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.productName}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.sku}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${r.out ? "text-red-400" : "text-orange-400"}`}>{r.quantity} {r.unit}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{Math.round(r.trigger)} {r.unit}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider ${r.out ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-orange-900/30 text-orange-400 border-orange-800/40"}`}>{r.out ? "Out" : "Low"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">{data.total === 0 ? "No inventory tracked yet — add items in Operations to monitor stock." : "All SKUs are above their reorder level."}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Re-order cost estimates the spend to refill back to the trigger quantity at last-known unit cost. Set realistic reorder levels per SKU in Operations for sharper alerts.</p>
+    </div>
+  );
+}
+
+// ── Large-Transaction Alerts ─────────────────────────────────────────────────────
+// Flags any single transaction above an amount you set, scoped by direction
+// (outflow / inflow / either), so big money movements never slip past unnoticed.
+function LargeTransactionAlerts() {
+  const { store } = useApp();
+  const [amountInput, setAmountInput] = useFeatureState<string>("alr-largetxn-amount", "100000");
+  const [direction, setDirection] = useFeatureState<"out" | "in" | "either">("alr-largetxn-dir", "out");
+  const fc = formatCurrency;
+  const threshold = parseFloat(amountInput) || 0;
+
+  const matches = useMemo(() => {
+    const txns = (store.transactions ?? []).filter(t => t.category !== "transfer");
+    return txns
+      .filter(t => {
+        const amt = t.amount || 0;
+        if (direction === "out" && amt >= 0) return false;
+        if (direction === "in" && amt < 0) return false;
+        return Math.abs(amt) >= threshold && threshold > 0;
+      })
+      .sort((a, b) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0))
+      .slice(0, 50);
+  }, [store.transactions, threshold, direction]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ArrowUpRight size={14} className="text-[var(--color-primary)]" /> Large-Transaction Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Get a heads-up on any single transaction above a threshold you set — a hard rupee floor rather than a statistical outlier. Useful for sign-off on big vendor payments or spotting an unexpectedly large inflow.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when amount is at least (₹)</label>
+            <input type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="e.g. 100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Direction</label>
+            <select value={direction} onChange={e => setDirection(e.target.value as "out" | "in" | "either")} className={INP}>
+              <option value="out">Outflows (money leaving)</option>
+              <option value="in">Inflows (money in)</option>
+              <option value="either">Either direction</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {matches.length > 0 ? (
+        <>
+          <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+            <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {matches.length} transaction{matches.length > 1 ? "s" : ""} at or above {fc(threshold)}{matches.length >= 50 ? " (showing top 50)" : ""}</p>
+          </div>
+          <div className="space-y-2">
+            {matches.map(t => {
+              const out = (t.amount || 0) < 0;
+              return (
+                <div key={t.id} className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${out ? "bg-red-950/20 border-red-800/40" : "bg-green-950/20 border-green-800/40"}`}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold truncate">{t.counterparty || t.description}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-muted)]">{t.category}</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-muted)]">{new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}{t.description && t.counterparty ? ` · ${t.description}` : ""}</p>
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${out ? "text-red-400" : "text-green-400"}`}>{out ? "−" : "+"}{fc(Math.abs(t.amount || 0))}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">{threshold <= 0 ? "Set a threshold above to start flagging large transactions." : `No transactions at or above ${fc(threshold)} in this direction.`}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Inter-account transfers are excluded so internal sweeps don't trigger. This is a fixed-amount rule — use Fraud / Anomaly for statistical outlier detection.</p>
+    </div>
+  );
+}
+
+// ── Budget-Overrun Alerts ────────────────────────────────────────────────────────
+// Compares each budget's monthly limit against actual last-30-day spend in that
+// category, flagging overruns and a configurable "approaching" warning band.
+function BudgetOverrunAlerts() {
+  const { store } = useApp();
+  const [warnInput, setWarnInput] = useFeatureState<string>("alr-budget-warn", "80");
+  const fc = formatCurrency;
+  const warnPct = Math.min(Math.max(parseFloat(warnInput) || 80, 1), 100);
+
+  const rows = useMemo(() => {
+    const cutoff = Date.now() - 30 * 86400000;
+    const recent = (store.transactions ?? []).filter(t => new Date(t.date).getTime() >= cutoff && (t.amount || 0) < 0);
+    const spentByCat = new Map<string, number>();
+    recent.forEach(t => spentByCat.set(t.category, (spentByCat.get(t.category) ?? 0) + Math.abs(t.amount || 0)));
+    return (store.budgets ?? []).map(b => {
+      const spent = spentByCat.get(b.category) ?? 0;
+      const limit = b.monthlyLimit || 0;
+      const pct = limit > 0 ? (spent / limit) * 100 : 0;
+      const over = limit > 0 && spent > limit;
+      const near = !over && pct >= warnPct;
+      return { ...b, spent, limit, pct, over, near };
+    }).sort((a, b) => b.pct - a.pct);
+  }, [store.transactions, store.budgets, warnPct]);
+
+  const overCount = rows.filter(r => r.over).length;
+  const nearCount = rows.filter(r => r.near).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Budget-Overrun Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tracks last-30-day spend per category against the monthly budgets you've set. Flags categories that have blown the limit, plus an early warning when they cross a percentage you choose.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Warn when spend reaches: {warnPct}% of budget</label>
+          <input type="range" min="50" max="100" step="5" value={warnInput} onChange={e => setWarnInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {(overCount > 0 || nearCount > 0) && (
+        <div className={`rounded-lg p-4 border ${overCount > 0 ? "border-red-800/40 bg-red-950/20" : "border-yellow-800/40 bg-yellow-950/20"}`}>
+          <p className={`text-sm font-bold flex items-center gap-2 ${overCount > 0 ? "text-red-400" : "text-yellow-400"}`}><AlertTriangle size={14} /> {overCount > 0 ? `${overCount} budget${overCount > 1 ? "s" : ""} over limit` : `${nearCount} budget${nearCount > 1 ? "s" : ""} approaching limit`}</p>
+        </div>
+      )}
+
+      {rows.length > 0 ? (
+        <div className="space-y-2">
+          {rows.map(r => {
+            const barColor = r.over ? "bg-red-400" : r.near ? "bg-yellow-400" : "bg-green-400";
+            const txtColor = r.over ? "text-red-400" : r.near ? "text-yellow-400" : "text-green-400";
+            return (
+              <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold">{r.label || r.category}</span>
+                  <span className={`text-xs font-bold tabular-nums ${txtColor}`}>{fc(r.spent)} / {fc(r.limit)} · {Math.round(r.pct)}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                  <div className={`h-full ${barColor}`} style={{ width: `${Math.min(r.pct, 100)}%` }} />
+                </div>
+                {r.over && <p className="text-[11px] text-red-400 mt-1">Over budget by {fc(r.spent - r.limit)} this period.</p>}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No budgets defined — set category budgets to monitor overruns here.</p>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Actuals use a rolling 30-day window of outflows matched on transaction category. Make sure transactions are categorised for accurate budget tracking.</p>
+    </div>
+  );
+}
+
+// ── Customer Concentration Alerts ────────────────────────────────────────────────
+// Flags over-reliance on a single customer — what share of open receivables (and
+// of all-time invoiced revenue) sits with your top accounts, above a risk ceiling.
+function CustomerConcentrationAlerts() {
+  const { store } = useApp();
+  const [ceilingInput, setCeilingInput] = useFeatureState<string>("alr-concentration-pct", "30");
+  const fc = formatCurrency;
+  const ceiling = Math.min(Math.max(parseFloat(ceilingInput) || 30, 1), 100);
+
+  const data = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const openByCust = new Map<string, number>();
+    const allByCust = new Map<string, number>();
+    let openTotal = 0;
+    let allTotal = 0;
+    invoices.forEach(i => {
+      const amt = i.amount || 0;
+      const c = i.customer || "Unknown";
+      allByCust.set(c, (allByCust.get(c) ?? 0) + amt);
+      allTotal += amt;
+      if (i.status !== "paid") {
+        openByCust.set(c, (openByCust.get(c) ?? 0) + amt);
+        openTotal += amt;
+      }
+    });
+    const rows = [...allByCust.entries()].map(([customer, all]) => {
+      const open = openByCust.get(customer) ?? 0;
+      const openShare = openTotal > 0 ? (open / openTotal) * 100 : 0;
+      const allShare = allTotal > 0 ? (all / allTotal) * 100 : 0;
+      return { customer, open, all, openShare, allShare };
+    }).sort((a, b) => b.openShare - a.openShare);
+    const breached = rows.filter(r => r.openShare > ceiling);
+    return { rows: rows.slice(0, 20), breached, openTotal, custCount: allByCust.size };
+  }, [store.invoices, ceiling]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Customer Concentration Alerts</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Warns when too much of your open receivables sits with one customer — a concentration risk if that account pays late or churns. Set the share above which a single customer should raise a flag.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Flag a customer above: {ceiling}% of open AR</label>
+          <input type="range" min="10" max="80" step="5" value={ceilingInput} onChange={e => setCeilingInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {data.breached.length > 0 ? (
+        <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+          <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {data.breached.length} customer{data.breached.length > 1 ? "s" : ""} above your {ceiling}% concentration ceiling</p>
+          <ul className="text-xs text-[var(--color-muted)] mt-1.5 space-y-0.5 list-disc list-inside">
+            {data.breached.map(r => <li key={r.customer}>{r.customer} holds {Math.round(r.openShare)}% of open AR ({fc(r.open)})</li>)}
+          </ul>
+        </div>
+      ) : data.custCount > 0 ? (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">Receivables are well spread — no single customer exceeds {ceiling}% of open AR.</p>
+        </div>
+      ) : null}
+
+      {data.rows.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Open AR", "% of open", "% of all-time"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.rows.map(r => (
+                <tr key={r.customer} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.customer}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.open)}</td>
+                  <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.openShare > ceiling ? "text-orange-400" : "text-[var(--color-text)]"}`}>{r.openShare.toFixed(1)}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.allShare.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No invoices yet — add receivables to assess customer concentration.</p>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">"Open AR" excludes paid invoices; "all-time" includes every invoice on record. A diversified book reduces the cashflow hit if one big customer slips.</p>
+    </div>
+  );
+}
+
+// ── Priority Inbox ───────────────────────────────────────────────────────────────
+// A triage view of active alerts ordered by severity, with one-tap dismiss and
+// bulk actions to clear a whole severity tier at once — built for fast morning sweeps.
+function PriorityInbox() {
+  const { store, markAlertRead } = useApp();
+  const [filter, setFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
+
+  const data = useMemo(() => {
+    const sevOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const open = (store.alerts ?? []).filter(a => !a.isRead);
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
+    open.forEach(a => { counts[a.severity] = (counts[a.severity] ?? 0) + 1; });
+    const visible = open
+      .filter(a => filter === "all" || a.severity === filter)
+      .sort((a, b) => (sevOrder[a.severity] ?? 4) - (sevOrder[b.severity] ?? 4) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { open, counts, visible };
+  }, [store.alerts, filter]);
+
+  const clearTier = (sev: string) => {
+    const ids = data.open.filter(a => a.severity === sev).map(a => a.id);
+    ids.forEach(id => markAlertRead(id));
+    toast.success(`Cleared ${ids.length} ${sev} alert${ids.length === 1 ? "" : "s"}`);
+  };
+
+  const TABS: { key: "all" | "critical" | "high" | "medium" | "low"; label: string }[] = [
+    { key: "all", label: "All" }, { key: "critical", label: "Critical" }, { key: "high", label: "High" }, { key: "medium", label: "Warning" }, { key: "low", label: "Info" },
+  ];
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Inbox size={14} className="text-[var(--color-primary)]" /> Priority Inbox</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A single triage queue of every active alert, ordered by severity then recency. Filter to one tier, dismiss individually, or clear a whole band in one tap — built for a fast morning sweep.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TABS.map(t => {
+            const n = t.key === "all" ? data.open.length : (data.counts[t.key] ?? 0);
+            return (
+              <button key={t.key} onClick={() => setFilter(t.key)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-medium ${filter === t.key ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
+                {t.label} ({n})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {filter !== "all" && (data.counts[filter] ?? 0) > 0 && (
+        <button onClick={() => clearTier(filter)} className="text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          Clear all {filter} ({data.counts[filter]})
+        </button>
+      )}
+
+      {data.visible.length > 0 ? (
+        <div className="space-y-2">
+          {data.visible.map(a => {
+            const meta = SEV[a.severity] ?? SEV.low;
+            const Icon = meta.icon;
+            return (
+              <div key={a.id} className={`rounded-lg border px-4 py-3 flex items-start justify-between gap-3 ${meta.bg}`}>
+                <div className="flex items-start gap-3 min-w-0">
+                  <Icon size={14} className={`${meta.color} mt-0.5 shrink-0`} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${meta.color}`}>{meta.label}</span>
+                      <span className="text-[10px] text-[var(--color-muted)]">{new Date(a.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                    {a.title && <p className="text-sm font-semibold">{a.title}</p>}
+                    <p className="text-xs text-[var(--color-muted)] leading-snug">{a.message}</p>
+                  </div>
+                </div>
+                <button onClick={() => { markAlertRead(a.id); toast.success("Alert dismissed"); }}
+                  className="p-1 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-lg hover:bg-black/20 shrink-0">
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-green-400" />
+          <p className="text-sm text-green-400 font-medium">{data.open.length === 0 ? "Inbox zero — no active alerts." : "Nothing in this tier right now."}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Dismissing moves an alert to Resolved without a note. To log what you did, use the Active tab's resolve box instead.</p>
     </div>
   );
 }

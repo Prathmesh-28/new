@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, monthlyBurn, runwayDays } from "@/lib/utils";
-import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks } from "lucide-react";
+import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks, Scale, LineChart, Receipt, Banknote, GitCompareArrows } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
@@ -56,7 +56,7 @@ const SECTION_STYLE: Record<BriefSection["type"], string> = {
   action:  "border-green-800/30 bg-green-950/10",
 };
 
-type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager";
+type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager" | "ratios" | "trend" | "expense-control" | "covenant" | "what-changed";
 
 export default function CfoBriefPage() {
   const [view, setView] = useState<CfoView>("ai-brief");
@@ -64,7 +64,7 @@ export default function CfoBriefPage() {
   return (
     <div className="space-y-5">
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText]] as const).map(([id, label, Icon]) => (
+        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText], ["ratios", "Financial Ratios", Scale], ["trend", "Profitability Trend", LineChart], ["expense-control", "Expense Control", Receipt], ["covenant", "Loan & Covenant", Banknote], ["what-changed", "What Changed", GitCompareArrows]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -82,6 +82,11 @@ export default function CfoBriefPage() {
       {view === "calendar" && <FinancialCalendar />}
       {view === "actions" && <TopActionsThisWeek />}
       {view === "one-pager" && <OnePageSummary />}
+      {view === "ratios" && <FinancialRatios />}
+      {view === "trend" && <ProfitabilityTrend />}
+      {view === "expense-control" && <ExpenseControlScorecard />}
+      {view === "covenant" && <CovenantBrief />}
+      {view === "what-changed" && <WhatChangedThisWeek />}
     </div>
   );
 }
@@ -1224,6 +1229,491 @@ TAKEAWAY
       <div className={`border rounded-xl p-5 ${s.net >= 0 && s.runway > 90 ? "border-green-800/30 bg-green-950/10" : s.runway < 45 ? "border-red-800/40 bg-red-950/20" : "border-yellow-800/30 bg-yellow-950/10"}`}>
         <h3 className="text-sm font-bold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Takeaway</h3>
         <p className="text-sm text-[var(--color-muted)] leading-relaxed">{takeaway}</p>
+      </div>
+    </div>
+  );
+}
+
+// #160 ── FINANCIAL RATIOS SNAPSHOT ──────────────────────────────────────────────
+// Headline liquidity, leverage and efficiency ratios computed from the live store,
+// each benchmarked against a healthy band with a plain-English read of what it means.
+function FinancialRatios() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, activeLoans, invoices } = store;
+
+  const ratios = useMemo(() => {
+    const cur = monthBounds(0);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    const burn = monthlyBurn(transactions);
+    const ar = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    const totalDebt = activeLoans.reduce((s, l) => s + l.outstanding, 0);
+    const totalEmi = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0);
+
+    type Ratio = { label: string; value: string; status: "good" | "watch" | "poor"; band: string; read: string };
+    const out: Ratio[] = [];
+
+    // Current ratio (proxy): liquid assets (cash + open AR) vs near-term EMI obligation.
+    const liquidAssets = balance + ar;
+    const nearObligation = totalEmi > 0 ? totalEmi : 1;
+    const currentRatio = liquidAssets / nearObligation;
+    out.push({ label: "Liquidity coverage", value: `${currentRatio.toFixed(1)}×`, status: currentRatio >= 3 ? "good" : currentRatio >= 1.5 ? "watch" : "poor", band: "≥ 3× healthy", read: "Cash plus open receivables against this month's EMI load." });
+
+    // Cash-to-burn months.
+    const cashMonths = burn > 0 ? balance / burn : 99;
+    out.push({ label: "Cash-to-burn", value: `${cashMonths.toFixed(1)} mo`, status: cashMonths >= 6 ? "good" : cashMonths >= 3 ? "watch" : "poor", band: "≥ 6 months healthy", read: "How many months of burn the current cash covers." });
+
+    // Debt-to-revenue (annualised).
+    const annualRev = c.inflow * 12;
+    const debtToRev = annualRev > 0 ? totalDebt / annualRev : 0;
+    out.push({ label: "Debt-to-revenue", value: `${Math.round(debtToRev * 100)}%`, status: debtToRev <= 0.3 ? "good" : debtToRev <= 0.6 ? "watch" : "poor", band: "≤ 30% healthy", read: "Outstanding debt as a share of annualised revenue." });
+
+    // Debt-service coverage: revenue vs EMI.
+    const dscr = totalEmi > 0 ? c.inflow / totalEmi : 99;
+    out.push({ label: "Debt-service coverage", value: `${dscr.toFixed(1)}×`, status: dscr >= 2 ? "good" : dscr >= 1.25 ? "watch" : "poor", band: "≥ 2× healthy", read: "Monthly revenue against monthly EMI commitments." });
+
+    // Receivables intensity: open AR vs monthly revenue.
+    const arIntensity = c.inflow > 0 ? ar / c.inflow : 0;
+    out.push({ label: "Receivables intensity", value: `${arIntensity.toFixed(1)}×`, status: arIntensity <= 1 ? "good" : arIntensity <= 2 ? "watch" : "poor", band: "≤ 1× healthy", read: "Open receivables relative to a month of revenue." });
+
+    // Expense ratio: outflow vs inflow this month.
+    const expenseRatio = c.inflow > 0 ? c.outflow / c.inflow : (c.outflow > 0 ? 99 : 0);
+    out.push({ label: "Expense ratio", value: `${Math.round(expenseRatio * 100)}%`, status: expenseRatio <= 0.85 ? "good" : expenseRatio <= 1 ? "watch" : "poor", band: "≤ 85% healthy", read: "This month's outflow as a share of inflow." });
+
+    return out;
+  }, [transactions, bankAccounts, activeLoans, invoices]);
+
+  const statusStyle: Record<string, string> = { good: "text-green-400", watch: "text-yellow-400", poor: "text-red-400" };
+  const dot: Record<string, string> = { good: "bg-green-400", watch: "bg-yellow-400", poor: "bg-red-400" };
+
+  const copy = () => {
+    const txt = `Financial Ratios — ${monthBounds(0).label}\n\n${ratios.map(r => `${r.label}: ${r.value} (${r.band}) [${r.status.toUpperCase()}]`).join("\n")}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Ratios copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Scale size={18} className="text-[var(--color-primary)]" /> Financial Ratios Snapshot</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Liquidity, leverage and efficiency ratios benchmarked against healthy bands — from your live data</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy ratios
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {ratios.map(r => (
+          <div key={r.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[var(--color-muted)]">{r.label}</p>
+              <span className={`w-2.5 h-2.5 rounded-full ${dot[r.status]}`} />
+            </div>
+            <p className={`text-2xl font-bold tabular-nums mb-1 ${statusStyle[r.status]}`}>{r.value}</p>
+            <p className="text-[11px] text-[var(--color-muted)] mb-1.5">{r.band}</p>
+            <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">{r.read}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Cash-basis approximations derived from your connected bank data, open receivables and active loans. Directional ratios, not statutory financials.
+      </div>
+    </div>
+  );
+}
+
+// #161 ── PROFITABILITY-BY-MONTH TREND ───────────────────────────────────────────
+// A six-month rolling trend of revenue, expenses and net profit so the owner sees
+// the trajectory rather than a single snapshot, with mini bars and a verdict.
+function ProfitabilityTrend() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const months = useMemo(() => {
+    const out: { label: string; revenue: number; expense: number; net: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const b = monthBounds(i);
+      const f = flowsIn(transactions, b.start, b.end);
+      out.push({ label: b.label, revenue: f.inflow, expense: f.outflow, net: f.net });
+    }
+    return out;
+  }, [transactions]);
+
+  const maxRev = Math.max(1, ...months.map(m => m.revenue));
+  const profitable = months.filter(m => m.net > 0).length;
+  const first = months[0];
+  const last = months[months.length - 1];
+  const trendPct = pctChange(last.net, first.net);
+
+  const verdict = profitable >= 5
+    ? "Consistently profitable across the window — a strong, durable trajectory."
+    : profitable >= 3
+      ? "Mixed: profitable in most months but with loss-making swings to watch."
+      : "Mostly loss-making — net profit needs structural attention, not one-off fixes.";
+
+  const copy = () => {
+    const txt = `Profitability Trend (6 months)\n\n${months.map(m => `${m.label}: rev ${formatAmount(m.revenue)}, exp ${formatAmount(m.expense)}, net ${formatAmount(m.net)}`).join("\n")}\n\n${verdict}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Trend copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><LineChart size={18} className="text-[var(--color-primary)]" /> Profitability Trend</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Revenue, expenses and net profit over the last six months — the trajectory, not just today</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy trend
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {[
+          { label: "Profitable months", value: `${profitable}/6`, color: profitable >= 4 ? "text-green-400" : profitable >= 2 ? "text-yellow-400" : "text-red-400" },
+          { label: `Net (${last.label})`, value: formatAmount(last.net), color: last.net >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Net trend (6mo)", value: trendPct === null ? "—" : `${trendPct >= 0 ? "+" : ""}${trendPct}%`, color: (trendPct ?? 0) >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 space-y-3">
+        {months.map(m => {
+          const revW = Math.round((m.revenue / maxRev) * 100);
+          const expW = Math.round((m.expense / maxRev) * 100);
+          return (
+            <div key={m.label}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium">{m.label}</span>
+                <span className={`tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{m.net >= 0 ? "+" : ""}{formatAmount(m.net)}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden mb-1">
+                <div className="h-full bg-green-400" style={{ width: `${revW}%` }} />
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                <div className="h-full bg-orange-400" style={{ width: `${expW}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-4 text-[11px] text-[var(--color-muted)] pt-1">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-1.5 rounded-full bg-green-400" /> Revenue</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-1.5 rounded-full bg-orange-400" /> Expenses</span>
+        </div>
+      </div>
+
+      <div className={`border rounded-xl p-5 ${profitable >= 5 ? "border-green-800/30 bg-green-950/10" : profitable >= 3 ? "border-yellow-800/30 bg-yellow-950/10" : "border-red-800/40 bg-red-950/20"}`}>
+        <h3 className="text-sm font-bold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Verdict</h3>
+        <p className="text-sm text-[var(--color-muted)] leading-relaxed">{verdict}</p>
+      </div>
+    </div>
+  );
+}
+
+// #162 ── EXPENSE-CONTROL SCORECARD ──────────────────────────────────────────────
+// Grades spending discipline per expense category by comparing this month's spend
+// to a trailing 3-month average, flagging the categories that are creeping up.
+function ExpenseControlScorecard() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const rows = useMemo(() => {
+    const cur = monthBounds(0);
+    const curWin = transactions.filter(t => t.date >= cur.start && t.date <= cur.end && t.amount < 0);
+
+    // Trailing 3-month average baseline (months 1..3 back).
+    const baseMonths = [1, 2, 3].map(b => monthBounds(b));
+    const spendIn = (cat: string, start: string, end: string) =>
+      Math.abs(transactions.filter(t => t.amount < 0 && t.category === cat && t.date >= start && t.date <= end).reduce((s, t) => s + t.amount, 0));
+
+    const cats = Array.from(new Set(curWin.map(t => t.category)));
+    return cats.map(category => {
+      const current = spendIn(category, cur.start, cur.end);
+      const baseline = baseMonths.reduce((s, m) => s + spendIn(category, m.start, m.end), 0) / 3;
+      const pct = pctChange(current, baseline);
+      const status: "controlled" | "watch" | "overrun" =
+        pct === null ? "watch" : pct <= 5 ? "controlled" : pct <= 20 ? "watch" : "overrun";
+      return { category, current, baseline, pct, status };
+    }).sort((a, b) => b.current - a.current);
+  }, [transactions]);
+
+  const overruns = rows.filter(r => r.status === "overrun").length;
+  const grade = overruns === 0 ? "A" : overruns === 1 ? "B" : overruns <= 3 ? "C" : "D";
+  const gradeColor = overruns === 0 ? "text-green-400" : overruns <= 2 ? "text-yellow-400" : "text-red-400";
+
+  const statusStyle: Record<string, string> = {
+    controlled: "border-green-800/30 bg-green-950/10 text-green-400",
+    watch: "border-yellow-800/30 bg-yellow-950/10 text-yellow-400",
+    overrun: "border-red-800/40 bg-red-950/20 text-red-400",
+  };
+
+  const copy = () => {
+    const txt = `Expense-Control Scorecard — ${monthBounds(0).label} (Grade ${grade})\n\n${rows.map(r => `${capitalise(r.category)}: ${formatAmount(r.current)} vs ${formatAmount(r.baseline)} avg (${r.pct === null ? "n/a" : `${r.pct >= 0 ? "+" : ""}${r.pct}%`}) [${r.status.toUpperCase()}]`).join("\n")}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Scorecard copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Receipt size={18} className="text-[var(--color-primary)]" /> Expense-Control Scorecard</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">This month's spend per category vs its trailing 3-month average — catching the creep early</p>
+        </div>
+        {rows.length > 0 && (
+          <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+            <Copy size={12} /> Copy scorecard
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Control grade", value: grade, color: gradeColor },
+          { label: "Categories tracked", value: rows.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Overruns", value: overruns.toString(), color: overruns > 0 ? "text-red-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-12 text-center">
+          <Receipt size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No expense activity this month to grade yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(r => (
+            <div key={r.category} className={`border rounded-xl p-5 ${statusStyle[r.status]}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {r.status === "controlled" ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
+                  <h3 className="text-sm font-bold text-[var(--color-text)] capitalize">{r.category}</h3>
+                </div>
+                <span className="text-sm font-bold tabular-nums">
+                  {r.pct === null ? "new" : `${r.pct >= 0 ? "+" : ""}${r.pct}%`}
+                </span>
+              </div>
+              <p className="text-sm text-[var(--color-muted)] leading-relaxed">
+                Spent <span className="text-[var(--color-text)] font-medium">{formatCurrency(r.current)}</span> this month vs a 3-month average of {formatCurrency(r.baseline)}.
+                {r.status === "overrun" ? " Running well above trend — review the drivers." : r.status === "watch" ? " Drifting up — keep an eye on it." : " Within trend — well controlled."}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Baseline is the trailing three full months' average per category. Grade weights the count of categories overrunning by more than 20%.
+      </div>
+    </div>
+  );
+}
+
+// #163 ── LOAN & COVENANT BRIEF ──────────────────────────────────────────────────
+// A per-loan brief with the headline covenant most lenders track — debt-service
+// coverage — plus repayment progress and the next payment due, from the live store.
+function CovenantBrief() {
+  const { store } = useApp();
+  const { activeLoans, transactions } = store;
+
+  const data = useMemo(() => {
+    const cur = monthBounds(0);
+    const revenue = flowsIn(transactions, cur.start, cur.end).inflow;
+    const totalDebt = activeLoans.reduce((s, l) => s + l.outstanding, 0);
+    const totalEmi = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0);
+    const portfolioDscr = totalEmi > 0 ? revenue / totalEmi : null;
+
+    const loans = activeLoans.map(l => {
+      const repaid = l.principal > 0 ? Math.round(((l.principal - l.outstanding) / l.principal) * 100) : 0;
+      // Per-loan DSCR allocates revenue by this loan's share of total EMI.
+      const dscr = l.monthlyEmi > 0 ? revenue / l.monthlyEmi : null;
+      const breach = dscr !== null && dscr < 1.25;
+      return { ...l, repaid: Math.max(0, Math.min(100, repaid)), dscr, breach };
+    }).sort((a, b) => b.outstanding - a.outstanding);
+
+    return { revenue, totalDebt, totalEmi, portfolioDscr, loans, label: cur.label };
+  }, [activeLoans, transactions]);
+
+  const copy = () => {
+    const txt = `Loan & Covenant Brief — ${data.label}\n\nPortfolio DSCR: ${data.portfolioDscr === null ? "n/a" : `${data.portfolioDscr.toFixed(2)}×`}\nTotal outstanding: ${formatAmount(data.totalDebt)}\nTotal EMI: ${formatAmount(data.totalEmi)}/mo\n\n${data.loans.map(l => `${l.lender}: ${formatAmount(l.outstanding)} outstanding, ${l.repaid}% repaid, DSCR ${l.dscr === null ? "n/a" : `${l.dscr.toFixed(2)}×`}${l.breach ? " [COVENANT WATCH]" : ""}`).join("\n")}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Covenant brief copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Banknote size={18} className="text-[var(--color-primary)]" /> Loan & Covenant Brief</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Repayment progress and debt-service coverage per loan — the covenant lenders actually watch</p>
+        </div>
+        {data.loans.length > 0 && (
+          <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+            <Copy size={12} /> Copy brief
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Portfolio DSCR", value: data.portfolioDscr === null ? "—" : `${data.portfolioDscr.toFixed(2)}×`, color: data.portfolioDscr === null ? "text-[var(--color-text)]" : data.portfolioDscr >= 2 ? "text-green-400" : data.portfolioDscr >= 1.25 ? "text-yellow-400" : "text-red-400" },
+          { label: "Total outstanding", value: formatAmount(data.totalDebt), color: "text-[var(--color-text)]" },
+          { label: "Total EMI / month", value: formatAmount(data.totalEmi), color: "text-orange-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {data.loans.length === 0 ? (
+        <div className="border border-green-800/30 bg-green-950/10 rounded-xl p-10 text-center">
+          <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400" />
+          <p className="text-sm font-semibold text-green-400 mb-1">No active loans</p>
+          <p className="text-xs text-[var(--color-muted)]">You are debt-free — no covenants to monitor this period.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {data.loans.map(l => (
+            <div key={l.id} className={`border rounded-xl p-5 ${l.breach ? "border-red-800/40 bg-red-950/20" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-[var(--color-text)]">{l.lender}</h3>
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${l.breach ? "border-red-400 text-red-400" : "border-green-700/50 text-green-400"}`}>
+                  {l.breach ? "Covenant watch" : "Covenant OK"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 text-xs">
+                <div><p className="text-[10px] text-[var(--color-muted)]">Outstanding</p><p className="tabular-nums font-semibold">{formatCurrency(l.outstanding)}</p></div>
+                <div><p className="text-[10px] text-[var(--color-muted)]">EMI</p><p className="tabular-nums font-semibold">{formatCurrency(l.monthlyEmi)}</p></div>
+                <div><p className="text-[10px] text-[var(--color-muted)]">DSCR</p><p className={`tabular-nums font-semibold ${l.dscr === null ? "" : l.dscr >= 2 ? "text-green-400" : l.dscr >= 1.25 ? "text-yellow-400" : "text-red-400"}`}>{l.dscr === null ? "n/a" : `${l.dscr.toFixed(2)}×`}</p></div>
+                <div><p className="text-[10px] text-[var(--color-muted)]">Next payment</p><p className="tabular-nums font-semibold">{format(new Date(l.nextPaymentDate), "d MMM")}</p></div>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[var(--color-muted)] mb-1">
+                <span>Repayment progress</span><span className="tabular-nums">{l.repaid}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                <div className="h-full bg-[var(--color-primary)]" style={{ width: `${l.repaid}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        DSCR uses this month's revenue against the EMI commitment. "Covenant watch" flags coverage below 1.25× — a common minimum lenders require.
+      </div>
+    </div>
+  );
+}
+
+// #164 ── WHAT CHANGED THIS WEEK ─────────────────────────────────────────────────
+// A snapshot diff: it captures the key headline metrics on demand, stores them
+// durably, and on the next capture shows exactly what moved since last time.
+function WhatChangedThisWeek() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, activeLoans, invoices } = store;
+
+  interface Snapshot { takenAt: string; balance: number; runway: number; revenueMtd: number; netMtd: number; openAr: number; overdueAr: number; totalDebt: number }
+
+  const current = useMemo<Snapshot>(() => {
+    const cur = monthBounds(0);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    const burn = monthlyBurn(transactions);
+    return {
+      takenAt: new Date().toISOString(),
+      balance,
+      runway: runwayDays(bankAccounts.map(b => b.balance), burn),
+      revenueMtd: c.inflow,
+      netMtd: c.net,
+      openAr: invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0),
+      overdueAr: invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0),
+      totalDebt: activeLoans.reduce((s, l) => s + l.outstanding, 0),
+    };
+  }, [transactions, bankAccounts, activeLoans, invoices]);
+
+  const [baseline, setBaseline] = useFeatureState<Snapshot | null>("cfo-whatchanged-baseline", null);
+
+  const capture = () => {
+    setBaseline(current);
+    toast.success("Snapshot captured — changes will show against this baseline");
+  };
+
+  const diffs = useMemo(() => {
+    if (!baseline) return [];
+    type Diff = { label: string; from: number; to: number; isCurrency: boolean; goodUp: boolean };
+    const mk = (label: string, from: number, to: number, isCurrency: boolean, goodUp: boolean): Diff => ({ label, from, to, isCurrency, goodUp });
+    return [
+      mk("Cash balance", baseline.balance, current.balance, true, true),
+      mk("Runway (days)", baseline.runway, current.runway, false, true),
+      mk("Revenue MTD", baseline.revenueMtd, current.revenueMtd, true, true),
+      mk("Net cash flow MTD", baseline.netMtd, current.netMtd, true, true),
+      mk("Open receivables", baseline.openAr, current.openAr, true, false),
+      mk("Overdue receivables", baseline.overdueAr, current.overdueAr, true, false),
+      mk("Debt outstanding", baseline.totalDebt, current.totalDebt, true, false),
+    ].filter(d => d.from !== d.to);
+  }, [baseline, current]);
+
+  const fmt = (v: number, isCurrency: boolean) => isCurrency ? formatAmount(v) : `${v}d`;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><GitCompareArrows size={18} className="text-[var(--color-primary)]" /> What Changed This Week</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            {baseline ? `Movement since your last snapshot — ${format(new Date(baseline.takenAt), "d MMM, h:mma")}` : "Capture a baseline, then return next week to see exactly what moved"}
+          </p>
+        </div>
+        <button onClick={capture} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+          <GitCompareArrows size={13} /> {baseline ? "Re-baseline now" : "Capture snapshot"}
+        </button>
+      </div>
+
+      {!baseline ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-12 text-center">
+          <GitCompareArrows size={28} className="mx-auto mb-3 text-[var(--color-primary)] opacity-50" />
+          <p className="text-sm font-semibold mb-1">No baseline captured yet</p>
+          <p className="text-sm text-[var(--color-muted)] max-w-sm mx-auto">Capture today's headline metrics. Next time you open this, it will show the delta on cash, runway, revenue, receivables and debt.</p>
+        </div>
+      ) : diffs.length === 0 ? (
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] rounded-xl p-10 text-center">
+          <CheckCircle2 size={28} className="mx-auto mb-3 text-[var(--color-muted)]" />
+          <p className="text-sm font-semibold mb-1">Nothing has changed</p>
+          <p className="text-xs text-[var(--color-muted)]">Every tracked metric matches your last snapshot.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {diffs.map(d => {
+            const delta = d.to - d.from;
+            const improved = d.goodUp ? delta > 0 : delta < 0;
+            return (
+              <div key={d.label} className={`border rounded-xl p-5 ${improved ? "border-green-800/30 bg-green-950/10" : "border-orange-800/30 bg-orange-950/10"}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-sm font-bold text-[var(--color-text)]">{d.label}</h3>
+                  <span className={`text-sm font-bold tabular-nums flex items-center gap-1 ${improved ? "text-green-400" : "text-orange-400"}`}>
+                    {improved ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{delta >= 0 ? "+" : "−"}{fmt(Math.abs(delta), d.isCurrency)}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--color-muted)] tabular-nums">{fmt(d.from, d.isCurrency)} <ChevronRight size={11} className="inline" /> {fmt(d.to, d.isCurrency)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Compares your current headline metrics against the last snapshot you captured. Re-baseline whenever you want a fresh starting point.
       </div>
     </div>
   );

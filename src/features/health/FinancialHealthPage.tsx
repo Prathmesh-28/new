@@ -8,6 +8,7 @@ import {
   HeartPulse, ArrowRight, TrendingUp, TrendingDown, Minus, Droplets, Receipt, Scale,
   Users, ShieldCheck, PiggyBank, Landmark, Activity, Waves, AlertTriangle, CheckCircle2, Gauge,
   Layers, Percent, RefreshCw, Timer, Siren, XCircle,
+  HandCoins, Ratio, GitCompareArrows, Banknote, Anchor,
 } from "lucide-react";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -90,6 +91,11 @@ export default function FinancialHealthPage() {
     ["health-dupont",          "DuPont ROE",     Layers],
     ["health-runway-gauge",    "Runway Gauge",   Timer],
     ["health-early-warning",   "Early Warning",  Siren],
+    ["health-cf-coverage",     "CF Coverage",    HandCoins],
+    ["health-margin-stability","Margin Stability", Ratio],
+    ["health-growth-quality",  "Growth Quality", GitCompareArrows],
+    ["health-expense-discipline","Expense Discipline", Banknote],
+    ["health-resilience",      "Resilience",     Anchor],
   ] as const);
 
   return (
@@ -243,6 +249,21 @@ export default function FinancialHealthPage() {
 
       {/* #162 Distress Early-Warning Checklist */}
       <EarlyWarning snap={snap} />
+
+      {/* #163 Cash-Flow Coverage */}
+      <CashFlowCoverage snap={snap} />
+
+      {/* #164 Margin Stability Score */}
+      <MarginStability snap={snap} />
+
+      {/* #165 Growth Quality (cash vs accrual) */}
+      <GrowthQuality snap={snap} />
+
+      {/* #166 Expense Discipline Trend */}
+      <ExpenseDiscipline snap={snap} />
+
+      {/* #167 Overall Resilience Index */}
+      <ResilienceIndex snap={snap} />
     </div>
   );
 }
@@ -924,6 +945,346 @@ function AltmanZScore({ snap }: { snap: FinancialSnapshot }) {
             <p className="text-[10px] text-[var(--color-muted)]">Weighted sum (Z' = Σ coef × factor)</p>
             <span className={`text-sm font-bold tabular-nums ${zone.color}`}>{z.score}</span>
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── #163 CASH-FLOW COVERAGE — can operating cash cover all fixed claims? ──────────
+// Tests whether monthly operating cash flow covers each layer of fixed claims —
+// interest, full debt service, then debt service plus a tax accrual. The tightest
+// passing layer tells the owner how much fixed cost the cash engine can actually carry.
+function CashFlowCoverage({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const opCash    = snap.monthlyNet + snap.monthlyDebtService;   // pre-debt operating cash
+    const taxAccrual = Math.max(0, snap.estAnnualProfit) * 0.25 / 12; // ~25% effective rate, monthly
+    const intCov  = snap.monthlyInterest > 0 ? opCash / snap.monthlyInterest : null;
+    const dsCov   = snap.monthlyDebtService > 0 ? opCash / snap.monthlyDebtService : null;
+    const fixed   = snap.monthlyDebtService + taxAccrual;
+    const fullCov = fixed > 0 ? opCash / fixed : null;
+    return { opCash, taxAccrual, intCov, dsCov, fullCov, fixed };
+  }, [snap]);
+
+  const layers: { label: string; value: number | null; target: number; desc: string }[] = [
+    { label: "Interest coverage", value: m.intCov, target: 3, desc: "Operating cash ÷ monthly interest" },
+    { label: "Debt-service coverage", value: m.dsCov, target: 1.25, desc: "Operating cash ÷ EMI (principal + interest)" },
+    { label: "Debt + tax coverage", value: m.fullCov, target: 1, desc: "Operating cash ÷ (EMI + tax accrual)" },
+  ];
+  const passing = layers.filter(l => l.value === null || l.value >= l.target).length;
+  const allClear = passing === layers.length;
+
+  return (
+    <section id="health-cf-coverage" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-sm font-semibold flex items-center gap-2"><HandCoins size={15} className="text-[var(--color-primary)]" /> Cash-Flow Coverage</p>
+        <span className={`text-xs font-semibold flex items-center gap-1 ${allClear ? "text-green-400" : "text-red-400"}`}>
+          {allClear ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />} {passing}/{layers.length} layers covered
+        </span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        How comfortably your monthly operating cash covers each layer of fixed claims — interest, full EMI, then EMI plus a tax accrual. The tightest layer that still clears tells you the headroom in your cash engine.
+      </p>
+      <div className="space-y-4">
+        {layers.map(l => {
+          const noClaim = l.value === null;
+          const ok = noClaim || l.value! >= l.target;
+          const pct = noClaim ? 100 : Math.min(100, (l.value! / (l.target * 1.5)) * 100);
+          return (
+            <div key={l.label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{l.label}</span>
+                  <span className="text-[10px] text-[var(--color-muted)] ml-2">target ≥ {l.target.toFixed(2)}x</span>
+                  <p className="text-[10px] text-[var(--color-muted)]">{l.desc}</p>
+                </div>
+                <span className={`text-lg font-bold tabular-nums shrink-0 ${ok ? "text-green-400" : "text-red-400"}`}>
+                  {noClaim ? "n/a" : `${l.value!.toFixed(2)}x`}
+                </span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${ok ? "bg-green-500" : l.value! >= l.target * 0.66 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+        <MetricCard label="Operating cash / mo" value={formatAmount(m.opCash)} ok={m.opCash >= 0} />
+        <MetricCard label="Fixed claims / mo" value={formatAmount(m.fixed)} />
+        <MetricCard label="Tax accrual / mo (est.)" value={formatAmount(m.taxAccrual)} />
+      </div>
+      <button onClick={() => navigate("/debt")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Review debt obligations <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #164 MARGIN STABILITY SCORE — how consistent monthly margins are ─────────────
+// Volatile margins scare lenders even when the average is fine. This scores the
+// month-to-month consistency of net margin using its coefficient of variation,
+// then flags the best and worst month so the owner can chase the swing.
+function MarginStability({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const pts = snap.months
+      .filter(mo => mo.revenue > 0)
+      .map(mo => ({ label: mo.label, margin: (mo.net / mo.revenue) * 100 }));
+    if (pts.length < 2) return { score: null, mean: 0, cv: null, best: null, worst: null, range: 0, pts };
+    const margins = pts.map(p => p.margin);
+    const mean = margins.reduce((s, v) => s + v, 0) / margins.length;
+    const variance = margins.reduce((s, v) => s + (v - mean) ** 2, 0) / margins.length;
+    const sd = Math.sqrt(variance);
+    const cv = Math.abs(mean) > 0.5 ? sd / Math.abs(mean) : sd / 0.5; // coefficient of variation
+    const score = Math.round(Math.max(0, Math.min(100, 100 - cv * 100)));
+    let best = pts[0], worst = pts[0];
+    for (const p of pts) { if (p.margin > best.margin) best = p; if (p.margin < worst.margin) worst = p; }
+    return { score, mean, cv, best, worst, range: best.margin - worst.margin, pts };
+  }, [snap]);
+
+  const ok = m.score !== null && m.score >= 60;
+
+  return (
+    <section id="health-margin-stability" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Ratio size={15} className="text-[var(--color-primary)]" /> Margin Stability Score</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Lenders trust steady margins more than high-but-erratic ones. This scores month-to-month consistency of your net margin (100 = rock-steady). Wide swings drag the score down even when the average looks healthy.
+      </p>
+      {m.score === null ? (
+        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet — needs at least two months of sales.</p>
+      ) : (
+        <>
+          <div className="flex items-center gap-6 flex-wrap mb-4">
+            <div className={`rounded-xl px-6 py-4 border text-center shrink-0 ${ok ? "border-green-800/40 bg-green-900/20" : "border-yellow-800/40 bg-yellow-900/20"}`}>
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">Stability score</p>
+              <p className={`text-4xl font-bold tabular-nums ${ok ? "text-green-400" : "text-yellow-400"}`}>{m.score}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">{ok ? "Steady margins" : "Volatile margins"}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 flex-1 min-w-[220px]">
+              <MetricCard label="Average net margin" value={`${m.mean.toFixed(1)}%`} ok={m.mean >= 10} />
+              <MetricCard label="Variation (CV)" value={m.cv !== null ? `${(m.cv * 100).toFixed(0)}%` : "—"} note="lower is steadier" />
+              <MetricCard label="Best month" value={m.best ? `${m.best.margin.toFixed(0)}%` : "—"} note={m.best ? m.best.label : ""} />
+              <MetricCard label="Worst month" value={m.worst ? `${m.worst.margin.toFixed(0)}%` : "—"} note={m.worst ? m.worst.label : ""} />
+            </div>
+          </div>
+          <div className="flex items-end gap-1.5 h-20">
+            {m.pts.map(p => {
+              const h = Math.max(4, Math.min(100, (p.margin / Math.max(1, m.best!.margin)) * 100));
+              const neg = p.margin < 0;
+              return (
+                <div key={p.label} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${p.label}: ${p.margin.toFixed(1)}%`}>
+                  <div className={`w-full rounded-t ${neg ? "bg-red-500" : "bg-[var(--color-primary)]"}`} style={{ height: `${neg ? 6 : h}%` }} />
+                  <span className="text-[9px] text-[var(--color-muted)]">{p.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <button onClick={() => navigate("/analytics")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Investigate margin swings <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #165 GROWTH QUALITY — is growth backed by cash, or just receivables? ─────────
+// Revenue can rise while cash falls if sales pile up as uncollected receivables.
+// This compares revenue growth against operating-cash growth and the share of
+// revenue still locked in receivables, then grades whether growth is "cash-real".
+function GrowthQuality({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const revGrowth = snap.revenueGrowthPct;                            // CMGR %
+    const opCash    = snap.monthlyNet + snap.monthlyDebtService;
+    // Accrual drag: how much of one month's revenue is still sitting in receivables.
+    const arMonths  = snap.monthlyRevenue > 0 ? snap.accountsReceivable / snap.monthlyRevenue : 0;
+    const cashConv  = snap.monthlyRevenue > 0 ? opCash / snap.monthlyRevenue : 0; // cash kept per ₹1 sales
+    // Growth is "quality" when it's positive AND cash is converting AND AR isn't ballooning.
+    const growthPos = (revGrowth ?? 0) > 0;
+    const cashReal  = cashConv >= 0.05;
+    const arHealthy = arMonths <= 1.5;
+    const passes = [growthPos, cashReal, arHealthy].filter(Boolean).length;
+    return { revGrowth, opCash, arMonths, cashConv, growthPos, cashReal, arHealthy, passes };
+  }, [snap]);
+
+  const verdict = m.passes === 3
+    ? { label: "High-quality growth — backed by real cash", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
+    : m.passes === 2
+    ? { label: "Mixed quality — watch the cash conversion", color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
+    : { label: "Low-quality growth — sales aren't turning into cash", color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: AlertTriangle };
+
+  const tests: { label: string; ok: boolean; detail: string }[] = [
+    { label: "Revenue is growing", ok: m.growthPos, detail: m.revGrowth !== null ? `${m.revGrowth.toFixed(1)}%/mo CMGR` : "Not enough history" },
+    { label: "Sales convert to cash", ok: m.cashReal, detail: `${(m.cashConv * 100).toFixed(0)}% of revenue lands as operating cash` },
+    { label: "Receivables under control", ok: m.arHealthy, detail: `${m.arMonths.toFixed(1)} months of revenue tied up in AR` },
+  ];
+
+  return (
+    <section id="health-growth-quality" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompareArrows size={15} className="text-[var(--color-primary)]" /> Growth Quality — Cash vs Accrual</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Revenue can rise while cash falls if sales pile up as uncollected receivables. This checks whether growth is "cash-real": positive growth, sales converting to cash, and receivables that aren't ballooning.
+      </p>
+      <div className={`rounded-lg p-3 border ${verdict.border} ${verdict.bg} flex items-center gap-2 mb-4`}>
+        <verdict.Icon size={16} className={`${verdict.color} shrink-0`} />
+        <p className={`text-sm font-semibold ${verdict.color}`}>{verdict.label}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {tests.map(t => (
+          <div key={t.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 flex items-start gap-2">
+            {t.ok ? <CheckCircle2 size={14} className="text-green-400 mt-0.5 shrink-0" /> : <XCircle size={14} className="text-red-400 mt-0.5 shrink-0" />}
+            <div className="min-w-0">
+              <p className={`text-xs font-medium ${t.ok ? "" : "text-red-400"}`}>{t.label}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{t.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+        <MetricCard label="Operating cash / mo" value={formatAmount(m.opCash)} ok={m.opCash >= 0} />
+        <MetricCard label="Cash conversion" value={`${(m.cashConv * 100).toFixed(0)}%`} note="of revenue" />
+        <MetricCard label="Revenue in receivables" value={`${m.arMonths.toFixed(1)} mo`} ok={m.arHealthy} />
+      </div>
+      <button onClick={() => navigate("/receivables")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Speed up collections <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #166 EXPENSE DISCIPLINE TREND — is the cost base growing faster than sales? ──
+// Tracks the expense-to-revenue ratio month by month. Discipline slips when costs
+// climb faster than revenue. Charts the ratio, flags the trend direction and
+// estimates the rupee swing from the best month to the latest.
+function ExpenseDiscipline({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const pts = snap.months
+      .filter(mo => mo.revenue > 0)
+      .map(mo => ({ label: mo.label, ratio: (mo.expense / mo.revenue) * 100, revenue: mo.revenue, expense: mo.expense }));
+    if (pts.length < 2) return { pts, first: null, last: null, delta: 0, best: null, leakage: 0 };
+    const first = pts[0], last = pts[pts.length - 1];
+    let best = pts[0];
+    for (const p of pts) { if (p.ratio < best.ratio) best = p; }
+    const delta = last.ratio - first.ratio;
+    // Rupee leakage: extra cost the latest month carries vs running at its best ratio.
+    const leakage = Math.max(0, (last.ratio - best.ratio) / 100 * last.revenue);
+    return { pts, first, last, delta, best, leakage };
+  }, [snap]);
+
+  const improving = m.delta < -1;
+  const worsening = m.delta > 1;
+  const TrendIcon = improving ? TrendingDown : worsening ? TrendingUp : Minus;
+  const trendColor = improving ? "text-green-400" : worsening ? "text-red-400" : "text-[var(--color-muted)]";
+  const maxRatio = m.pts.length ? Math.max(...m.pts.map(p => p.ratio), 100) : 100;
+
+  return (
+    <section id="health-expense-discipline" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-sm font-semibold flex items-center gap-2"><Banknote size={15} className="text-[var(--color-primary)]" /> Expense Discipline Trend</p>
+        {m.last && (
+          <span className={`text-xs font-semibold flex items-center gap-1 ${trendColor}`}>
+            <TrendIcon size={13} /> {m.delta >= 0 ? "+" : ""}{m.delta.toFixed(0)} pts cost ratio
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        Your expense-to-revenue ratio over time. Discipline slips when costs climb faster than sales — a falling ratio is healthy. The gap to your best month shows recoverable cost leakage.
+      </p>
+      {m.first === null ? (
+        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet — needs at least two months of sales.</p>
+      ) : (
+        <>
+          <div className="flex items-end gap-1.5 h-24 mb-2">
+            {m.pts.map(p => {
+              const h = Math.max(4, Math.min(100, (p.ratio / maxRatio) * 100));
+              const over = p.ratio >= 100;
+              return (
+                <div key={p.label} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${p.label}: ${p.ratio.toFixed(0)}% of revenue`}>
+                  <span className="text-[9px] text-[var(--color-muted)] tabular-nums">{p.ratio.toFixed(0)}%</span>
+                  <div className={`w-full rounded-t ${over ? "bg-red-500" : p.ratio >= 90 ? "bg-yellow-500" : "bg-green-500"}`} style={{ height: `${h}%` }} />
+                  <span className="text-[9px] text-[var(--color-muted)]">{p.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            <MetricCard label="Latest cost ratio" value={`${m.last!.ratio.toFixed(0)}%`} ok={m.last!.ratio < 90} />
+            <MetricCard label="Best month" value={m.best ? `${m.best.ratio.toFixed(0)}%` : "—"} note={m.best ? m.best.label : ""} />
+            <MetricCard label="Trend" value={improving ? "Improving" : worsening ? "Worsening" : "Flat"} note={`${m.delta >= 0 ? "+" : ""}${m.delta.toFixed(0)} pts`} />
+            <MetricCard label="Cost leakage / mo" value={formatAmount(m.leakage)} note="vs best month" />
+          </div>
+        </>
+      )}
+      <button onClick={() => navigate("/analytics")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Break down the cost base <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #167 OVERALL RESILIENCE INDEX — one blended shock-absorption number ───────────
+// Blends four survival pillars — cash buffer (runway), profitability cushion,
+// leverage headroom and customer diversification — into a single 0–100 resilience
+// index that answers "how well could this business absorb a shock?"
+function ResilienceIndex({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const idx = useMemo(() => {
+    const clampS = (v: number) => Math.max(0, Math.min(100, v));
+    // Buffer: runway days → 6 months (180d) = full marks.
+    const buffer = snap.runwayDays >= 999 ? 100 : clampS((snap.runwayDays / 180) * 100);
+    // Profit cushion: net margin %, scaled so 20% margin = full marks.
+    const margin = snap.grossMarginPct === null ? 50 : clampS(snap.grossMarginPct * 5);
+    // Leverage headroom: DSCR vs 1.25x bar; no debt = strong.
+    const leverage = snap.dscr === null ? 90 : clampS((snap.dscr / 1.25) * 60 + 25);
+    // Diversification: penalise concentration above 15%.
+    const diversify = clampS(100 - Math.max(0, (snap.topCustomerPct - 15) * 2));
+    const score = Math.round(buffer * 0.35 + margin * 0.25 + leverage * 0.25 + diversify * 0.15);
+    return { score, buffer, margin, leverage, diversify };
+  }, [snap]);
+
+  const band = idx.score >= 70
+    ? { label: "Resilient — well-buffered against shocks", color: "text-green-400" }
+    : idx.score >= 45
+    ? { label: "Moderately resilient — thin in places", color: "text-yellow-400" }
+    : { label: "Fragile — little cushion for a downturn", color: "text-red-400" };
+
+  const pillars: { label: string; score: number; weight: number; path: string }[] = [
+    { label: "Cash buffer (runway)", score: idx.buffer, weight: 35, path: "/forecast" },
+    { label: "Profit cushion (margin)", score: idx.margin, weight: 25, path: "/analytics" },
+    { label: "Leverage headroom (DSCR)", score: idx.leverage, weight: 25, path: "/debt" },
+    { label: "Customer diversification", score: idx.diversify, weight: 15, path: "/invoices" },
+  ];
+
+  return (
+    <section id="health-resilience" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Anchor size={15} className="text-[var(--color-primary)]" /> Overall Resilience Index</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        One blended number for shock-absorption, weighing cash buffer, profit cushion, leverage headroom and customer diversification. It answers a single question: how well could the business take a hit and keep going?
+      </p>
+      <div className="flex items-center gap-6 flex-wrap">
+        <div className="shrink-0 text-center">
+          <ScoreRing score={idx.score} grade={idx.score >= 85 ? "A+" : idx.score >= 70 ? "A" : idx.score >= 55 ? "B" : idx.score >= 40 ? "C" : "D"} />
+          <p className={`text-xs font-semibold mt-1 max-w-[176px] ${band.color}`}>{band.label}</p>
+        </div>
+        <div className="flex-1 min-w-[240px] space-y-3">
+          {pillars.map(p => (
+            <button key={p.label} onClick={() => navigate(p.path)} className="w-full text-left group">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">{p.label}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-[var(--color-muted)]">{p.weight}% weight</span>
+                  <span className={`text-xs font-bold tabular-nums ${scoreColor(p.score)}`}>{Math.round(p.score)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${barColor(p.score)}`} style={{ width: `${p.score}%` }} />
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </section>

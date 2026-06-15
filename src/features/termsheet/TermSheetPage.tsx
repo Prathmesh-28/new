@@ -3,9 +3,9 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { termSheetMath, type RoundType } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles } from "lucide-react";
+import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles, Network, Landmark, Milestone, Clock, LineChart } from "lucide-react";
 
-type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist";
+type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist" | "multi-class-waterfall" | "board-modeler" | "tranche-planner" | "note-maturity" | "dilution-rounds";
 
 const ROUND_LABELS: Record<RoundType, string> = {
   priced:      "Priced Equity Round",
@@ -72,7 +72,7 @@ export default function TermSheetPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users], ["clause-explainer", "Clause Explainer", BookOpen], ["anti-dilution", "Anti-Dilution", Layers], ["pro-rata", "Pro-Rata Rights", Percent], ["safe-vs-priced", "SAFE vs Priced", Scale], ["vesting", "Vesting Schedule", CalendarClock], ["checklist", "Term-Sheet Checklist", ListChecks]] as const).map(([id, label, Icon]) => (
+        {([["generator", "Generator", ScrollText], ["comparator", "Offer Comparator", GitCompare], ["liq-pref", "Liquidation Pref", TrendingDown], ["esop-topup", "ESOP Top-up Impact", Users], ["clause-explainer", "Clause Explainer", BookOpen], ["anti-dilution", "Anti-Dilution", Layers], ["pro-rata", "Pro-Rata Rights", Percent], ["safe-vs-priced", "SAFE vs Priced", Scale], ["vesting", "Vesting Schedule", CalendarClock], ["checklist", "Term-Sheet Checklist", ListChecks], ["multi-class-waterfall", "Multi-Class Waterfall", Network], ["board-modeler", "Board Composition", Landmark], ["tranche-planner", "Tranche Planner", Milestone], ["note-maturity", "Note Maturity", Clock], ["dilution-rounds", "Dilution Over Rounds", LineChart]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -89,6 +89,11 @@ export default function TermSheetPage() {
       {tab === "safe-vs-priced"  && <SafeVsPriced />}
       {tab === "vesting"         && <VestingSchedule />}
       {tab === "checklist"       && <TermSheetChecklist />}
+      {tab === "multi-class-waterfall" && <MultiClassWaterfall />}
+      {tab === "board-modeler"   && <BoardCompositionModeler />}
+      {tab === "tranche-planner" && <TranchePlanner />}
+      {tab === "note-maturity"   && <NoteMaturityScenarios />}
+      {tab === "dilution-rounds" && <DilutionOverRounds />}
 
       {tab === "generator" && <>
       {/* Round type selector */}
@@ -1130,6 +1135,585 @@ function TermSheetChecklist() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
         A general founder checklist, not legal advice. Add your own deal-specific items in discussion with your advisor and lawyer.
+      </div>
+    </div>
+  );
+}
+
+// ── #129 Multi-Class Liquidation Waterfall — seniority-ordered payout across preferred classes ──
+interface PrefClass {
+  id: string;
+  name: string;
+  invested: number;
+  prefX: number;
+  participating: boolean;
+  seniority: number; // lower = paid first
+}
+
+function blankClass(n: number): PrefClass {
+  const names = ["Series A", "Series B", "Series C", "Series D"];
+  return {
+    id: Math.random().toString(36).slice(2),
+    name: names[Math.min(n - 1, names.length - 1)] ?? `Class ${n}`,
+    invested: 10_000_000 * n,
+    prefX: 1,
+    participating: false,
+    seniority: n,
+  };
+}
+
+function MultiClassWaterfall() {
+  const [exitValue, setExitValue] = useState(120_000_000);
+  const [commonShares, setCommonShares] = useState(70); // common ownership % (founders + ESOP)
+  const [classes, setClasses] = useState<PrefClass[]>([blankClass(1), blankClass(2)]);
+
+  const patch = (id: string, key: keyof PrefClass, value: PrefClass[keyof PrefClass]) =>
+    setClasses(prev => prev.map(c => (c.id === id ? { ...c, [key]: value } : c)));
+
+  const exit = Math.max(0, exitValue);
+  // Each preferred class owns (invested / exit-implied) is not derivable; instead model ownership
+  // as residual: preferred classes together own (100 - common)% pro-rata to invested capital.
+  const totalPref = classes.reduce((s, c) => s + c.invested, 0);
+  const prefOwnPct = Math.max(0, 100 - Math.min(100, Math.max(0, commonShares)));
+
+  // Step 1: pay preferences in seniority order (lower seniority first). Non-participating preferred
+  // will later take the GREATER of pref vs as-converted; we compute both and choose per class.
+  const ordered = [...classes].sort((a, b) => a.seniority - b.seniority);
+  let remaining = exit;
+  const prefPaid: Record<string, number> = {};
+  for (const c of ordered) {
+    const pref = c.invested * c.prefX;
+    const pay = Math.min(pref, remaining);
+    prefPaid[c.id] = pay;
+    remaining -= pay;
+  }
+  // Step 2: distribute the remainder. Participating preferred + common share pro-rata by ownership.
+  // Each class's as-converted ownership = prefOwnPct × (invested / totalPref).
+  const classOwn = (c: PrefClass) => (totalPref > 0 ? prefOwnPct * (c.invested / totalPref) : 0) / 100;
+  const commonOwn = Math.min(100, Math.max(0, commonShares)) / 100;
+  const participatingOwn = classes.filter(c => c.participating).reduce((s, c) => s + classOwn(c), 0);
+  const residualBase = participatingOwn + commonOwn;
+  const afterPref = remaining;
+
+  // Final payout per class: non-participating chooses max(pref, as-converted of whole exit)
+  const payouts = classes.map(c => {
+    const own = classOwn(c);
+    if (c.participating) {
+      const share = residualBase > 0 ? afterPref * (own / residualBase) : 0;
+      return { ...c, payout: prefPaid[c.id] + share, basis: "pref + participation" };
+    }
+    const asConverted = exit * own;
+    if (asConverted >= prefPaid[c.id]) {
+      return { ...c, payout: asConverted, basis: "as-converted (converts)" };
+    }
+    return { ...c, payout: prefPaid[c.id], basis: "preference" };
+  });
+
+  const prefTotalPaid = payouts.reduce((s, p) => s + p.payout, 0);
+  const commonPayout = Math.max(0, exit - prefTotalPaid);
+  const fc = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> Multi-Class Liquidation Waterfall</h3>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Stack several preferred classes with their own seniority and preference, then see who gets paid in what order at exit.</p>
+          </div>
+          {classes.length < 4 && (
+            <button onClick={() => setClasses(prev => [...prev, blankClass(prev.length + 1)])}
+              className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">+ Add class</button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Exit / sale value (₹)
+            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Common ownership % (founders + ESOP)
+            <input type="number" value={commonShares} onChange={e => setCommonShares(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {classes.map(c => (
+            <div key={c.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <input value={c.name} onChange={e => patch(c.id, "name", e.target.value)} className="bg-transparent text-sm font-semibold outline-none w-full" />
+                {classes.length > 1 && (
+                  <button onClick={() => setClasses(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs shrink-0">✕</button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[10px] text-[var(--color-muted)] block">Invested (₹)
+                  <input type="number" value={c.invested} onChange={e => patch(c.id, "invested", +e.target.value)} className={tsInp} />
+                </label>
+                <label className="text-[10px] text-[var(--color-muted)] block">Pref (×)
+                  <input type="number" step="0.5" min={0} value={c.prefX} onChange={e => patch(c.id, "prefX", +e.target.value)} className={tsInp} />
+                </label>
+                <label className="text-[10px] text-[var(--color-muted)] block">Seniority (1 = first)
+                  <input type="number" min={1} value={c.seniority} onChange={e => patch(c.id, "seniority", +e.target.value)} className={tsInp} />
+                </label>
+                <label className="flex items-end gap-1.5 text-[11px] cursor-pointer pb-2">
+                  <input type="checkbox" checked={c.participating} onChange={e => patch(c.id, "participating", e.target.checked)} className="accent-[var(--color-primary)]" /> Participating
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Class", "Seniority", "Preference", "Payout", "Basis", "% of exit"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[...payouts].sort((a, b) => a.seniority - b.seniority).map(p => (
+              <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{p.seniority}</td>
+                <td className="px-4 py-2.5 tabular-nums">{p.prefX}× ({fc(p.invested * p.prefX)})</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{fc(Math.round(p.payout))}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.basis}</td>
+                <td className="px-4 py-2.5 tabular-nums">{exit > 0 ? ((p.payout / exit) * 100).toFixed(1) : "0.0"}%</td>
+              </tr>
+            ))}
+            <tr className="bg-[var(--color-accent)]/30">
+              <td className="px-4 py-2.5 font-semibold">Common (founders + ESOP)</td>
+              <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">last</td>
+              <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">—</td>
+              <td className={`px-4 py-2.5 tabular-nums font-semibold ${commonPayout > 0 ? "text-green-400" : "text-red-400"}`}>{fc(Math.round(commonPayout))}</td>
+              <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">residual</td>
+              <td className="px-4 py-2.5 tabular-nums">{exit > 0 ? ((commonPayout / exit) * 100).toFixed(1) : "0.0"}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Preferences pay in seniority order (lowest number first); later money is usually senior in real stacks. Non-participating classes take the greater of their preference or as-converted equity; participating classes also share the leftover. Ownership is approximated pro-rata to invested capital — a simplification of an actual share ledger.
+      </div>
+    </div>
+  );
+}
+
+// ── #130 Board-Composition Modeler — seats by group and who holds control ──
+function BoardCompositionModeler() {
+  const [founderSeats, setFounderSeats]   = useState(2);
+  const [investorSeats, setInvestorSeats] = useState(1);
+  const [independentSeats, setIndependentSeats] = useState(0);
+  const [indLeansFounder, setIndLeansFounder] = useState(true);
+
+  const total = Math.max(0, founderSeats) + Math.max(0, investorSeats) + Math.max(0, independentSeats);
+  const majority = Math.floor(total / 2) + 1;
+  const founderBloc = Math.max(0, founderSeats) + (indLeansFounder ? Math.max(0, independentSeats) : 0);
+  const investorBloc = Math.max(0, investorSeats) + (indLeansFounder ? 0 : Math.max(0, independentSeats));
+
+  const founderControls = total > 0 && founderBloc >= majority;
+  const investorControls = total > 0 && investorBloc >= majority;
+  const deadlock = total > 0 && !founderControls && !investorControls;
+
+  const groups = [
+    { label: "Founder seats", value: founderSeats, set: setFounderSeats, color: "#22c55e" },
+    { label: "Investor seats", value: investorSeats, set: setInvestorSeats, color: "#6366f1" },
+    { label: "Independent seats", value: independentSeats, set: setIndependentSeats, color: "#f59e0b" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Board-Composition Modeler</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Board control decides hiring, budgets and even founder removal. Model the seat split and see who holds a voting majority.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {groups.map(g => (
+            <label key={g.label} className="text-xs text-[var(--color-muted)] block">{g.label}
+              <input type="number" min={0} value={g.value} onChange={e => g.set(Math.max(0, +e.target.value))} className={tsInp} />
+            </label>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={indLeansFounder} onChange={e => setIndLeansFounder(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Assume independents side with founders (untick to side with investors)
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total seats", value: `${total}`, color: "text-[var(--color-text)]" },
+          { label: "Seats for majority", value: `${total > 0 ? majority : 0}`, color: "text-[var(--color-primary)]" },
+          { label: "Founder bloc", value: `${founderBloc}`, color: founderControls ? "text-green-400" : "text-[var(--color-muted)]" },
+          { label: "Investor bloc", value: `${investorBloc}`, color: investorControls ? "text-orange-400" : "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+        <p className="text-xs font-semibold mb-1">Seat composition</p>
+        <div className="flex h-6 rounded-lg overflow-hidden border border-[var(--color-border)]">
+          {groups.filter(g => g.value > 0).map(g => (
+            <div key={g.label} className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
+              style={{ width: `${total > 0 ? (g.value / total) * 100 : 0}%`, background: g.color }}>
+              {g.value}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`rounded-lg px-4 py-3 text-xs flex items-start gap-2 border ${
+        founderControls ? "bg-green-500/10 border-green-500/40 text-green-400"
+        : investorControls ? "bg-orange-500/10 border-orange-500/40 text-orange-400"
+        : "bg-[var(--color-accent)]/40 border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+        <Info size={13} className="shrink-0 mt-px" />
+        {total === 0 ? "Add at least one seat to model control."
+          : founderControls ? `Founders hold ${founderBloc}/${total} — a controlling majority. Investors get a voice, not control. This is the founder-friendly seed-stage default.`
+          : investorControls ? `Investors hold ${investorBloc}/${total} — they can outvote founders. Push for an independent seat or one investor seat only to keep founder/independent majority.`
+          : "No single bloc holds a majority — decisions need cross-group agreement. A neutral independent can be the swing vote; define how the chair/casting vote works."}
+        {deadlock && total % 2 === 0 && " An even board can deadlock — consider an odd number of seats."}
+      </div>
+    </div>
+  );
+}
+
+// ── #131 Milestone / Tranche Funding Planner — split a raise into milestone-gated tranches ──
+interface Tranche { id: string; label: string; amount: number; milestone: string; }
+
+function blankTranche(n: number): Tranche {
+  return {
+    id: Math.random().toString(36).slice(2),
+    label: `Tranche ${n}`,
+    amount: 5_000_000,
+    milestone: n === 1 ? "On signing / first close" : "On hitting agreed milestone",
+  };
+}
+
+function TranchePlanner() {
+  const [preMoney, setPreMoney]   = useState(50_000_000);
+  const [tranches, setTranches]   = useState<Tranche[]>([blankTranche(1), blankTranche(2)]);
+
+  const patch = (id: string, key: keyof Tranche, value: Tranche[keyof Tranche]) =>
+    setTranches(prev => prev.map(t => (t.id === id ? { ...t, [key]: value } : t)));
+
+  const total = tranches.reduce((s, t) => s + Math.max(0, t.amount), 0);
+  const postMoney = preMoney + total;
+  const fullDilution = postMoney > 0 ? (total / postMoney) * 100 : 0;
+  const fc = formatCurrency;
+
+  // Cumulative dilution as each tranche lands (priced at the same pre-money for simplicity)
+  let cumInvested = 0;
+  const rows = tranches.map(t => {
+    cumInvested += Math.max(0, t.amount);
+    const cumPost = preMoney + cumInvested;
+    const cumPct = cumPost > 0 ? (cumInvested / cumPost) * 100 : 0;
+    return { ...t, cumInvested, cumPct };
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Milestone size={14} className="text-[var(--color-primary)]" /> Milestone / Tranche Planner</h3>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Investors often release capital in milestone-gated tranches instead of one cheque. Plan the schedule and see dilution build as each tranche lands.</p>
+          </div>
+          {tranches.length < 5 && (
+            <button onClick={() => setTranches(prev => [...prev, blankTranche(prev.length + 1)])}
+              className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">+ Add tranche</button>
+          )}
+        </div>
+        <label className="text-xs text-[var(--color-muted)] block md:w-1/3">Pre-money valuation (₹)
+          <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+        </label>
+        <div className="space-y-2.5">
+          {tranches.map(t => (
+            <div key={t.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-3">Label
+                <input value={t.label} onChange={e => patch(t.id, "label", e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-3">Amount (₹)
+                <input type="number" value={t.amount} onChange={e => patch(t.id, "amount", +e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-5">Milestone / trigger
+                <input value={t.milestone} onChange={e => patch(t.id, "milestone", e.target.value)} className={tsInp} />
+              </label>
+              <div className="md:col-span-1 flex md:justify-end">
+                {tranches.length > 1 && (
+                  <button onClick={() => setTranches(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total raise (all tranches)", value: fc(total), color: "text-[var(--color-primary)]" },
+          { label: "Post-money (fully drawn)", value: formatAmount(postMoney), color: "text-[var(--color-text)]" },
+          { label: "Dilution if fully drawn", value: `−${fullDilution.toFixed(1)}%`, color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Tranche", "Amount", "Milestone", "Cumulative in", "Cumulative dilution"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.amount)}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.milestone}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(r.cumInvested)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">−{r.cumPct.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Tranching protects investors and stretches your runway, but missed milestones can stall the next tranche when you most need it. Negotiate objective, achievable triggers and a fixed price for all tranches so later money is not re-priced down. All tranches here are modeled at one pre-money — a real deal may re-price.
+      </div>
+    </div>
+  );
+}
+
+// ── #132 Convertible-Note Maturity Scenarios — what happens at maturity if no priced round ──
+function NoteMaturityScenarios() {
+  const [principal, setPrincipal]   = useState(10_000_000);
+  const [interestPct, setInterestPct] = useState(8);
+  const [termMonths, setTermMonths] = useState(24);
+  const [cap, setCap]               = useState(60_000_000);
+  const [discount, setDiscount]     = useState(20);
+  const [maturityPre, setMaturityPre] = useState(50_000_000); // negotiated pre-money if converting at maturity
+
+  const years = Math.max(0, termMonths) / 12;
+  const accruedInterest = principal * (Math.max(0, interestPct) / 100) * years;
+  const balance = principal + accruedInterest;
+
+  // Scenario 1: repay in cash (principal + accrued interest)
+  // Scenario 2: convert at the lower of cap or (maturity pre × (1 - discount))
+  const discPrice = maturityPre * (1 - Math.min(99, Math.max(0, discount)) / 100);
+  const convVal = Math.min(cap > 0 ? cap : discPrice, discPrice > 0 ? discPrice : (cap || 0));
+  const convPostMoney = convVal + balance;
+  const convPct = convPostMoney > 0 ? (balance / convPostMoney) * 100 : 0;
+  const convBasis = (cap > 0 && cap <= discPrice) ? "valuation cap" : "discounted price";
+  // Scenario 3: extend (no change today, interest keeps accruing) — illustrate +12 months
+  const extYears = (termMonths + 12) / 12;
+  const extBalance = principal + principal * (Math.max(0, interestPct) / 100) * extYears;
+  const fc = formatCurrency;
+
+  const scenarios = [
+    { name: "Repay in cash", detail: `Principal ${fc(principal)} + interest ${fc(Math.round(accruedInterest))}`, headline: fc(Math.round(balance)), note: "Needs cash you may not have — most startups can't repay.", color: "text-orange-400" },
+    { name: "Convert to equity", detail: `Converts on ${convBasis} at ${formatAmount(convVal)} → ≈${convPct.toFixed(1)}% stake`, headline: `${convPct.toFixed(1)}%`, note: "Most common outcome — note becomes equity at maturity.", color: "text-[var(--color-primary)]" },
+    { name: "Extend maturity", detail: `+12 months; balance grows to ${fc(Math.round(extBalance))}`, headline: fc(Math.round(extBalance)), note: "Buys time but more interest accrues; needs investor consent.", color: "text-blue-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Convertible-Note Maturity Scenarios</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">If no priced round happens before the note matures, three things can occur: repay, convert, or extend. Model the balance and the conversion outcome.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Principal (₹)
+            <input type="number" value={principal} onChange={e => setPrincipal(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Interest % p.a.
+            <input type="number" value={interestPct} onChange={e => setInterestPct(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Term (months)
+            <input type="number" value={termMonths} onChange={e => setTermMonths(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Valuation cap (₹)
+            <input type="number" value={cap} onChange={e => setCap(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Discount %
+            <input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Maturity pre-money (₹)
+            <input type="number" value={maturityPre} onChange={e => setMaturityPre(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Accrued interest", value: fc(Math.round(accruedInterest)), color: "text-orange-400" },
+          { label: "Balance at maturity", value: fc(Math.round(balance)), color: "text-[var(--color-primary)]" },
+          { label: "Equity if converted", value: `${convPct.toFixed(1)}%`, color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {scenarios.map(s => (
+          <div key={s.name} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-start justify-between gap-4">
+            <div>
+              <p className={`text-sm font-semibold ${s.color}`}>{s.name}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">{s.detail}</p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-1">{s.note}</p>
+            </div>
+            <p className={`text-lg font-bold tabular-nums shrink-0 ${s.color}`}>{s.headline}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        At maturity a note typically converts on the better of its cap or discount, or — failing a priced round — may be repaid or extended by negotiation. Interest is shown as simple (not compounded). In India, instrument choice (CCPS vs note) and FEMA rules affect what is actually permitted.
+      </div>
+    </div>
+  );
+}
+
+// ── #133 Founder Dilution Over Rounds — cumulative ownership across a sequence of raises ──
+interface RaiseRound { id: string; name: string; investorPct: number; poolPct: number; }
+
+function blankRound(n: number): RaiseRound {
+  const names = ["Seed", "Series A", "Series B", "Series C", "Series D"];
+  return {
+    id: Math.random().toString(36).slice(2),
+    name: names[Math.min(n - 1, names.length - 1)] ?? `Round ${n}`,
+    investorPct: n === 1 ? 15 : 18,
+    poolPct: n === 1 ? 10 : 3,
+  };
+}
+
+function DilutionOverRounds() {
+  const [startFounderPct, setStartFounderPct] = useState(100);
+  const [exitValue, setExitValue]   = useState(2_000_000_000);
+  const [rounds, setRounds]         = useState<RaiseRound[]>([blankRound(1), blankRound(2), blankRound(3)]);
+
+  const patch = (id: string, key: keyof RaiseRound, value: RaiseRound[keyof RaiseRound]) =>
+    setRounds(prev => prev.map(r => (r.id === id ? { ...r, [key]: value } : r)));
+
+  // Each round: new investor takes investorPct of post; a new pool takes poolPct.
+  // Existing holders (incl. founders) are scaled by (1 - investorPct/100 - poolPct/100).
+  let founderPct = Math.min(100, Math.max(0, startFounderPct));
+  const steps = rounds.map(r => {
+    const dilFactor = Math.max(0, 1 - Math.max(0, r.investorPct) / 100 - Math.max(0, r.poolPct) / 100);
+    const before = founderPct;
+    founderPct = founderPct * dilFactor;
+    return { ...r, before, after: founderPct, dilFactor };
+  });
+  const finalFounderPct = founderPct;
+  const founderExitValue = exitValue * (finalFounderPct / 100);
+  const fc = formatCurrency;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Founder Dilution Over Rounds</h3>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Stack several future rounds and watch founder ownership compound down. Each round's investor stake and new pool dilute everyone before it.</p>
+          </div>
+          {rounds.length < 5 && (
+            <button onClick={() => setRounds(prev => [...prev, blankRound(prev.length + 1)])}
+              className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">+ Add round</button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="text-xs text-[var(--color-muted)] block">Starting founder ownership %
+            <input type="number" value={startFounderPct} onChange={e => setStartFounderPct(+e.target.value)} className={tsInp} />
+          </label>
+          <label className="text-xs text-[var(--color-muted)] block">Eventual exit value (₹)
+            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+          </label>
+        </div>
+        <div className="space-y-2.5">
+          {rounds.map(r => (
+            <div key={r.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-4">Round
+                <input value={r.name} onChange={e => patch(r.id, "name", e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-3">New investor %
+                <input type="number" value={r.investorPct} onChange={e => patch(r.id, "investorPct", +e.target.value)} className={tsInp} />
+              </label>
+              <label className="text-[10px] text-[var(--color-muted)] block md:col-span-4">New pool %
+                <input type="number" value={r.poolPct} onChange={e => patch(r.id, "poolPct", +e.target.value)} className={tsInp} />
+              </label>
+              <div className="md:col-span-1 flex md:justify-end">
+                {rounds.length > 1 && (
+                  <button onClick={() => setRounds(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Founder % after all rounds", value: `${finalFounderPct.toFixed(1)}%`, color: finalFounderPct >= 50 ? "text-green-400" : finalFounderPct >= 25 ? "text-orange-400" : "text-red-400" },
+          { label: "Total founder dilution", value: `−${(startFounderPct - finalFounderPct).toFixed(1)}%`, color: "text-orange-400" },
+          { label: "Founder value at exit", value: fc(Math.round(founderExitValue)), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Round", "Founder before", "Investor + pool", "Founder after", "Bar"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map(s => (
+              <tr key={s.id} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{s.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{s.before.toFixed(1)}%</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.investorPct}% + {s.poolPct}%</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{s.after.toFixed(1)}%</td>
+                <td className="px-4 py-2.5 w-1/4">
+                  <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.min(100, s.after)}%` }} />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <Info size={12} className="shrink-0 mt-px" />
+        Dilution compounds: a 20% round on top of a 20% round leaves you with 64%, not 60%. New option pools dilute founders too. This is a planning estimate (each round's investor + pool are taken from post-money); model your real cap table for exact numbers.
       </div>
     </div>
   );
