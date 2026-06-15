@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { incomeStatement, balanceSheet, cashFlowStatement, monthlyCashFlow } from "@/lib/finance";
+import { incomeStatement, balanceSheet, cashFlowStatement, monthlyCashFlow, monthlyAggregates } from "@/lib/finance";
 import { totalGrossCost, totalAccumulatedDepreciation, totalNetBookValue, depreciationBetween, accumulatedDepreciation, bookValue } from "@/lib/depreciation";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { exportExcel, exportPdf } from "@/lib/exporters";
@@ -9,6 +9,7 @@ import {
   FileSpreadsheet, FileDown, Sheet as SheetIcon, Info, Scale, TrendingUp, Wallet, Building2,
   Repeat, FileStack, NotebookPen, Columns3, PieChart,
   Percent, ArrowLeftRight, Briefcase, Layers, CalendarClock, Coins, Receipt, LayoutDashboard,
+  GitCompare, LineChart, Crosshair, Target, BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import FixedAssetRegister from "./FixedAssetRegister";
@@ -17,7 +18,8 @@ type Tab =
   | "income" | "balance" | "cashflow" | "assets"
   | "as3-cashflow" | "schedule3" | "notes" | "comparative" | "segment"
   | "ratios" | "fund-flow" | "working-capital" | "socie"
-  | "dep-schedule" | "eps-networth" | "cost-sheet" | "mis-pack";
+  | "dep-schedule" | "eps-networth" | "cost-sheet" | "mis-pack"
+  | "indirect-cf" | "projection" | "breakeven" | "budget-variance" | "trend-pl";
 type Preset = "month" | "quarter" | "fy" | "ttm";
 
 function iso(d: Date) { return d.toISOString().split("T")[0]; }
@@ -203,6 +205,11 @@ export default function StatementsPage() {
     { id: "eps-networth",    label: "EPS & Net Worth",  icon: Coins },
     { id: "cost-sheet",      label: "Cost Sheet",       icon: Receipt },
     { id: "mis-pack",        label: "MIS Pack",         icon: LayoutDashboard },
+    { id: "indirect-cf",     label: "Indirect Cash Flow", icon: GitCompare },
+    { id: "projection",      label: "3-Statement Forecast", icon: LineChart },
+    { id: "breakeven",       label: "Break-even",       icon: Crosshair },
+    { id: "budget-variance", label: "Budget Variance",  icon: Target },
+    { id: "trend-pl",        label: "Monthly Trend",    icon: BarChart3 },
   ] as const satisfies readonly { id: Tab; label: string; icon: React.ElementType }[];
   const PRESETS: { id: Preset; label: string }[] = [
     { id: "month",   label: "This Month" },
@@ -472,6 +479,21 @@ export default function StatementsPage() {
 
       {/* ── MIS DASHBOARD PACK ── */}
       {tab === "mis-pack" && <MisPack start={range.start} end={range.end} asOf={today} label={range.label} />}
+
+      {/* ── INDIRECT-METHOD CASH FLOW (reconciliation from net profit) ── */}
+      {tab === "indirect-cf" && <IndirectCashFlow today={today} />}
+
+      {/* ── 3-STATEMENT FORECAST (projected P&L / BS / cash) ── */}
+      {tab === "projection" && <ProjectedStatements start={range.start} end={range.end} asOf={today} label={range.label} />}
+
+      {/* ── BREAK-EVEN & OPERATING LEVERAGE ── */}
+      {tab === "breakeven" && <BreakEvenAnalysis start={range.start} end={range.end} label={range.label} />}
+
+      {/* ── VARIANCE-TO-BUDGET P&L ── */}
+      {tab === "budget-variance" && <BudgetVariance start={range.start} end={range.end} label={range.label} />}
+
+      {/* ── MONTHLY-TREND P&L ── */}
+      {tab === "trend-pl" && <MonthlyTrendPL today={today} />}
     </div>
   );
 }
@@ -1620,6 +1642,455 @@ function MisPack({ start, end, asOf, label }: { start: string; end: string; asOf
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">The MIS pack assembles the same live figures that drive every other statement here, so it always reconciles. Add management commentary and prior-period comparatives before circulating to the board.</p>
+    </div>
+  );
+}
+
+// ── Indirect-Method Cash Flow — full reconciliation with working-capital movements ──
+// Distinct from the AS-3 tab: this decomposes the working-capital change into its
+// individual components (receivables / inventory / payables) using the year-on-year
+// balance-sheet deltas, so the operating section is fully built up rather than
+// reconciled with a single balancing figure.
+function IndirectCashFlow({ today }: { today: Date }) {
+  const { store } = useApp();
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const priorDate = useMemo(() => new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()), [today]);
+  const cur = useMemo(() => balanceSheet(store, today), [store, today]);
+  const prior = useMemo(() => balanceSheet(store, priorDate), [store, priorDate]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+  const cf = useMemo(() => cashFlowStatement(store, fy.start, iso(today), today), [store, fy, today]);
+
+  const wc = useMemo(() => {
+    // A rise in a current asset is a USE of cash (−); a rise in a current liability is a SOURCE (+).
+    const recvChange = -(cur.accountsReceivable - prior.accountsReceivable);
+    const invChange = -(cur.inventory - prior.inventory);
+    const payChange = cur.accountsPayable - prior.accountsPayable;
+    const gstChange = cur.gstPayable - prior.gstPayable;
+    const otherChange = cur.otherCurrentLiabilities - prior.otherCurrentLiabilities;
+    const wcTotal = recvChange + invChange + payChange + gstChange + otherChange;
+    const opBeforeWc = pl.pbt + pl.depreciation + pl.interest;
+    const operatingDerived = opBeforeWc + wcTotal - pl.tax;
+    return { recvChange, invChange, payChange, gstChange, otherChange, wcTotal, opBeforeWc, operatingDerived };
+  }, [cur, prior, pl]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompare size={14} className="text-[var(--color-primary)]" /> Cash Flow Statement — Indirect Method</h2>
+        <p className="text-xs text-[var(--color-muted)]">Net profit reconciled to operating cash for {fy.label} (YTD), with each working-capital movement built up from the year-on-year balance-sheet change (vs {prior.asOf}).</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className={`lg:col-span-2 ${CARD} p-5`}>
+          <Row label="A. Operating Activities" level={0} />
+          <Row label="Profit before tax" value={pl.pbt} accent={pl.pbt >= 0 ? "green" : "red"} />
+          <Row label="Add: Depreciation & amortisation" value={pl.depreciation} note="non-cash" />
+          <Row label="Add: Finance costs" value={pl.interest} note="reclassified to financing" />
+          <Row label="Operating profit before working-capital changes" value={wc.opBeforeWc} level={2} />
+          <Row label="Working-Capital Movements" level={0} />
+          <Row label="(Increase) / decrease in trade receivables" value={wc.recvChange} />
+          <Row label="(Increase) / decrease in inventories" value={wc.invChange} />
+          <Row label="Increase / (decrease) in trade payables" value={wc.payChange} />
+          <Row label="Increase / (decrease) in GST payable" value={wc.gstChange} />
+          <Row label="Increase / (decrease) in other current liabilities" value={wc.otherChange} />
+          <Row label="Net working-capital change" value={wc.wcTotal} level={2} accent={wc.wcTotal >= 0 ? "green" : "red"} />
+          <Row label="Less: Income tax paid" value={-pl.tax} />
+          <Row label="Net cash from Operating Activities" value={wc.operatingDerived} level={3} accent={wc.operatingDerived >= 0 ? "green" : "red"} />
+        </div>
+        <div className="space-y-4">
+          <div className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Operating cash (indirect build-up)</p>
+            <p className={`text-xl font-bold tabular-nums ${wc.operatingDerived >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(wc.operatingDerived)}</p>
+          </div>
+          <div className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">Operating cash (direct method)</p>
+            <p className={`text-xl font-bold tabular-nums ${cf.operating >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(cf.operating)}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">Difference: {formatCurrency(Math.abs(wc.operatingDerived - cf.operating))} (timing of accruals vs actual cash).</p>
+          </div>
+          <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg p-3 flex gap-2">
+            <Info size={13} className="text-[var(--color-muted)] shrink-0 mt-px" />
+            <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+              Unlike the AS-3 tab (single reconciling line), this statement builds each working-capital movement from the balance-sheet deltas, so the gap to direct-method cash is purely accrual timing rather than a forced plug.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Working-capital movements compare the balance sheet today with the same date a year earlier. A rise in receivables/inventory consumes cash; a rise in payables/provisions releases it. Depreciation is a non-cash add-back; finance cost is reclassified to financing. Reconcile accrual-vs-cash timing differences with your CA.</p>
+    </div>
+  );
+}
+
+// ── 3-Statement Forecast — projected P&L plus the resulting cash & equity position ──
+function ProjectedStatements({ start, end, asOf, label }: { start: string; end: string; asOf: Date; label: string }) {
+  const { store } = useApp();
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+  const bs = useMemo(() => balanceSheet(store, asOf), [store, asOf]);
+
+  const [revGrowthPct, setRevGrowthPct] = useFeatureState<number>("stm-proj-rev-growth", 12);
+  const [costGrowthPct, setCostGrowthPct] = useFeatureState<number>("stm-proj-cost-growth", 8);
+  const [horizonMonths, setHorizonMonths] = useFeatureState<number>("stm-proj-horizon-months", 12);
+
+  const proj = useMemo(() => {
+    const m = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000 / 30));
+    const annualise = (n: number) => (n / m) * 12; // scale the window to a full-year base
+    const g = revGrowthPct / 100, cg = costGrowthPct / 100;
+    const baseRev = annualise(pl.revenue);
+    const baseCogs = annualise(pl.cogs);
+    const basePayroll = annualise(pl.payroll);
+    const baseOpex = annualise(pl.otherOpex);
+    const baseDep = annualise(pl.depreciation);
+    const baseInt = annualise(pl.interest);
+
+    const horizon = Math.max(1, Math.min(36, Math.round(horizonMonths)));
+    const yf = horizon / 12; // fraction of a year being projected
+    const revenue = baseRev * (1 + g) * yf;
+    const cogs = baseCogs * (1 + cg) * yf;
+    const payroll = basePayroll * (1 + cg) * yf;
+    const otherOpex = baseOpex * (1 + cg) * yf;
+    const depreciation = baseDep * yf;
+    const interest = baseInt * yf;
+    const grossProfit = revenue - cogs;
+    const ebitda = grossProfit - payroll - otherOpex;
+    const ebit = ebitda - depreciation;
+    const pbt = ebit - interest;
+    const tax = pbt > 0 ? pbt * 0.25 : 0;
+    const netProfit = pbt - tax;
+
+    // Projected position assumes profit + depreciation add-back accrete to cash, no new capex/financing/dividends.
+    const projectedCash = bs.cash + netProfit + depreciation;
+    const projectedEquity = bs.totalEquity + netProfit;
+    const projectedAssets = bs.totalAssets + netProfit + depreciation;
+    return { revenue, cogs, grossProfit, payroll, otherOpex, ebitda, depreciation, ebit, interest, pbt, tax, netProfit, projectedCash, projectedEquity, projectedAssets, horizon };
+  }, [pl, bs, revGrowthPct, costGrowthPct, horizonMonths]);
+
+  const r = (n: number) => Math.round(n);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> 3-Statement Forecast</h2>
+        <p className="text-xs text-[var(--color-muted)]">A projected profit &amp; loss with the resulting cash and equity position, based on your {label} run-rate and the growth assumptions below. A planning model — not a statutory statement.</p>
+      </div>
+      <div className={`${CARD} p-5`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Assumptions</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Revenue growth (% over period)</span>
+            <input type="number" value={revGrowthPct}
+              onChange={e => setRevGrowthPct(Number(e.target.value) || 0)}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Cost growth (% over period)</span>
+            <input type="number" value={costGrowthPct}
+              onChange={e => setCostGrowthPct(Number(e.target.value) || 0)}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Horizon (months, 1–36)</span>
+            <input type="number" min={1} max={36} value={horizonMonths}
+              onChange={e => setHorizonMonths(Math.max(1, Math.min(36, Number(e.target.value) || 1)))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Projected revenue", value: formatAmount(r(proj.revenue)), tone: "text-[var(--color-text)]" },
+          { label: "Projected net profit", value: formatAmount(r(proj.netProfit)), tone: proj.netProfit >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Projected cash", value: formatAmount(r(proj.projectedCash)), tone: "text-[var(--color-primary)]" },
+          { label: "Projected equity", value: formatAmount(r(proj.projectedEquity)), tone: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.tone}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${CARD} p-5`}>
+          <Row label={`Projected P&L · next ${proj.horizon} months`} level={0} />
+          <Row label="Revenue" value={r(proj.revenue)} accent="green" />
+          <Row label="Cost of goods sold" value={-r(proj.cogs)} />
+          <Row label="Gross profit" value={r(proj.grossProfit)} level={2} />
+          <Row label="Payroll" value={-r(proj.payroll)} />
+          <Row label="Other operating expenses" value={-r(proj.otherOpex)} />
+          <Row label="EBITDA" value={r(proj.ebitda)} level={2} />
+          <Row label="Depreciation & amortisation" value={-r(proj.depreciation)} />
+          <Row label="Finance costs" value={-r(proj.interest)} />
+          <Row label="Profit before tax" value={r(proj.pbt)} level={2} />
+          <Row label="Income tax (est. 25%)" value={-r(proj.tax)} />
+          <Row label="Projected net profit" value={r(proj.netProfit)} level={3} accent={proj.netProfit >= 0 ? "green" : "red"} />
+        </div>
+        <div className={`${CARD} p-5`}>
+          <Row label="Projected Position (period end)" level={0} />
+          <Row label="Opening cash (today)" value={bs.cash} />
+          <Row label="Add: net profit retained" value={r(proj.netProfit)} />
+          <Row label="Add: depreciation (non-cash)" value={r(proj.depreciation)} />
+          <Row label="Projected cash" value={r(proj.projectedCash)} level={2} accent="blue" />
+          <Row label="Opening equity (today)" value={bs.totalEquity} />
+          <Row label="Add: retained profit" value={r(proj.netProfit)} />
+          <Row label="Projected total equity" value={r(proj.projectedEquity)} level={2} />
+          <Row label="Projected total assets" value={r(proj.projectedAssets)} level={3} accent="blue" />
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Built by annualising your {label} run-rate, then applying the growth assumptions across the chosen horizon. The projected position assumes profit and depreciation add to cash with no new capex, financing or dividends — adjust those manually for a fuller plan. Income tax is estimated at 25% of projected PBT.</p>
+    </div>
+  );
+}
+
+// ── Break-even & Operating Leverage ───────────────────────────────────────────────
+function BreakEvenAnalysis({ start, end, label }: { start: string; end: string; label: string }) {
+  const { store } = useApp();
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+
+  // What share of "other operating expenses" is fixed. COGS is treated as fully
+  // variable; payroll, depreciation and finance cost are treated as fixed.
+  const [fixedOpexPct, setFixedOpexPct] = useFeatureState<number>("stm-be-fixed-opex-pct", 70);
+
+  const be = useMemo(() => {
+    const fp = Math.max(0, Math.min(100, fixedOpexPct)) / 100;
+    const variableCosts = pl.cogs + pl.otherOpex * (1 - fp);
+    const fixedCosts = pl.payroll + pl.otherOpex * fp + pl.depreciation + pl.interest;
+    const contribution = pl.revenue - variableCosts;
+    const cmRatio = pl.revenue > 0 ? contribution / pl.revenue : 0;
+    const breakEvenRevenue = cmRatio > 0 ? fixedCosts / cmRatio : 0;
+    const marginOfSafety = pl.revenue - breakEvenRevenue;
+    const marginOfSafetyPct = pl.revenue > 0 ? (marginOfSafety / pl.revenue) * 100 : 0;
+    const dol = pl.ebit !== 0 ? contribution / pl.ebit : null; // degree of operating leverage
+    return { variableCosts, fixedCosts, contribution, cmRatio, breakEvenRevenue, marginOfSafety, marginOfSafetyPct, dol };
+  }, [pl, fixedOpexPct]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Crosshair size={14} className="text-[var(--color-primary)]" /> Break-even &amp; Operating Leverage</h2>
+        <p className="text-xs text-[var(--color-muted)]">Splits your {label} costs into fixed and variable to find the revenue at which you cover all costs, the margin of safety, and how sensitive profit is to revenue (operating leverage).</p>
+      </div>
+      <div className={`${CARD} p-5`}>
+        <label className="flex flex-col gap-1.5 max-w-md">
+          <span className="text-xs text-[var(--color-muted)]">Fixed share of other operating expenses (%) — payroll, depreciation &amp; finance cost are treated as fixed; COGS as fully variable</span>
+          <input type="range" min={0} max={100} value={fixedOpexPct}
+            onChange={e => setFixedOpexPct(Number(e.target.value))}
+            className="accent-[var(--color-primary)]" />
+          <span className="text-sm font-bold tabular-nums">{Math.round(fixedOpexPct)}% fixed</span>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Break-even revenue", value: formatAmount(Math.round(be.breakEvenRevenue)), tone: "text-[var(--color-primary)]" },
+          { label: "Contribution margin", value: `${(be.cmRatio * 100).toFixed(1)}%`, tone: "text-[var(--color-text)]" },
+          { label: "Margin of safety", value: `${be.marginOfSafetyPct.toFixed(0)}%`, tone: be.marginOfSafetyPct >= 20 ? "text-green-400" : "text-yellow-400" },
+          { label: "Operating leverage (DOL)", value: be.dol === null ? "n/a" : `${be.dol.toFixed(2)}x`, tone: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.tone}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${CARD} p-5`}>
+          <Row label="Cost Behaviour" level={0} />
+          <Row label="Revenue" value={pl.revenue} pct={100} accent="green" />
+          <Row label="Variable costs (COGS + variable opex)" value={-Math.round(be.variableCosts)} pct={pl.revenue > 0 ? Math.round(be.variableCosts / pl.revenue * 100) : 0} />
+          <Row label="Contribution margin" value={Math.round(be.contribution)} level={2} pct={Math.round(be.cmRatio * 100)} />
+          <Row label="Fixed costs (payroll + fixed opex + dep + interest)" value={-Math.round(be.fixedCosts)} />
+          <Row label="Operating profit (EBIT)" value={pl.ebit} level={3} accent={pl.ebit >= 0 ? "green" : "red"} />
+        </div>
+        <div className={`${CARD} p-5`}>
+          <Row label="Break-even &amp; Safety" level={0} />
+          <Row label="Break-even revenue" value={Math.round(be.breakEvenRevenue)} accent="blue" />
+          <Row label="Actual revenue" value={pl.revenue} />
+          <Row label="Margin of safety (₹)" value={Math.round(be.marginOfSafety)} level={2} accent={be.marginOfSafety >= 0 ? "green" : "red"} />
+          <div className="flex items-center justify-between gap-3 px-1 py-1.5 border-t border-[var(--color-border)] mt-1 pt-2">
+            <span className="text-sm font-bold">Margin of safety (%)</span>
+            <span className={`tabular-nums text-base font-bold ${be.marginOfSafetyPct >= 0 ? "text-green-400" : "text-red-400"}`}>{be.marginOfSafetyPct.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-1 py-1.5">
+            <span className="text-sm">Degree of operating leverage</span>
+            <span className="tabular-nums text-sm">{be.dol === null ? "n/a" : `${be.dol.toFixed(2)}x`}</span>
+          </div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">COGS is taken as fully variable and payroll/depreciation/finance cost as fixed — adjust the fixed share of other operating expenses with the slider to match your cost structure. A DOL of {be.dol === null ? "n/a" : `${be.dol.toFixed(1)}x`} means a 1% change in revenue moves operating profit by about that multiple. Refine the fixed/variable split with your accountant.</p>
+    </div>
+  );
+}
+
+// ── Variance-to-Budget P&L ────────────────────────────────────────────────────────
+function BudgetVariance({ start, end, label }: { start: string; end: string; label: string }) {
+  const { store } = useApp();
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+
+  type BudgetKey = "revenue" | "cogs" | "payroll" | "otherOpex";
+  const [budget, setBudget] = useFeatureState<Record<BudgetKey, number>>("stm-budget-targets", {
+    revenue: 0, cogs: 0, payroll: 0, otherOpex: 0,
+  });
+  const setOne = (k: BudgetKey, v: number) => setBudget(b => ({ ...b, [k]: Math.max(0, v) }));
+
+  const lines = useMemo(() => {
+    // For revenue, favourable = actual above budget; for costs, favourable = actual below budget.
+    const defs: { key: BudgetKey; label: string; actual: number; favIfAbove: boolean }[] = [
+      { key: "revenue", label: "Revenue from operations", actual: pl.revenue, favIfAbove: true },
+      { key: "cogs", label: "Cost of goods sold", actual: pl.cogs, favIfAbove: false },
+      { key: "payroll", label: "Employee benefits (payroll)", actual: pl.payroll, favIfAbove: false },
+      { key: "otherOpex", label: "Other operating expenses", actual: pl.otherOpex, favIfAbove: false },
+    ];
+    return defs.map(d => {
+      const bud = budget[d.key];
+      const variance = d.actual - bud;
+      const variancePct = bud > 0 ? (variance / bud) * 100 : null;
+      const favourable = d.favIfAbove ? variance >= 0 : variance <= 0;
+      return { ...d, budget: bud, variance, variancePct, favourable };
+    });
+  }, [pl, budget]);
+
+  const budgetEbitda = budget.revenue - budget.cogs - budget.payroll - budget.otherOpex;
+  const actualEbitda = pl.ebitda;
+  const ebitdaVariance = actualEbitda - budgetEbitda;
+  const anyBudget = budget.revenue + budget.cogs + budget.payroll + budget.otherOpex > 0;
+
+  const INPUTS: { key: BudgetKey; label: string }[] = [
+    { key: "revenue", label: "Revenue" },
+    { key: "cogs", label: "COGS" },
+    { key: "payroll", label: "Payroll" },
+    { key: "otherOpex", label: "Other opex" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Budget vs Actual P&amp;L</h2>
+        <p className="text-xs text-[var(--color-muted)]">Enter your budget for {label} and compare it line-by-line with actuals from your live data. Variances are flagged favourable or adverse with the percentage swing.</p>
+      </div>
+      <div className={`${CARD} p-5`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Budget targets (₹)</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {INPUTS.map(inp => (
+            <label key={inp.key} className="flex flex-col gap-1.5">
+              <span className="text-xs text-[var(--color-muted)]">{inp.label}</span>
+              <input type="number" min={0} value={budget[inp.key]}
+                onChange={e => setOne(inp.key, Number(e.target.value) || 0)}
+                className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+            </label>
+          ))}
+        </div>
+      </div>
+      {!anyBudget ? (
+        <div className={`${CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>Enter at least one budget figure above to see the variance analysis.</div>
+      ) : (
+        <div className={`${CARD} overflow-x-auto`}>
+          <table className="w-full text-sm min-w-[680px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Line item", "Budget", "Actual", "Variance", "Variance %", "Status"].map((h, i) => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i === 5 ? "text-center" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {lines.map(l => (
+                <tr key={l.key} className="hover:bg-white/2">
+                  <td className="px-4 py-2 font-medium">{l.label}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(l.budget)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(l.actual)}</td>
+                  <td className={`px-4 py-2 text-right tabular-nums ${l.favourable ? "text-green-400" : "text-red-400"}`}>{amt(l.variance)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{l.variancePct === null ? "—" : `${l.variancePct >= 0 ? "+" : ""}${l.variancePct.toFixed(1)}%`}</td>
+                  <td className={`px-4 py-2 text-center text-[10px] font-semibold ${l.favourable ? "text-green-400" : "text-red-400"}`}>{l.favourable ? "FAVOURABLE" : "ADVERSE"}</td>
+                </tr>
+              ))}
+              <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+                <td className="px-4 py-2">EBITDA</td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatAmount(budgetEbitda)}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatAmount(actualEbitda)}</td>
+                <td className={`px-4 py-2 text-right tabular-nums ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(ebitdaVariance)}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{budgetEbitda !== 0 ? `${ebitdaVariance >= 0 ? "+" : ""}${(ebitdaVariance / Math.abs(budgetEbitda) * 100).toFixed(1)}%` : "—"}</td>
+                <td className={`px-4 py-2 text-center text-[10px] font-semibold ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{ebitdaVariance >= 0 ? "FAVOURABLE" : "ADVERSE"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Budget targets are saved with your data and persist across sessions and devices. Favourability is direction-aware: for revenue, above-budget is favourable; for costs, below-budget is favourable. EBITDA variance is the net effect across all four lines.</p>
+    </div>
+  );
+}
+
+// ── Monthly-Trend P&L ─────────────────────────────────────────────────────────────
+function MonthlyTrendPL({ today }: { today: Date }) {
+  const { store } = useApp();
+  const months = useMemo(() => monthlyAggregates(store.transactions ?? [], 12, today), [store.transactions, today]);
+
+  const stats = useMemo(() => {
+    const totalRev = months.reduce((s, m) => s + m.revenue, 0);
+    const totalExp = months.reduce((s, m) => s + m.expense, 0);
+    const totalNet = totalRev - totalExp;
+    const avgRev = months.length ? totalRev / months.length : 0;
+    const profitable = months.filter(m => m.net > 0).length;
+    const peak = months.reduce<{ revenue: number; label: string }>((a, b) => (b.revenue > a.revenue ? b : a), { revenue: 0, label: "—" });
+    return { totalRev, totalExp, totalNet, avgRev, profitable, peakLabel: peak.label };
+  }, [months]);
+
+  const maxRev = Math.max(1, ...months.map(m => m.revenue));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Monthly-Trend P&amp;L</h2>
+        <p className="text-xs text-[var(--color-muted)]">Revenue, expense and net month-by-month over the last 12 months, to smooth seasonality and reveal the trend a single-period statement hides.</p>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "12-month revenue", value: formatAmount(stats.totalRev), tone: "text-[var(--color-text)]" },
+          { label: "12-month net", value: formatAmount(stats.totalNet), tone: stats.totalNet >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Avg monthly revenue", value: formatAmount(Math.round(stats.avgRev)), tone: "text-[var(--color-text)]" },
+          { label: "Profitable months", value: `${stats.profitable} / ${months.length}`, tone: stats.profitable >= months.length / 2 ? "text-green-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.tone}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`${CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Month", "Revenue", "Expense", "Net", "Margin %", "Revenue trend"].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 || i === 5 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {months.map(m => {
+              const margin = m.revenue > 0 ? Math.round((m.net / m.revenue) * 100) : 0;
+              return (
+                <tr key={m.key} className="hover:bg-white/2">
+                  <td className="px-4 py-2 font-medium">{m.label}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(m.revenue)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(m.expense)})</td>
+                  <td className={`px-4 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
+                  <td className={`px-4 py-2 text-right tabular-nums ${margin >= 0 ? "" : "text-red-400"}`}>{margin}%</td>
+                  <td className="px-4 py-2">
+                    <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden w-full min-w-[80px]">
+                      <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${Math.round((m.revenue / maxRev) * 100)}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+              <td className="px-4 py-2">Total</td>
+              <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(stats.totalRev)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(stats.totalExp)})</td>
+              <td className={`px-4 py-2 text-right tabular-nums ${stats.totalNet >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(stats.totalNet)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{stats.totalRev > 0 ? Math.round((stats.totalNet / stats.totalRev) * 100) : 0}%</td>
+              <td className="px-4 py-2 text-[10px] text-[var(--color-muted)]">Peak: {stats.peakLabel}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Net here is cash-basis revenue less total expense per month (a simplified P&amp;L trend), so it differs slightly from the statutory net profit, which also charges depreciation, interest and estimated tax. Use this for momentum and seasonality reading.</p>
     </div>
   );
 }

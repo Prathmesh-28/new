@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -206,6 +206,11 @@ export default function CreditPage() {
           ["lap",      "LAP / LTV"],
           ["prepay",   "Prepayment Optimizer"],
           ["odterm",   "OD vs Term Loan"],
+          ["scoreplan","Score Planner"],
+          ["offercmp", "Compare 3 Offers"],
+          ["invadv",   "Invoice Advance"],
+          ["nbfcbank", "NBFC vs Bank"],
+          ["scheme",   "Scheme Finder"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -742,6 +747,11 @@ export default function CreditPage() {
       {tab === "lap" && <LapLtvTab />}
       {tab === "prepay" && <PrepaymentOptimizer />}
       {tab === "odterm" && <OdVsTermLoanTab />}
+      {tab === "scoreplan" && <ScoreImprovementPlanner />}
+      {tab === "offercmp" && <ThreeOfferCompare />}
+      {tab === "invadv" && <InvoiceAdvanceCalculator />}
+      {tab === "nbfcbank" && <NbfcVsBankCompare />}
+      {tab === "scheme" && <SchemeFinder />}
     </div>
   );
 }
@@ -3568,6 +3578,492 @@ function OdVsTermLoanTab() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         OD interest is charged daily on the drawn balance, so low average utilisation makes it cheap; a term loan charges interest on the full disbursed amount regardless of use. Choose OD for unpredictable working-capital swings, a term loan for one-time capex with steady repayment.
+      </div>
+    </div>
+  );
+}
+
+// ── Score Improvement Planner (feature #27: Score Improvement Coach) ──
+// Owner ticks off concrete actions; each carries a point value. We project the
+// new score live and persist which actions are committed (durable, "cr-" key).
+function ScoreImprovementPlanner() {
+  const { store } = useApp();
+  const { creditApplications } = store;
+  const baseScore = Math.max(0, ...creditApplications.map(a => a.underwritingScore), 0);
+
+  const ACTIONS: { id: string; label: string; points: number; effort: "Quick" | "30 days" | "90 days"; detail: string }[] = [
+    { id: "consistency", label: "Smooth monthly revenue (consistent invoicing)", points: 8, effort: "30 days", detail: "Keep monthly inflows within ±25% to cut revenue volatility — the single largest score lever." },
+    { id: "buffer",      label: "Maintain a 1-month burn cash buffer (no overdrafts)", points: 5, effort: "Quick", detail: "Even one negative-balance day knocks ~5 pts. Park a buffer to avoid overdraft flags." },
+    { id: "diversify",   label: "Add 2+ revenue sources (cut top-customer concentration)", points: 6, effort: "90 days", detail: "Lower single-customer share below 40% of revenue to reduce concentration risk." },
+    { id: "gst",         label: "File GSTR-3B on time for 3 consecutive months", points: 7, effort: "90 days", detail: "On-time GST filing is verified turnover proof and a strong positive signal." },
+    { id: "dsr",         label: "Reduce existing EMI load below 30% of revenue", points: 6, effort: "30 days", detail: "Prepay or close a small loan to free up debt-service capacity." },
+    { id: "age",         label: "Cross the 12-month / 24-month business-age tier", points: 5, effort: "90 days", detail: "Longer verified history unlocks standard and best-rate tiers automatically." },
+  ];
+
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("cr-scoreplan-done", {});
+  const gained = ACTIONS.filter(a => done[a.id]).reduce((s, a) => s + a.points, 0);
+  const projected = Math.min(100, baseScore + gained);
+  const remaining = ACTIONS.filter(a => !done[a.id]).reduce((s, a) => s + a.points, 0);
+  const toggle = (id: string) => setDone(prev => ({ ...prev, [id]: !prev[id] }));
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Credit Score Improvement Planner</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tick the actions you commit to. We project the score gain instantly and remember your plan. {baseScore === 0 && "Apply once to anchor this to your real score."}</p>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {[
+            { label: "Current score", value: baseScore > 0 ? `${baseScore}/100` : "—", color: "text-[var(--color-text)]" },
+            { label: "Projected",     value: baseScore > 0 ? `${projected}/100` : `+${gained}`, color: "text-[var(--color-primary)]" },
+            { label: "Points left",   value: `+${remaining}`, color: "text-yellow-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+        {baseScore > 0 && (
+          <div className="mb-4">
+            <div className="flex justify-between text-[10px] text-[var(--color-muted)] mb-1"><span>{baseScore}</span><span>50 (approval)</span><span>100</span></div>
+            <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden relative">
+              <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${projected}%` }} />
+              <div className="absolute top-0 bottom-0 w-px bg-[var(--color-muted)]" style={{ left: "50%" }} />
+            </div>
+          </div>
+        )}
+        <div className="space-y-2">
+          {ACTIONS.map(a => {
+            const checked = !!done[a.id];
+            return (
+              <button key={a.id} onClick={() => toggle(a.id)}
+                className={`w-full text-left rounded-lg border p-3 transition-colors ${checked ? "border-green-800/40 bg-green-950/10" : "border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-primary)]/40"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 flex-1">
+                    {checked ? <CheckCircle2 size={14} className="text-green-400 shrink-0 mt-0.5" /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-muted)]/50 shrink-0 mt-0.5" />}
+                    <div>
+                      <p className="text-xs font-semibold">{a.label}</p>
+                      <p className="text-[11px] text-[var(--color-muted)] mt-0.5 leading-snug">{a.detail}</p>
+                      <span className="inline-block mt-1 text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)]/40 border border-[var(--color-border)] px-1.5 py-0.5 rounded">{a.effort}</span>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-bold shrink-0 px-2 py-0.5 rounded border ${checked ? "text-green-400 bg-green-950/30 border-green-800/30" : "text-yellow-400 bg-yellow-950/30 border-yellow-800/30"}`}>+{a.points} pts</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Point values are indicative weightings from the underwriting model. Completing committed actions and re-applying after 30+ days lets the engine re-score with the improved data.
+      </div>
+    </div>
+  );
+}
+
+// ── Compare 3 Loan Offers Side-by-Side (feature #28: Multi-Lender Rate Compare) ──
+// Effective APR comparison that folds processing fees and insurance into the true
+// cost, so the cheapest headline rate isn't mistaken for the cheapest loan.
+function ThreeOfferCompare() {
+  type Offer = { lender: string; amount: string; rate: string; months: string; fee: string; insurance: string };
+  const blank = (lender: string): Offer => ({ lender, amount: "", rate: "", months: "24", fee: "1", insurance: "0" });
+  const [offers, setOffers] = useFeatureState<Offer[]>("cr-offercmp", [blank("Lender A"), blank("Lender B"), blank("Lender C")]);
+
+  const setField = (i: number, key: keyof Offer, val: string) =>
+    setOffers(prev => prev.map((o, idx) => idx === i ? { ...o, [key]: val } : o));
+
+  const rows = offers.map(o => {
+    const amount = parseFloat(o.amount) || 0;
+    const rate   = parseFloat(o.rate)   || 0;
+    const months = Math.max(1, Math.round(parseFloat(o.months) || 0));
+    const fee    = Math.round(amount * (parseFloat(o.fee) || 0) / 100);
+    const ins    = Math.round(amount * (parseFloat(o.insurance) || 0) / 100);
+    const emiVal = amount > 0 ? emi(amount, rate, months) : 0;
+    const interest = amount > 0 ? Math.round(totalInterest(amount, rate, months)) : 0;
+    const totalCost = interest + fee + ins;
+    // Effective annualised cost on disbursed amount net of upfront fee+insurance.
+    const effApr = amount > 0 && months > 0 ? Math.round(((totalCost / amount) / (months / 12)) * 1000) / 10 : 0;
+    return { ...o, amount, months, emiVal, interest, fee, ins, totalCost, effApr };
+  });
+  const valid = rows.filter(r => r.amount > 0);
+  const cheapest = valid.length > 0 ? valid.reduce((a, b) => a.totalCost <= b.totalCost ? a : b).lender : null;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Compare 3 Loan Offers</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Enter three competing offers. We fold processing fee and insurance into the effective APR so you compare true cost, not just the advertised rate.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {offers.map((o, i) => (
+            <div key={i} className="space-y-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <input value={o.lender} onChange={e => setField(i, "lender", e.target.value)} placeholder="Lender name" className={`${inp} font-semibold`} />
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Amount (₹)</label><input type="number" min={0} value={o.amount} onChange={e => setField(i, "amount", e.target.value)} className={inp} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Rate %</label><input type="number" min={0} value={o.rate} onChange={e => setField(i, "rate", e.target.value)} className={inp} /></div>
+                <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Months</label><input type="number" min={1} value={o.months} onChange={e => setField(i, "months", e.target.value)} className={inp} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Fee %</label><input type="number" min={0} step={0.1} value={o.fee} onChange={e => setField(i, "fee", e.target.value)} className={inp} /></div>
+                <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Insurance %</label><input type="number" min={0} step={0.1} value={o.insurance} onChange={e => setField(i, "insurance", e.target.value)} className={inp} /></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {valid.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-[var(--color-muted)] border-b border-[var(--color-border)]">
+                <th className="pb-2 font-medium">Metric</th>
+                {rows.map((r, i) => <th key={i} className="pb-2 font-semibold text-[var(--color-text)] text-right">{r.lender || `Offer ${i + 1}`}{r.lender === cheapest && r.amount > 0 && <span className="ml-1 text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-1.5 py-0.5 rounded-full">Best</span>}</th>)}
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {[
+                { label: "Loan amount", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.amount) : "—" },
+                { label: "Headline rate", get: (r: typeof rows[number]) => r.amount > 0 ? `${parseFloat(r.rate) || 0}%` : "—" },
+                { label: "Monthly EMI", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.emiVal) : "—" },
+                { label: "Total interest", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.interest) : "—" },
+                { label: "Processing fee", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.fee) : "—" },
+                { label: "Insurance", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.ins) : "—" },
+                { label: "Effective APR", get: (r: typeof rows[number]) => r.amount > 0 ? `${r.effApr}%` : "—", strong: true },
+                { label: "True total cost", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.totalCost) : "—", strong: true },
+              ].map(row => (
+                <tr key={row.label} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="py-2 text-xs text-[var(--color-muted)]">{row.label}</td>
+                  {rows.map((r, i) => (
+                    <td key={i} className={`py-2 text-right ${row.strong ? "font-bold" : ""} ${row.strong && r.lender === cheapest && r.amount > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-text)]"}`}>{row.get(r)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Effective APR here loads upfront fees and insurance onto the cost spread over the tenure — a low headline rate with a 3% fee can cost more than a higher rate with no fee. Always compare the true total cost row.
+      </div>
+    </div>
+  );
+}
+
+// ── Invoice-Financing Advance Calculator (features #9/#64: invoice discounting) ──
+// Computes the advance you'd receive against an invoice net of margin/haircut and
+// financing cost over the expected days to payment, with the implied annualised cost.
+function InvoiceAdvanceCalculator() {
+  const [faceStr,    setFaceStr]    = useState("1000000");
+  const [advancePct, setAdvancePct] = useState(80);  // % advanced upfront
+  const [feeStr,     setFeeStr]     = useState("1");  // one-time processing fee %
+  const [rateStr,    setRateStr]    = useState("18"); // financing rate % p.a.
+  const [daysStr,    setDaysStr]    = useState("60"); // expected days to buyer payment
+
+  const face    = parseFloat(faceStr)   || 0;
+  const fee     = parseFloat(feeStr)    || 0;
+  const rate    = parseFloat(rateStr)   || 0;
+  const days    = Math.max(1, Math.round(parseFloat(daysStr) || 0));
+
+  const advance      = Math.round(face * (advancePct / 100));
+  const reserve      = face - advance; // margin held back, released on collection
+  const financeCost  = Math.round(advance * (rate / 100) * (days / 365));
+  const processFee   = Math.round(face * (fee / 100));
+  const totalCost    = financeCost + processFee;
+  const netUpfront   = advance - totalCost;
+  const finalNet     = netUpfront + reserve; // total received once buyer pays
+  // Annualised cost of the cash you actually get for the period you hold it.
+  const effCost = advance > 0 ? Math.round(((totalCost / advance) / (days / 365)) * 1000) / 10 : 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Invoice Financing Advance Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">See exactly how much cash you get today against an unpaid invoice, the cost of that advance, and the true annualised rate so you can decide if it beats waiting.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Invoice value (₹)</label>
+            <input type="number" min={0} value={faceStr} onChange={e => setFaceStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Advance rate</span><span className="font-semibold text-[var(--color-text)]">{advancePct}%</span></label>
+            <input type="range" min={50} max={95} value={advancePct} onChange={e => setAdvancePct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Financing rate (% p.a.)</label>
+            <input type="number" min={0} value={rateStr} onChange={e => setRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Processing fee (% of invoice)</label>
+            <input type="number" min={0} step={0.1} value={feeStr} onChange={e => setFeeStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Expected days to payment</label>
+            <input type="number" min={1} value={daysStr} onChange={e => setDaysStr(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {face > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Cash today (net)", value: formatCurrency(netUpfront), color: "text-[var(--color-primary)]" },
+              { label: "Total cost",       value: formatCurrency(totalCost),  color: "text-red-400" },
+              { label: "Margin released later", value: formatCurrency(reserve), color: "text-[var(--color-text)]" },
+              { label: "Effective annual cost", value: `${effCost}%`, color: effCost > 24 ? "text-red-400" : effCost > 15 ? "text-orange-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">Cash flow breakdown</h3>
+            <div className="space-y-2">
+              {[
+                { label: `Advance (${advancePct}% of invoice)`, value: formatCurrency(advance), op: "+" },
+                { label: `Financing cost (${rate}% × ${days}d)`, value: formatCurrency(financeCost), op: "−", color: "text-red-400" },
+                { label: `Processing fee (${fee}%)`, value: formatCurrency(processFee), op: "−", color: "text-red-400" },
+                { label: "Net cash received today", value: formatCurrency(netUpfront), op: "=", bold: true, color: "text-[var(--color-primary)]" },
+                { label: "Margin released on collection", value: formatCurrency(reserve), op: "+" },
+                { label: "Total received once buyer pays", value: formatCurrency(finalNet), op: "=", bold: true },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]"><span className="mr-2 font-mono">{r.op}</span>{r.label}</span>
+                  <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Effective annual cost annualises the fee + interest over the days the cash is outstanding — a 1% fee on a 30-day invoice is ~12% p.a. Compare it to your overdraft rate before discounting; if the buyer is reliable and your OD is cheaper, the OD may win.
+      </div>
+    </div>
+  );
+}
+
+// ── NBFC vs Bank Cost Compare ──
+// Banks usually offer a lower rate but slower disbursal and stricter docs; NBFCs
+// cost more but fund fast. We price the true cost AND value the speed difference.
+function NbfcVsBankCompare() {
+  const [amountStr,    setAmountStr]    = useState("1500000");
+  const [monthsStr,    setMonthsStr]    = useState("24");
+  const [bankRateStr,  setBankRateStr]  = useState("13");
+  const [bankFeeStr,   setBankFeeStr]   = useState("0.5");
+  const [bankDaysStr,  setBankDaysStr]  = useState("21"); // days to disburse
+  const [nbfcRateStr,  setNbfcRateStr]  = useState("18");
+  const [nbfcFeeStr,   setNbfcFeeStr]   = useState("2");
+  const [nbfcDaysStr,  setNbfcDaysStr]  = useState("3");
+  const [delayCostStr, setDelayCostStr] = useState("0"); // ₹/day cost of waiting for funds
+
+  const amount = parseFloat(amountStr) || 0;
+  const months = Math.max(1, Math.round(parseFloat(monthsStr) || 0));
+  const delayPerDay = parseFloat(delayCostStr) || 0;
+
+  const calc = (rateStr: string, feeStr: string, daysStr: string) => {
+    const rate = parseFloat(rateStr) || 0;
+    const fee  = Math.round(amount * (parseFloat(feeStr) || 0) / 100);
+    const days = Math.max(0, Math.round(parseFloat(daysStr) || 0));
+    const emiVal = amount > 0 ? emi(amount, rate, months) : 0;
+    const interest = amount > 0 ? Math.round(totalInterest(amount, rate, months)) : 0;
+    const delayCost = Math.round(days * delayPerDay);
+    const total = interest + fee + delayCost;
+    return { rate, fee, days, emiVal, interest, delayCost, total };
+  };
+
+  const bank = calc(bankRateStr, bankFeeStr, bankDaysStr);
+  const nbfc = calc(nbfcRateStr, nbfcFeeStr, nbfcDaysStr);
+  const winner = amount > 0 ? (bank.total <= nbfc.total ? "bank" : "nbfc") : null;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const card = (title: string, who: "bank" | "nbfc", c: ReturnType<typeof calc>, icon: ReactNode) => (
+    <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${winner === who ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold flex items-center gap-2">{icon}{title}</p>
+        {winner === who && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Lower cost</span>}
+      </div>
+      <div className="space-y-2">
+        {[
+          { label: "Monthly EMI", value: `${formatCurrency(c.emiVal)} /mo` },
+          { label: `Interest @ ${c.rate}%`, value: formatCurrency(c.interest), color: "text-orange-400" },
+          { label: "Processing fee", value: formatCurrency(c.fee), color: "text-red-400" },
+          { label: `Disbursal: ${c.days} days`, value: delayPerDay > 0 ? `cost ${formatCurrency(c.delayCost)}` : "—", color: delayPerDay > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
+          { label: "True total cost", value: formatCurrency(c.total), bold: true, color: winner === who ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
+        ].map(r => (
+          <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+            <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+            <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> NBFC vs Bank Cost Compare</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Banks are cheaper but slow; NBFCs are pricier but fund in days. Add a cost-of-delay to value speed and see which is genuinely cheaper for your situation.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Loan amount (₹)</label><input type="number" min={0} value={amountStr} onChange={e => setAmountStr(e.target.value)} className={inp} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label><input type="number" min={1} value={monthsStr} onChange={e => setMonthsStr(e.target.value)} className={inp} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Cost of waiting (₹/day)</label><input type="number" min={0} value={delayCostStr} onChange={e => setDelayCostStr(e.target.value)} className={inp} /></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Bank terms</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Rate %</label><input type="number" min={0} value={bankRateStr} onChange={e => setBankRateStr(e.target.value)} className={inp} /></div>
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Fee %</label><input type="number" min={0} step={0.1} value={bankFeeStr} onChange={e => setBankFeeStr(e.target.value)} className={inp} /></div>
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Days</label><input type="number" min={0} value={bankDaysStr} onChange={e => setBankDaysStr(e.target.value)} className={inp} /></div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">NBFC terms</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Rate %</label><input type="number" min={0} value={nbfcRateStr} onChange={e => setNbfcRateStr(e.target.value)} className={inp} /></div>
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Fee %</label><input type="number" min={0} step={0.1} value={nbfcFeeStr} onChange={e => setNbfcFeeStr(e.target.value)} className={inp} /></div>
+              <div><label className="block text-[10px] text-[var(--color-muted)] mb-0.5">Days</label><input type="number" min={0} value={nbfcDaysStr} onChange={e => setNbfcDaysStr(e.target.value)} className={inp} /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {amount > 0 && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {card("Bank", "bank", bank, <Landmark size={13} className="text-[var(--color-primary)]" />)}
+            {card("NBFC / Fintech", "nbfc", nbfc, <Coins size={13} className="text-[var(--color-primary)]" />)}
+          </div>
+          {winner && (
+            <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "bank" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
+              <span className="font-semibold">{winner === "bank" ? "Bank" : "NBFC"} is cheaper</span> by {formatCurrency(Math.abs(bank.total - nbfc.total))} over {months} months{delayPerDay > 0 ? ", after pricing the disbursal delay" : ""}.
+              {winner === "bank" ? " If you can wait for the bank's process and have the documents ready, it saves real money." : " The NBFC wins once the cost of waiting for funds is counted — speed has a price worth paying when cash is urgent."}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Set "cost of waiting" to what a funding delay actually costs you — a missed bulk-purchase discount, a stalled order, or penalty interest. With it at ₹0 the bank almost always wins on rate; the comparison only gets interesting when speed has real value.
+      </div>
+    </div>
+  );
+}
+
+// ── Subsidy / MUDRA Scheme Finder (feature #45: Mudra & PSB Scheme Match) ──
+// Filters well-known Indian MSME credit schemes by the owner's profile and need,
+// so they see only the schemes they likely qualify for.
+function SchemeFinder() {
+  type Scheme = {
+    id: string; name: string; max: number; collateralFree: boolean;
+    desc: string; eligibility: string;
+    purposes: string[]; womenFocus: boolean; newToCredit: boolean;
+  };
+  const SCHEMES: Scheme[] = [
+    { id: "mudra-shishu", name: "PMMY MUDRA — Shishu", max: 50000, collateralFree: true, desc: "Micro-loans for the smallest and newest enterprises.", eligibility: "Non-farm micro units; no collateral; ideal for new businesses.", purposes: ["Working capital", "Inventory", "Equipment purchase"], womenFocus: false, newToCredit: true },
+    { id: "mudra-kishor", name: "PMMY MUDRA — Kishor", max: 500000, collateralFree: true, desc: "Growth-stage micro-enterprise funding up to ₹5L.", eligibility: "Established micro units needing expansion capital; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion", "Inventory"], womenFocus: false, newToCredit: false },
+    { id: "mudra-tarun", name: "PMMY MUDRA — Tarun", max: 1000000, collateralFree: true, desc: "Larger micro/small enterprise loans up to ₹10L.", eligibility: "Growing small businesses with a track record; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion"], womenFocus: false, newToCredit: false },
+    { id: "cgtmse", name: "CGTMSE Collateral-Free", max: 50000000, collateralFree: true, desc: "Govt-backed guarantee enabling collateral-free term/WC loans up to ₹5Cr.", eligibility: "Micro & small enterprises; lender routes the loan through the guarantee fund.", purposes: ["Working capital", "Equipment purchase", "Expansion"], womenFocus: false, newToCredit: false },
+    { id: "standup", name: "Stand-Up India", max: 10000000, collateralFree: false, desc: "₹10L–₹1Cr for greenfield ventures by women & SC/ST entrepreneurs.", eligibility: "Women or SC/ST owner; new (greenfield) manufacturing, services or trading unit.", purposes: ["Expansion", "Equipment purchase", "Working capital"], womenFocus: true, newToCredit: true },
+    { id: "pmegp", name: "PMEGP", max: 5000000, collateralFree: true, desc: "Credit-linked capital subsidy for new micro-enterprise setup.", eligibility: "New units only; subsidy 15–35% of project cost based on category & location.", purposes: ["Equipment purchase", "Expansion"], womenFocus: false, newToCredit: true },
+    { id: "psb59", name: "PSB Loans in 59 Minutes", max: 50000000, collateralFree: false, desc: "In-principle MSME loan approval online in under an hour.", eligibility: "GST-registered, ITR-filing MSMEs with 6+ months banking history.", purposes: ["Working capital", "Equipment purchase", "Expansion", "GST/TDS payment"], womenFocus: false, newToCredit: false },
+  ];
+
+  const PURPOSES = ["Working capital", "Equipment purchase", "Inventory", "Expansion", "GST/TDS payment"] as const;
+
+  const [needStr,      setNeedStr]      = useState("500000");
+  const [purpose,      setPurpose]      = useState<string>("Working capital");
+  const [women,        setWomen]        = useState(false);
+  const [newBiz,       setNewBiz]       = useState(false);
+  const [noCollateral, setNoCollateral] = useState(true);
+
+  const need = parseFloat(needStr) || 0;
+
+  const matches = SCHEMES.filter(s =>
+    (need === 0 || need <= s.max) &&
+    s.purposes.includes(purpose) &&
+    (!women || s.womenFocus) &&
+    (!newBiz || s.newToCredit) &&
+    (!noCollateral || s.collateralFree)
+  ).sort((a, b) => a.max - b.max);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Subsidy & MUDRA Scheme Finder</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Answer a few questions and see the government MSME credit schemes you likely qualify for, with limits and eligibility.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount needed (₹)</label>
+            <input type="number" min={0} value={needStr} onChange={e => setNeedStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Purpose</label>
+            <select value={purpose} onChange={e => setPurpose(e.target.value)} className={inp}>
+              {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4 mt-4">
+          {[
+            { label: "Women-owned business", checked: women, set: setWomen },
+            { label: "New / recently started", checked: newBiz, set: setNewBiz },
+            { label: "Need collateral-free", checked: noCollateral, set: setNoCollateral },
+          ].map(c => (
+            <label key={c.label} className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={c.checked} onChange={e => c.set(e.target.checked)} className="accent-[var(--color-primary)]" />
+              <span>{c.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {matches.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Landmark size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No scheme matches these filters. Try raising the amount limit or relaxing a filter — e.g. a ₹50L need exceeds most MUDRA tiers.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-[var(--color-muted)]">{matches.length} scheme{matches.length > 1 ? "s" : ""} match your profile</p>
+          {matches.map(s => (
+            <div key={s.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-sm font-semibold">{s.name}</p>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">{s.desc}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-[var(--color-muted)]">Up to</p>
+                  <p className="text-base font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(s.max)}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)] leading-snug mb-2"><span className="font-semibold text-[var(--color-text)]">Eligibility:</span> {s.eligibility}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {s.collateralFree && <span className="text-[9px] bg-green-950/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full font-semibold">Collateral-free</span>}
+                {s.womenFocus && <span className="text-[9px] bg-purple-900/30 text-purple-400 border border-purple-800/40 px-1.5 py-0.5 rounded-full font-semibold">Women-focused</span>}
+                {s.newToCredit && <span className="text-[9px] bg-blue-900/30 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded-full font-semibold">New-business friendly</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Scheme limits and rules are indicative as of the latest public guidelines and vary by lender and applicant category. Confirm current terms with the lending bank or on the official scheme portal before applying.
       </div>
     </div>
   );

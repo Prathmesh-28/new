@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Transaction } from "@/data/types";
@@ -75,7 +75,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -293,6 +293,11 @@ export default function TransactionsPage() {
           ["write-off",        "Write-Off",        Eraser],
           ["period-lock",      "Period Lock",      Lock],
           ["chart-of-accounts","Chart of Accounts",ListTree],
+          ["gst-ledger",       "GST Ledger",       Percent],
+          ["tds-ledger",       "TDS Ledger",       Receipt],
+          ["cash-bank-split",  "Cash / Bank Split",Banknote],
+          ["counterparty-360", "Counterparty 360", Users],
+          ["budget-actual",    "Budget vs Actual", Target],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(v => v === id ? "transactions" : id)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
@@ -318,6 +323,11 @@ export default function TransactionsPage() {
       {view === "write-off"         && <WriteOffComposer />}
       {view === "period-lock"       && <PeriodLockManager />}
       {view === "chart-of-accounts" && <ChartOfAccounts />}
+      {view === "gst-ledger"        && <GstLedger />}
+      {view === "tds-ledger"        && <TdsLedger />}
+      {view === "cash-bank-split"   && <CashBankSplit />}
+      {view === "counterparty-360"  && <Counterparty360 />}
+      {view === "budget-actual"     && <BudgetVsActual />}
 
       {view === "pdc" && <PDCRegister />}
       {view === "bounce" && <BounceTracker />}
@@ -2570,6 +2580,334 @@ function ChartOfAccounts() {
         );
       })}
       <p className="text-[10px] text-[var(--color-muted)]">A starter chart of accounts grouped under the five primary heads. Usage counts are mapped live from your transaction categories so you can see which ledgers are active. Saved and synced across devices.</p>
+    </div>
+  );
+}
+
+// ── #201 GST OUTPUT/INPUT LEDGER ────────────────────────────────────────────
+// Back-computes the GST embedded in revenue (output) and expense (input) lines
+// at a chosen slab, giving an indicative net GST payable for the period.
+function GstLedger() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const [rate, setRate] = useFeatureState<number>("txn-gst-ledger-rate", 18);
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const rows = useMemo(() => txns.filter(t => t.date.startsWith(month)), [txns, month]);
+  // GST = gross × rate / (100 + rate), since shown amounts are tax-inclusive.
+  const factor = rate / (100 + rate);
+  const output = useMemo(() => rows.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0) * factor, [rows, factor]);
+  const input = useMemo(() => rows.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount), 0) * factor, [rows, factor]);
+  const net = output - input;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Percent size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">GST Output / Input Ledger</h3></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs text-[var(--color-muted)]">Month</label>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={inp} />
+          <label className="text-xs text-[var(--color-muted)]">Slab %</label>
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>
+            {[5, 12, 18, 28].map(r => <option key={r} value={r}>{r}%</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[
+          { label: `Output GST (on revenue, ${rate}%)`, value: fc(output), color: "text-green-400" },
+          { label: `Input GST / ITC (on expense, ${rate}%)`, value: fc(input), color: "text-blue-400" },
+          { label: net >= 0 ? "Net GST payable" : "Net ITC carry-forward", value: fc(Math.abs(net)), color: net >= 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative GSTR-3B-style summary. It back-computes the tax embedded in revenue and expense lines at a single slab assuming amounts are tax-inclusive — real returns need line-level rates, ineligible-ITC exclusions and RCM. Use as a directional estimate and confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ── #202 TDS-DEDUCTED LEDGER ────────────────────────────────────────────────
+// Estimates TDS on qualifying expense payments at a chosen section rate and
+// totals the deduction per counterparty for the period.
+function TdsLedger() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const SECTIONS = { "194C": 2, "194J": 10, "194H": 5, "194I": 10, "194Q": 0.1 } as const;
+  type Section = keyof typeof SECTIONS;
+  const [section, setSection] = useFeatureState<Section>("txn-tds-ledger-section", "194C");
+  const [threshold, setThreshold] = useFeatureState<number>("txn-tds-ledger-threshold", 30000);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const rate = SECTIONS[section];
+  const byParty = useMemo(() => {
+    const m: Record<string, { gross: number; count: number }> = {};
+    txns.filter(t => (t.category === "expense" || t.category === "payroll") && t.amount < 0 && t.counterparty).forEach(t => {
+      const k = t.counterparty;
+      if (!m[k]) m[k] = { gross: 0, count: 0 };
+      m[k].gross += Math.abs(t.amount); m[k].count += 1;
+    });
+    return Object.entries(m)
+      .map(([party, v]) => ({ party, gross: v.gross, count: v.count, tds: v.gross >= threshold ? v.gross * rate / 100 : 0 }))
+      .filter(r => r.tds > 0)
+      .sort((a, b) => b.tds - a.tds);
+  }, [txns, rate, threshold]);
+  const totalTds = byParty.reduce((s, r) => s + r.tds, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Receipt size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">TDS-Deducted Ledger</h3></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs text-[var(--color-muted)]">Section</label>
+          <select value={section} onChange={e => setSection(e.target.value as Section)} className={inp}>
+            {(Object.entries(SECTIONS) as [Section, number][]).map(([k, v]) => <option key={k} value={k}>{k} · {v}%</option>)}
+          </select>
+          <label className="text-xs text-[var(--color-muted)]">Threshold ₹</label>
+          <input type="number" value={threshold} onChange={e => setThreshold(Number(e.target.value))} className={inp} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Parties above threshold", value: byParty.length.toString(), color: "text-[var(--color-text)]" },
+          { label: `Estimated TDS (${rate}%)`, value: fc(totalTds), color: "text-orange-400" },
+          { label: "Gross deductible spend", value: fc(byParty.reduce((s, r) => s + r.gross, 0)), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {byParty.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Receipt size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No counterparty crosses the {fc(threshold)} threshold for this section yet.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Counterparty", "Payments", "Gross paid", `TDS @ ${rate}%`].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Counterparty" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {byParty.map(r => (
+                <tr key={r.party} className="hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-2.5 font-medium">{r.party}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-[var(--color-muted)] tabular-nums">{r.count}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{fc(r.gross)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-orange-400">{fc(r.tds)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative TDS estimate on expense and payroll payments per counterparty, applied above a section threshold. Actual TDS depends on PAN/payee status, aggregate-during-year limits and exact section applicability — treat this as a working estimate and confirm with your CA before depositing.</p>
+    </div>
+  );
+}
+
+// ── #203 CASH vs BANK SPLIT ─────────────────────────────────────────────────
+// Splits balances and flows between cash-type and bank-type accounts so the
+// owner sees the true cash-in-hand position alongside bank money.
+function CashBankSplit() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const accounts = useMemo(() => store.bankAccounts ?? [], [store.bankAccounts]);
+  const fc = formatCurrency;
+
+  const isCash = useCallback((id: string) => {
+    const a = accounts.find(x => x.id === id);
+    if (!a) return true; // unassigned/no account → treat as cash in hand
+    const hay = `${a.name} ${a.provider}`.toLowerCase();
+    return hay.includes("cash") || hay.includes("petty") || hay.includes("wallet");
+  }, [accounts]);
+
+  const split = useMemo(() => {
+    let cashIn = 0, cashOut = 0, bankIn = 0, bankOut = 0;
+    txns.forEach(t => {
+      const cash = isCash(t.bankAccountId);
+      if (t.amount >= 0) { if (cash) cashIn += t.amount; else bankIn += t.amount; }
+      else { const v = Math.abs(t.amount); if (cash) cashOut += v; else bankOut += v; }
+    });
+    return { cashIn, cashOut, bankIn, bankOut, cashNet: cashIn - cashOut, bankNet: bankIn - bankOut };
+  }, [txns, isCash]);
+
+  const Card = ({ title, net, inFlow, outFlow, color }: { title: string; net: number; inFlow: number; outFlow: number; color: string }) => (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <div className="flex items-center gap-2 mb-3"><Banknote size={14} className={color} /><h3 className="text-sm font-semibold">{title}</h3></div>
+      <p className={`text-2xl font-bold tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(net)}</p>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+        <div><p className="text-[var(--color-muted)]">In</p><p className="tabular-nums text-green-400 font-medium">{fc(inFlow)}</p></div>
+        <div><p className="text-[var(--color-muted)]">Out</p><p className="tabular-nums text-red-400 font-medium">{fc(outFlow)}</p></div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card title="Cash in hand" net={split.cashNet} inFlow={split.cashIn} outFlow={split.cashOut} color="text-orange-400" />
+        <Card title="Bank accounts" net={split.bankNet} inFlow={split.bankIn} outFlow={split.bankOut} color="text-blue-400" />
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm flex flex-wrap items-center gap-x-6 gap-y-1">
+        <span className="text-[var(--color-muted)]">Total movement net</span>
+        <span className={`tabular-nums font-bold ${(split.cashNet + split.bankNet) >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(split.cashNet + split.bankNet)}</span>
+        <span className="text-[var(--color-muted)]">Cash share of outflow</span>
+        <span className="tabular-nums font-semibold">{(split.cashOut + split.bankOut) > 0 ? Math.round(split.cashOut / (split.cashOut + split.bankOut) * 100) : 0}%</span>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Splits flows between cash-type accounts (name or provider contains cash, petty or wallet — plus any transaction with no account) and bank accounts, so you can see true cash-in-hand against bank money. Rename a petty-cash account to include "cash" to have it counted here.</p>
+    </div>
+  );
+}
+
+// ── #204 COUNTERPARTY 360 ───────────────────────────────────────────────────
+// A ranked, one-screen profile of every counterparty: net position, money in
+// vs out, transaction count, and last-seen date — sortable by net exposure.
+function Counterparty360() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const [sortBy, setSortBy] = useState<"net" | "out" | "in" | "count">("out");
+
+  const parties = useMemo(() => {
+    const m: Record<string, { in: number; out: number; count: number; last: string }> = {};
+    txns.filter(t => t.counterparty).forEach(t => {
+      const k = t.counterparty;
+      if (!m[k]) m[k] = { in: 0, out: 0, count: 0, last: t.date };
+      if (t.amount >= 0) m[k].in += t.amount; else m[k].out += Math.abs(t.amount);
+      m[k].count += 1;
+      if (t.date > m[k].last) m[k].last = t.date;
+    });
+    const list = Object.entries(m).map(([party, v]) => ({ party, in: v.in, out: v.out, net: v.in - v.out, count: v.count, last: v.last }));
+    list.sort((a, b) => sortBy === "net" ? Math.abs(b.net) - Math.abs(a.net) : sortBy === "in" ? b.in - a.in : sortBy === "count" ? b.count - a.count : b.out - a.out);
+    return list;
+  }, [txns, sortBy]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Users size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Counterparty 360</h3></div>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-[var(--color-muted)] mr-1">Sort by</span>
+          {([["out", "Most paid"], ["in", "Most received"], ["net", "Net exposure"], ["count", "Activity"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setSortBy(k)}
+              className={`text-xs px-3 py-1 rounded-lg border transition-colors ${sortBy === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {parties.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Users size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No counterparties found on your transactions yet.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Counterparty", "Txns", "Last seen", "Received", "Paid", "Net"].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Counterparty" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {parties.map(p => (
+                <tr key={p.party} className="hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-2.5 font-medium max-w-[200px] truncate">{p.party}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-[var(--color-muted)] tabular-nums">{p.count}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-[var(--color-muted)] tabular-nums">{p.last}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(p.in)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(p.out)}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${p.net >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(p.net)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A complete relationship view for every counterparty in your books — money received, money paid, net position, activity, and last-seen date — built live from transactions. A positive net means you have received more than you have paid them.</p>
+    </div>
+  );
+}
+
+// ── #205 EXPENSE BUDGET vs ACTUAL ───────────────────────────────────────────
+// Set a monthly budget per spend category; the tool compares it to actual spend
+// for the chosen month and flags overruns with a utilisation bar.
+function BudgetVsActual() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const SPEND_CATS = ["expense", "payroll", "tax", "loan"] as const;
+  type SpendCat = typeof SPEND_CATS[number];
+  const [budgets, setBudgets] = useFeatureState<Record<string, number>>("txn-budget-actual", {});
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] w-36";
+
+  const actuals = useMemo(() => {
+    const m: Record<string, number> = {};
+    txns.filter(t => t.amount < 0 && t.date.startsWith(month)).forEach(t => { m[t.category] = (m[t.category] ?? 0) + Math.abs(t.amount); });
+    return m;
+  }, [txns, month]);
+
+  const rows = SPEND_CATS.map(cat => {
+    const budget = budgets[cat] ?? 0;
+    const actual = actuals[cat] ?? 0;
+    const pct = budget > 0 ? Math.round(actual / budget * 100) : 0;
+    return { cat, budget, actual, pct, over: budget > 0 && actual > budget };
+  });
+  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
+  const totalActual = rows.reduce((s, r) => s + r.actual, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Budget vs Actual</h3></div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[var(--color-muted)]">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          {rows.map(r => (
+            <div key={r.cat}>
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${CAT_COLOR[r.cat]}`}><Tag size={8} /> {r.cat}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--color-muted)] tabular-nums">{fc(r.actual)} / {fc(r.budget)}</span>
+                  <input type="number" placeholder="Budget ₹" value={budgets[r.cat] ?? ""}
+                    onChange={e => setBudgets(prev => ({ ...prev, [r.cat]: Number(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--color-accent)] overflow-hidden">
+                <div className={`h-full rounded-full ${r.over ? "bg-red-400" : r.pct > 80 ? "bg-yellow-400" : "bg-green-400"}`} style={{ width: `${Math.min(100, r.pct)}%` }} />
+              </div>
+              {r.over && <p className="text-[10px] text-red-400 mt-0.5">Over budget by {fc(r.actual - r.budget)} ({r.pct}%)</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total budget", value: fc(totalBudget), color: "text-[var(--color-text)]" },
+          { label: "Total actual", value: fc(totalActual), color: "text-[var(--color-text)]" },
+          { label: totalActual <= totalBudget ? "Remaining" : "Over budget", value: fc(Math.abs(totalBudget - totalActual)), color: totalActual <= totalBudget ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Set a monthly budget per spend category and compare it against actual outflow for the chosen month. Budgets are saved and synced across devices; the bar turns amber past 80% and red on overrun.</p>
     </div>
   );
 }

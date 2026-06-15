@@ -7,6 +7,7 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, Repeat, Eye, ChevronRight,
   PieChart, CreditCard, CalendarClock, Wallet, Copy, Building2, Trash2,
   BarChart3, RefreshCw, ShieldCheck, Plane, CheckSquare, Lightbulb, LineChart, Gauge,
+  Scale, Layers, ArrowUpRight, Receipt, Timer,
 } from "lucide-react";
 import { format, startOfMonth, subMonths, isWithinInterval, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
@@ -353,6 +354,13 @@ export default function SpendPage() {
       <ExpensePolicyChecker />
       <TravelSpendTracker />
       <SpendApprovalQueue />
+
+      {/* New tools (2nd pass) */}
+      <SpendVarianceVsLastMonth />
+      <DiscretionaryVsCommitted />
+      <TopGrowingCategories />
+      <GstItcEligibleSplit />
+      <ApprovalTurnaroundTracker />
 
       {/* Ramp-style CTA */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/25 rounded-lg p-4 flex items-center justify-between gap-4">
@@ -1486,6 +1494,373 @@ function SpendApprovalQueue() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)] mt-3">A simple pre-spend approval workflow: queue a request, review pending value at a glance, then approve or reject with a full status trail — durable across devices.</p>
+    </div>
+  );
+}
+
+// ── Spend Variance vs Last Month ─────────────────────────────────────────────────
+function SpendVarianceVsLastMonth() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+
+  const { rows, curTotal, prvTotal } = useMemo(() => {
+    const ks = monthKeys(2, today);
+    const prvKey = ks[0];
+    const curKey = ks[1];
+    const cur: Record<string, number> = {};
+    const prv: Record<string, number> = {};
+    let ct = 0, pt = 0;
+    store.transactions.filter(t => t.amount < 0).forEach(t => {
+      const mk = t.date.slice(0, 7);
+      const a = Math.abs(t.amount);
+      if (mk === curKey) { cur[t.category] = (cur[t.category] ?? 0) + a; ct += a; }
+      else if (mk === prvKey) { prv[t.category] = (prv[t.category] ?? 0) + a; pt += a; }
+    });
+    const cats = new Set([...Object.keys(cur), ...Object.keys(prv)]);
+    const r = [...cats].map(cat => {
+      const c = cur[cat] ?? 0;
+      const p = prv[cat] ?? 0;
+      const delta = c - p;
+      const pct = p > 0 ? (delta / p) * 100 : (c > 0 ? 100 : 0);
+      return { cat, c, p, delta, pct };
+    }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    return { rows: r, curTotal: ct, prvTotal: pt };
+  }, [store.transactions, today]);
+
+  const totalDelta = curTotal - prvTotal;
+  const totalPct = prvTotal > 0 ? (totalDelta / prvTotal) * 100 : 0;
+  const ks = monthKeys(2, today);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Scale size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Spend Variance vs Last Month</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">{ks[1]} vs {ks[0]}</span>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No spend in the last two months to compare.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { label: "This month", value: fc(Math.round(curTotal)), color: "text-[var(--color-text)]" },
+              { label: "Last month", value: fc(Math.round(prvTotal)), color: "text-[var(--color-muted)]" },
+              { label: "Change", value: `${totalDelta >= 0 ? "+" : ""}${fc(Math.round(totalDelta))} (${totalPct >= 0 ? "+" : ""}${totalPct.toFixed(0)}%)`, color: totalDelta > 0 ? "text-red-400" : "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{c.label}</p>
+                <p className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {rows.map(r => {
+              const up = r.delta > 0;
+              return (
+                <div key={r.cat} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{SPEND_CAT_LABEL[r.cat] ?? r.cat}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{fc(Math.round(r.p))} → {fc(Math.round(r.c))}</p>
+                  </div>
+                  <div className={`flex items-center gap-1 shrink-0 ${up ? "text-red-400" : "text-green-400"}`}>
+                    {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    <span className="text-sm font-bold tabular-nums">{up ? "+" : ""}{fc(Math.round(r.delta))}</span>
+                    <span className="text-[10px] tabular-nums">({r.pct >= 0 ? "+" : ""}{r.pct.toFixed(0)}%)</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Month-over-month variance per category from live transactions, ranked by the largest rupee swing — so you instantly see what drove this month's spend up or down versus last month.</p>
+    </div>
+  );
+}
+
+// ── Discretionary vs Committed Spend ─────────────────────────────────────────────
+const COMMITTED_CATS = ["payroll", "loan", "tax"] as const;
+function DiscretionaryVsCommitted() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+
+  const { committed, discretionary, total } = useMemo(() => {
+    const key = format(today, "yyyy-MM");
+    let com = 0, dis = 0;
+    store.transactions
+      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .forEach(t => {
+        const a = Math.abs(t.amount);
+        if ((COMMITTED_CATS as readonly string[]).includes(t.category)) com += a;
+        else dis += a;
+      });
+    return { committed: com, discretionary: dis, total: com + dis };
+  }, [store.transactions, today]);
+
+  const comPct = total > 0 ? (committed / total) * 100 : 0;
+  const disPct = total > 0 ? (discretionary / total) * 100 : 0;
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Layers size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Discretionary vs Committed Spend</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">{format(today, "MMMM yyyy")}</span>
+      </div>
+
+      {total === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No spend this month yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Committed (payroll · debt · tax)</p>
+              <p className="text-base font-bold tabular-nums text-[var(--color-text)]">{fc(Math.round(committed))}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{comPct.toFixed(0)}% of spend</p>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Discretionary (ops · transfers)</p>
+              <p className="text-base font-bold tabular-nums text-orange-400">{fc(Math.round(discretionary))}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{disPct.toFixed(0)}% of spend</p>
+            </div>
+          </div>
+          <div className="flex h-3 rounded-full overflow-hidden bg-[var(--color-bg)]">
+            <div className="h-full bg-[var(--color-primary)]/60" style={{ width: `${comPct}%` }} title={`Committed ${comPct.toFixed(0)}%`} />
+            <div className="h-full bg-orange-500/60" style={{ width: `${disPct}%` }} title={`Discretionary ${disPct.toFixed(0)}%`} />
+          </div>
+          <div className="flex items-center gap-4 text-[10px] text-[var(--color-muted)] mt-2">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-[var(--color-primary)]/60 rounded inline-block" /> Committed</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-orange-500/60 rounded inline-block" /> Discretionary</span>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Splits this month's spend into committed obligations (payroll, debt service, tax — hard to cut quickly) versus discretionary spend (operations, transfers — your real lever in a cash crunch).</p>
+    </div>
+  );
+}
+
+// ── Top-Growing Expense Categories (last 3 vs prior 3 months) ────────────────────
+function TopGrowingCategories() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+
+  const rows = useMemo(() => {
+    const ks = monthKeys(6, today);
+    const recentKeys = ks.slice(3);
+    const priorKeys = ks.slice(0, 3);
+    const recent: Record<string, number> = {};
+    const prior: Record<string, number> = {};
+    store.transactions.filter(t => t.amount < 0).forEach(t => {
+      const mk = t.date.slice(0, 7);
+      const a = Math.abs(t.amount);
+      if (recentKeys.includes(mk)) recent[t.category] = (recent[t.category] ?? 0) + a;
+      else if (priorKeys.includes(mk)) prior[t.category] = (prior[t.category] ?? 0) + a;
+    });
+    const cats = new Set([...Object.keys(recent), ...Object.keys(prior)]);
+    return [...cats].map(cat => {
+      const r = recent[cat] ?? 0;
+      const p = prior[cat] ?? 0;
+      const delta = r - p;
+      const pct = p > 0 ? (delta / p) * 100 : (r > 0 ? 100 : 0);
+      return { cat, r, p, delta, pct };
+    }).filter(x => x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 6);
+  }, [store.transactions, today]);
+
+  const maxDelta = Math.max(1, ...rows.map(r => r.delta));
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <ArrowUpRight size={13} className="text-orange-400" />
+        <h2 className="text-sm font-semibold">Top-Growing Expense Categories</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">last 3 mo vs prior 3 mo</span>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-green-400 py-2">No category grew over the last three months versus the prior three.</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(r => (
+            <div key={r.cat}>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium">{SPEND_CAT_LABEL[r.cat] ?? r.cat}</p>
+                <span className="text-xs tabular-nums text-orange-400 flex items-center gap-1">
+                  <TrendingUp size={10} /> +{fc(Math.round(r.delta))} <span className="text-[10px]">(+{r.pct.toFixed(0)}%)</span>
+                </span>
+              </div>
+              <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-orange-500/60" style={{ width: `${Math.min((r.delta / maxDelta) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{fc(Math.round(r.p))} → {fc(Math.round(r.r))} over the two windows</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Ranks categories by the rupee increase between the last three months and the prior three — the fastest-rising cost heads to investigate before they compound.</p>
+    </div>
+  );
+}
+
+// ── GST / ITC-Eligible Spend Split ───────────────────────────────────────────────
+// Heuristic: operations spend typically carries claimable input GST; payroll, debt
+// service, tax payments and internal transfers generally do not.
+const ITC_ELIGIBLE_CATS = ["expense"] as const;
+function GstItcEligibleSplit() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const [ratePct, setRatePct] = useFeatureState<string>("spd-itc-rate", "18");
+
+  const { eligible, ineligible, total } = useMemo(() => {
+    const key = format(today, "yyyy-MM");
+    let el = 0, inel = 0;
+    store.transactions
+      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .forEach(t => {
+        const a = Math.abs(t.amount);
+        if ((ITC_ELIGIBLE_CATS as readonly string[]).includes(t.category)) el += a;
+        else inel += a;
+      });
+    return { eligible: el, ineligible: inel, total: el + inel };
+  }, [store.transactions, today]);
+
+  const rate = Math.min(Math.max(parseFloat(ratePct) || 0, 0), 28);
+  // GST embedded inside a tax-inclusive spend amount: amount * rate / (100 + rate)
+  const estItc = rate > 0 ? eligible * (rate / (100 + rate)) : 0;
+  const elPct = total > 0 ? (eligible / total) * 100 : 0;
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Receipt size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">GST / ITC-Eligible Spend Split</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">{format(today, "MMMM yyyy")} · estimate</span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-3">
+        <label className="text-xs text-[var(--color-muted)] whitespace-nowrap">Assumed GST rate</label>
+        <input type="number" value={ratePct} onChange={e => setRatePct(e.target.value)} placeholder="18" className={`${INP} max-w-[120px]`} />
+        <span className="text-xs text-[var(--color-muted)]">%</span>
+      </div>
+
+      {total === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-1">No spend this month yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { label: "ITC-eligible spend (ops)", value: fc(Math.round(eligible)), color: "text-[var(--color-text)]" },
+              { label: "Non-eligible spend", value: fc(Math.round(ineligible)), color: "text-[var(--color-muted)]" },
+              { label: "Est. claimable input GST", value: fc(Math.round(estItc)), color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{c.label}</p>
+                <p className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-green-500/60" style={{ width: `${elPct}%` }} />
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">{elPct.toFixed(0)}% of this month's spend is operations spend assumed to carry claimable input GST.</p>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A planning estimate, not a filing: treats operations spend as GST-inclusive and extracts the embedded input tax at your assumed rate. Payroll, debt, tax and transfers are excluded. Verify against actual tax invoices and GSTR-2B before claiming ITC.</p>
+    </div>
+  );
+}
+
+// ── Approval Turnaround Tracker ──────────────────────────────────────────────────
+// Reads the durable approval queue (spd-approval-queue) written by SpendApprovalQueue
+// and records the time each request was decided, persisted under its own key.
+function ApprovalTurnaroundTracker() {
+  const [queue] = useFeatureState<ApprovalItem[]>("spd-approval-queue", []);
+  const [decidedAt, setDecidedAt] = useFeatureState<Record<string, string>>("spd-approval-decided", {});
+
+  const decided = useMemo(() => queue.filter(i => i.status !== "pending"), [queue]);
+  const pending = useMemo(() => queue.filter(i => i.status === "pending"), [queue]);
+
+  // Stamp a decided-at time the first time we observe a decided request without one.
+  const stampMissing = () => {
+    const missing = decided.filter(i => !decidedAt[i.id]);
+    if (missing.length === 0) { toast.info("All decided requests already timestamped"); return; }
+    const now = new Date().toISOString();
+    setDecidedAt(prev => {
+      const next = { ...prev };
+      missing.forEach(i => { next[i.id] = now; });
+      return next;
+    });
+    toast.success(`Stamped ${missing.length} decided ${missing.length === 1 ? "request" : "requests"}`);
+  };
+
+  const turnarounds = decided
+    .filter(i => decidedAt[i.id])
+    .map(i => ({
+      id: i.id,
+      vendor: i.vendor,
+      status: i.status,
+      hours: Math.max(differenceInCalendarDays(new Date(decidedAt[i.id]), new Date(i.created)), 0),
+      created: i.created,
+    }));
+  const avgDays = turnarounds.length > 0
+    ? turnarounds.reduce((s, t) => s + t.hours, 0) / turnarounds.length
+    : 0;
+  const oldestPending = pending
+    .map(i => differenceInCalendarDays(new Date(), new Date(i.created)))
+    .reduce((m, d) => Math.max(m, d), 0);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Timer size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Approval Turnaround Tracker</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">SLA on the approval queue</span>
+      </div>
+
+      {queue.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No spend requests queued yet. Add requests in the Spend Approval Queue above, then stamp decisions here to track turnaround.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { label: "Avg decision time", value: turnarounds.length > 0 ? `${avgDays.toFixed(1)}d` : "—", color: "text-[var(--color-text)]" },
+              { label: "Pending now", value: String(pending.length), color: pending.length > 0 ? "text-yellow-400" : "text-green-400" },
+              { label: "Oldest pending", value: pending.length > 0 ? `${oldestPending}d` : "—", color: oldestPending > 3 ? "text-red-400" : "text-[var(--color-muted)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{c.label}</p>
+                <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <button onClick={stampMissing} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">Stamp decided requests now</button>
+
+          {turnarounds.length === 0 ? (
+            <p className="text-xs text-[var(--color-muted)] py-1">Once requests are approved/rejected in the queue, press the button to record when — then per-request turnaround appears here.</p>
+          ) : (
+            <div className="space-y-2">
+              {turnarounds.sort((a, b) => b.hours - a.hours).map(t => (
+                <div key={t.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{t.vendor}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${t.status === "approved" ? "bg-green-900/30 text-green-400 border-green-800/30" : "bg-red-900/30 text-red-400 border-red-800/30"}`}>{t.status}</span>
+                    </div>
+                    <p className="text-[10px] text-[var(--color-muted)]">requested {format(new Date(t.created), "dd MMM")}</p>
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${t.hours > 3 ? "text-red-400" : "text-[var(--color-text)]"}`}>{t.hours}d</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Measures how quickly spend requests move from queued to decided. It reads the same approval queue above; press the button to record decision times, then watch the average turnaround and flag any request sitting too long.</p>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2, HardHat, CheckCircle2, Clock, CalendarRange, GitCompareArrows, SlidersHorizontal, Wallet, Users, FolderKanban, Gauge, Repeat } from "lucide-react";
+import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2, HardHat, CheckCircle2, Clock, CalendarRange, GitCompareArrows, SlidersHorizontal, Wallet, Users, FolderKanban, Gauge, Repeat, Megaphone, Scissors, ArrowLeftRight, CalendarClock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import type { Budget } from "@/data/types";
@@ -257,6 +257,11 @@ export default function BudgetsPage() {
           ["project-budget", "Project Budget", FolderKanban],
           ["utilization-gauge", "Utilization", Gauge],
           ["reforecast", "Reforecast", Repeat],
+          ["marketing-roi", "Marketing ROI", Megaphone],
+          ["cost-cutting", "Cost Cutting", Scissors],
+          ["reallocation", "Reallocation", ArrowLeftRight],
+          ["quarterly-phasing", "Quarterly Phasing", CalendarClock],
+          ["contingency", "Contingency", ShieldCheck],
         ] as const).map(([id, label, Icon]) => (
           <a key={id} href={`#${id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-accent)]">
@@ -276,6 +281,11 @@ export default function BudgetsPage() {
       <section id="project-budget"><ProjectBudgetTracker /></section>
       <section id="utilization-gauge"><BudgetUtilizationGauges /></section>
       <section id="reforecast"><ForecastVsBudgetReforecast /></section>
+      <section id="marketing-roi"><MarketingBudgetAllocator /></section>
+      <section id="cost-cutting"><CostCuttingSimulator /></section>
+      <section id="reallocation"><BudgetReallocationTool /></section>
+      <section id="quarterly-phasing"><QuarterlyPhasingPlanner /></section>
+      <section id="contingency"><ContingencyReservePlanner /></section>
 
       {(adding || editing) && (
         <AddBudgetModal
@@ -1237,6 +1247,403 @@ function ForecastVsBudgetReforecast() {
           </div>
         </div>
       ) : <p className="mt-4 text-xs text-[var(--color-muted)]">Create budget categories above to run a reforecast.</p>}
+    </ToolShell>
+  );
+}
+
+// ── Marketing Budget Allocator — split spend across channels by ROI ───────────────
+type Channel = { id: string; name: string; spend: number; revenue: number };
+
+function MarketingBudgetAllocator() {
+  const [budget, setBudget] = useFeatureState<string>("bud-mktg-budget", "");
+  const [channels, setChannels] = useFeatureState<Channel[]>("bud-mktg-channels", []);
+  const [name, setName] = useState("");
+  const [spend, setSpend] = useState("");
+  const [revenue, setRevenue] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const s = parseFloat(spend) || 0;
+    const r = parseFloat(revenue) || 0;
+    if (!name.trim() || s <= 0) { toast.error("Enter a channel and prior spend"); return; }
+    setChannels(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), spend: s, revenue: r }]);
+    setName(""); setSpend(""); setRevenue("");
+    toast.success("Channel added");
+  };
+  const remove = (id: string) => setChannels(prev => prev.filter(c => c.id !== id));
+
+  const pool = parseFloat(budget) || 0;
+  // ROAS = revenue / spend; allocate the new pool proportional to each channel's ROAS weight.
+  const totalRoas = channels.reduce((s, c) => s + (c.spend > 0 ? c.revenue / c.spend : 0), 0);
+  const rows = channels.map(c => {
+    const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+    const weight = totalRoas > 0 ? roas / totalRoas : (channels.length > 0 ? 1 / channels.length : 0);
+    return { ...c, roas, weight, recommend: pool * weight };
+  }).sort((a, b) => b.roas - a.roas);
+
+  const blendedRoas = (() => {
+    const ts = channels.reduce((s, c) => s + c.spend, 0);
+    const tr = channels.reduce((s, c) => s + c.revenue, 0);
+    return ts > 0 ? tr / ts : 0;
+  })();
+  const bestChannel = rows.length > 0 ? rows[0].name : "—";
+
+  return (
+    <ToolShell icon={Megaphone} title="Marketing Budget Allocator" intro="Enter prior spend and revenue per channel, set your next-period marketing pool, and we recommend an allocation weighted by each channel's return on ad spend (ROAS) — funnelling more budget to what actually converts.">
+      <div className="md:max-w-xs mb-3">
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Marketing pool to allocate (₹)</label>
+        <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="e.g. 500000" className={INP} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Channel *" className={INP} />
+        <input type="number" min="1" value={spend} onChange={e => setSpend(e.target.value)} placeholder="Prior spend ₹ *" className={INP} />
+        <input type="number" min="0" value={revenue} onChange={e => setRevenue(e.target.value)} placeholder="Revenue ₹" className={INP} />
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add channel</button>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <StatCards cards={[
+            { label: "Pool", value: fc(pool), color: "text-[var(--color-primary)]" },
+            { label: "Blended ROAS", value: `${blendedRoas.toFixed(2)}x`, color: blendedRoas >= 1 ? "text-green-400" : "text-red-400" },
+            { label: "Channels", value: String(rows.length), color: "text-blue-400" },
+            { label: "Top Channel", value: bestChannel, color: "text-yellow-400" },
+          ]} />
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Channel", "Prior spend", "Revenue", "ROAS", "Weight", "Recommended", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.name}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.spend)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.revenue)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.roas >= 1 ? "text-green-400" : "text-red-400"}`}>{r.roas.toFixed(2)}x</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{(r.weight * 100).toFixed(0)}%</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.recommend)}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </ToolShell>
+  );
+}
+
+// ── Cost-Cutting Simulator — rank live expenses by cuttability, model savings ─────
+type CutLevel = "easy" | "medium" | "hard";
+const CUT_PCT: Record<CutLevel, number> = { easy: 0.3, medium: 0.15, hard: 0.05 };
+
+function CostCuttingSimulator() {
+  const { store } = useApp();
+  const transactions = store.transactions ?? [];
+  const [levels, setLevels] = useFeatureState<Record<string, CutLevel>>("bud-cut-levels", {});
+  const fc = formatCurrency;
+
+  // Last 3 months of outflow by category → monthly average spend.
+  const avgByCat = useMemo(() => {
+    const start = startOfMonth(subMonths(new Date(), 2)).toISOString().split("T")[0];
+    const end = endOfMonth(new Date()).toISOString().split("T")[0];
+    const map: Record<string, number> = {};
+    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+      const c = t.category ?? "expense";
+      map[c] = (map[c] ?? 0) + Math.abs(t.amount);
+    });
+    const out: Record<string, number> = {};
+    Object.keys(map).forEach(c => { out[c] = map[c] / 3; });
+    return out;
+  }, [transactions]);
+
+  const cats = Object.keys(avgByCat).sort((a, b) => avgByCat[b] - avgByCat[a]);
+  const setLevel = (cat: string, level: CutLevel) => setLevels(prev => ({ ...prev, [cat]: level }));
+
+  const rows = cats.map(c => {
+    const level = levels[c] ?? "hard";
+    const monthly = avgByCat[c];
+    const saving = monthly * CUT_PCT[level];
+    return { cat: c, monthly, level, saving };
+  });
+  const totalMonthly = rows.reduce((s, r) => s + r.monthly, 0);
+  const totalSaving = rows.reduce((s, r) => s + r.saving, 0);
+  const annualSaving = totalSaving * 12;
+
+  const LEVELS: CutLevel[] = ["easy", "medium", "hard"];
+
+  return (
+    <ToolShell icon={Scissors} title="Cost-Cutting Simulator" intro="Each spend category from the last 3 months, with a cuttability dial. Tag a line easy / medium / hard and we model the realistic saving (30% / 15% / 5% of its monthly run-rate) so you can find the safest cuts first.">
+      {rows.length > 0 ? (
+        <div className="space-y-3">
+          <StatCards cards={[
+            { label: "Monthly Spend", value: fc(totalMonthly), color: "text-[var(--color-primary)]" },
+            { label: "Modeled Monthly Saving", value: fc(totalSaving), color: "text-green-400" },
+            { label: "Annualised Saving", value: fc(annualSaving), color: "text-yellow-400" },
+          ]} />
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Category", "Avg monthly", "Cuttability", "Monthly saving", "% of total"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.cat} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium capitalize">{r.cat}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.monthly)}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1">
+                        {LEVELS.map(l => (
+                          <button key={l} onClick={() => setLevel(r.cat, l)}
+                            className={`text-[9px] capitalize px-1.5 py-0.5 rounded border ${r.level === l ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-green-400">{fc(r.saving)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{totalMonthly > 0 ? ((r.monthly / totalMonthly) * 100).toFixed(0) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : <p className="text-xs text-[var(--color-muted)]">No outflow transactions in the last 3 months to analyse.</p>}
+    </ToolShell>
+  );
+}
+
+// ── Budget Reallocation Tool — move budget between live budgets, balance to zero ──
+type Move = { id: string; fromId: string; toId: string; amount: number };
+
+function BudgetReallocationTool() {
+  const { store } = useApp();
+  const budgets = store.budgets ?? [];
+  const [moves, setMoves] = useFeatureState<Move[]>("bud-realloc-moves", []);
+  const [fromId, setFromId] = useState("");
+  const [toId, setToId] = useState("");
+  const [amount, setAmount] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!fromId || !toId || fromId === toId || amt <= 0) { toast.error("Pick two different budgets and an amount"); return; }
+    setMoves(prev => [...prev, { id: crypto.randomUUID(), fromId, toId, amount: amt }]);
+    setAmount("");
+    toast.success("Reallocation queued");
+  };
+  const remove = (id: string) => setMoves(prev => prev.filter(m => m.id !== id));
+
+  // Net delta per budget across all queued moves → revised limit.
+  const delta: Record<string, number> = {};
+  moves.forEach(m => {
+    delta[m.fromId] = (delta[m.fromId] ?? 0) - m.amount;
+    delta[m.toId] = (delta[m.toId] ?? 0) + m.amount;
+  });
+  const revised = budgets.map(b => ({ ...b, delta: delta[b.id] ?? 0, revised: b.monthlyLimit + (delta[b.id] ?? 0) }));
+  const totalBefore = budgets.reduce((s, b) => s + b.monthlyLimit, 0);
+  const totalAfter = revised.reduce((s, b) => s + b.revised, 0);
+  const netSwing = moves.reduce((s, m) => s + m.amount, 0);
+  const nameOf = (id: string) => budgets.find(b => b.id === id)?.label ?? "—";
+
+  return (
+    <ToolShell icon={ArrowLeftRight} title="Budget Reallocation Tool" intro="Move money between your budget categories without changing the total. Queue from → to transfers and see each budget's revised limit — total pool stays balanced, so reallocations never silently inflate the plan.">
+      {budgets.length >= 2 ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <select value={fromId} onChange={e => setFromId(e.target.value)} className={INP}>
+              <option value="">From budget…</option>
+              {budgets.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            <select value={toId} onChange={e => setToId(e.target.value)} className={INP}>
+              <option value="">To budget…</option>
+              {budgets.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹ *" className={INP} />
+            <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Reallocate</button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <StatCards cards={[
+              { label: "Total Before", value: fc(totalBefore), color: "text-[var(--color-primary)]" },
+              { label: "Total After", value: fc(totalAfter), color: Math.round(totalAfter) === Math.round(totalBefore) ? "text-green-400" : "text-red-400" },
+              { label: "Reallocated", value: fc(netSwing), color: "text-blue-400" },
+            ]} />
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead><tr className="border-b border-[var(--color-border)]">{["Budget", "Current limit", "Net change", "Revised limit"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {revised.map(b => (
+                    <tr key={b.id} className="hover:bg-white/2">
+                      <td className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: b.color }} />{b.label}</td>
+                      <td className="px-3 py-2.5 text-xs tabular-nums">{fc(b.monthlyLimit)}</td>
+                      <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${b.delta < 0 ? "text-red-400" : b.delta > 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{b.delta > 0 ? "+" : b.delta < 0 ? "-" : ""}{fc(Math.abs(b.delta))}</td>
+                      <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(b.revised)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {moves.length > 0 && (
+              <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-[var(--color-muted)] mb-1">Queued moves</p>
+                {moves.map(m => (
+                  <div key={m.id} className="flex items-center justify-between text-xs">
+                    <span>{nameOf(m.fromId)} <ArrowLeftRight size={10} className="inline mx-1 text-[var(--color-muted)]" /> {nameOf(m.toId)} · <span className="tabular-nums font-semibold">{fc(m.amount)}</span></span>
+                    <button onClick={() => remove(m.id)} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : <p className="text-xs text-[var(--color-muted)]">Create at least two budget categories above to reallocate between them.</p>}
+    </ToolShell>
+  );
+}
+
+// ── Quarterly Phasing Planner — spread an annual figure across Q1–Q4 ──────────────
+type PhaseLine = { id: string; label: string; annual: number; q1: number; q2: number; q3: number; q4: number };
+const QUARTERS = ["q1", "q2", "q3", "q4"] as const;
+const Q_LABELS = ["Q1", "Q2", "Q3", "Q4"] as const;
+
+function QuarterlyPhasingPlanner() {
+  const [lines, setLines] = useFeatureState<PhaseLine[]>("bud-phasing-lines", []);
+  const [label, setLabel] = useState("");
+  const [annual, setAnnual] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const amt = parseFloat(annual) || 0;
+    if (!label.trim() || amt <= 0) { toast.error("Enter a line and an annual amount"); return; }
+    const even = amt / 4;
+    setLines(prev => [...prev, { id: crypto.randomUUID(), label: label.trim(), annual: amt, q1: even, q2: even, q3: even, q4: even }]);
+    setLabel(""); setAnnual("");
+    toast.success("Line added — phased evenly across quarters");
+  };
+  const remove = (id: string) => setLines(prev => prev.filter(l => l.id !== id));
+  const setQ = (id: string, q: typeof QUARTERS[number], value: number) =>
+    setLines(prev => prev.map(l => l.id === id ? { ...l, [q]: value } : l));
+
+  const qTotals = QUARTERS.map(q => lines.reduce((s, l) => s + l[q], 0));
+  const grand = lines.reduce((s, l) => s + l.annual, 0);
+
+  return (
+    <ToolShell icon={CalendarClock} title="Quarterly Phasing Planner" intro="Take an annual figure per line, auto-phased evenly across the four quarters, then override any quarter to model seasonality or planned ramp-ups. The phased column flags any line that no longer reconciles to its annual total.">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Line item *" className={INP} />
+        <input type="number" min="1" value={annual} onChange={e => setAnnual(e.target.value)} placeholder="Annual ₹ *" className={INP} />
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add line</button>
+      </div>
+
+      {lines.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <StatCards cards={[
+            { label: "Q1", value: fc(qTotals[0]), color: "text-[var(--color-primary)]" },
+            { label: "Q2", value: fc(qTotals[1]), color: "text-blue-400" },
+            { label: "Q3", value: fc(qTotals[2]), color: "text-yellow-400" },
+            { label: "Q4", value: fc(qTotals[3]), color: "text-green-400" },
+          ]} />
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Line item", ...Q_LABELS, "Phased", "Annual", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {lines.map(l => {
+                  const phased = l.q1 + l.q2 + l.q3 + l.q4;
+                  const off = Math.round(phased) !== Math.round(l.annual);
+                  return (
+                    <tr key={l.id} className="hover:bg-white/2">
+                      <td className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
+                      {QUARTERS.map(q => (
+                        <td key={q} className="px-3 py-2">
+                          <input type="number" min="0" value={l[q] || ""} onChange={e => setQ(l.id, q, parseFloat(e.target.value) || 0)} placeholder="0"
+                            className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
+                        </td>
+                      ))}
+                      <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${off ? "text-red-400" : "text-green-400"}`}>{fc(phased)}</td>
+                      <td className="px-3 py-2.5 text-xs tabular-nums">{fc(l.annual)}</td>
+                      <td className="px-3 py-2.5"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-[var(--color-bg)]/40 font-semibold">
+                  <td className="px-3 py-2.5 text-xs">Total</td>
+                  {qTotals.map((t, ti) => <td key={ti} className="px-3 py-2.5 text-xs tabular-nums">{fc(t)}</td>)}
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-primary)]">{fc(qTotals.reduce((s, t) => s + t, 0))}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(grand)}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </ToolShell>
+  );
+}
+
+// ── Contingency Reserve Planner — buffer sized to spend volatility ────────────────
+function ContingencyReservePlanner() {
+  const { store } = useApp();
+  const transactions = store.transactions ?? [];
+  const [manualPct, setManualPct] = useFeatureState<string>("bud-contingency-pct", "");
+  const fc = formatCurrency;
+
+  // Monthly total outflow over the last 6 months → mean + volatility (coefficient of variation).
+  const stats = useMemo(() => {
+    const monthly: number[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const ref = subMonths(new Date(), i);
+      const start = startOfMonth(ref).toISOString().split("T")[0];
+      const end = endOfMonth(ref).toISOString().split("T")[0];
+      const total = transactions
+        .filter(t => t.amount < 0 && t.date >= start && t.date <= end)
+        .reduce((s, t) => s + Math.abs(t.amount), 0);
+      monthly.push(total);
+    }
+    const mean = monthly.reduce((s, v) => s + v, 0) / (monthly.length || 1);
+    const variance = monthly.reduce((s, v) => s + (v - mean) ** 2, 0) / (monthly.length || 1);
+    const std = Math.sqrt(variance);
+    const cv = mean > 0 ? std / mean : 0; // coefficient of variation
+    return { mean, std, cv, monthly };
+  }, [transactions]);
+
+  // Suggested buffer % scales with volatility (cap 5–30%); a manual override wins.
+  const suggestedPct = Math.min(Math.max(stats.cv * 100, 5), 30);
+  const usePct = manualPct.trim() !== "" ? (parseFloat(manualPct) || 0) : suggestedPct;
+  const reserve = stats.mean * (usePct / 100);
+
+  return (
+    <ToolShell icon={ShieldCheck} title="Contingency Reserve Planner" intro="Sizes a contingency buffer from your last 6 months of spend: the more volatile your monthly outflows, the larger the suggested reserve (5–30% of average monthly spend). Override the percentage if you want a fixed policy.">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-1">
+        <div className="md:col-span-2">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Override reserve % (optional)</label>
+          <input type="number" min="0" max="100" value={manualPct} onChange={e => setManualPct(e.target.value)} placeholder={`Suggested ${suggestedPct.toFixed(0)}%`} className={INP} />
+        </div>
+      </div>
+      {stats.mean > 0 ? (
+        <div className="mt-3 space-y-3">
+          <StatCards cards={[
+            { label: "Avg Monthly Spend", value: fc(stats.mean), color: "text-[var(--color-primary)]" },
+            { label: "Volatility (±)", value: fc(stats.std), color: "text-yellow-400" },
+            { label: `Reserve @ ${usePct.toFixed(0)}%`, value: fc(reserve), color: "text-green-400" },
+            { label: "Annual Reserve", value: fc(reserve * 12), color: "text-blue-400" },
+          ]} />
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-2">Monthly outflow, last 6 months</p>
+            <div className="flex items-end gap-2 h-24">
+              {stats.monthly.map((v, i) => {
+                const max = Math.max(...stats.monthly, 1);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-[var(--color-primary)]/60 rounded-t" style={{ height: `${(v / max) * 100}%` }} />
+                    <span className="text-[10px] text-[var(--color-muted)]">{format(subMonths(new Date(), 5 - i), "MMM")}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : <p className="text-xs text-[var(--color-muted)]">No outflow transactions found to size a reserve.</p>}
     </ToolShell>
   );
 }

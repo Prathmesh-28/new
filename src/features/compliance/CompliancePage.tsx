@@ -9,6 +9,7 @@ import {
   FileStack, UserCheck, Users, BookMarked, Store, BadgeCheck, CalendarClock,
   FileSignature, ScrollText, Gavel, Activity, CheckCircle2, Copy,
   Receipt, Award, Ship, Leaf, Flame, HandCoins, GitCompareArrows, UserX, FileClock,
+  CalendarRange, Banknote, UserCog, ClipboardCheck, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
@@ -18,7 +19,8 @@ type ComplianceTab =
   | "shop-license" | "fssai-license" | "labour-calendar" | "templates"
   | "posh-policy" | "penalty-multi" | "health-score"
   | "ptax-tracker" | "ip-renewal" | "iec-compliance" | "pollution-consent"
-  | "fire-noc" | "csr-spend" | "rpt-register" | "dir-disqual" | "event-roc";
+  | "fire-noc" | "csr-spend" | "rpt-register" | "dir-disqual" | "event-roc"
+  | "annual-cal" | "msme-form1" | "sbo-register" | "secretarial-std" | "gst-turnover-recon";
 
 interface ComplianceEvent {
   date: Date;
@@ -159,6 +161,11 @@ export default function CompliancePage() {
           ["rpt-register", "Related-Party Txns", GitCompareArrows],
           ["dir-disqual", "Director Disqual.", UserX],
           ["event-roc", "Event-Based ROC", FileClock],
+          ["annual-cal", "Annual Master Calendar", CalendarRange],
+          ["msme-form1", "MSME Form-1 (45-day)", Banknote],
+          ["sbo-register", "Beneficial Owner (SBO)", UserCog],
+          ["secretarial-std", "Secretarial Standards", ClipboardCheck],
+          ["gst-turnover-recon", "GST vs Books Recon", Scale],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -187,6 +194,11 @@ export default function CompliancePage() {
       {tab === "rpt-register" && <RelatedPartyRegister />}
       {tab === "dir-disqual" && <DirectorDisqualChecker />}
       {tab === "event-roc" && <EventBasedRocTracker />}
+      {tab === "annual-cal" && <AnnualMasterCalendar />}
+      {tab === "msme-form1" && <MsmeForm1Tracker />}
+      {tab === "sbo-register" && <BeneficialOwnerRegister />}
+      {tab === "secretarial-std" && <SecretarialStandardsChecklist />}
+      {tab === "gst-turnover-recon" && <GstTurnoverRecon />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -1988,6 +2000,410 @@ function EventBasedRocTracker() {
         )}
       </div>
       <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative — confirm the exact rule per form.</p>
+    </div>
+  );
+}
+
+// ── #143 ANNUAL COMPLIANCE MASTER CALENDAR (consolidated GST / IT / ROC / Labour) ─
+function AnnualMasterCalendar() {
+  const { store } = useApp();
+  const now = new Date();
+  // Pick the financial year currently in progress (Apr–Mar). fyStart = April of the FY we're in.
+  const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  type Stream = "GST" | "Income Tax" | "ROC / MCA" | "Labour" | "TDS";
+  type Row = { stream: Stream; form: string; freq: string; due: Date; note: string };
+
+  const gstReg = store.firm.gstRegistered ?? true;
+  const hasPayroll = store.transactions.some(t => t.category === "payroll");
+
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    const d = (m: number, day: number) => {
+      // months 3..14 map to Apr(this FY) .. Mar(next year)
+      const year = m <= 11 ? fyStartYear : fyStartYear + 1;
+      const month = m <= 11 ? m : m - 12;
+      return new Date(year, month, day);
+    };
+    // Monthly recurring (show next occurrence for brevity, plus frequency label)
+    out.push({ stream: "TDS", form: "TDS challan (281)", freq: "Monthly · 7th", due: d(now.getMonth(), 7), note: "Deposit tax deducted last month by the 7th." });
+    if (gstReg) {
+      out.push({ stream: "GST", form: "GSTR-1", freq: "Monthly · 11th", due: d(now.getMonth(), 11), note: "Outward supplies for last month." });
+      out.push({ stream: "GST", form: "GSTR-3B", freq: "Monthly · 20th", due: d(now.getMonth(), 20), note: "Summary return + net GST payment." });
+    }
+    if (hasPayroll) out.push({ stream: "Labour", form: "PF ECR + ESI", freq: "Monthly · 15th", due: d(now.getMonth(), 15), note: "Provident fund & ESI contributions." });
+    // Annual / periodic fixed dates within the FY
+    out.push({ stream: "Income Tax", form: "Advance tax Q1 (15%)", freq: "15-Jun", due: d(5, 15), note: "First advance-tax instalment." });
+    out.push({ stream: "Income Tax", form: "Advance tax Q2 (45%)", freq: "15-Sep", due: d(8, 15), note: "Cumulative 45% of estimated tax." });
+    out.push({ stream: "Income Tax", form: "Advance tax Q3 (75%)", freq: "15-Dec", due: d(11, 15), note: "Cumulative 75% of estimated tax." });
+    out.push({ stream: "Income Tax", form: "Advance tax Q4 (100%)", freq: "15-Mar", due: d(14, 15), note: "Full estimated tax paid." });
+    out.push({ stream: "Income Tax", form: "Tax audit (3CA/3CB-3CD)", freq: "30-Sep", due: d(8, 30), note: "If turnover > ₹1 cr (₹10 cr if cash ≤5%) or §44AB applies." });
+    out.push({ stream: "Income Tax", form: "ITR (audited)", freq: "31-Oct", due: d(9, 31), note: "Return for companies/audited assessees." });
+    out.push({ stream: "ROC / MCA", form: "DPT-3", freq: "30-Jun", due: d(5, 30), note: "Return of deposits & exempted loans as on 31 Mar." });
+    out.push({ stream: "ROC / MCA", form: "DIR-3 KYC", freq: "30-Sep", due: d(8, 30), note: "Annual KYC of every DIN holder." });
+    out.push({ stream: "ROC / MCA", form: "AOC-4", freq: "Within 30d of AGM", due: d(9, 29), note: "Financial statements (default 29-Oct for 30-Sep AGM)." });
+    out.push({ stream: "ROC / MCA", form: "MGT-7 / 7A", freq: "Within 60d of AGM", due: d(10, 29), note: "Annual return (default 29-Nov)." });
+    out.push({ stream: "GST", form: "GSTR-9 / 9C", freq: "31-Dec", due: d(11, 31), note: "Annual return & reconciliation (if turnover > ₹2 cr / ₹5 cr)." });
+    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H2)", freq: "30-Apr", due: d(13, 30), note: "Oct–Mar dues > 45 days to MSE suppliers." });
+    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H1)", freq: "31-Oct", due: d(9, 31), note: "Apr–Sep dues > 45 days to MSE suppliers." });
+    return out.sort((a, b) => a.due.getTime() - b.due.getTime());
+  }, [fyStartYear, gstReg, hasPayroll]);
+
+  const STREAM_STYLE: Record<Stream, string> = {
+    "GST": "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    "Income Tax": "bg-orange-900/30 text-orange-400 border-orange-800/40",
+    "ROC / MCA": "bg-pink-900/30 text-pink-400 border-pink-800/40",
+    "Labour": "bg-green-900/30 text-green-400 border-green-800/40",
+    "TDS": "bg-purple-900/30 text-purple-400 border-purple-800/40",
+  };
+  const STREAMS: Stream[] = ["GST", "Income Tax", "ROC / MCA", "Labour", "TDS"];
+  const [active, setActive] = useState<Stream | "all">("all");
+  const shown = active === "all" ? rows : rows.filter(r => r.stream === active);
+
+  const copyAll = () => {
+    const text = rows.map(r => `${format(r.due, "dd MMM yyyy")}\t${r.stream}\t${r.form}\t${r.freq}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => toast.success("Calendar copied to clipboard")).catch(() => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Annual Compliance Master Calendar — FY {fyStartYear}–{(fyStartYear + 1).toString().slice(2)}</h3>
+            <p className="text-xs text-[var(--color-muted)]">Every statutory due date for the year in one place — GST, income tax, TDS, ROC/MCA and labour — scoped to your firm profile (GST {gstReg ? "registered" : "not registered"}{hasPayroll ? ", payroll active" : ""}).</p>
+          </div>
+          <button onClick={copyAll} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)] shrink-0"><Copy size={12} /> Copy all</button>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {(["all", ...STREAMS] as const).map(s => (
+            <button key={s} onClick={() => setActive(s)} className={`text-[10px] px-2.5 py-1 rounded-full border font-medium ${active === s ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{s === "all" ? "All streams" : s}</button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+        {shown.map((r, i) => {
+          const days = differenceInDays(r.due, now);
+          const urgent = days >= 0 && days <= 14;
+          return (
+            <div key={`${r.form}-${i}`} className="flex items-center gap-4 px-5 py-3">
+              <div className="w-14 text-center shrink-0">
+                <p className={`text-base font-bold leading-none ${urgent ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{format(r.due, "d")}</p>
+                <p className="text-[10px] text-[var(--color-muted)] uppercase">{format(r.due, "MMM")}</p>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium">{r.form}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${STREAM_STYLE[r.stream]}`}>{r.stream}</span>
+                  <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] px-1.5 py-0.5 rounded-full">{r.freq}</span>
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] truncate">{r.note}</p>
+              </div>
+              <p className={`text-[10px] shrink-0 ${urgent ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}`}>{days < 0 ? `${-days}d ago` : days === 0 ? "Today" : `in ${days}d`}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Monthly rows show the next occurrence; AGM-linked ROC dates assume a 30-Sep AGM. Adjust for actual AGM date and turnover-based applicability.</p>
+    </div>
+  );
+}
+
+// ── #144 MSME FORM-1 (delayed-payment to MSE suppliers > 45 days) TRACKER ────────
+type MsmeDue = { id: string; supplier: string; udyam: string; invoiceDate: string; amount: number; paid: boolean };
+function MsmeForm1Tracker() {
+  const [dues, setDues] = useFeatureState<MsmeDue[]>("comp-msme-form1", []);
+  const [supplier, setSupplier] = useState("");
+  const [udyam, setUdyam] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [amount, setAmount] = useState("");
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!supplier || amt <= 0) { toast.error("Enter supplier and amount"); return; }
+    setDues(prev => [...prev, { id: Math.random().toString(36).slice(2), supplier, udyam, invoiceDate, amount: amt, paid: false }]);
+    setSupplier(""); setUdyam(""); setAmount(""); toast.success("Outstanding due added");
+  };
+
+  const today = new Date();
+  // RBI / MSMED accepted-day default: 45 days. Interest = 3× bank rate (~3 × 6.5% = 19.5% p.a., compounded monthly — simplified to simple here).
+  const RATE = 0.195;
+  const enriched = dues.map(d => {
+    const ageDays = differenceInDays(today, new Date(d.invoiceDate));
+    const overdueDays = Math.max(0, ageDays - 45);
+    const interest = d.paid ? 0 : (d.amount * RATE * overdueDays) / 365;
+    return { ...d, ageDays, overdueDays, interest, reportable: !d.paid && overdueDays > 0 };
+  }).sort((a, b) => b.overdueDays - a.overdueDays);
+
+  const reportable = enriched.filter(d => d.reportable);
+  const totalReportable = reportable.reduce((s, d) => s + d.amount, 0);
+  const totalInterest = reportable.reduce((s, d) => s + d.interest, 0);
+  const period = today.getMonth() >= 3 && today.getMonth() <= 8 ? "Apr–Sep (due 31 Oct)" : "Oct–Mar (due 30 Apr)";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Banknote size={14} className="text-[var(--color-primary)]" /> MSME Form-1 — Delayed Payments to MSE Suppliers</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Half-yearly MCA return (MSME-1) disclosing amounts outstanding beyond 45 days to Micro & Small suppliers. Current half-year: <span className="text-[var(--color-text)] font-medium">{period}</span>. Also feeds §43B(h) — unpaid dues lose income-tax deduction.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input className={INP} placeholder="MSE supplier name" value={supplier} onChange={e => setSupplier(e.target.value)} />
+          <input className={INP} placeholder="Udyam no. (optional)" value={udyam} onChange={e => setUdyam(e.target.value)} />
+          <input type="date" className={INP} title="Invoice / supply date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} />
+          <input type="number" className={INP} placeholder="Amount due (₹)" value={amount} onChange={e => setAmount(e.target.value)} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add outstanding due</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Reportable in MSME-1", value: formatCurrency(totalReportable), sub: `${reportable.length} supplier(s) > 45d`, color: reportable.length > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Est. interest exposure", value: formatCurrency(totalInterest), sub: "≈ 3× bank rate, simple", color: "text-orange-400" },
+            { label: "Total tracked", value: formatCurrency(dues.reduce((s, d) => s + d.amount, 0)), sub: `${dues.length} entries`, color: "text-[var(--color-text)]" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-[11px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {enriched.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No MSE dues tracked. Add outstanding supplier invoices to compute the MSME-1 disclosure.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {enriched.map(d => (
+              <div key={d.id} className="py-3 flex items-center gap-3">
+                <button onClick={() => setDues(prev => prev.map(x => x.id === d.id ? { ...x, paid: !x.paid } : x))} className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${d.paid ? "bg-green-900/30 text-green-400 border-green-800/40" : d.reportable ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{d.paid ? "Paid" : d.reportable ? "Reportable" : "Within 45d"}</button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{d.supplier} {d.udyam && <span className="text-[10px] text-[var(--color-muted)] font-mono">· {d.udyam}</span>}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">Invoice {d.invoiceDate} · {d.ageDays}d old{d.overdueDays > 0 && !d.paid ? ` · ${d.overdueDays}d past 45-day limit` : ""}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold tabular-nums">{formatCurrency(d.amount)}</p>
+                  {d.reportable && d.interest > 0 && <p className="text-[10px] text-orange-400 tabular-nums">+{formatCurrency(d.interest)} int.</p>}
+                </div>
+                <button onClick={() => setDues(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />45-day limit applies where there is a written agreement (else 15 days). Interest is compounded monthly under the MSMED Act — figures here are a simplified estimate. Confirm supplier MSE status from their Udyam certificate.</p>
+    </div>
+  );
+}
+
+// ── #145 BENEFICIAL OWNER (SBO / BEN-2) REGISTER ─────────────────────────────────
+type Sbo = { id: string; name: string; pan: string; directPct: number; indirectPct: number; declared: boolean };
+function BeneficialOwnerRegister() {
+  const [owners, setOwners] = useFeatureState<Sbo[]>("comp-sbo-register", []);
+  const [name, setName] = useState("");
+  const [pan, setPan] = useState("");
+  const [directPct, setDirectPct] = useState("");
+  const [indirectPct, setIndirectPct] = useState("");
+
+  const add = () => {
+    const dp = parseFloat(directPct) || 0;
+    const ip = parseFloat(indirectPct) || 0;
+    if (!name) { toast.error("Enter the individual's name"); return; }
+    if (dp + ip > 100) { toast.error("Holding cannot exceed 100%"); return; }
+    setOwners(prev => [...prev, { id: Math.random().toString(36).slice(2), name, pan, directPct: dp, indirectPct: ip, declared: false }]);
+    setName(""); setPan(""); setDirectPct(""); setIndirectPct(""); toast.success("Individual added to register");
+  };
+
+  // SBO threshold: ≥ 10% beneficial interest (shares/voting/dividend) held indirectly, or with any direct holding.
+  const THRESHOLD = 10;
+  const enriched = owners.map(o => {
+    const total = o.directPct + o.indirectPct;
+    // An SBO is significant where the indirect holding (or indirect + any direct) is ≥ 10%.
+    const isSbo = (o.indirectPct >= THRESHOLD) || (o.indirectPct > 0 && total >= THRESHOLD);
+    const needsBen2 = isSbo && !o.declared;
+    return { ...o, total, isSbo, needsBen2 };
+  }).sort((a, b) => b.total - a.total);
+
+  const sbos = enriched.filter(o => o.isSbo);
+  const pending = enriched.filter(o => o.needsBen2).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><UserCog size={14} className="text-[var(--color-primary)]" /> Significant Beneficial Owner (SBO) Register {pending > 0 && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">{pending} BEN-2 pending</span>}</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Maintain Form BEN-3 register of individuals holding ≥ 10% beneficial interest (directly or via layered entities). Each SBO files BEN-1 to the company; the company files BEN-2 to ROC within 30 days.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input className={INP} placeholder="Individual name" value={name} onChange={e => setName(e.target.value)} />
+          <input className={INP} placeholder="PAN (optional)" value={pan} onChange={e => setPan(e.target.value)} />
+          <input type="number" className={INP} placeholder="Direct holding %" value={directPct} onChange={e => setDirectPct(e.target.value)} />
+          <input type="number" className={INP} placeholder="Indirect holding %" value={indirectPct} onChange={e => setIndirectPct(e.target.value)} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add to register</button>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {enriched.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No individuals tracked. Add holders to identify Significant Beneficial Owners.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {enriched.map(o => (
+              <div key={o.id} className="py-3 flex items-center gap-3">
+                <button onClick={() => setOwners(prev => prev.map(x => x.id === o.id ? { ...x, declared: !x.declared } : x))} className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${!o.isSbo ? "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]" : o.declared ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{!o.isSbo ? "Below 10%" : o.declared ? "BEN-2 filed" : "BEN-2 due"}</button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{o.name} {o.pan && <span className="text-[10px] text-[var(--color-muted)] font-mono">· {o.pan}</span>}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">Direct {o.directPct}% · Indirect {o.indirectPct}% {o.isSbo && <span className="text-[var(--color-primary)] font-medium">· SBO</span>}</p>
+                </div>
+                <p className={`text-sm font-bold tabular-nums shrink-0 ${o.isSbo ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{o.total}%</p>
+                <button onClick={() => setOwners(prev => prev.filter(x => x.id !== o.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {sbos.length > 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-3 border-t border-[var(--color-border)]">{sbos.length} significant beneficial owner(s) identified — each must file BEN-1; the company files BEN-2 within 30 days of receiving it.</p>}
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />The 10% SBO threshold tests beneficial interest in shares, voting rights, dividend or control held indirectly (alone or with direct holdings). Pure direct shareholders shown on the register are not SBOs. Determination is fact-specific — confirm with your CS.</p>
+    </div>
+  );
+}
+
+// ── #146 SECRETARIAL STANDARDS (SS-1 board / SS-2 general meetings) CHECKLIST ─────
+function SecretarialStandardsChecklist() {
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("comp-secretarial-std", {});
+  const toggle = (id: string) => setDone(prev => ({ ...prev, [id]: !prev[id] }));
+
+  type Item = { id: string; std: "SS-1" | "SS-2"; text: string };
+  const ITEMS: Item[] = [
+    { id: "ss1-notice", std: "SS-1", text: "Board notice issued ≥ 7 days before the meeting (with agenda & notes)." },
+    { id: "ss1-quorum", std: "SS-1", text: "Quorum present: 1/3rd of total strength or 2 directors, whichever higher." },
+    { id: "ss1-freq", std: "SS-1", text: "Minimum 4 board meetings held in the year with gap ≤ 120 days." },
+    { id: "ss1-leave", std: "SS-1", text: "No director absent from all meetings for 12 months (vacation of office)." },
+    { id: "ss1-minutes", std: "SS-1", text: "Minutes entered in the minute book within 30 days; pages numbered & signed." },
+    { id: "ss1-draftcirc", std: "SS-1", text: "Draft minutes circulated to directors within 15 days of the meeting." },
+    { id: "ss2-notice21", std: "SS-2", text: "AGM/EGM notice given ≥ 21 clear days to every member, director & auditor." },
+    { id: "ss2-explan", std: "SS-2", text: "Explanatory statement annexed for each item of special business." },
+    { id: "ss2-quorum", std: "SS-2", text: "Quorum (5/15/30 members per company size) present throughout." },
+    { id: "ss2-proxy", std: "SS-2", text: "Proxy form (MGT-11) enclosed; proxies lodged ≥ 48 hours before." },
+    { id: "ss2-attend", std: "SS-2", text: "Attendance register maintained and signed by members present." },
+    { id: "ss2-minutes", std: "SS-2", text: "General meeting minutes recorded in a separate minute book within 30 days." },
+  ];
+
+  const groups: { std: Item["std"]; label: string }[] = [
+    { std: "SS-1", label: "SS-1 — Meetings of the Board of Directors" },
+    { std: "SS-2", label: "SS-2 — General Meetings" },
+  ];
+  const total = ITEMS.length;
+  const checked = ITEMS.filter(i => done[i.id]).length;
+  const pct = total === 0 ? 0 : Math.round((checked / total) * 100);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Secretarial Standards Checklist (SS-1 / SS-2)</h3>
+            <p className="text-xs text-[var(--color-muted)]">ICSI Secretarial Standards on board and general meetings are mandatory under §118(10). This checklist confirms your meeting process is compliant.</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className={`text-2xl font-bold tabular-nums ${pct === 100 ? "text-green-400" : pct >= 60 ? "text-yellow-400" : "text-red-400"}`}>{pct}%</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{checked}/{total} confirmed</p>
+          </div>
+        </div>
+        <div className="mt-3 h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+          <div className={`h-full ${pct === 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      {groups.map(g => (
+        <div key={g.std} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{g.label}</p></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {ITEMS.filter(i => i.std === g.std).map(i => (
+              <label key={i.id} className="flex items-start gap-3 px-5 py-3 cursor-pointer hover:bg-white/2 transition-colors">
+                <input type="checkbox" checked={!!done[i.id]} onChange={() => toggle(i.id)} className="mt-0.5 accent-[var(--color-primary)] shrink-0" />
+                <span className={`text-sm ${done[i.id] ? "line-through text-[var(--color-muted)]" : ""}`}>{i.text}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Non-compliance with SS-1/SS-2 is reported in the secretarial audit (MR-3) and can invalidate resolutions. Quorum and notice thresholds vary by company class — verify with your CS.</p>
+    </div>
+  );
+}
+
+// ── #147 GST TURNOVER vs BOOKS RECONCILIATION (GSTR-9C prep) ─────────────────────
+function GstTurnoverRecon() {
+  const { store } = useApp();
+  // Books turnover = positive (income) transactions for the firm.
+  const booksTurnover = useMemo(() => store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [store.transactions]);
+
+  const [gstrTurnover, setGstrTurnover] = useFeatureState<string>("comp-gst-recon-gstr", "");
+  const [unbilled, setUnbilled] = useFeatureState<string>("comp-gst-recon-unbilled", "");
+  const [exempt, setExempt] = useFeatureState<string>("comp-gst-recon-exempt", "");
+  const [nonGst, setNonGst] = useFeatureState<string>("comp-gst-recon-nongst", "");
+
+  const n = (v: string) => parseFloat(v) || 0;
+  const gstr = n(gstrTurnover);
+  // Adjusted books turnover that should match GST returns = books − exempt/non-GST income + unbilled revenue recognised in books.
+  const adjustments = -n(exempt) - n(nonGst) + n(unbilled);
+  const adjustedBooks = booksTurnover + adjustments;
+  const diff = gstr === 0 ? 0 : adjustedBooks - gstr;
+  const absDiff = Math.abs(diff);
+  const pctDiff = gstr === 0 ? 0 : (absDiff / gstr) * 100;
+  const status = gstr === 0 ? "info" : absDiff < 1 ? "ok" : pctDiff <= 1 ? "minor" : "review";
+
+  const STATUS: Record<string, { cls: string; label: string }> = {
+    info: { cls: "bg-[var(--color-accent)] text-[var(--color-muted)]", label: "Enter GST turnover to reconcile" },
+    ok: { cls: "bg-green-950/30 text-green-400 border border-green-800/40", label: "Reconciled — books match GST returns" },
+    minor: { cls: "bg-yellow-950/30 text-yellow-400 border border-yellow-800/40", label: "Minor difference — within 1%, document the reason" },
+    review: { cls: "bg-red-950/30 text-red-400 border border-red-800/40", label: "Material difference — investigate before GSTR-9C" },
+  };
+
+  const rows = [
+    { label: "Turnover as per books (income)", value: booksTurnover, sub: "From your transactions" },
+    { label: "Less: exempt / nil-rated supplies", value: -n(exempt), sub: "Not reported as taxable" },
+    { label: "Less: non-GST income (e.g. interest)", value: -n(nonGst), sub: "Outside GST scope" },
+    { label: "Add: unbilled revenue in books", value: n(unbilled), sub: "Recognised but not yet invoiced" },
+    { label: "Adjusted books turnover", value: adjustedBooks, sub: "Comparable to GST returns", bold: true },
+    { label: "Turnover as per GSTR-1 / 3B", value: gstr, sub: "As filed", bold: true },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Scale size={14} className="text-[var(--color-primary)]" /> GST vs Books Turnover Reconciliation</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reconciles turnover declared in GST returns against your books — the core of GSTR-9C (mandatory above ₹5 cr) and a common GST-audit query. Books turnover is pulled from your transactions; enter GST and adjustment figures below.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Turnover as per GSTR-1 / 3B (₹)</label>
+            <input type="number" className={INP} placeholder="As filed in GST returns" value={gstrTurnover} onChange={e => setGstrTurnover(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Unbilled revenue in books (₹)</label>
+            <input type="number" className={INP} placeholder="Recognised, not yet invoiced" value={unbilled} onChange={e => setUnbilled(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Exempt / nil-rated supplies (₹)</label>
+            <input type="number" className={INP} placeholder="In books, not taxable" value={exempt} onChange={e => setExempt(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Non-GST income (₹)</label>
+            <input type="number" className={INP} placeholder="e.g. interest, dividend" value={nonGst} onChange={e => setNonGst(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.label} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0 ${r.bold ? "font-semibold" : ""}`}>
+              <div><span>{r.label}</span><span className="text-[10px] text-[var(--color-muted)] ml-2">{r.sub}</span></div>
+              <span className={`tabular-nums ${r.value < 0 ? "text-red-400" : ""}`}>{formatCurrency(r.value)}</span>
+            </div>
+          ))}
+        </div>
+        <div className={`mt-4 rounded-lg px-4 py-3 text-sm flex items-center justify-between ${STATUS[status].cls}`}>
+          <span className="font-medium">{STATUS[status].label}</span>
+          {gstr !== 0 && <span className="tabular-nums font-bold">Diff {formatCurrency(diff)} ({pctDiff.toFixed(1)}%)</span>}
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />A clean reconciliation needs every difference explained (timing, schemes, credit notes, cross-charges). GSTR-9C requires the auditor to certify these adjustments — this is a prep aid, not the certified statement.</p>
     </div>
   );
 }
