@@ -8,6 +8,7 @@ import {
   AlertTriangle, CheckCircle2, Repeat, Scale, ShieldCheck, Building2,
   Coins, CreditCard, Gift, Receipt, Scale3d, LineChart, Waves,
   Gem, Building, Activity, ShieldAlert, FileText, Clock, ArrowLeftRight,
+  Timer, Banknote, Sparkles, Hourglass,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
@@ -21,7 +22,8 @@ type Tab =
   | "tbill" | "goal" | "split" | "posttax" | "maturity"
   | "sip" | "debteq" | "emergency" | "sweepfd" | "corpfd" | "smallsave"
   | "swod" | "income" | "capgain" | "rebalance" | "xirr" | "waterfall"
-  | "gold" | "reit" | "mtm" | "dicgc" | "policy" | "accrued" | "almatch";
+  | "gold" | "reit" | "mtm" | "dicgc" | "policy" | "accrued" | "almatch"
+  | "incfcast" | "liqtier" | "ylq" | "oppcost";
 
 export default function TreasuryPage() {
   const { store } = useApp();
@@ -74,6 +76,10 @@ export default function TreasuryPage() {
             ["policy", "Treasury Policy", FileText],
             ["accrued", "Accrued Interest", Clock],
             ["almatch", "Asset-Liability Match", ArrowLeftRight],
+            ["incfcast", "Interest-Income Forecast", Banknote],
+            ["liqtier", "Liquidity Tiers", Hourglass],
+            ["ylq", "Yield vs Liquidity", Sparkles],
+            ["oppcost", "Idle-Cash Opportunity Cost", Timer],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -113,6 +119,10 @@ export default function TreasuryPage() {
       {tab === "policy" && <TreasuryPolicyConfig />}
       {tab === "accrued" && <AccruedInterestCalculator />}
       {tab === "almatch" && <AssetLiabilityMatcher />}
+      {tab === "incfcast" && <InterestIncomeForecast totalBalance={totalBalance} />}
+      {tab === "liqtier" && <LiquidityTierAllocator totalBalance={totalBalance} />}
+      {tab === "ylq" && <YieldLiquidityTradeoff />}
+      {tab === "oppcost" && <IdleCashOpportunityCost totalBalance={totalBalance} />}
     </div>
   );
 }
@@ -2720,6 +2730,315 @@ function AssetLiabilityMatcher() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Gaps are within-bucket only and don't carry surplus forward between buckets — read them as timing warnings, not a full liquidity forecast. A negative near-term gap means plan a maturity or credit line before that bucket.</p>
+    </div>
+  );
+}
+
+// ── Interest-Income Forecast (multi-year projection of treasury income) ─────────
+function InterestIncomeForecast({ totalBalance }: { totalBalance: number }) {
+  const [deployed, setDeployed] = useState(String(Math.max(0, Math.round(totalBalance * 0.5)) || ""));
+  const [yieldPct, setYieldPct] = useState("7.25");
+  const [growthPct, setGrowthPct] = useState(10);
+  const [slab, setSlab] = useState("30");
+  const [years, setYears] = useState(5);
+
+  const base = parseFloat(deployed) || 0;
+  const y = (parseFloat(yieldPct) || 0) / 100;
+  const g = growthPct / 100;
+  const taxRate = (parseFloat(slab) || 0) / 100;
+
+  const rows = useMemo(() => {
+    if (base <= 0) return [];
+    let corpus = base;
+    return Array.from({ length: years }, (_, i) => {
+      const gross = corpus * y;
+      const tax = gross * taxRate;
+      const net = gross - tax;
+      const row = { year: i + 1, corpus, gross, tax, net };
+      // Net income is reinvested; principal grows by the deployment-growth assumption.
+      corpus = corpus * (1 + g) + net;
+      return row;
+    });
+  }, [base, y, g, taxRate, years]);
+
+  const totalGross = rows.reduce((s, r) => s + r.gross, 0);
+  const totalNet = rows.reduce((s, r) => s + r.net, 0);
+  const totalTax = rows.reduce((s, r) => s + r.tax, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Interest-Income Forecast</h3>
+        <p className="text-xs text-[var(--color-muted)]">Project the recurring interest your treasury throws off over the next few years — net income is reinvested and the deployed corpus grows as the business retains more cash.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deployed corpus (₹)</label>
+            <input type="number" value={deployed} onChange={e => setDeployed(e.target.value)} placeholder="2500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Blended yield (% p.a.)</label>
+            <input type="number" value={yieldPct} onChange={e => setYieldPct(e.target.value)} placeholder="7.25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tax slab (%)</label>
+            <input type="number" value={slab} onChange={e => setSlab(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Corpus growth: <strong className="text-[var(--color-text)]">{growthPct}%</strong>/yr</label>
+            <input type="range" min={0} max={30} step={1} value={growthPct} onChange={e => setGrowthPct(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Horizon: <strong className="text-[var(--color-text)]">{years} years</strong></label>
+          <input type="range" min={1} max={10} step={1} value={years} onChange={e => setYears(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {rows.length > 0 ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: `Gross interest (${years}yr)`, value: formatCurrency(Math.round(totalGross)), color: "text-[var(--color-text)]" },
+              { label: "Tax paid", value: formatCurrency(Math.round(totalTax)), color: "text-red-400" },
+              { label: "Net interest income", value: formatCurrency(Math.round(totalNet)), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Year", "Opening corpus", "Gross interest", "Tax", "Net income"].map(h =>
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.year} className="hover:bg-white/2">
+                      <td className="px-5 py-2.5 tabular-nums">{r.year}</td>
+                      <td className="px-5 py-2.5 tabular-nums">{formatCurrency(Math.round(r.corpus))}</td>
+                      <td className="px-5 py-2.5 tabular-nums">{formatCurrency(Math.round(r.gross))}</td>
+                      <td className="px-5 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(r.tax))}</td>
+                      <td className="px-5 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.net))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter a deployed corpus to forecast interest income.</p>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Yields are pre-tax estimates and not guaranteed; corpus growth is your own retention assumption. Net income is taxed at slab and assumed reinvested at the same yield. A forecasting aid, not advice.</p>
+    </div>
+  );
+}
+
+// ── Liquidity-Tier Allocator (split cash by when it's needed) ───────────────────
+function LiquidityTierAllocator({ totalBalance }: { totalBalance: number }) {
+  const [cash, setCash] = useState(String(Math.round(totalBalance) || ""));
+  const [t1, setT1] = useState(20); // 0-7d
+  const [t2, setT2] = useState(35); // 1-6m
+  // tier 3 (6m+) is the remainder.
+
+  const C = parseFloat(cash) || 0;
+  const p1 = Math.min(100, Math.max(0, t1));
+  const p2 = Math.min(100 - p1, Math.max(0, t2));
+  const p3 = Math.max(0, 100 - p1 - p2);
+
+  const TIERS = [
+    { name: "Tier 1 — Operating", horizon: "0–7 days", pct: p1, yield: 6.8, instr: "Overnight / liquid funds, sweep account", color: "#22c55e" },
+    { name: "Tier 2 — Reserve", horizon: "1–6 months", pct: p2, yield: 7.4, instr: "Short-duration debt, sweep FD, T-bills", color: "#3b82f6" },
+    { name: "Tier 3 — Strategic", horizon: "6m+", pct: p3, yield: 7.9, instr: "Corporate FD (AAA), G-Secs, longer ladder", color: "#a855f7" },
+  ];
+  const blended = TIERS.reduce((s, t) => s + t.pct * t.yield, 0) / 100;
+  const annual = Math.round(C * blended / 100);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Liquidity-Tier Allocator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Bucket cash by how soon you'll need it, not by risk appetite. Same-day money stays instant; money you won't touch for months can earn more. The third tier is whatever's left.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total cash (₹)</label>
+            <input type="number" value={cash} onChange={e => setCash(e.target.value)} placeholder="3000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 1 (0–7d): <strong className="text-[var(--color-text)]">{p1}%</strong></label>
+            <input type="range" min={0} max={100} step={5} value={t1} onChange={e => setT1(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 2 (1–6m): <strong className="text-[var(--color-text)]">{p2}%</strong></label>
+            <input type="range" min={0} max={100} step={5} value={t2} onChange={e => setT2(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {C > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">Blended yield</p>
+              <p className="text-xl font-bold tabular-nums text-[var(--color-text)]">{blended.toFixed(2)}%</p>
+            </div>
+            <div className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">Est. annual income</p>
+              <p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(annual)}</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {TIERS.map(t => (
+              <div key={t.name} className={`${CARD} p-4`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div>
+                    <p className="text-sm font-semibold">{t.name} <span className="text-[var(--color-muted)] font-normal">· {t.horizon} · ~{t.yield}%</span></p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{t.instr}</p>
+                  </div>
+                  <p className="text-sm font-bold tabular-nums">{formatCurrency(Math.round(C * t.pct / 100))} <span className="text-[var(--color-muted)] text-xs">· {t.pct}%</span></p>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${t.pct}%`, background: t.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Tier yields are indicative and not guaranteed. Size Tier 1 to cover committed payables and payroll before stretching for yield in higher tiers. Allocation aid, not advice.</p>
+    </div>
+  );
+}
+
+// ── Yield vs Liquidity Tradeoff (score instruments on both axes) ────────────────
+function YieldLiquidityTradeoff() {
+  const [pref, setPref] = useState(50); // 0 = pure liquidity, 100 = pure yield
+
+  // liquidity score 0-100 (100 = instant), yield % indicative.
+  const OPTIONS = [
+    { name: "Savings / current account", yield: 3.0, liquidity: 100 },
+    { name: "Sweep FD (auto-break)", yield: 6.5, liquidity: 95 },
+    { name: "Overnight / liquid fund", yield: 6.8, liquidity: 90 },
+    { name: "91-day T-Bill", yield: 7.0, liquidity: 60 },
+    { name: "Short-duration debt fund", yield: 7.4, liquidity: 70 },
+    { name: "1-year bank FD", yield: 7.25, liquidity: 40 },
+    { name: "Corporate FD (AAA, 2yr)", yield: 7.9, liquidity: 20 },
+  ];
+  const w = pref / 100;
+  const maxY = Math.max(...OPTIONS.map(o => o.yield));
+  const scored = OPTIONS
+    .map(o => ({ ...o, score: w * (o.yield / maxY * 100) + (1 - w) * o.liquidity }))
+    .sort((a, b) => b.score - a.score);
+  const best = scored[0];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Yield vs Liquidity Tradeoff</h3>
+        <p className="text-xs text-[var(--color-muted)]">Every instrument trades return against how fast you can get your money back. Slide toward what you value more and see which option scores best on the blend.</p>
+        <div>
+          <div className="flex justify-between text-[11px] text-[var(--color-muted)] mb-1">
+            <span>Prioritise liquidity</span><span>Prioritise yield</span>
+          </div>
+          <input type="range" min={0} max={100} step={5} value={pref} onChange={e => setPref(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          <p className="text-center text-xs mt-1"><strong className="text-[var(--color-text)]">{pref}%</strong> weight on yield · <strong className="text-[var(--color-text)]">{100 - pref}%</strong> on liquidity</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+        <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Best fit: {best.name} — ~{best.yield}% yield, {best.liquidity}/100 liquidity</p>
+      </div>
+
+      <div className={`${CARD} p-4 space-y-3`}>
+        {scored.map((o, i) => (
+          <div key={o.name}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-medium">{i + 1}. {o.name} <span className="text-[var(--color-muted)]">· {o.yield}% · liq {o.liquidity}</span></span>
+              <span className="tabular-nums font-semibold">{o.score.toFixed(0)}</span>
+            </div>
+            <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.min(100, o.score)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Liquidity scores are illustrative (100 = same-day access). Yields are indicative and not guaranteed. The score is a blended ranking aid — match the actual instrument to a real cash-need date.</p>
+    </div>
+  );
+}
+
+// ── Idle-Cash Opportunity Cost (cost of leaving cash idle over time) ────────────
+function IdleCashOpportunityCost({ totalBalance }: { totalBalance: number }) {
+  const [idle, setIdle] = useState(String(Math.round(totalBalance) || ""));
+  const [currentRate, setCurrentRate] = useState("3");
+  const [betterRate, setBetterRate] = useState("7");
+  const [months, setMonths] = useState(12);
+
+  const A = parseFloat(idle) || 0;
+  const cr = (parseFloat(currentRate) || 0) / 100;
+  const br = (parseFloat(betterRate) || 0) / 100;
+  const t = months / 12;
+  const spread = Math.max(0, br - cr);
+
+  const earnNow = A * Math.pow(1 + cr, t) - A;
+  const earnBetter = A * Math.pow(1 + br, t) - A;
+  const forgone = earnBetter - earnNow;
+  const perDay = months > 0 ? forgone / (months * 30.4) : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Idle-Cash Opportunity Cost</h3>
+        <p className="text-xs text-[var(--color-muted)]">Cash sitting in a current/savings account quietly costs you the better yield you could be earning. See what the gap adds up to — and what each idle day costs.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Idle cash (₹)</label>
+            <input type="number" value={idle} onChange={e => setIdle(e.target.value)} placeholder="2000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current rate (% p.a.)</label>
+            <input type="number" value={currentRate} onChange={e => setCurrentRate(e.target.value)} placeholder="3" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Achievable rate (% p.a.)</label>
+            <input type="number" value={betterRate} onChange={e => setBetterRate(e.target.value)} placeholder="7" className={INP} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Idle period: <strong className="text-[var(--color-text)]">{months} months</strong></label>
+          <input type="range" min={1} max={36} step={1} value={months} onChange={e => setMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {A > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Earning now", value: formatCurrency(Math.round(earnNow)), color: "text-[var(--color-muted)]", sub: `@ ${currentRate || 0}%` },
+              { label: "Could earn", value: formatCurrency(Math.round(earnBetter)), color: "text-green-400", sub: `@ ${betterRate || 0}%` },
+              { label: "Opportunity cost", value: formatCurrency(Math.round(forgone)), color: "text-red-400", sub: `over ${months} mo` },
+              { label: "Cost per idle day", value: formatCurrency(Math.round(perDay)), color: "text-red-400", sub: `${(spread * 100).toFixed(1)}% spread` },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+            <p className="text-sm font-bold text-red-400 flex items-center gap-2">
+              <AlertTriangle size={14} /> Leaving {formatCurrency(A)} idle for {months} months forgoes about {formatCurrency(Math.round(forgone))} — roughly {formatCurrency(Math.round(perDay))} every day it stays put.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Both rates compound annually here and are pre-tax. Achievable yields are market-linked and not guaranteed. Always keep committed payables and a runway buffer liquid before deploying — opportunity cost is only real on truly idle cash.</p>
     </div>
   );
 }

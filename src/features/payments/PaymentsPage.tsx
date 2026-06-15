@@ -10,6 +10,7 @@ import {
   CalendarRange, Coins, Calculator, FileSearch,
   Download, Trash2,
   FileCheck, Scale, ListOrdered, Boxes, BadgeCheck, Zap, CopyCheck,
+  Layers, ArrowDownUp, PiggyBank, PlugZap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
@@ -23,7 +24,8 @@ type Tab =
   | "refunds" | "split" | "success" | "collect" | "mix"
   | "autopay" | "bulk" | "reminders" | "qrbatch" | "disputes"
   | "emi" | "convfee" | "forecast" | "tip" | "utr"
-  | "nach" | "gwcompare" | "dunning" | "vaccount" | "verify" | "instant" | "dupe";
+  | "nach" | "gwcompare" | "dunning" | "vaccount" | "verify" | "instant" | "dupe"
+  | "feetier" | "allocate" | "reserve" | "downtime";
 
 async function copy(text: string, label = "Copied") {
   try {
@@ -78,6 +80,10 @@ export default function PaymentsPage() {
             ["verify", "Payee Verify", BadgeCheck],
             ["instant", "Instant Settle", Zap],
             ["dupe", "Duplicate Guard", CopyCheck],
+            ["feetier", "Fee Tier Model", Layers],
+            ["allocate", "Payment Allocation", ArrowDownUp],
+            ["reserve", "Rolling Reserve", PiggyBank],
+            ["downtime", "Method Downtime", PlugZap],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -115,6 +121,10 @@ export default function PaymentsPage() {
       {tab === "verify" && <PayeeVerifyLog />}
       {tab === "instant" && <InstantSettleCalculator />}
       {tab === "dupe" && <DuplicateGuard />}
+      {tab === "feetier" && <FeeTierModeler />}
+      {tab === "allocate" && <PaymentAllocator />}
+      {tab === "reserve" && <RollingReserveTracker />}
+      {tab === "downtime" && <MethodDowntimeLog />}
     </div>
   );
 }
@@ -2991,6 +3001,420 @@ function DuplicateGuard() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Heuristic match: identical non-empty reference, or same customer + same amount within the tolerance window. Genuine repeat purchases can trip this — review each group before refunding. Refund the extra charge to the original instrument and issue a GST credit note if the sale was taxed.</p>
+    </div>
+  );
+}
+
+// ── Fee-by-volume tier modeler ───────────────────────────────────────────────────────
+type FeeTier = { id: string; upto: number; ratePct: number };
+function FeeTierModeler() {
+  const [tiers, setTiers] = useFeatureState<FeeTier[]>("pay-feetiers", []);
+  const [upto, setUpto] = useState("");
+  const [rate, setRate] = useState("");
+  const [volume, setVolume] = useState("");
+
+  const sorted = useMemo(() => [...tiers].sort((a, b) => a.upto - b.upto), [tiers]);
+
+  const add = () => {
+    const u = Number(upto), r = Number(rate);
+    if (!Number.isFinite(u) || u <= 0) { toast.error("Enter a positive monthly-volume ceiling"); return; }
+    if (!Number.isFinite(r) || r < 0 || r > 5) { toast.error("Enter a rate between 0 and 5%"); return; }
+    if (tiers.some(t => t.upto === u)) { toast.error("A tier with that ceiling already exists"); return; }
+    setTiers([...tiers, { id: crypto.randomUUID(), upto: u, ratePct: r }]);
+    setUpto(""); setRate("");
+    toast.success("Tier added");
+  };
+
+  const vol = Number(volume) || 0;
+  const calc = useMemo(() => {
+    if (vol <= 0 || sorted.length === 0) return null;
+    let remaining = vol, fee = 0, prevCeil = 0;
+    const breakdown: { band: string; amount: number; ratePct: number; fee: number }[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const t = sorted[i];
+      const bandTop = t.upto;
+      const slab = Math.max(0, Math.min(remaining, bandTop - prevCeil));
+      if (slab > 0) {
+        const f = slab * t.ratePct / 100;
+        breakdown.push({ band: `${formatCurrency(prevCeil)} – ${formatCurrency(bandTop)}`, amount: slab, ratePct: t.ratePct, fee: f });
+        fee += f; remaining -= slab;
+      }
+      prevCeil = bandTop;
+      if (remaining <= 0) break;
+    }
+    if (remaining > 0) {
+      const topRate = sorted[sorted.length - 1].ratePct;
+      const f = remaining * topRate / 100;
+      breakdown.push({ band: `above ${formatCurrency(prevCeil)}`, amount: remaining, ratePct: topRate, fee: f });
+      fee += f;
+    }
+    const blended = vol > 0 ? fee / vol * 100 : 0;
+    return { fee, blended, breakdown };
+  }, [vol, sorted]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Fee-by-Volume Tier Modeler</h2>
+        <p className="text-xs text-[var(--color-muted)]">Build the slab-rate card your gateway offers as you scale, then drop in an expected monthly volume to see the marginal cost per band and your true blended MDR. Use it to negotiate the next tier before you cross it.</p>
+        <div className="flex gap-2 items-end flex-wrap">
+          <div className="w-40">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Volume up to (₹/mo)</label>
+            <input value={upto} onChange={e => setUpto(e.target.value)} inputMode="numeric" placeholder="1000000" className={INP} />
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate %</label>
+            <input value={rate} onChange={e => setRate(e.target.value)} inputMode="decimal" placeholder="1.8" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <Plus size={13} /> Add tier
+          </button>
+        </div>
+      </div>
+
+      {sorted.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No tiers yet. Add your gateway's slab card — e.g. 2.0% up to ₹5L, 1.8% up to ₹20L, 1.5% above.</p>
+      ) : (
+        <div className={`${CARD} p-5 space-y-4`}>
+          <div className="flex flex-wrap gap-2">
+            {sorted.map(t => (
+              <span key={t.id} className="flex items-center gap-2 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-full px-3 py-1.5">
+                <span className="font-medium">≤ {formatCurrency(t.upto)}</span>
+                <span className="text-[var(--color-primary)] tabular-nums">{t.ratePct}%</span>
+                <button onClick={() => setTiers(tiers.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
+              </span>
+            ))}
+          </div>
+          <div className="max-w-xs">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expected monthly volume (₹)</label>
+            <input value={volume} onChange={e => setVolume(e.target.value)} inputMode="numeric" placeholder="3500000" className={INP} />
+          </div>
+          {calc && (
+            <div className="space-y-2">
+              {calc.breakdown.map((b, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-1.5">
+                  <span className="text-[var(--color-muted)]">{b.band} <span className="text-[10px]">@ {b.ratePct}%</span></span>
+                  <span className="tabular-nums">{formatCurrency(Math.round(b.amount))} → <span className="text-[var(--color-text)] font-medium">{formatCurrency(Math.round(b.fee))}</span></span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between text-sm pt-1">
+                <span className="font-semibold">Total fee / blended MDR</span>
+                <span className="tabular-nums font-bold text-[var(--color-primary)]">{formatCurrency(Math.round(calc.fee))} · {calc.blended.toFixed(2)}%</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Marginal pricing: each slab is charged only on the volume that falls inside it, so your blended rate is always below the top-band rate. GST (18%) applies on the fee, not the transaction. Add a buffer tier above your forecast so a good month doesn't surprise you.</p>
+    </div>
+  );
+}
+
+// ── Partial-payment allocation ───────────────────────────────────────────────────────
+type AllocInvoice = { id: string; number: string; due: number };
+function PaymentAllocator() {
+  const [invoices, setInvoices] = useFeatureState<AllocInvoice[]>("pay-alloc-invoices", []);
+  const [number, setNumber] = useState("");
+  const [due, setDue] = useState("");
+  const [received, setReceived] = useState("");
+  const [mode, setMode] = useState<"oldest" | "prorata">("oldest");
+
+  const add = () => {
+    const d = Number(due);
+    if (!number.trim()) { toast.error("Enter an invoice number"); return; }
+    if (!Number.isFinite(d) || d <= 0) { toast.error("Enter a positive outstanding amount"); return; }
+    if (invoices.some(i => i.number.toLowerCase() === number.trim().toLowerCase())) { toast.error("That invoice is already listed"); return; }
+    setInvoices([...invoices, { id: crypto.randomUUID(), number: number.trim(), due: d }]);
+    setNumber(""); setDue("");
+  };
+
+  const totalDue = invoices.reduce((s, i) => s + i.due, 0);
+  const recv = Number(received) || 0;
+  const alloc = useMemo(() => {
+    if (recv <= 0 || invoices.length === 0) return null;
+    const rows = invoices.map(i => ({ ...i, applied: 0 }));
+    let pool = recv;
+    if (mode === "oldest") {
+      for (const r of rows) {
+        const a = Math.min(pool, r.due);
+        r.applied = a; pool -= a;
+        if (pool <= 0) break;
+      }
+    } else {
+      for (const r of rows) {
+        const share = totalDue > 0 ? Math.min(r.due, recv * r.due / totalDue) : 0;
+        r.applied = Math.round(share);
+      }
+      pool = recv - rows.reduce((s, r) => s + r.applied, 0);
+    }
+    const advance = Math.max(0, pool);
+    return { rows, advance };
+  }, [recv, invoices, mode, totalDue]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowDownUp size={14} className="text-[var(--color-primary)]" /> Partial-Payment Allocation</h2>
+        <p className="text-xs text-[var(--color-muted)]">A customer paid a lump sum that doesn't match any one invoice. List the open invoices, enter what landed, and decide whether to clear oldest-first or split pro-rata — then post clean part-payments to each bill.</p>
+        <div className="flex gap-2 items-end flex-wrap">
+          <div className="w-40">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice #</label>
+            <input value={number} onChange={e => setNumber(e.target.value)} placeholder="INV-1042" className={INP} />
+          </div>
+          <div className="w-40">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Outstanding (₹)</label>
+            <input value={due} onChange={e => setDue(e.target.value)} inputMode="numeric" placeholder="48000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <Plus size={13} /> Add invoice
+          </button>
+        </div>
+      </div>
+
+      {invoices.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No open invoices listed. Add the bills this customer still owes against, in age order.</p>
+      ) : (
+        <div className={`${CARD} p-5 space-y-4`}>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="w-44">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received (₹)</label>
+              <input value={received} onChange={e => setReceived(e.target.value)} inputMode="numeric" placeholder="60000" className={INP} />
+            </div>
+            <div className="w-40">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Allocation rule</label>
+              <select value={mode} onChange={e => setMode(e.target.value as typeof mode)} className={INP}>
+                <option value="oldest">Oldest first</option>
+                <option value="prorata">Pro-rata</option>
+              </select>
+            </div>
+            <span className="text-xs text-[var(--color-muted)]">Total due: <span className="tabular-nums text-[var(--color-text)]">{formatCurrency(totalDue)}</span></span>
+          </div>
+          <div className="space-y-2">
+            {(alloc ? alloc.rows : invoices.map(i => ({ ...i, applied: 0 }))).map(r => (
+              <div key={r.id} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-1.5">
+                <span className="font-medium flex items-center gap-2">
+                  {r.number}
+                  <button onClick={() => setInvoices(invoices.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
+                </span>
+                <span className="tabular-nums text-[var(--color-muted)]">
+                  applied <span className="text-green-400 font-medium">{formatCurrency(Math.round(r.applied))}</span> · bal {formatCurrency(Math.round(r.due - r.applied))}
+                </span>
+              </div>
+            ))}
+            {alloc && alloc.advance > 0 && (
+              <div className="flex items-center justify-between text-sm pt-1 text-[var(--color-primary)]">
+                <span className="font-semibold">Unapplied (post as advance)</span>
+                <span className="tabular-nums font-bold">{formatCurrency(Math.round(alloc.advance))}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Oldest-first protects your ageing buckets and is the safer default for receivables; pro-rata keeps every invoice proportionally alive when a customer disputes specific bills. Any surplus should be parked as a customer advance, not force-fit onto a bill.</p>
+    </div>
+  );
+}
+
+// ── Rolling-reserve tracker ──────────────────────────────────────────────────────────
+type ReserveRow = { id: string; month: string; gross: number; reservePct: number; releaseMonth: string };
+function RollingReserveTracker() {
+  const [rows, setRows] = useFeatureState<ReserveRow[]>("pay-reserves", []);
+  const [gross, setGross] = useState("");
+  const [pct, setPct] = useState("5");
+  const [holdMonths, setHoldMonths] = useState("6");
+  const [month, setMonth] = useState(() => format(new Date(), "yyyy-MM"));
+
+  const add = () => {
+    const g = Number(gross), p = Number(pct), h = Number(holdMonths);
+    if (!Number.isFinite(g) || g <= 0) { toast.error("Enter the month's gross processed volume"); return; }
+    if (!Number.isFinite(p) || p < 0 || p > 100) { toast.error("Reserve % must be 0–100"); return; }
+    if (!Number.isFinite(h) || h < 1) { toast.error("Hold period must be at least 1 month"); return; }
+    if (rows.some(r => r.month === month)) { toast.error("That month is already tracked"); return; }
+    const release = format(addMonths(new Date(month + "-01"), h), "yyyy-MM");
+    setRows([{ id: crypto.randomUUID(), month, gross: g, reservePct: p, releaseMonth: release }, ...rows]);
+    setGross("");
+    toast.success("Reserve recorded");
+  };
+
+  const today = format(new Date(), "yyyy-MM");
+  const held = useMemo(() => rows.map(r => ({ ...r, amount: r.gross * r.reservePct / 100, released: r.releaseMonth <= today })), [rows, today]);
+  const lockedUp = held.filter(r => !r.released).reduce((s, r) => s + r.amount, 0);
+  const dueThisMonth = held.filter(r => r.releaseMonth === today).reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Rolling-Reserve Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">High-risk merchants and new accounts often have a slice of every settlement withheld as a rolling reserve, released months later. Log each month's hold so you can forecast the cash that frees up — and chase releases the gateway forgets.</p>
+        <div className="flex gap-2 items-end flex-wrap">
+          <div className="w-36">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={INP} />
+          </div>
+          <div className="w-40">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross processed (₹)</label>
+            <input value={gross} onChange={e => setGross(e.target.value)} inputMode="numeric" placeholder="2400000" className={INP} />
+          </div>
+          <div className="w-24">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reserve %</label>
+            <input value={pct} onChange={e => setPct(e.target.value)} inputMode="decimal" className={INP} />
+          </div>
+          <div className="w-28">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Hold (months)</label>
+            <input value={holdMonths} onChange={e => setHoldMonths(e.target.value)} inputMode="numeric" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <Plus size={13} /> Record
+          </button>
+        </div>
+      </div>
+
+      {held.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No reserves tracked yet. Add a month and its hold % to start forecasting locked-up cash.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[["Currently locked up", lockedUp, "text-orange-400"], ["Releasing this month", dueThisMonth, "text-green-400"], ["Months tracked", held.length, ""]].map(([label, val, cls]) => (
+              <div key={String(label)} className={`${CARD} p-4`}>
+                <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)]">{label}</p>
+                <p className={`text-lg font-bold tabular-nums mt-0.5 ${cls as string}`}>{label === "Months tracked" ? formatAmount(Number(val)) : formatCurrency(Math.round(Number(val)))}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[620px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Month", "Gross", "Reserve %", "Held", "Releases", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {held.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{format(new Date(r.month + "-01"), "MMM yyyy")}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.reservePct}%</td>
+                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(Math.round(r.amount))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.releaseMonth + "-01"), "MMM yyyy")}</td>
+                      <td className="px-4 py-2.5">{r.released
+                        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">released</span>
+                        : <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">held</span>}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Reserves are your money sitting in the gateway's escrow — treat them as a receivable, not an expense. A clean chargeback history is your strongest lever to get the % cut or the hold period shortened at renewal.</p>
+    </div>
+  );
+}
+
+// ── Payment-method downtime log ──────────────────────────────────────────────────────
+type DowntimeRow = { id: string; method: string; start: string; minutes: number; failedTxns: number; lostValue: number };
+function MethodDowntimeLog() {
+  const [rows, setRows] = useFeatureState<DowntimeRow[]>("pay-downtime", []);
+  const [method, setMethod] = useState("UPI");
+  const [start, setStart] = useState(() => format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [minutes, setMinutes] = useState("");
+  const [failed, setFailed] = useState("");
+  const [lost, setLost] = useState("");
+
+  const add = () => {
+    const m = Number(minutes), f = Number(failed), l = Number(lost);
+    if (!method.trim()) { toast.error("Pick a payment method"); return; }
+    if (!Number.isFinite(m) || m <= 0) { toast.error("Enter outage duration in minutes"); return; }
+    setRows([{ id: crypto.randomUUID(), method: method.trim(), start, minutes: m, failedTxns: Number.isFinite(f) ? f : 0, lostValue: Number.isFinite(l) ? l : 0 }, ...rows]);
+    setMinutes(""); setFailed(""); setLost("");
+    toast.success("Outage logged");
+  };
+
+  const totalMin = rows.reduce((s, r) => s + r.minutes, 0);
+  const totalLost = rows.reduce((s, r) => s + r.lostValue, 0);
+  const worst = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of rows) map.set(r.method, (map.get(r.method) ?? 0) + r.minutes);
+    let name = "—", mins = 0;
+    for (const [k, v] of map) if (v > mins) { name = k; mins = v; }
+    return { name, mins };
+  }, [rows]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PlugZap size={14} className="text-[var(--color-primary)]" /> Payment-Method Downtime Log</h2>
+        <p className="text-xs text-[var(--color-muted)]">When a bank handle or card network goes dark, your checkout silently bleeds. Log each outage with the value lost so you can hold the gateway to its SLA, justify a multi-PG fallback, and spot the flaky issuer to deprioritise at routing.</p>
+        <div className="flex gap-2 items-end flex-wrap">
+          <div className="w-36">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Method</label>
+            <select value={method} onChange={e => setMethod(e.target.value)} className={INP}>
+              {["UPI", "Cards", "Netbanking", "Wallet", "EMI"].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="w-48">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Started</label>
+            <input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+          </div>
+          <div className="w-28">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Minutes</label>
+            <input value={minutes} onChange={e => setMinutes(e.target.value)} inputMode="numeric" placeholder="45" className={INP} />
+          </div>
+          <div className="w-28">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Failed txns</label>
+            <input value={failed} onChange={e => setFailed(e.target.value)} inputMode="numeric" placeholder="120" className={INP} />
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Value lost (₹)</label>
+            <input value={lost} onChange={e => setLost(e.target.value)} inputMode="numeric" placeholder="85000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <Plus size={13} /> Log
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No outages logged. Capture each one as it happens — exact start time and lost value are your strongest SLA evidence.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[["Total downtime", `${totalMin} min`], ["Value lost", formatCurrency(Math.round(totalLost))], ["Flakiest method", `${worst.name} · ${worst.mins}m`]].map(([label, val]) => (
+              <div key={label} className={`${CARD} p-4`}>
+                <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)]">{label}</p>
+                <p className="text-lg font-bold tabular-nums mt-0.5">{val}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Method", "Started", "Duration", "Failed", "Lost", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.method}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.start), "d MMM HH:mm")}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.minutes} min</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.failedTxns || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.lostValue ? formatCurrency(r.lostValue) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">RBI's framework expects gateways to publish uptime; your own log is what turns a vague "it was down" into a credit claim. Route around a method that repeatedly fails at peak hours and keep a second PG warm as automatic fallback.</p>
     </div>
   );
 }

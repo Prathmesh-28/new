@@ -19,7 +19,8 @@ type Tab =
   | "duecal" | "csrcompare" | "ncbtracker" | "deductibleopt" | "bicover"
   | "marinecover" | "piestimator" | "cyberscore" | "fleettracker" | "wcestimator"
   | "premiumemi" | "itcchecker"
-  | "tophealth" | "opdwellness" | "lifestage" | "riders" | "tco" | "surrender" | "groupvsindiv";
+  | "tophealth" | "opdwellness" | "lifestage" | "riders" | "tco" | "surrender" | "groupvsindiv"
+  | "renewplanner" | "inflationidx" | "spendbudget" | "claimprep";
 
 // shared styles (reused from Tax/Debt pattern)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -71,6 +72,10 @@ export default function InsurancePage() {
             ["tco", "Insurance TCO", Coins],
             ["surrender", "Surrender Value", PiggyBank],
             ["groupvsindiv", "Group vs Individual", Users],
+            ["renewplanner", "Renewal Planner", CalendarClock],
+            ["inflationidx", "SI Inflation Indexer", TrendingDown],
+            ["spendbudget", "Spend Budget", Coins],
+            ["claimprep", "Claim Readiness", FileWarning],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -110,6 +115,10 @@ export default function InsurancePage() {
       {tab === "tco" && <InsuranceTCO />}
       {tab === "surrender" && <SurrenderValueEstimator />}
       {tab === "groupvsindiv" && <GroupVsIndividual />}
+      {tab === "renewplanner" && <RenewalPlanner />}
+      {tab === "inflationidx" && <SumInsuredInflationIndexer />}
+      {tab === "spendbudget" && <InsuranceSpendBudget />}
+      {tab === "claimprep" && <ClaimReadinessChecklist />}
     </div>
   );
 }
@@ -2875,6 +2884,286 @@ function GroupVsIndividual() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability — many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Policy Renewal Planner — month-by-month renewal cashflow across register
+// ─────────────────────────────────────────────────────────────────────────────
+function RenewalPlanner() {
+  const [policies] = useFeatureState<Policy[]>("ins-policies", []);
+  const today = new Date();
+
+  const months = useMemo(() => {
+    const buckets: { key: string; label: string; total: number; items: Policy[] }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      buckets.push({ key: format(d, "yyyy-MM"), label: format(d, "MMM yyyy"), total: 0, items: [] });
+    }
+    policies.forEach(p => {
+      if (!p.renewalDate) return;
+      let rd: Date;
+      try { rd = parseISO(p.renewalDate); } catch { return; }
+      const key = format(rd, "yyyy-MM");
+      const bucket = buckets.find(b => b.key === key);
+      if (bucket) { bucket.total += p.premium; bucket.items.push(p); }
+    });
+    return buckets;
+  }, [policies, today]);
+
+  const total = months.reduce((s, m) => s + m.total, 0);
+  const peak = months.reduce((mx, m) => (m.total > mx.total ? m : mx), months[0]);
+  const maxBar = Math.max(1, ...months.map(m => m.total));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Multi-Policy Renewal Planner</h3>
+        <p className="text-xs text-[var(--color-muted)]">A rolling 12-month view of when every policy in your register falls due, so you can smooth premium outflow and avoid a renewal pile-up. Add renewal dates and premiums in the Policy Register.</p>
+      </div>
+
+      {policies.filter(p => p.renewalDate && p.premium > 0).length === 0 ? (
+        <div className={`${CARD} border-dashed p-10 text-center`}>
+          <CalendarClock size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
+          <p className="text-sm font-medium mb-1">Nothing to plan yet</p>
+          <p className="text-xs text-[var(--color-muted)]">Add policies with a renewal date and annual premium to map the next 12 months of renewals.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Renewals (next 12 mo)", value: `${months.reduce((s, m) => s + m.items.length, 0)}`, color: "text-[var(--color-text)]" },
+              { label: "Premium due (12 mo)", value: formatAmount(Math.round(total)), color: "text-orange-400" },
+              { label: "Peak month", value: peak && peak.total > 0 ? `${peak.label}` : "—", color: "text-yellow-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-5 space-y-2`}>
+            {months.map(m => (
+              <div key={m.key} className="flex items-center gap-3">
+                <span className="text-xs text-[var(--color-muted)] w-20 shrink-0">{m.label}</span>
+                <div className="flex-1 h-5 bg-[var(--color-bg)] rounded overflow-hidden">
+                  <div className="h-full bg-[var(--color-primary)] rounded" style={{ width: `${(m.total / maxBar) * 100}%` }} />
+                </div>
+                <span className="text-xs tabular-nums w-24 text-right">{m.total > 0 ? formatAmount(Math.round(m.total)) : "—"}</span>
+                <span className="text-[10px] text-[var(--color-muted)] w-10 text-right">{m.items.length || ""}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A clustered renewal month strains cashflow — consider asking insurers to align or stagger renewal dates, or move some covers to monthly premium EMI. Lapsing to save cash in a peak month risks fresh underwriting and loss of continuity benefits.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sum-Insured Inflation Indexer — project cover forward to beat under-insurance
+// ─────────────────────────────────────────────────────────────────────────────
+function SumInsuredInflationIndexer() {
+  const [currentSI, setCurrentSI] = useState("5000000");
+  const [inflationPct, setInflationPct] = useState("6");
+  const [years, setYears] = useState("5");
+  const [lastRevalued, setLastRevalued] = useState("0");
+
+  const si = parseFloat(currentSI) || 0;
+  const infl = parseFloat(inflationPct) || 0;
+  const yrs = Math.max(0, Math.min(20, parseFloat(years) || 0));
+  const elapsed = Math.max(0, parseFloat(lastRevalued) || 0);
+
+  const rows = useMemo(() => {
+    const out: { year: number; indexed: number }[] = [];
+    for (let y = 0; y <= yrs; y++) out.push({ year: y, indexed: si * Math.pow(1 + infl / 100, y) });
+    return out;
+  }, [si, infl, yrs]);
+
+  // current real replacement value if SI was set `elapsed` years ago and never revised
+  const trueValueNow = si * Math.pow(1 + infl / 100, elapsed);
+  const shortfall = Math.max(0, trueValueNow - si);
+  const shortfallPct = si > 0 ? (shortfall / trueValueNow) * 100 : 0;
+  const targetSI = rows.length ? rows[rows.length - 1].indexed : si;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><TrendingDown size={14} className="text-[var(--color-primary)]" /> Sum-Insured Inflation Indexer</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Replacement costs rise every year but a flat sum insured does not — so a policy set years ago quietly becomes under-insurance, triggering the average clause at claim time. Index your cover forward.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current sum insured (₹)</label>
+            <input type="number" value={currentSI} onChange={e => setCurrentSI(e.target.value)} placeholder="5000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cost inflation % p.a.</label>
+            <input type="number" step="0.5" value={inflationPct} onChange={e => setInflationPct(e.target.value)} placeholder="6" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Project ahead (years)</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Years since last revaluation</label>
+            <input type="number" value={lastRevalued} onChange={e => setLastRevalued(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {elapsed > 0 && shortfall > 0 && (
+        <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
+          <p className="text-sm text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> Set {elapsed} year{elapsed === 1 ? "" : "s"} ago, the real replacement value today is about <strong>{formatCurrency(Math.round(trueValueNow))}</strong> — you may be <strong>{shortfallPct.toFixed(0)}%</strong> under-insured ({formatCurrency(Math.round(shortfall))} gap). A claim could be proportionately reduced.</p>
+        </div>
+      )}
+
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold">Indexed cover projection</p>
+          <span className="text-xs text-[var(--color-muted)]">Target in {yrs}y: <strong className="text-[var(--color-primary)]">{formatCurrency(Math.round(targetSI))}</strong></span>
+        </div>
+        <div className="space-y-1.5">
+          {rows.map(r => (
+            <div key={r.year} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-1.5 last:border-0 last:pb-0">
+              <span className="text-xs text-[var(--color-muted)]">{r.year === 0 ? "Today" : `Year +${r.year}`}</span>
+              <span className="tabular-nums">{formatCurrency(Math.round(r.indexed))}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Use a cost-inflation rate that reflects your assets (construction, plant, imported machinery can run well above headline CPI). Some insurers offer an inflation/escalation clause that auto-indexes the sum insured during the policy year — ask at renewal.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Insurance Spend Budget — premium outflow vs a target % of revenue
+// ─────────────────────────────────────────────────────────────────────────────
+function InsuranceSpendBudget() {
+  const { store } = useApp();
+  const [policies] = useFeatureState<Policy[]>("ins-policies", []);
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+  const registerPremium = Math.round(policies.reduce((s, p) => s + p.premium, 0));
+
+  const [revenue, setRevenue] = useState("");
+  const [targetPct, setTargetPct] = useState("2");
+  const [extraSpend, setExtraSpend] = useState("");
+
+  const rev = parseFloat(revenue) || autoRevenue;
+  const target = parseFloat(targetPct) || 0;
+  const spend = registerPremium + (parseFloat(extraSpend) || 0);
+  const budget = rev * (target / 100);
+  const actualPct = rev > 0 ? (spend / rev) * 100 : 0;
+  const variance = budget - spend; // positive = headroom
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Insurance Spend Budget</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Sets a sensible insurance budget as a share of turnover and checks your actual premium outflow against it. SMBs typically spend 1–3% of revenue on protection — far too low risks ruin, far too high erodes margin.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual revenue (₹){autoRevenue > 0 ? " · auto" : ""}</label>
+            <input type="number" value={revenue} onChange={e => setRevenue(e.target.value)} placeholder={autoRevenue > 0 ? String(autoRevenue) : "10000000"} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target spend (% of revenue)</label>
+            <input type="number" step="0.25" value={targetPct} onChange={e => setTargetPct(e.target.value)} placeholder="2" className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Extra premiums not in register (₹){registerPremium > 0 ? ` · register has ${formatCurrency(registerPremium)}` : ""}</label>
+            <input type="number" value={extraSpend} onChange={e => setExtraSpend(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {rev > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Budget", value: formatAmount(Math.round(budget)), color: "text-blue-400" },
+              { label: "Actual spend", value: formatAmount(Math.round(spend)), color: "text-orange-400" },
+              { label: "Actual % of revenue", value: `${actualPct.toFixed(2)}%`, color: actualPct > target ? "text-yellow-400" : "text-green-400" },
+              { label: variance >= 0 ? "Headroom" : "Over budget", value: formatAmount(Math.round(Math.abs(variance))), color: variance >= 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${variance >= 0 ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+            <p className={`text-sm font-medium flex items-center gap-2 ${variance >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {variance >= 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {variance >= 0
+                ? `You are within budget with ${formatCurrency(Math.round(variance))} of headroom — room to close coverage gaps before cost becomes a concern.`
+                : `You are ${formatCurrency(Math.round(-variance))} over your target budget — review for overlapping cover, high deductibles or over-insured assets before cutting essential protection.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">The right ratio varies by sector — asset-heavy manufacturing runs higher than a services firm. Spending under budget is only good if you are not carrying open coverage gaps; check the Coverage-Gap Analyzer alongside this.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Claim Document Readiness — checklist to avoid claim repudiation
+// ─────────────────────────────────────────────────────────────────────────────
+const CLAIM_DOCS = [
+  { id: "intimation", label: "Written claim intimation to insurer", note: "Usually within 24–48 hrs of the event" },
+  { id: "fir", label: "FIR / police complaint (theft, burglary, fatal accident)", note: "Mandatory for theft and third-party motor" },
+  { id: "policy", label: "Policy copy & latest premium receipt", note: "Proves cover was in force on the loss date" },
+  { id: "estimate", label: "Repair / replacement estimate or invoices", note: "Quantifies the loss for the surveyor" },
+  { id: "photos", label: "Photos / video of the damage", note: "Capture before any cleanup or repair" },
+  { id: "purchase", label: "Original purchase bills of damaged assets", note: "Establishes ownership and value" },
+  { id: "surveyor", label: "Surveyor report cooperation", note: "Insurer appoints for losses above threshold" },
+  { id: "kyc", label: "KYC & bank details for payout", note: "Cancelled cheque / NEFT mandate" },
+] as const;
+
+function ClaimReadinessChecklist() {
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("ins-claim-readiness", {});
+  const toggle = (id: string) => setDone({ ...done, [id]: !done[id] });
+
+  const total = CLAIM_DOCS.length;
+  const ready = CLAIM_DOCS.filter(d => done[d.id]).length;
+  const pct = Math.round((ready / total) * 100);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileWarning size={14} className="text-[var(--color-primary)]" /> Claim Document Readiness</h3>
+        <p className="text-xs text-[var(--color-muted)]">Most rejected claims fail on missing documents or late intimation, not on cover. Work this checklist the moment a loss occurs to give your claim the best chance of a clean settlement.</p>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex-1 h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? "var(--color-success, #22c55e)" : "var(--color-primary)" }} />
+          </div>
+          <span className="text-xs tabular-nums text-[var(--color-muted)]">{ready}/{total} ready ({pct}%)</span>
+        </div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {CLAIM_DOCS.map(d => (
+          <button key={d.id} onClick={() => toggle(d.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-white/2 transition-colors">
+            {done[d.id]
+              ? <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
+              : <span className="w-4 h-4 rounded border border-[var(--color-border)] shrink-0 mt-0.5" />}
+            <div>
+              <p className={`text-sm font-medium ${done[d.id] ? "line-through text-[var(--color-muted)]" : ""}`}>{d.label}</p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{d.note}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {pct === 100 && (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> All core documents are in hand — submit the file to your insurer/broker and keep copies of every acknowledgement.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Exact documents vary by claim type and insurer — always check your policy wording and the insurer's claim form. The single biggest avoidable cause of repudiation is delayed intimation; notify first, gather documents next.</p>
     </div>
   );
 }
