@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, dcfValuation, dilution } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet } from "lucide-react";
+import { useFeatureState } from "@/hooks/useFeatureState";
+import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
@@ -67,6 +68,14 @@ export default function ValuationPage() {
           ["berkus-scorecard", "Berkus / Scorecard", Sprout],
           ["dcf-tornado", "DCF Sensitivity", SlidersHorizontal],
           ["esop-409a", "409A FMV (ESOP)", FileSpreadsheet],
+          ["vc-method", "VC Method", Calculator],
+          ["first-chicago", "First-Chicago", Dice5],
+          ["runway-planner", "Runway → Raise", Hourglass],
+          ["dilution-waterfall", "Dilution Waterfall", Layers],
+          ["pool-shuffle", "Option-Pool Shuffle", PieChart],
+          ["note-converter", "Note Cap/Discount", Repeat],
+          ["esop-grant", "ESOP Grant Value", Gift],
+          ["vesting-schedule", "Founder Vesting", CalendarClock],
         ] as const).map(([id, label, Icon]) => (
           <a key={id} href={`#${id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-accent)] transition-colors">
@@ -249,6 +258,46 @@ export default function ValuationPage() {
       {/* #112 409A-style FMV for ESOP */}
       <section id="esop-409a" className="scroll-mt-4">
         <Esop409aFmv enterpriseValue={range.mid} />
+      </section>
+
+      {/* VC method — exit value ÷ target return */}
+      <section id="vc-method" className="scroll-mt-4">
+        <VcMethod annualRevenue={annualRevenue} raiseAmount={raiseAmount} />
+      </section>
+
+      {/* First-Chicago probability-weighted valuation */}
+      <section id="first-chicago" className="scroll-mt-4">
+        <FirstChicago baseValuation={range.mid} />
+      </section>
+
+      {/* Runway → next-round planner */}
+      <section id="runway-planner" className="scroll-mt-4">
+        <RunwayPlanner cash={snap.cash} monthlyNet={snap.monthlyNet} />
+      </section>
+
+      {/* Dilution waterfall across rounds */}
+      <section id="dilution-waterfall" className="scroll-mt-4">
+        <DilutionWaterfall startValuation={range.mid} />
+      </section>
+
+      {/* Option-pool shuffle (pre vs post-money) */}
+      <section id="pool-shuffle" className="scroll-mt-4">
+        <PoolShuffle preMoney={range.mid} raiseAmount={raiseAmount} />
+      </section>
+
+      {/* Convertible-note cap / discount converter */}
+      <section id="note-converter" className="scroll-mt-4">
+        <NoteConverter nextRoundPreMoney={range.mid} />
+      </section>
+
+      {/* ESOP grant value calculator */}
+      <section id="esop-grant" className="scroll-mt-4">
+        <EsopGrantValue equityValue={range.mid} />
+      </section>
+
+      {/* Founder vesting schedule */}
+      <section id="vesting-schedule" className="scroll-mt-4">
+        <VestingSchedule />
       </section>
     </div>
   );
@@ -604,6 +653,623 @@ function Esop409aFmv({ enterpriseValue }: { enterpriseValue: number }) {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         A US 409A valuation must be done by an independent appraiser; this is an indicative strike-price guide. Set option exercise price at or above FMV to avoid deemed-perquisite / tax issues.
       </div>
+    </div>
+  );
+}
+
+const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+// ── VC METHOD (EXIT-VALUE ÷ TARGET RETURN) ──────────────────────────────────────
+function VcMethod({ annualRevenue, raiseAmount }: { annualRevenue: number; raiseAmount: number }) {
+  const [exitYears, setExitYears] = useState(5);
+  const [exitGrowth, setExitGrowth] = useState(40);      // annual revenue CAGR to exit
+  const [exitMultiple, setExitMultiple] = useState(4);   // EV/Revenue at exit
+  const [targetReturn, setTargetReturn] = useState(10);  // investor wants 10x
+  const [raiseInput, setRaiseInput] = useState(() => String(Math.round(raiseAmount)));
+
+  const baseRev = annualRevenue > 0 ? annualRevenue : 10_000_000;
+  const exitRevenue = baseRev * Math.pow(1 + exitGrowth / 100, exitYears);
+  const exitValue = exitRevenue * exitMultiple;
+  const postMoneyToday = targetReturn > 0 ? exitValue / targetReturn : 0;        // what the round must be worth today
+  const raise = parseFloat(raiseInput) || 0;
+  const investorOwnership = postMoneyToday > 0 ? (raise / postMoneyToday) * 100 : 0;
+  const preMoney = Math.max(0, postMoneyToday - raise);
+  const impliedIrr = postMoneyToday > 0 && exitYears > 0 ? (Math.pow(exitValue / postMoneyToday, 1 / exitYears) - 1) * 100 : 0;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> VC Method — Exit-Value Backsolve</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Works backward from a projected exit value and the investor's required return multiple to today's post-money and the stake they need.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Round size (₹)</label>
+          <input type="number" min={0} value={raiseInput} onChange={e => setRaiseInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Exit EV/Revenue multiple</label>
+          <input type="number" min={0} step={0.5} value={exitMultiple} onChange={e => setExitMultiple(Number(e.target.value))} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Investor target return (x)</label>
+          <input type="number" min={1} step={1} value={targetReturn} onChange={e => setTargetReturn(Number(e.target.value))} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Years to exit</span><strong>{exitYears}y</strong></div>
+          <input type="range" min={2} max={10} step={1} value={exitYears} onChange={e => setExitYears(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Revenue CAGR to exit</span><strong>{exitGrowth}%</strong></div>
+          <input type="range" min={0} max={120} step={5} value={exitGrowth} onChange={e => setExitGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Exit value", value: formatCurrency(Math.round(exitValue)), color: "text-[var(--color-text)]" },
+          { label: "Post-money today", value: formatCurrency(Math.round(postMoneyToday)), color: "text-[var(--color-primary)]" },
+          { label: "Pre-money today", value: formatCurrency(Math.round(preMoney)), color: "text-[var(--color-text)]" },
+          { label: "Investor stake", value: `${investorOwnership.toFixed(1)}%`, color: investorOwnership > 30 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Implied IRR on the investor's money: <strong className="tabular-nums">{impliedIrr.toFixed(0)}%</strong> per year. A {targetReturn}x over {exitYears} years is what the classic VC method requires to back this entry price.</p>
+    </div>
+  );
+}
+
+// ── FIRST-CHICAGO PROBABILITY-WEIGHTED VALUATION ────────────────────────────────
+function FirstChicago({ baseValuation }: { baseValuation: number }) {
+  const round = (n: number) => Math.max(0, Math.round(n));
+  const [best, setBest] = useState(() => String(round(baseValuation * 2.5)));
+  const [base, setBase] = useState(() => String(round(baseValuation)));
+  const [worst, setWorst] = useState(() => String(round(baseValuation * 0.3)));
+  const [pBest, setPBest] = useState(20);
+  const [pBase, setPBase] = useState(55);
+  // worst probability is the remainder
+  const pWorst = Math.max(0, 100 - pBest - pBase);
+
+  const bestV = parseFloat(best) || 0;
+  const baseV = parseFloat(base) || 0;
+  const worstV = parseFloat(worst) || 0;
+  const expected = (bestV * pBest + baseV * pBase + worstV * pWorst) / 100;
+
+  const rows = [
+    { name: "Best case", value: bestV, prob: pBest, color: "text-green-400" },
+    { name: "Base case", value: baseV, prob: pBase, color: "text-[var(--color-primary)]" },
+    { name: "Worst case", value: worstV, prob: pWorst, color: "text-red-400" },
+  ];
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Dice5 size={14} className="text-blue-400" /> First-Chicago Method</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Blends best / base / worst-case valuations by probability into one expected figure — honest about uncertainty instead of a single false-precision number.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {([["Best case (₹)", best, setBest], ["Base case (₹)", base, setBase], ["Worst case (₹)", worst, setWorst]] as const).map(([label, val, setter]) => (
+          <div key={label}>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+            <input type="number" min={0} value={val} onChange={e => setter(e.target.value)} className={INP} />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Best-case probability</span><strong>{pBest}%</strong></div>
+          <input type="range" min={0} max={100} step={5} value={pBest} onChange={e => setPBest(Math.min(Number(e.target.value), 100 - pBase))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Base-case probability</span><strong>{pBase}%</strong></div>
+          <input type="range" min={0} max={100} step={5} value={pBase} onChange={e => setPBase(Math.min(Number(e.target.value), 100 - pBest))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        {rows.map(r => (
+          <div key={r.name} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+            <span className={`font-medium ${r.color}`}>{r.name}</span>
+            <span className="text-[var(--color-muted)] tabular-nums">{r.prob}% × {formatCurrency(Math.round(r.value))}</span>
+            <span className="tabular-nums font-semibold">{formatCurrency(Math.round(r.value * r.prob / 100))}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-blue-950/20 border border-blue-800/40 rounded-lg p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-blue-300">Expected valuation</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Probabilities sum to {pBest + pBase + pWorst}% (worst = {pWorst}%)</p>
+        </div>
+        <p className="text-xl font-bold tabular-nums text-blue-300">{formatCurrency(Math.round(expected))}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── RUNWAY → NEXT-ROUND PLANNER ─────────────────────────────────────────────────
+function RunwayPlanner({ cash, monthlyNet }: { cash: number; monthlyNet: number }) {
+  const liveBurn = monthlyNet < 0 ? Math.round(-monthlyNet) : 0;
+  const [cashInput, setCashInput] = useState(() => String(Math.max(0, Math.round(cash))));
+  const [burnInput, setBurnInput] = useState(() => String(liveBurn > 0 ? liveBurn : 500_000));
+  const [raiseProcessMonths, setRaiseProcessMonths] = useState(5); // how long a raise takes to close
+  const [bufferMonths, setBufferMonths] = useState(3);              // safety cushion after close
+
+  const cashNow = parseFloat(cashInput) || 0;
+  const burn = parseFloat(burnInput) || 0;
+  const runwayMonths = burn > 0 ? cashNow / burn : Infinity;
+  const startInMonths = burn > 0 ? Math.max(0, runwayMonths - raiseProcessMonths - bufferMonths) : Infinity;
+  const cashAtClose = burn > 0 ? cashNow - burn * (startInMonths + raiseProcessMonths) : cashNow;
+  const status: "ok" | "soon" | "urgent" =
+    !isFinite(startInMonths) ? "ok" : startInMonths <= 0 ? "urgent" : startInMonths <= 2 ? "soon" : "ok";
+
+  const statusStyle = {
+    ok: "bg-green-950/20 border-green-800/40 text-green-400",
+    soon: "bg-yellow-950/20 border-yellow-800/40 text-yellow-400",
+    urgent: "bg-red-950/20 border-red-800/40 text-red-400",
+  }[status];
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Runway → Next-Round Planner</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">When to start raising so you close before cash runs out. Pre-filled from your live cash balance and monthly burn.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Cash in bank (₹)</label>
+          <input type="number" min={0} value={cashInput} onChange={e => setCashInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Net monthly burn (₹)</label>
+          <input type="number" min={0} value={burnInput} onChange={e => setBurnInput(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Time to close a raise</span><strong>{raiseProcessMonths} mo</strong></div>
+          <input type="range" min={2} max={9} step={1} value={raiseProcessMonths} onChange={e => setRaiseProcessMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Safety buffer</span><strong>{bufferMonths} mo</strong></div>
+          <input type="range" min={0} max={6} step={1} value={bufferMonths} onChange={e => setBufferMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Current runway", value: isFinite(runwayMonths) ? `${runwayMonths.toFixed(1)} mo` : "∞ (profitable)" },
+          { label: "Start raising in", value: isFinite(startInMonths) ? `${startInMonths.toFixed(1)} mo` : "No urgency" },
+          { label: "Cash at close", value: formatCurrency(Math.round(cashAtClose)) },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className="text-base font-bold tabular-nums">{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg border p-3 text-xs font-medium ${statusStyle}`}>
+        {status === "ok" && (isFinite(startInMonths) ? "On track — you have comfortable headroom before you must start raising." : "Cash-flow positive — raise opportunistically, not out of necessity.")}
+        {status === "soon" && "Start preparing the raise now — you cross the buffer line within two months."}
+        {status === "urgent" && "Begin raising immediately — current runway is already inside the time it takes to close plus your buffer."}
+      </div>
+    </div>
+  );
+}
+
+// ── DILUTION WATERFALL ACROSS ROUNDS ────────────────────────────────────────────
+interface WaterfallRound { id: string; name: string; raise: number; preMoney: number }
+
+function DilutionWaterfall({ startValuation }: { startValuation: number }) {
+  const seed = Math.max(5_000_000, Math.round(startValuation || 50_000_000));
+  const [rounds, setRounds] = useFeatureState<WaterfallRound[]>("val-dilution-waterfall", [
+    { id: "r1", name: "Seed", raise: Math.round(seed * 0.15), preMoney: seed },
+    { id: "r2", name: "Series A", raise: Math.round(seed * 0.6), preMoney: Math.round(seed * 3) },
+  ]);
+
+  // Walk the rounds: founders + earlier holders dilute by investor% each round
+  let founderPct = 100;
+  const walk = rounds.map(r => {
+    const post = r.preMoney + r.raise;
+    const newInvestorPct = post > 0 ? (r.raise / post) * 100 : 0;
+    founderPct = founderPct * (1 - newInvestorPct / 100);
+    return { ...r, post, newInvestorPct, founderPctAfter: founderPct };
+  });
+  const finalFounder = walk.length ? walk[walk.length - 1].founderPctAfter : 100;
+
+  const update = (id: string, patch: Partial<WaterfallRound>) =>
+    setRounds(p => p.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  const addRound = () =>
+    setRounds(p => [...p, { id: `r${Date.now()}`, name: `Round ${p.length + 1}`, raise: 10_000_000, preMoney: 100_000_000 }]);
+  const removeRound = (id: string) => setRounds(p => p.filter(r => r.id !== id));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-purple-400" /> Dilution Waterfall</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Stack multiple rounds and watch your founder ownership compound down. Saved to your workspace.</p>
+        </div>
+        <button onClick={addRound} className="text-[11px] bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2.5 py-1 rounded-lg hover:bg-[var(--color-primary)]/25 whitespace-nowrap">+ Add round</button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>{["Round", "Pre-money (₹)", "Raise (₹)", "Post-money", "New stake", "Founder after", ""].map(h =>
+              <th key={h} className="px-2 py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {walk.map(r => (
+              <tr key={r.id}>
+                <td className="px-2 py-2">
+                  <input value={r.name} onChange={e => update(r.id, { name: e.target.value })}
+                    className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
+                </td>
+                <td className="px-2 py-2">
+                  <input type="number" min={0} value={r.preMoney} onChange={e => update(r.id, { preMoney: Number(e.target.value) })}
+                    className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                </td>
+                <td className="px-2 py-2">
+                  <input type="number" min={0} value={r.raise} onChange={e => update(r.id, { raise: Number(e.target.value) })}
+                    className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                </td>
+                <td className="px-2 py-2 tabular-nums text-[var(--color-muted)]">{formatAmount(r.post)}</td>
+                <td className="px-2 py-2 tabular-nums">{r.newInvestorPct.toFixed(1)}%</td>
+                <td className={`px-2 py-2 tabular-nums font-semibold ${r.founderPctAfter < 50 ? "text-red-400" : "text-[var(--color-text)]"}`}>{r.founderPctAfter.toFixed(1)}%</td>
+                <td className="px-2 py-2">
+                  <button onClick={() => removeRound(r.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-purple-950/20 border border-purple-800/40 rounded-lg p-4 flex items-center justify-between">
+        <p className="text-sm font-semibold text-purple-300">Founder ownership after {walk.length} round{walk.length === 1 ? "" : "s"}</p>
+        <p className={`text-xl font-bold tabular-nums ${finalFounder < 50 ? "text-red-400" : "text-purple-300"}`}>{finalFounder.toFixed(1)}%</p>
+      </div>
+      {finalFounder < 50 && <p className="text-[10px] text-red-400">You drop below 50% — plan board control and protective provisions before the round that crosses this line.</p>}
+    </div>
+  );
+}
+
+// ── OPTION-POOL SHUFFLE (PRE VS POST-MONEY) ─────────────────────────────────────
+function PoolShuffle({ preMoney, raiseAmount }: { preMoney: number; raiseAmount: number }) {
+  const [preInput, setPreInput] = useState(() => String(Math.round(preMoney || 50_000_000)));
+  const [raiseInput, setRaiseInput] = useState(() => String(Math.round(raiseAmount || 10_000_000)));
+  const [poolPct, setPoolPct] = useState(10);          // target pool as % of post-money cap table
+  const [timing, setTiming] = useState<"pre" | "post">("pre");
+
+  const pre = parseFloat(preInput) || 0;
+  const raise = parseFloat(raiseInput) || 0;
+  const post = pre + raise;
+  const investorPct = post > 0 ? (raise / post) * 100 : 0;
+
+  // Pre-money pool: the new pool comes out of the pre-money (founders bear it).
+  // Post-money pool: the pool dilutes everyone proportionally (investors share it).
+  const poolFromFounders = timing === "pre" ? poolPct : poolPct * (1 - investorPct / 100);
+  const founderPct = Math.max(0, 100 - investorPct - poolFromFounders);
+  const investorEff = timing === "pre" ? investorPct : Math.max(0, investorPct - poolPct * (investorPct / 100));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Option-Pool Shuffle</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">The "pool shuffle": creating the ESOP pool <em>pre</em>-money dilutes only founders; <em>post</em>-money spreads it across everyone. See who pays for the pool.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-money (₹)</label>
+          <input type="number" min={0} value={preInput} onChange={e => setPreInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Round size (₹)</label>
+          <input type="number" min={0} value={raiseInput} onChange={e => setRaiseInput(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Target option pool (% of post-money)</span><strong>{poolPct}%</strong></div>
+        <input type="range" min={0} max={25} step={1} value={poolPct} onChange={e => setPoolPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+
+      <div className="flex gap-2">
+        {(["pre", "post"] as const).map(t => (
+          <button key={t} onClick={() => setTiming(t)}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${timing === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+            {t === "pre" ? "Pre-money pool (founders pay)" : "Post-money pool (shared)"}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Founder stake", value: `${founderPct.toFixed(1)}%`, color: "text-[var(--color-text)]" },
+          { label: "Investor stake", value: `${investorEff.toFixed(1)}%`, color: "text-[var(--color-primary)]" },
+          { label: "Option pool", value: `${poolPct.toFixed(1)}%`, color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Founders give up <strong className="tabular-nums">{poolFromFounders.toFixed(1)}%</strong> to the pool in the {timing}-money structure.
+        {timing === "pre" && " Investors usually push for a pre-money pool because it dilutes you, not them — negotiate the pool size down."}
+      </p>
+    </div>
+  );
+}
+
+// ── CONVERTIBLE-NOTE CAP / DISCOUNT CONVERTER ───────────────────────────────────
+function NoteConverter({ nextRoundPreMoney }: { nextRoundPreMoney: number }) {
+  const [investment, setInvestment] = useState("2500000");
+  const [cap, setCap] = useState(() => String(Math.round(nextRoundPreMoney || 60_000_000)));
+  const [discountPct, setDiscountPct] = useState(20);
+  const [interestPct, setInterestPct] = useState(8);
+  const [months, setMonths] = useState(18);
+  const [roundPre, setRoundPre] = useState(() => String(Math.round((nextRoundPreMoney || 60_000_000) * 1.5)));
+  const [sharesPreRound, setSharesPreRound] = useState("1000000");
+
+  const inv = parseFloat(investment) || 0;
+  const capV = parseFloat(cap) || 0;
+  const pre = parseFloat(roundPre) || 0;
+  const shares = parseFloat(sharesPreRound) || 0;
+
+  const accruedInterest = inv * (interestPct / 100) * (months / 12);
+  const principalPlusInterest = inv + accruedInterest;
+
+  // Price per share in the priced round (pre-money basis)
+  const roundPrice = shares > 0 ? pre / shares : 0;
+  const discountPrice = roundPrice * (1 - discountPct / 100);
+  const capPrice = shares > 0 && capV > 0 ? capV / shares : 0;
+  // Note converts at the lower of cap price and discount price (better for noteholder)
+  const conversionPrice = Math.min(
+    discountPrice || Infinity,
+    capPrice || Infinity,
+  );
+  const finalPrice = isFinite(conversionPrice) ? conversionPrice : roundPrice;
+  const sharesIssued = finalPrice > 0 ? principalPlusInterest / finalPrice : 0;
+  const usedCap = capPrice > 0 && capPrice <= (discountPrice || Infinity);
+  const postRound = pre + principalPlusInterest;
+  const noteOwnership = postRound > 0 ? (principalPlusInterest / (finalPrice * (shares + sharesIssued) || 1)) * 100 : 0;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Convertible-Note Cap / Discount Converter</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Works out where a note converts at the next priced round — the noteholder takes the lower of the valuation-cap price and the discount price.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Note principal (₹)</label>
+          <input type="number" min={0} value={investment} onChange={e => setInvestment(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Valuation cap (₹)</label>
+          <input type="number" min={0} value={cap} onChange={e => setCap(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Next-round pre-money (₹)</label>
+          <input type="number" min={0} value={roundPre} onChange={e => setRoundPre(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Shares before round</label>
+          <input type="number" min={0} value={sharesPreRound} onChange={e => setSharesPreRound(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Discount %</label>
+          <input type="number" min={0} max={50} value={discountPct} onChange={e => setDiscountPct(Number(e.target.value))} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Interest % p.a. · months</label>
+          <div className="flex gap-2">
+            <input type="number" min={0} value={interestPct} onChange={e => setInterestPct(Number(e.target.value))} className={INP} />
+            <input type="number" min={0} value={months} onChange={e => setMonths(Number(e.target.value))} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Principal + interest", value: formatCurrency(Math.round(principalPlusInterest)), color: "text-[var(--color-text)]" },
+          { label: "Round price / share", value: formatCurrency(Number(roundPrice.toFixed(2))), color: "text-[var(--color-muted)]" },
+          { label: "Conversion price / share", value: formatCurrency(Number(finalPrice.toFixed(2))), color: "text-[var(--color-primary)]" },
+          { label: "Shares to noteholder", value: formatAmount(Math.round(sharesIssued)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Converts on the <strong>{usedCap ? "valuation cap" : "discount"}</strong> (the cheaper price for the noteholder), giving roughly <strong className="tabular-nums">{noteOwnership.toFixed(1)}%</strong> post-conversion ownership. A lower cap or higher discount means more shares for the same cheque.
+      </p>
+    </div>
+  );
+}
+
+// ── ESOP GRANT VALUE CALCULATOR ─────────────────────────────────────────────────
+function EsopGrantValue({ equityValue }: { equityValue: number }) {
+  const [optionsGranted, setOptionsGranted] = useState("5000");
+  const [totalShares, setTotalShares] = useState("1000000");
+  const [strikeInput, setStrikeInput] = useState("10");
+  const [equityInput, setEquityInput] = useState(() => String(Math.round(equityValue || 50_000_000)));
+  const [exitGrowthX, setExitGrowthX] = useState(3); // company grows Nx by exit
+
+  const options = parseFloat(optionsGranted) || 0;
+  const total = parseFloat(totalShares) || 0;
+  const strike = parseFloat(strikeInput) || 0;
+  const equity = parseFloat(equityInput) || 0;
+
+  const pricePerShare = total > 0 ? equity / total : 0;
+  const grossNow = options * pricePerShare;
+  const exerciseCost = options * strike;
+  const netNow = Math.max(0, grossNow - exerciseCost);
+  const ownershipPct = total > 0 ? (options / total) * 100 : 0;
+  const exitPrice = pricePerShare * exitGrowthX;
+  const netAtExit = Math.max(0, options * exitPrice - exerciseCost);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-green-400" /> ESOP Grant Value Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">What a grant is worth today and at exit — the number to put in an offer letter so candidates understand the equity, net of exercise cost.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Options granted</label>
+          <input type="number" min={0} value={optionsGranted} onChange={e => setOptionsGranted(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Total fully-diluted shares</label>
+          <input type="number" min={0} value={totalShares} onChange={e => setTotalShares(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Strike price / share (₹)</label>
+          <input type="number" min={0} value={strikeInput} onChange={e => setStrikeInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Equity value (₹)</label>
+          <input type="number" min={0} value={equityInput} onChange={e => setEquityInput(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Company value at exit</span><strong>{exitGrowthX}x today</strong></div>
+        <input type="range" min={1} max={20} step={1} value={exitGrowthX} onChange={e => setExitGrowthX(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Ownership", value: `${ownershipPct.toFixed(3)}%`, color: "text-[var(--color-text)]" },
+          { label: "Gross value (today)", value: formatCurrency(Math.round(grossNow)), color: "text-[var(--color-text)]" },
+          { label: "Net of exercise", value: formatCurrency(Math.round(netNow)), color: "text-green-400" },
+          { label: `Net at ${exitGrowthX}x exit`, value: formatCurrency(Math.round(netAtExit)), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Exercise cost on the full grant is {formatCurrency(Math.round(exerciseCost))}. Perquisite tax applies at exercise on (FMV − strike); plan with the ESOP Tax tools before the candidate exercises.</p>
+    </div>
+  );
+}
+
+// ── FOUNDER VESTING SCHEDULE ────────────────────────────────────────────────────
+function VestingSchedule() {
+  const [totalShares, setTotalShares] = useState("400000");
+  const [totalMonths, setTotalMonths] = useState(48);
+  const [cliffMonths, setCliffMonths] = useState(12);
+  const [elapsed, setElapsed] = useState(18);
+
+  const total = parseFloat(totalShares) || 0;
+  const vestedNow = elapsed < cliffMonths ? 0 : Math.min(total, Math.round((total * elapsed) / totalMonths));
+  const vestedPct = total > 0 ? (vestedNow / total) * 100 : 0;
+  const unvested = total - vestedNow;
+
+  // Milestone schedule: cliff, then yearly checkpoints
+  const milestones = useMemo(() => {
+    const pts: { label: string; month: number; vested: number }[] = [];
+    pts.push({ label: `Cliff (${cliffMonths}m)`, month: cliffMonths, vested: Math.round((total * cliffMonths) / totalMonths) });
+    for (let y = 1; y * 12 <= totalMonths; y++) {
+      const m = y * 12;
+      if (m <= cliffMonths) continue;
+      pts.push({ label: `Year ${y}`, month: m, vested: Math.round((total * m) / totalMonths) });
+    }
+    if (totalMonths % 12 !== 0) pts.push({ label: "Full vest", month: totalMonths, vested: total });
+    return pts;
+  }, [total, totalMonths, cliffMonths]);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-purple-400" /> Founder Vesting Schedule</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Standard four-year vest with a one-year cliff. See exactly how many founder shares are vested today and at each milestone.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Founder shares under vesting</label>
+          <input type="number" min={0} value={totalShares} onChange={e => setTotalShares(e.target.value)} className={INP} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Vest length (mo)</label>
+            <input type="number" min={1} value={totalMonths} onChange={e => setTotalMonths(Number(e.target.value))} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cliff (mo)</label>
+            <input type="number" min={0} value={cliffMonths} onChange={e => setCliffMonths(Number(e.target.value))} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Months elapsed since grant</span><strong>{elapsed} mo</strong></div>
+        <input type="range" min={0} max={totalMonths} step={1} value={Math.min(elapsed, totalMonths)} onChange={e => setElapsed(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        <div className="relative h-3 bg-[var(--color-bg)] rounded-full overflow-hidden mt-2">
+          <div className="absolute h-full bg-purple-500/50" style={{ left: 0, width: `${totalMonths > 0 ? (cliffMonths / totalMonths) * 100 : 0}%` }} title="cliff" />
+          <div className="absolute h-full bg-purple-400 rounded-full" style={{ width: `${Math.min(100, vestedPct)}%` }} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Vested now", value: formatAmount(vestedNow), color: "text-purple-300" },
+          { label: "Vested %", value: `${vestedPct.toFixed(1)}%`, color: "text-purple-300" },
+          { label: "Still unvested", value: formatAmount(unvested), color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>{["Milestone", "Month", "Cumulative vested", "% vested"].map(h =>
+              <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {milestones.map(m => (
+              <tr key={m.label} className={elapsed >= m.month ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}>
+                <td className="px-3 py-2">{m.label}{elapsed >= m.month && " ✓"}</td>
+                <td className="px-3 py-2 tabular-nums">{m.month}</td>
+                <td className="px-3 py-2 tabular-nums">{formatAmount(m.vested)}</td>
+                <td className="px-3 py-2 tabular-nums">{total > 0 ? ((m.vested / total) * 100).toFixed(0) : 0}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {elapsed < cliffMonths && <p className="text-[10px] text-yellow-400">Before the cliff nothing is vested — leaving now forfeits the entire grant.</p>}
     </div>
   );
 }

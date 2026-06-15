@@ -9,6 +9,7 @@ import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
   Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star, FileText, Copy,
   Layers, LineChart, HandCoins, Users, Scissors, Plus, Trash2, Mail,
+  Gauge, ShieldAlert, CalendarClock, Percent, TrendingUp, ListChecks, Tag, Gavel,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -125,7 +126,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -233,6 +234,14 @@ export default function CollectionsPage() {
               { id: "promise",       label: "Promise-to-Pay", icon: <HandCoins size={10} /> },
               { id: "agents",        label: "Agents",         icon: <Users size={10} /> },
               { id: "settlement",    label: "Settlement",     icon: <Scissors size={10} /> },
+              { id: "cei",           label: "CEI",            icon: <Gauge size={10} /> },
+              { id: "provision",     label: "Bad-Debt",       icon: <ShieldAlert size={10} /> },
+              { id: "plan",          label: "Payment Plan",   icon: <CalendarClock size={10} /> },
+              { id: "interest",      label: "Late Interest",  icon: <Percent size={10} /> },
+              { id: "forecast",      label: "Forecast",       icon: <TrendingUp size={10} /> },
+              { id: "worklist",      label: "Worklist",       icon: <ListChecks size={10} /> },
+              { id: "discount",      label: "Early-Pay",      icon: <Tag size={10} /> },
+              { id: "legal",         label: "Legal Notice",   icon: <Gavel size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -483,6 +492,14 @@ export default function CollectionsPage() {
       {view === "promise" && <PromiseToPay />}
       {view === "agents" && <AgentAssignment />}
       {view === "settlement" && <SettlementWorkflow />}
+      {view === "cei" && <CollectionEffectiveness />}
+      {view === "provision" && <BadDebtProvision />}
+      {view === "plan" && <PaymentPlanBuilder />}
+      {view === "interest" && <LateInterestCalculator />}
+      {view === "forecast" && <CollectionForecast />}
+      {view === "worklist" && <PriorityWorklist />}
+      {view === "discount" && <EarlyPayDiscount />}
+      {view === "legal" && <LegalNoticeDrafter />}
     </div>
   );
 }
@@ -1598,6 +1615,773 @@ function SettlementWorkflow() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Settlement = accept a discounted amount to close the account; write-off = recognise the full balance as bad debt (Dr Bad-debt expense, Cr Debtors). Approved figures feed the recovery/loss summary. Records sync across devices.</p>
+    </div>
+  );
+}
+
+// ── #55 COLLECTION EFFECTIVENESS INDEX (CEI) ────────────────────────────────
+// CEI = (collected during a period ÷ amount that was collectible) × 100.
+// Computed per month over the last 6 months from live invoices.
+function CollectionEffectiveness() {
+  const { store } = useApp();
+
+  const { months, overallCei } = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const now = new Date();
+    const buckets: { key: string; label: string; collectible: number; collected: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ key: format(d, "yyyy-MM"), label: format(d, "MMM yy"), collectible: 0, collected: 0 });
+    }
+    const byKey: Record<string, { collectible: number; collected: number }> = {};
+    buckets.forEach(b => { byKey[b.key] = b; });
+
+    // Collectible = invoices that became due in the month; collected = the paid ones.
+    invoices.forEach(inv => {
+      const key = (inv.dueDate || "").slice(0, 7);
+      if (byKey[key]) {
+        byKey[key].collectible += inv.amount;
+        if (inv.status === "paid") byKey[key].collected += inv.amount;
+      }
+    });
+
+    const months = buckets.map(b => ({
+      ...b,
+      cei: b.collectible > 0 ? Math.round((b.collected / b.collectible) * 100) : 0,
+    }));
+    const totalCollectible = months.reduce((s, m) => s + m.collectible, 0);
+    const totalCollected = months.reduce((s, m) => s + m.collected, 0);
+    const overallCei = totalCollectible > 0 ? Math.round((totalCollected / totalCollectible) * 100) : 0;
+    return { months, overallCei };
+  }, [store.invoices]);
+
+  const maxCei = Math.max(...months.map(m => m.cei), 1);
+  const hasData = months.some(m => m.collectible > 0);
+  const grade = overallCei >= 80 ? { label: "Excellent", cls: "text-green-400" } : overallCei >= 60 ? { label: "Healthy", cls: "text-yellow-400" } : { label: "Needs work", cls: "text-red-400" };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Overall CEI (6 mo)", value: hasData ? `${overallCei}%` : "—", color: grade.cls },
+          { label: "Rating", value: hasData ? grade.label : "—", color: grade.cls },
+          { label: "Latest month CEI", value: hasData ? `${months[months.length - 1].cei}%` : "—", color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {!hasData ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Gauge size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add invoices with due dates to measure how effectively you collect what becomes due.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Gauge size={14} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Collection Effectiveness — last 6 months</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">higher is better</span>
+          </div>
+          <div className="flex items-end gap-3 h-40">
+            {months.map(m => (
+              <div key={m.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                <span className="text-[10px] font-semibold tabular-nums">{m.collectible > 0 ? `${m.cei}%` : "—"}</span>
+                <div className="w-full rounded-t bg-[var(--color-primary)] transition-all" style={{ height: `${(m.cei / maxCei) * 100}%`, minHeight: m.cei > 0 ? "4px" : "0" }} />
+                <span className="text-[10px] text-[var(--color-muted)]">{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">CEI = collected ÷ collectible (invoices that fell due that month) × 100. ≥80% is excellent, 60–80% healthy, below means too much slips past its due date.</p>
+    </div>
+  );
+}
+
+// ── #56 BAD-DEBT PROVISIONING CALCULATOR ────────────────────────────────────
+// Apply an aging-based provisioning policy to open receivables for the books.
+const DEFAULT_PROVISION: Record<Aging, number> = { "current": 0, "1-30": 0, "31-60": 10, "61-90": 25, "90+": 50 };
+
+function BadDebtProvision() {
+  const { store } = useApp();
+  const [pct, setPct] = useState<Record<Aging, number>>(DEFAULT_PROVISION);
+
+  const rows = useMemo(() => {
+    const map: Record<Aging, number> = { "current": 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+    (store.invoices ?? []).filter(i => i.status !== "paid").forEach(i => { map[getAging(i.dueDate)] += i.amount; });
+    return (["current", "1-30", "31-60", "61-90", "90+"] as Aging[]).map(age => ({
+      age,
+      outstanding: map[age],
+      rate: pct[age],
+      provision: Math.round(map[age] * (pct[age] / 100)),
+    }));
+  }, [store.invoices, pct]);
+
+  const totalOut = rows.reduce((s, r) => s + r.outstanding, 0);
+  const totalProv = rows.reduce((s, r) => s + r.provision, 0);
+  const netRealisable = totalOut - totalProv;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Provisioning policy (% doubtful by age)</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {(["current", "1-30", "31-60", "61-90", "90+"] as Aging[]).map(age => (
+            <div key={age}>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-1">{AGING_STYLE[age].label}</label>
+              <div className="flex items-center gap-1">
+                <input type="number" min={0} max={100} value={pct[age]}
+                  onChange={e => setPct({ ...pct, [age]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                <span className="text-xs text-[var(--color-muted)]">%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total outstanding", value: formatCurrency(totalOut), color: "text-[var(--color-text)]" },
+          { label: "Bad-debt provision", value: formatCurrency(totalProv), color: "text-red-400" },
+          { label: "Net realisable AR", value: formatCurrency(netRealisable), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {totalOut === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <ShieldAlert size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open receivables to provision against. Outstanding invoices appear here grouped by aging bucket.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Aging Bucket", "Outstanding", "Provision %", "Provision Amount"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.age} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${AGING_STYLE[r.age].badge}`}>{AGING_STYLE[r.age].label}</span></td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(r.outstanding)}</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{r.rate}%</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{r.provision > 0 ? formatCurrency(r.provision) : "—"}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)] font-bold">
+                <td className="px-4 py-3">Total</td>
+                <td className="px-4 py-3 tabular-nums">{formatCurrency(totalOut)}</td>
+                <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{totalOut > 0 ? `${Math.round((totalProv / totalOut) * 100)}%` : "—"}</td>
+                <td className="px-4 py-3 tabular-nums text-red-400">{formatCurrency(totalProv)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Provision matrix posts as Dr Bad-debt expense / Cr Provision for doubtful debts. Adjust the % per bucket to match your accounting policy; older buckets typically carry higher provisioning.</p>
+    </div>
+  );
+}
+
+// ── #57 PAYMENT PLAN / INSTALLMENT BUILDER ──────────────────────────────────
+// Split an open balance into N equal installments and produce a schedule.
+function PaymentPlanBuilder() {
+  const { store } = useApp();
+  const openAccounts = useMemo(() => (store.invoices ?? [])
+    .filter(inv => inv.status !== "paid")
+    .map(inv => ({ id: inv.id, customer: inv.customer, amount: inv.amount, ref: inv.invoiceNumber || inv.id.slice(0, 6) })), [store.invoices]);
+
+  const [selId, setSelId] = useState("");
+  const [count, setCount] = useState(3);
+  const [everyDays, setEveryDays] = useState(30);
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [copied, setCopied] = useState(false);
+
+  const sel = openAccounts.find(a => a.id === selId);
+  const total = sel?.amount ?? 0;
+
+  const schedule = useMemo(() => {
+    if (!sel || count < 1) return [];
+    const base = Math.floor(total / count);
+    const remainder = total - base * count;
+    return Array.from({ length: count }, (_, i) => ({
+      n: i + 1,
+      // Push the rounding remainder into the final installment so the plan sums exactly.
+      amount: i === count - 1 ? base + remainder : base,
+      date: format(addDays(parseISO(startDate), i * everyDays), "d MMM yyyy"),
+    }));
+  }, [sel, count, total, everyDays, startDate]);
+
+  const copyPlan = () => {
+    if (!sel) return;
+    const lines = [
+      `PAYMENT PLAN — ${sel.customer} (Invoice ${sel.ref})`,
+      `Total: ${formatCurrency(total)} in ${count} installments`,
+      ``,
+      ...schedule.map(s => `Installment ${s.n}: ${formatCurrency(s.amount)} due ${s.date}`),
+    ];
+    navigator.clipboard.writeText(lines.join("\n")).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    toast.success("Payment plan copied");
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  if (openAccounts.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <CalendarClock size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+        <p className="text-sm text-[var(--color-muted)]">No open invoices to build a payment plan for. Outstanding accounts appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Build an installment plan</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Open account</label>
+            <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
+              <option value="">Select…</option>
+              {openAccounts.map(a => <option key={a.id} value={a.id}>{a.customer} · {a.ref} · {formatCurrency(a.amount)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Installments</label>
+            <input type="number" min={1} max={36} value={count} onChange={e => setCount(Math.max(1, Math.min(36, Number(e.target.value) || 1)))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Every (days)</label>
+            <input type="number" min={1} max={180} value={everyDays} onChange={e => setEveryDays(Math.max(1, Number(e.target.value) || 1))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First due</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {sel && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total to recover", value: formatCurrency(total), color: "text-[var(--color-text)]" },
+              { label: "Per installment", value: schedule.length > 0 ? `~${formatCurrency(schedule[0].amount)}` : "—", color: "text-[var(--color-primary)]" },
+              { label: "Plan length", value: `${(count - 1) * everyDays} days`, color: "text-yellow-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+              <span className="text-sm font-semibold">Schedule — {sel.customer}</span>
+              <button onClick={copyPlan} className="ml-auto flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+                <Copy size={11} /> {copied ? "Copied!" : "Copy plan"}
+              </button>
+            </div>
+            <table className="w-full text-sm min-w-[400px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["#", "Due Date", "Amount"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.map(s => (
+                  <tr key={s.n} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.n}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{s.date}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(s.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Splits the open balance into equal installments; the rounding remainder lands on the final one so the plan sums exactly to the balance. Copy and share the schedule with the customer to confirm terms.</p>
+    </div>
+  );
+}
+
+// ── #58 OVERDUE INTEREST CALCULATOR (MSME) ──────────────────────────────────
+// Compute delayed-payment interest on overdue invoices at a configurable annual rate.
+function LateInterestCalculator() {
+  const { store } = useApp();
+  const [annualPct, setAnnualPct] = useState(18);
+
+  const rows = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(inv => inv.status !== "paid")
+      .map(inv => {
+        const days = Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate)));
+        const interest = Math.round(inv.amount * (annualPct / 100) * (days / 365));
+        return { id: inv.id, customer: inv.customer, ref: inv.invoiceNumber || inv.id.slice(0, 6), amount: inv.amount, days, interest };
+      })
+      .filter(r => r.days > 0)
+      .sort((a, b) => b.interest - a.interest);
+  }, [store.invoices, annualPct]);
+
+  const totalInterest = rows.reduce((s, r) => s + r.interest, 0);
+  const totalPrincipal = rows.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-2">
+          <Percent size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Delayed-payment interest</span>
+        </div>
+        <div className="ml-auto">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Annual interest rate</label>
+          <div className="flex items-center gap-2">
+            <input type="range" min={0} max={36} value={annualPct} onChange={e => setAnnualPct(Number(e.target.value))} className="w-32 accent-[var(--color-primary)]" />
+            <span className="text-sm font-bold w-10 tabular-nums">{annualPct}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Overdue principal", value: formatCurrency(totalPrincipal), color: "text-[var(--color-text)]" },
+          { label: "Interest claimable", value: formatCurrency(totalInterest), color: "text-orange-400" },
+          { label: "Overdue accounts", value: rows.length.toString(), color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Percent size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No overdue invoices to charge interest on. Once an invoice passes its due date it appears here with accrued interest.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]">
+            <span className="text-sm font-semibold">Interest accrued by invoice</span>
+          </div>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Invoice", "Principal", "Days Overdue", "Interest"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)]">{r.ref}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(r.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{r.days}d</td>
+                  <td className="px-4 py-3 tabular-nums text-orange-400 font-semibold">{formatCurrency(r.interest)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Simple interest = principal × annual rate × days÷365. Under the MSMED Act buyers owe compound interest at 3× the RBI bank rate on delayed MSME payments — set the rate to match your contract or the applicable statutory rate.</p>
+    </div>
+  );
+}
+
+// ── #59 CASH FORECAST FROM RECEIVABLES ──────────────────────────────────────
+// Project expected collections into weekly buckets using a recovery-probability
+// curve keyed to each invoice's aging (older = less likely to land soon).
+const RECOVERY_PROB: Record<Aging, number> = { "current": 0.95, "1-30": 0.85, "31-60": 0.65, "61-90": 0.45, "90+": 0.25 };
+
+function CollectionForecast() {
+  const { store } = useApp();
+
+  const { weeks, expectedTotal, faceTotal } = useMemo(() => {
+    const open = (store.invoices ?? []).filter(i => i.status !== "paid");
+    const now = new Date();
+    const weeks = Array.from({ length: 6 }, (_, i) => ({
+      label: i === 0 ? "This week" : `Week +${i}`,
+      start: addDays(now, i * 7),
+      expected: 0,
+    }));
+    let expectedTotal = 0;
+    let faceTotal = 0;
+    open.forEach(inv => {
+      const prob = RECOVERY_PROB[getAging(inv.dueDate)];
+      const expected = inv.amount * prob;
+      faceTotal += inv.amount;
+      expectedTotal += expected;
+      // Bucket by expected-pay date: overdue lands in week 0; not-yet-due lands on its due week.
+      const daysToDue = differenceInDays(parseISO(inv.dueDate), now);
+      const wi = daysToDue <= 0 ? 0 : Math.min(5, Math.floor(daysToDue / 7));
+      weeks[wi].expected += expected;
+    });
+    return { weeks, expectedTotal: Math.round(expectedTotal), faceTotal };
+  }, [store.invoices]);
+
+  const maxWeek = Math.max(...weeks.map(w => w.expected), 1);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Open AR (face value)", value: formatCurrency(faceTotal), color: "text-[var(--color-text)]" },
+          { label: "Expected to collect", value: formatCurrency(expectedTotal), color: "text-green-400" },
+          { label: "Risk-adjusted shortfall", value: formatCurrency(faceTotal - expectedTotal), color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {faceTotal === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <TrendingUp size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open receivables to forecast. Outstanding invoices project into expected weekly collections here.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp size={14} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Expected collections — next 6 weeks</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">risk-adjusted</span>
+          </div>
+          <div className="flex items-end gap-3 h-40">
+            {weeks.map(w => (
+              <div key={w.label} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                <span className="text-[10px] font-semibold tabular-nums">{w.expected > 0 ? formatCurrency(Math.round(w.expected)) : "—"}</span>
+                <div className="w-full rounded-t bg-green-500/70 transition-all" style={{ height: `${(w.expected / maxWeek) * 100}%`, minHeight: w.expected > 0 ? "4px" : "0" }} />
+                <span className="text-[10px] text-[var(--color-muted)]">{w.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Each invoice is weighted by a recovery probability set by its aging (Current 95% → 90d+ 25%) and bucketed by its due week (overdue counts as this week). Expected = Σ(amount × probability) — a conservative cash-in estimate, not a guarantee.</p>
+    </div>
+  );
+}
+
+// ── #60 PRIORITY WORKLIST (value × age × risk) ──────────────────────────────
+// Rank open accounts by a chase-priority score so reps work the biggest wins first.
+function PriorityWorklist() {
+  const { store } = useApp();
+
+  const rows = useMemo(() => {
+    const open = (store.invoices ?? []).filter(i => i.status !== "paid");
+    const maxAmt = Math.max(...open.map(i => i.amount), 1);
+    return open
+      .map(inv => {
+        const days = Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate)));
+        const valueScore = (inv.amount / maxAmt) * 100;       // 0–100 by value
+        const ageScore = Math.min(days / 90, 1) * 100;        // 0–100, caps at 90d
+        const riskScore = (1 - RECOVERY_PROB[getAging(inv.dueDate)]) * 100; // older = riskier
+        // Weighted blend: value 40%, age 35%, risk 25%.
+        const priority = Math.round(valueScore * 0.4 + ageScore * 0.35 + riskScore * 0.25);
+        return { id: inv.id, customer: inv.customer, ref: inv.invoiceNumber || inv.id.slice(0, 6), amount: inv.amount, days, priority };
+      })
+      .sort((a, b) => b.priority - a.priority);
+  }, [store.invoices]);
+
+  const focus = rows.slice(0, Math.min(5, rows.length));
+  const focusValue = focus.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Accounts to work", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Top-5 focus value", value: formatCurrency(focusValue), color: "text-yellow-400" },
+          { label: "Highest priority", value: rows.length > 0 ? `${rows[0].priority}` : "—", color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <ListChecks size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open accounts to prioritise. Outstanding invoices are ranked here by value, age and risk.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <ListChecks size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Chase worklist</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">work top-down</span>
+          </div>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Rank", "Customer", "Invoice", "Amount", "Days Overdue", "Priority"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${i < 5 ? "bg-[var(--color-primary)]/5" : ""}`}>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{i + 1}</td>
+                  <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)]">{r.ref}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(r.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{r.days > 0 ? `${r.days}d` : "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden w-20">
+                        <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${r.priority}%` }} />
+                      </div>
+                      <span className="tabular-nums text-xs font-semibold w-6">{r.priority}</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Priority = 40% value + 35% age + 25% recovery-risk, each scaled 0–100. The top five (highlighted) are where chasing recovers the most cash per minute of effort.</p>
+    </div>
+  );
+}
+
+// ── #61 EARLY-PAYMENT DISCOUNT ENGINE ───────────────────────────────────────
+// Model a 2/10-net-30 style early-pay discount and the implied annualised cost.
+function EarlyPayDiscount() {
+  const { store } = useApp();
+  const [discountPct, setDiscountPct] = useState(2);
+  const [payWithin, setPayWithin] = useState(10);
+  const [netDays, setNetDays] = useState(30);
+
+  const open = useMemo(() => (store.invoices ?? []).filter(i => i.status !== "paid"), [store.invoices]);
+  const openValue = open.reduce((s, i) => s + i.amount, 0);
+
+  const rows = useMemo(() => open
+    .map(inv => ({
+      id: inv.id,
+      customer: inv.customer,
+      ref: inv.invoiceNumber || inv.id.slice(0, 6),
+      amount: inv.amount,
+      discounted: Math.round(inv.amount * (1 - discountPct / 100)),
+      saving: Math.round(inv.amount * (discountPct / 100)),
+    }))
+    .sort((a, b) => b.amount - a.amount), [open, discountPct]);
+
+  // Implied annual cost of offering the discount (your cost of accelerating cash).
+  const daysSaved = Math.max(1, netDays - payWithin);
+  const impliedApr = Math.round((discountPct / (100 - discountPct)) * (365 / daysSaved) * 100);
+  const totalDiscount = Math.round(openValue * (discountPct / 100));
+  const cashIfTaken = openValue - totalDiscount;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Tag size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Early-payment discount terms</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount %</label>
+            <input type="number" min={0} max={20} value={discountPct} onChange={e => setDiscountPct(Math.max(0, Math.min(20, Number(e.target.value) || 0)))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">If paid within (days)</label>
+            <input type="number" min={1} max={90} value={payWithin} onChange={e => setPayWithin(Math.max(1, Number(e.target.value) || 1))} className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Net terms (days)</label>
+            <input type="number" min={1} max={180} value={netDays} onChange={e => setNetDays(Math.max(1, Number(e.target.value) || 1))} className={inp} />
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Offer: <span className="font-semibold text-[var(--color-text)]">{discountPct}/{payWithin} net {netDays}</span> — {discountPct}% off if paid within {payWithin} days, otherwise full amount by day {netDays}.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Open AR", value: formatCurrency(openValue), color: "text-[var(--color-text)]" },
+          { label: "Cash if all take it", value: formatCurrency(cashIfTaken), color: "text-green-400" },
+          { label: "Discount given", value: formatCurrency(totalDiscount), color: "text-red-400" },
+          { label: "Implied annual cost", value: `${impliedApr}%`, color: impliedApr > 24 ? "text-red-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Tag size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open invoices to offer early-pay discounts on. Outstanding accounts appear here with their discounted amounts.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Invoice", "Full Amount", "Pay-now Amount", "Customer Saves"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)]">{r.ref}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatCurrency(r.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(r.discounted)}</td>
+                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.saving)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Implied annual cost = (d ÷ (100−d)) × (365 ÷ days saved). At 2/10 net 30 that is ~37% — only worth offering if your cash is scarcer than that. Use it selectively for customers whose early cash genuinely beats the discount.</p>
+    </div>
+  );
+}
+
+// ── #62 LEGAL / DEMAND NOTICE DRAFTER ───────────────────────────────────────
+// Generate a formal demand-notice / legal-notice draft from a selected overdue account.
+function LegalNoticeDrafter() {
+  const { store } = useApp();
+  const overdue = useMemo(() => (store.invoices ?? [])
+    .filter(inv => inv.status !== "paid" && differenceInDays(new Date(), parseISO(inv.dueDate)) > 0)
+    .map(inv => ({
+      id: inv.id,
+      customer: inv.customer,
+      ref: inv.invoiceNumber || inv.id.slice(0, 6),
+      amount: inv.amount,
+      dueDate: inv.dueDate,
+      days: Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate))),
+    }))
+    .sort((a, b) => b.days - a.days), [store.invoices]);
+
+  const [selId, setSelId] = useState("");
+  const [graceDays, setGraceDays] = useState(15);
+  const [copied, setCopied] = useState(false);
+
+  const sel = overdue.find(o => o.id === selId);
+  const firmName = store.firm?.name ?? "Your Company";
+
+  const notice = useMemo(() => {
+    if (!sel) return "";
+    return [
+      `LEGAL DEMAND NOTICE`,
+      ``,
+      `From: ${firmName}`,
+      `To: ${sel.customer}`,
+      `Date: ${format(new Date(), "d MMMM yyyy")}`,
+      ``,
+      `Subject: Demand for payment of overdue invoice ${sel.ref} amounting to ${formatCurrency(sel.amount)}`,
+      ``,
+      `Dear Sir/Madam,`,
+      ``,
+      `1. You are liable to pay our client ${firmName} a sum of ${formatCurrency(sel.amount)} towards invoice no. ${sel.ref}, which fell due on ${format(parseISO(sel.dueDate), "d MMMM yyyy")} and remains unpaid for ${sel.days} days as on date.`,
+      ``,
+      `2. Despite repeated reminders, the said amount has not been settled, causing financial loss and inconvenience.`,
+      ``,
+      `3. You are hereby called upon to pay the entire outstanding sum of ${formatCurrency(sel.amount)}, together with applicable interest, within ${graceDays} days of receipt of this notice.`,
+      ``,
+      `4. Take notice that failing payment within the stipulated period, our client shall be constrained to initiate appropriate legal proceedings for recovery, entirely at your risk as to cost and consequences.`,
+      ``,
+      `This notice is issued without prejudice to the rights and remedies available to our client.`,
+      ``,
+      `For ${firmName}`,
+      `Authorised Signatory`,
+    ].join("\n");
+  }, [sel, firmName, graceDays]);
+
+  const copy = () => {
+    navigator.clipboard.writeText(notice).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    toast.success("Notice draft copied");
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  if (overdue.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Gavel size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+        <p className="text-sm text-[var(--color-muted)]">No overdue accounts to draft a demand notice for. Overdue invoices become eligible here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Gavel size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Draft a demand / legal notice</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Overdue account</label>
+            <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
+              <option value="">Select…</option>
+              {overdue.map(o => <option key={o.id} value={o.id}>{o.customer} · {o.ref} · {formatCurrency(o.amount)} · {o.days}d</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pay within (days)</label>
+            <input type="number" min={1} max={90} value={graceDays} onChange={e => setGraceDays(Math.max(1, Number(e.target.value) || 1))} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {sel && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <FileText size={13} className="text-[var(--color-primary)]" />
+            <span className="text-sm font-semibold">Notice draft — {sel.customer}</span>
+            <button onClick={copy} className="ml-auto flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">
+              <Copy size={11} /> {copied ? "Copied!" : "Copy notice"}
+            </button>
+          </div>
+          <pre className="p-4 text-xs text-[var(--color-text)] leading-relaxed whitespace-pre-wrap font-sans">{notice}</pre>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A starting-point demand-notice draft auto-filled from the invoice and your firm name. This is not legal advice — have a lawyer review and adapt it (e.g. for a Section 138 cheque-bounce or MSMED Act claim) before serving.</p>
     </div>
   );
 }

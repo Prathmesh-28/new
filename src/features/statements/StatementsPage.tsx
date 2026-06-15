@@ -1,18 +1,23 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { incomeStatement, balanceSheet, cashFlowStatement, monthlyCashFlow } from "@/lib/finance";
+import { totalGrossCost, totalAccumulatedDepreciation, totalNetBookValue, depreciationBetween, accumulatedDepreciation, bookValue } from "@/lib/depreciation";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { exportExcel, exportPdf } from "@/lib/exporters";
 import {
   FileSpreadsheet, FileDown, Sheet as SheetIcon, Info, Scale, TrendingUp, Wallet, Building2,
   Repeat, FileStack, NotebookPen, Columns3, PieChart,
+  Percent, ArrowLeftRight, Briefcase, Layers, CalendarClock, Coins, Receipt, LayoutDashboard,
 } from "lucide-react";
 import { toast } from "sonner";
 import FixedAssetRegister from "./FixedAssetRegister";
 
 type Tab =
   | "income" | "balance" | "cashflow" | "assets"
-  | "as3-cashflow" | "schedule3" | "notes" | "comparative" | "segment";
+  | "as3-cashflow" | "schedule3" | "notes" | "comparative" | "segment"
+  | "ratios" | "fund-flow" | "working-capital" | "socie"
+  | "dep-schedule" | "eps-networth" | "cost-sheet" | "mis-pack";
 type Preset = "month" | "quarter" | "fy" | "ttm";
 
 function iso(d: Date) { return d.toISOString().split("T")[0]; }
@@ -180,17 +185,25 @@ export default function StatementsPage() {
     toast.success("PDF downloaded");
   };
 
-  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "income",        label: "Income Statement", icon: TrendingUp },
-    { id: "balance",       label: "Balance Sheet",    icon: Scale },
-    { id: "cashflow",      label: "Cash Flow",        icon: Wallet },
-    { id: "assets",        label: "Fixed Assets",     icon: Building2 },
-    { id: "as3-cashflow",  label: "AS-3 Cash Flow",   icon: Repeat },
-    { id: "schedule3",     label: "Schedule III",     icon: FileStack },
-    { id: "notes",         label: "Notes to Accounts", icon: NotebookPen },
-    { id: "comparative",   label: "Comparative",      icon: Columns3 },
-    { id: "segment",       label: "Segment Report",   icon: PieChart },
-  ];
+  const TABS = [
+    { id: "income",          label: "Income Statement", icon: TrendingUp },
+    { id: "balance",         label: "Balance Sheet",    icon: Scale },
+    { id: "cashflow",        label: "Cash Flow",        icon: Wallet },
+    { id: "assets",          label: "Fixed Assets",     icon: Building2 },
+    { id: "as3-cashflow",    label: "AS-3 Cash Flow",   icon: Repeat },
+    { id: "schedule3",       label: "Schedule III",     icon: FileStack },
+    { id: "notes",           label: "Notes to Accounts", icon: NotebookPen },
+    { id: "comparative",     label: "Comparative",      icon: Columns3 },
+    { id: "segment",         label: "Segment Report",   icon: PieChart },
+    { id: "ratios",          label: "Ratio Pack",       icon: Percent },
+    { id: "fund-flow",       label: "Fund Flow",        icon: ArrowLeftRight },
+    { id: "working-capital", label: "Working Capital",  icon: Briefcase },
+    { id: "socie",           label: "Changes in Equity", icon: Layers },
+    { id: "dep-schedule",    label: "Depreciation Sch.", icon: CalendarClock },
+    { id: "eps-networth",    label: "EPS & Net Worth",  icon: Coins },
+    { id: "cost-sheet",      label: "Cost Sheet",       icon: Receipt },
+    { id: "mis-pack",        label: "MIS Pack",         icon: LayoutDashboard },
+  ] as const satisfies readonly { id: Tab; label: string; icon: React.ElementType }[];
   const PRESETS: { id: Preset; label: string }[] = [
     { id: "month",   label: "This Month" },
     { id: "quarter", label: "This Quarter" },
@@ -435,6 +448,30 @@ export default function StatementsPage() {
 
       {/* ── #197 SEGMENT REPORTING ── */}
       {tab === "segment" && <SegmentReporting start={range.start} end={range.end} label={range.label} />}
+
+      {/* ── RATIO ANALYSIS PACK (Schedule III mandatory ratios) ── */}
+      {tab === "ratios" && <RatioPack today={today} />}
+
+      {/* ── FUND FLOW STATEMENT (sources & applications) ── */}
+      {tab === "fund-flow" && <FundFlowStatement today={today} />}
+
+      {/* ── WORKING-CAPITAL STATEMENT (changes in WC) ── */}
+      {tab === "working-capital" && <WorkingCapitalStatement today={today} />}
+
+      {/* ── STATEMENT OF CHANGES IN EQUITY (SOCIE) ── */}
+      {tab === "socie" && <ChangesInEquity today={today} />}
+
+      {/* ── DEPRECIATION SCHEDULE (Companies Act Schedule II) ── */}
+      {tab === "dep-schedule" && <DepreciationSchedule today={today} />}
+
+      {/* ── EPS & NET-WORTH COMPUTATION ── */}
+      {tab === "eps-networth" && <EpsNetWorth start={range.start} end={range.end} asOf={today} label={range.label} />}
+
+      {/* ── COST SHEET / GROSS-PROFIT STATEMENT ── */}
+      {tab === "cost-sheet" && <CostSheet start={range.start} end={range.end} label={range.label} />}
+
+      {/* ── MIS DASHBOARD PACK ── */}
+      {tab === "mis-pack" && <MisPack start={range.start} end={range.end} asOf={today} label={range.label} />}
     </div>
   );
 }
@@ -920,6 +957,669 @@ function SegmentReporting({ start, end, label }: { start: string; end: string; l
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Segments are inferred from top revenue counterparties as a working proxy; under AS-17 / Ind AS 108 reportable segments follow the entity's internal management structure. Common costs are allocated pro-rata to segment revenue. Refine segment definitions with your CA before disclosure.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Additional statements section tools (appended)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One financial ratio with formula, computed value and a health verdict. */
+function RatioCard({ name, formula, value, target, ok }: {
+  name: string; formula: string; value: string; target: string; ok: boolean | null;
+}) {
+  return (
+    <div className={`${CARD} p-4`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold">{name}</p>
+        <span className={`text-base font-bold tabular-nums ${ok === null ? "text-[var(--color-text)]" : ok ? "text-green-400" : "text-yellow-400"}`}>{value}</span>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] mt-1 leading-relaxed">{formula}</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-1.5">Benchmark: {target}</p>
+    </div>
+  );
+}
+
+// ── Ratio Analysis Pack — the Schedule III mandatory ratios + key cover ratios ────
+function RatioPack({ today }: { today: Date }) {
+  const { store } = useApp();
+  const bs = useMemo(() => balanceSheet(store, today), [store, today]);
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+
+  const r = useMemo(() => {
+    const div = (a: number, b: number) => (b === 0 ? null : a / b);
+    const cogs = pl.cogs + pl.payroll + pl.otherOpex; // total operating cost proxy
+    const avgInventory = bs.inventory;
+    const avgReceivables = bs.accountsReceivable;
+    const avgPayables = bs.accountsPayable;
+    const capitalEmployed = bs.totalEquity + bs.longTermDebt;
+    const ebit = pl.ebit;
+    return {
+      current: div(bs.currentAssets, bs.currentLiabilities),
+      quick: div(bs.currentAssets - bs.inventory, bs.currentLiabilities),
+      debtEquity: div(bs.totalLiabilities, bs.totalEquity),
+      dscr: div(pl.ebitda, pl.interest + bs.shortTermDebt),
+      icr: div(ebit, pl.interest),
+      invTurn: div(cogs, avgInventory),
+      debtorTurn: div(pl.revenue, avgReceivables),
+      creditorTurn: div(cogs, avgPayables),
+      netCapTurn: div(pl.revenue, bs.currentAssets - bs.currentLiabilities),
+      netMargin: pl.netMarginPct,
+      roce: div(ebit, capitalEmployed),
+      roe: div(pl.netProfit, bs.totalEquity),
+    };
+  }, [bs, pl]);
+
+  const f1 = (n: number | null, suffix = "x") => (n === null ? "n/a" : `${n.toFixed(2)}${suffix}`);
+  const pct = (n: number | null) => (n === null ? "n/a" : `${(n * 100).toFixed(1)}%`);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Ratio Analysis Pack</h2>
+        <p className="text-xs text-[var(--color-muted)]">The Schedule III (Companies Act 2013) mandatory ratios plus key liquidity, leverage and return ratios — computed live from your P&amp;L ({fy.label} YTD) and balance sheet as at {bs.asOf}.</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <RatioCard name="Current Ratio" formula="Current assets ÷ current liabilities" value={f1(r.current)} target="≥ 1.33x" ok={r.current === null ? null : r.current >= 1.33} />
+        <RatioCard name="Quick Ratio" formula="(Current assets − inventory) ÷ current liabilities" value={f1(r.quick)} target="≥ 1.0x" ok={r.quick === null ? null : r.quick >= 1} />
+        <RatioCard name="Debt–Equity Ratio" formula="Total liabilities ÷ shareholders' equity" value={f1(r.debtEquity)} target="≤ 2.0x" ok={r.debtEquity === null ? null : r.debtEquity <= 2} />
+        <RatioCard name="Debt Service Coverage" formula="EBITDA ÷ (interest + short-term debt)" value={f1(r.dscr)} target="≥ 1.25x" ok={r.dscr === null ? null : r.dscr >= 1.25} />
+        <RatioCard name="Interest Coverage" formula="EBIT ÷ finance cost" value={f1(r.icr)} target="≥ 3.0x" ok={r.icr === null ? null : r.icr >= 3} />
+        <RatioCard name="Inventory Turnover" formula="Cost of sales ÷ inventory" value={f1(r.invTurn)} target="higher is better" ok={null} />
+        <RatioCard name="Debtors Turnover" formula="Revenue ÷ trade receivables" value={f1(r.debtorTurn)} target="higher is better" ok={null} />
+        <RatioCard name="Creditors Turnover" formula="Cost of sales ÷ trade payables" value={f1(r.creditorTurn)} target="context-specific" ok={null} />
+        <RatioCard name="Net Capital Turnover" formula="Revenue ÷ net working capital" value={f1(r.netCapTurn)} target="higher is better" ok={null} />
+        <RatioCard name="Net Profit Ratio" formula="Net profit ÷ revenue" value={`${r.netMargin}%`} target="≥ 8%" ok={r.netMargin >= 8} />
+        <RatioCard name="Return on Capital Employed" formula="EBIT ÷ (equity + long-term debt)" value={pct(r.roce)} target="≥ 15%" ok={r.roce === null ? null : r.roce >= 0.15} />
+        <RatioCard name="Return on Equity" formula="Net profit ÷ shareholders' equity" value={pct(r.roe)} target="≥ 15%" ok={r.roe === null ? null : r.roe >= 0.15} />
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Schedule III requires these ratios with an explanation for any &gt;25% YoY movement. Turnover ratios use period-end balances as a proxy for averages (Headroom is cash-centric, not ledger-based). Your CA finalises the disclosed figures and the variance notes.</p>
+    </div>
+  );
+}
+
+// ── Fund Flow Statement — sources & applications of funds (lender format) ─────────
+function FundFlowStatement({ today }: { today: Date }) {
+  const { store } = useApp();
+  const priorDate = useMemo(() => new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()), [today]);
+  const cur = useMemo(() => balanceSheet(store, today), [store, today]);
+  const prior = useMemo(() => balanceSheet(store, priorDate), [store, priorDate]);
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+
+  const ff = useMemo(() => {
+    // Change in NON-current items drives fund flow; current items net into working capital.
+    const fundsFromOps = pl.netProfit + pl.depreciation; // add back non-cash depreciation
+    const equityIntroduced = Math.max(0, cur.paidInCapital - prior.paidInCapital);
+    const longTermBorrowed = Math.max(0, cur.longTermDebt - prior.longTermDebt);
+    const fixedAssetsSold = Math.max(0, prior.fixedAssetsNet - cur.fixedAssetsNet - pl.depreciation);
+
+    const sources = [
+      { label: "Funds from operations (net profit + depreciation)", value: fundsFromOps },
+      { label: "Fresh capital introduced", value: equityIntroduced },
+      { label: "Long-term borrowings raised", value: longTermBorrowed },
+      { label: "Sale of fixed assets", value: fixedAssetsSold },
+    ].filter(s => s.value !== 0);
+
+    const longTermRepaid = Math.max(0, prior.longTermDebt - cur.longTermDebt);
+    const capexAdditions = Math.max(0, cur.fixedAssetsNet - prior.fixedAssetsNet + pl.depreciation);
+    const applications = [
+      { label: "Purchase of fixed assets (capex)", value: capexAdditions },
+      { label: "Repayment of long-term borrowings", value: longTermRepaid },
+    ].filter(a => a.value !== 0);
+
+    const totalSources = sources.reduce((s, x) => s + x.value, 0);
+    const totalApplications = applications.reduce((s, x) => s + x.value, 0);
+    const wcChange = totalSources - totalApplications; // increase (+) / decrease (−) in working capital
+    return { sources, applications, totalSources, totalApplications, wcChange };
+  }, [cur, prior, pl]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Fund Flow Statement</h2>
+        <p className="text-xs text-[var(--color-muted)]">Sources and applications of funds for the year ended {cur.asOf} (vs {prior.asOf}). Banks ask for this with credit appraisals; the closing balancing figure is the change in working capital.</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${CARD} p-5`}>
+          <Row label="Sources of Funds" level={0} />
+          {ff.sources.length ? ff.sources.map(s => <Row key={s.label} label={s.label} value={s.value} accent="green" />) : <p className="text-xs text-[var(--color-muted)] py-2 pl-3">No fund inflows detected in the period.</p>}
+          <Row label="Total Sources" value={ff.totalSources} level={3} accent="blue" />
+        </div>
+        <div className={`${CARD} p-5`}>
+          <Row label="Applications of Funds" level={0} />
+          {ff.applications.length ? ff.applications.map(a => <Row key={a.label} label={a.label} value={a.value} />) : <p className="text-xs text-[var(--color-muted)] py-2 pl-3">No fund outflows detected in the period.</p>}
+          <Row label="Total Applications" value={ff.totalApplications} level={3} accent="blue" />
+        </div>
+      </div>
+      <div className={`rounded-lg px-4 py-2.5 text-xs flex items-center gap-2 border ${ff.wcChange >= 0 ? "bg-green-950/20 border-green-800/40 text-green-400" : "bg-red-950/20 border-red-800/40 text-red-400"}`}>
+        <Briefcase size={13} />
+        {ff.wcChange >= 0
+          ? `Net increase in working capital of ${formatCurrency(ff.wcChange)} (sources exceeded long-term applications)`
+          : `Net decrease in working capital of ${formatCurrency(Math.abs(ff.wcChange))} (long-term applications exceeded sources)`}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Derived by comparing the balance sheet as at {cur.asOf} with the same date a year earlier. Funds from operations add back depreciation; current-asset/liability movements are captured as the working-capital change. Review with your CA before lender submission.</p>
+    </div>
+  );
+}
+
+// ── Working-Capital Statement — schedule of changes in working capital ────────────
+function WorkingCapitalStatement({ today }: { today: Date }) {
+  const { store } = useApp();
+  const priorDate = useMemo(() => new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()), [today]);
+  const cur = useMemo(() => balanceSheet(store, today), [store, today]);
+  const prior = useMemo(() => balanceSheet(store, priorDate), [store, priorDate]);
+
+  const rows = useMemo(() => {
+    const ca = [
+      { label: "Cash & bank balances", c: cur.cash, p: prior.cash },
+      { label: "Trade receivables", c: cur.accountsReceivable, p: prior.accountsReceivable },
+      { label: "Inventories", c: cur.inventory, p: prior.inventory },
+    ];
+    const cl = [
+      { label: "Trade payables", c: cur.accountsPayable, p: prior.accountsPayable },
+      { label: "GST payable", c: cur.gstPayable, p: prior.gstPayable },
+      { label: "Short-term debt", c: cur.shortTermDebt, p: prior.shortTermDebt },
+      { label: "Other current liabilities", c: cur.otherCurrentLiabilities, p: prior.otherCurrentLiabilities },
+    ];
+    const sumC = (a: { c: number }[]) => a.reduce((s, x) => s + x.c, 0);
+    const sumP = (a: { p: number }[]) => a.reduce((s, x) => s + x.p, 0);
+    return {
+      ca, cl,
+      curCA: sumC(ca), priCA: sumP(ca),
+      curCL: sumC(cl), priCL: sumP(cl),
+      curWC: sumC(ca) - sumC(cl), priWC: sumP(ca) - sumP(cl),
+    };
+  }, [cur, prior]);
+
+  // For each line: a rise in a CURRENT ASSET increases WC; a rise in a CURRENT LIABILITY decreases it.
+  const lineRows = useMemo(() => [
+    ...rows.ca.map(x => ({ ...x, kind: "asset" as const })),
+    ...rows.cl.map(x => ({ ...x, kind: "liab" as const })),
+  ], [rows]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Briefcase size={14} className="text-[var(--color-primary)]" /> Statement of Changes in Working Capital</h2>
+        <p className="text-xs text-[var(--color-muted)]">Line-by-line movement in current assets and current liabilities between {prior.asOf} and {cur.asOf}, with the net effect on working capital.</p>
+      </div>
+      <div className={`${CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[640px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Particulars", prior.asOf, cur.asOf, "Increase in WC", "Decrease in WC"].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {lineRows.map(x => {
+              const delta = x.c - x.p;
+              // asset up → WC up; liability up → WC down
+              const wcEffect = x.kind === "asset" ? delta : -delta;
+              return (
+                <tr key={x.label} className="hover:bg-white/2">
+                  <td className="px-4 py-2 font-medium">{x.label}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(x.p)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(x.c)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{wcEffect > 0 ? formatAmount(wcEffect) : "—"}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-400">{wcEffect < 0 ? formatAmount(Math.abs(wcEffect)) : "—"}</td>
+                </tr>
+              );
+            })}
+            <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+              <td className="px-4 py-2">Net working capital</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.priWC)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.curWC)}</td>
+              <td colSpan={2} className={`px-4 py-2 text-right tabular-nums ${rows.curWC - rows.priWC >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {rows.curWC - rows.priWC >= 0 ? "Increase " : "Decrease "}{formatAmount(Math.abs(rows.curWC - rows.priWC))}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A rise in a current asset increases working capital; a rise in a current liability decreases it. Prior-period figures are reconstructed from the same balance-sheet logic dated one year back. WC drift hidden inside the balance sheet is made explicit here.</p>
+    </div>
+  );
+}
+
+// ── Statement of Changes in Equity (SOCIE) ────────────────────────────────────────
+function ChangesInEquity({ today }: { today: Date }) {
+  const { store } = useApp();
+  const priorDate = useMemo(() => new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()), [today]);
+  const cur = useMemo(() => balanceSheet(store, today), [store, today]);
+  const prior = useMemo(() => balanceSheet(store, priorDate), [store, priorDate]);
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+
+  // Opening = prior-year balances; profit for the year flows into reserves;
+  // capital issued = change in paid-in capital. Closing must tie to current BS.
+  const capitalIssued = cur.paidInCapital - prior.paidInCapital;
+  const otherReserveMove = (cur.retainedEarnings - prior.retainedEarnings) - pl.netProfit; // dividends/adjustments (balancing)
+
+  type Col = { capital: number; reserves: number };
+  const add = (a: Col, b: Partial<Col>): Col => ({ capital: a.capital + (b.capital ?? 0), reserves: a.reserves + (b.reserves ?? 0) });
+  const opening: Col = { capital: prior.paidInCapital, reserves: prior.retainedEarnings };
+  const afterProfit = add(opening, { reserves: pl.netProfit });
+  const afterCapital = add(afterProfit, { capital: capitalIssued });
+  const closing = add(afterCapital, { reserves: otherReserveMove });
+
+  const movementRows: { label: string; col: Partial<Col> }[] = [
+    { label: "Profit for the period (transferred to reserves)", col: { reserves: pl.netProfit } },
+    { label: "Capital issued during the period", col: { capital: capitalIssued } },
+    { label: "Dividends / other adjustments", col: { reserves: otherReserveMove } },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Statement of Changes in Equity (SOCIE)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Movement in share capital and reserves &amp; surplus for the year ended {cur.asOf}, opening from balances a year earlier. Required under Ind AS Division II, Schedule III.</p>
+      </div>
+      <div className={`${CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Particulars", "Share capital", "Reserves & surplus", "Total equity"].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            <tr className="bg-[var(--color-accent)]/30 font-bold">
+              <td className="px-4 py-2">Balance at {prior.asOf}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.reserves)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital + opening.reserves)}</td>
+            </tr>
+            {movementRows.map(m => {
+              const cap = m.col.capital ?? 0, res = m.col.reserves ?? 0;
+              if (cap === 0 && res === 0) return null;
+              return (
+                <tr key={m.label} className="hover:bg-white/2">
+                  <td className="px-4 py-2">{m.label}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{cap === 0 ? "—" : amt(cap)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{res === 0 ? "—" : amt(res)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{amt(cap + res)}</td>
+                </tr>
+              );
+            })}
+            <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+              <td className="px-4 py-2">Balance at {cur.asOf}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.capital)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.reserves)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(closing.capital + closing.reserves)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className={`rounded-lg px-4 py-2.5 text-xs flex items-center gap-2 border ${Math.abs((closing.capital + closing.reserves) - cur.totalEquity) < 2 ? "bg-green-950/20 border-green-800/40 text-green-400" : "bg-red-950/20 border-red-800/40 text-red-400"}`}>
+        <Scale size={13} />
+        {Math.abs((closing.capital + closing.reserves) - cur.totalEquity) < 2
+          ? `Closing equity ${formatCurrency(closing.capital + closing.reserves)} ties to the balance sheet ✓`
+          : "Closing equity does not tie to the balance sheet — review inputs"}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Retained earnings is a balancing figure in Headroom, so the dividends/other-adjustments line absorbs any reserve movement not explained by the period's profit. OCI components must be added by your CA where applicable.</p>
+    </div>
+  );
+}
+
+// ── Depreciation Schedule (Companies Act Schedule II) ─────────────────────────────
+function DepreciationSchedule({ today }: { today: Date }) {
+  const { store } = useApp();
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const assets = useMemo(() => store.fixedAssets ?? [], [store.fixedAssets]);
+
+  const rows = useMemo(() => assets.map(a => {
+    const opening = bookValue(a, fy.start);
+    const closing = bookValue(a, fy.end);
+    const dep = depreciationBetween(a, fy.start, fy.end);
+    return {
+      id: a.id, name: a.name, category: a.category ?? "Uncategorised",
+      method: a.method === "wdv" ? "WDV" : "SLM",
+      life: a.usefulLifeYears, cost: a.cost,
+      accDep: accumulatedDepreciation(a, fy.end),
+      opening, dep, closing,
+      disposed: !!(a.disposalDate && a.disposalDate <= fy.end),
+    };
+  }), [assets, fy]);
+
+  const totals = useMemo(() => ({
+    cost: totalGrossCost(assets, fy.end),
+    accDep: totalAccumulatedDepreciation(assets, fy.end),
+    nbv: totalNetBookValue(assets, fy.end),
+    depForYear: rows.reduce((s, r) => s + r.dep, 0),
+  }), [assets, fy, rows]);
+
+  const doExport = () => {
+    const body = rows.map(r => [r.name, r.category, r.method, r.life, r.cost, r.opening, r.dep, r.closing]) as (string | number)[][];
+    body.push(["TOTAL", "", "", "", totals.cost, "", totals.depForYear, totals.nbv]);
+    exportPdf(`depreciation-schedule-${fy.end}.pdf`, `${store.firm.name} — Depreciation Schedule (Schedule II)`, `${fy.label} · generated by Headroom`,
+      [{ title: "Fixed Asset & Depreciation Schedule", head: ["Asset", "Block", "Method", "Life (yrs)", "Gross cost (₹)", "Opening WDV (₹)", "Depreciation (₹)", "Closing WDV (₹)"], body }]);
+    toast.success("PDF downloaded");
+  };
+
+  if (!assets.length) {
+    return (
+      <div className={`${CARD} p-8 text-center`}>
+        <CalendarClock size={28} className="mx-auto text-[var(--color-muted)] mb-2" />
+        <p className="text-sm font-medium">No fixed assets recorded</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">Add assets in the Fixed Assets tab to generate the Schedule II depreciation block.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className={`${CARD} p-5 flex-1`}>
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Depreciation Schedule (Companies Act Schedule II)</h2>
+          <p className="text-xs text-[var(--color-muted)]">Useful-life-based depreciation per asset for {fy.label}, from your fixed-asset register. SLM and WDV are both handled; book value telescopes exactly across periods.</p>
+        </div>
+        <button onClick={doExport}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+          <FileDown size={13} /> PDF
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Gross cost", value: formatAmount(totals.cost) },
+          { label: "Accumulated depreciation", value: formatAmount(totals.accDep) },
+          { label: "Depreciation this year", value: formatAmount(totals.depForYear) },
+          { label: "Net book value", value: formatAmount(totals.nbv) },
+        ].map(c => (
+          <div key={c.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className="text-lg font-bold tabular-nums">{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`${CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[760px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Asset", "Block", "Method", "Life", "Gross cost", "Opening WDV", "Depreciation", "Closing WDV"].map((h, i) => (
+                <th key={h} className={`px-3 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i < 3 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <tr key={r.id} className={`hover:bg-white/2 ${r.disposed ? "opacity-60" : ""}`}>
+                <td className="px-3 py-2 font-medium">{r.name}{r.disposed ? " (disposed)" : ""}</td>
+                <td className="px-3 py-2 text-[var(--color-muted)]">{r.category}</td>
+                <td className="px-3 py-2">{r.method}</td>
+                <td className="px-3 py-2">{r.life}y</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatAmount(r.cost)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatAmount(r.opening)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(r.dep)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
+              </tr>
+            ))}
+            <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+              <td className="px-3 py-2" colSpan={4}>Total</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatAmount(totals.cost)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">—</td>
+              <td className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(totals.depForYear)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.nbv)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Depreciation for the year = opening WDV − closing WDV per asset, so it reconciles exactly with the P&amp;L charge. The Income-tax block-of-assets (WDV) computation differs from the Companies Act useful-life basis — your CA reconciles the two before filing.</p>
+    </div>
+  );
+}
+
+// ── EPS & Net-Worth Computation ───────────────────────────────────────────────────
+function EpsNetWorth({ start, end, asOf, label }: { start: string; end: string; asOf: Date; label: string }) {
+  const { store } = useApp();
+  const bs = useMemo(() => balanceSheet(store, asOf), [store, asOf]);
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+
+  // Face value default ₹10 (most common for Indian private companies).
+  const [faceValue, setFaceValue] = useFeatureState<number>("stm-eps-face-value", 10);
+  const [potentialShares, setPotentialShares] = useFeatureState<number>("stm-eps-potential-shares", 0);
+
+  const fv = faceValue > 0 ? faceValue : 10;
+  const shares = Math.max(0, Math.round(bs.paidInCapital / fv));
+  const dilutedShares = shares + Math.max(0, potentialShares);
+  const basicEps = shares > 0 ? pl.netProfit / shares : 0;
+  const dilutedEps = dilutedShares > 0 ? pl.netProfit / dilutedShares : 0;
+
+  // Net worth (Companies Act §2(57)): paid-up capital + free reserves − accumulated losses.
+  const accumulatedLosses = bs.retainedEarnings < 0 ? Math.abs(bs.retainedEarnings) : 0;
+  const freeReserves = bs.retainedEarnings > 0 ? bs.retainedEarnings : 0;
+  const netWorth = bs.paidInCapital + freeReserves - accumulatedLosses;
+  const bookValuePerShare = shares > 0 ? netWorth / shares : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> EPS &amp; Net-Worth Computation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Earnings per share (AS-20 / Ind AS 33) and net worth (Companies Act §2(57)) from net profit for {label} and equity as at {bs.asOf}.</p>
+      </div>
+      <div className={`${CARD} p-5`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Assumptions</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Face value per share (₹)</span>
+            <input type="number" min={1} value={faceValue}
+              onChange={e => setFaceValue(Math.max(1, Number(e.target.value) || 1))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Potential dilutive shares (options/convertibles)</span>
+            <input type="number" min={0} value={potentialShares}
+              onChange={e => setPotentialShares(Math.max(0, Number(e.target.value) || 0))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Shares outstanding", value: shares.toLocaleString("en-IN") },
+          { label: "Basic EPS", value: `₹${basicEps.toFixed(2)}` },
+          { label: "Diluted EPS", value: `₹${dilutedEps.toFixed(2)}` },
+          { label: "Book value / share", value: `₹${bookValuePerShare.toFixed(2)}` },
+        ].map(c => (
+          <div key={c.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className="text-lg font-bold tabular-nums">{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${CARD} p-5`}>
+          <Row label="Earnings Per Share" level={0} />
+          <Row label="Net profit attributable to equity" value={pl.netProfit} accent={pl.netProfit >= 0 ? "green" : "red"} />
+          {([
+            ["Weighted-avg shares (basic)", shares, false],
+            ["Add: potential dilutive shares", potentialShares, false],
+            ["Diluted shares", dilutedShares, true],
+          ] as const).map(([lbl, val, bold]) => (
+            <div key={lbl} className={`flex items-center justify-between gap-3 px-1 py-1.5 ${bold ? "border-t border-[var(--color-border)] mt-1 pt-2" : ""}`}>
+              <span className={`text-sm ${bold ? "font-bold" : ""}`} style={{ paddingLeft: bold ? 0 : 12 }}>{lbl}</span>
+              <span className={`tabular-nums text-sm ${bold ? "font-bold" : ""}`}>{val.toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+        </div>
+        <div className={`${CARD} p-5`}>
+          <Row label="Net Worth (§2(57))" level={0} />
+          <Row label="Paid-up share capital" value={bs.paidInCapital} />
+          <Row label="Add: free reserves & surplus" value={freeReserves} />
+          <Row label="Less: accumulated losses" value={-accumulatedLosses} />
+          <Row label="Net Worth" value={netWorth} level={3} accent="blue" />
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Share count is derived as paid-up capital ÷ face value (a working proxy — Headroom holds no share register). EPS uses the closing share count as a proxy for the weighted average; provide the actual weighted-average and dilutive instrument terms to your CA for the statutory note.</p>
+    </div>
+  );
+}
+
+// ── Cost Sheet / Gross-Profit Statement (cost build-up) ───────────────────────────
+function CostSheet({ start, end, label }: { start: string; end: string; label: string }) {
+  const { store } = useApp();
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+
+  const rows = useMemo(() => {
+    const primeCost = pl.cogs;                       // direct materials/goods consumed
+    const directWages = pl.payroll;                  // treat payroll as direct + works labour proxy
+    const works = primeCost + directWages;
+    const factoryCost = works;                       // no separate factory overhead bucket
+    const costOfProduction = factoryCost + pl.depreciation;
+    const otherOverheads = pl.otherOpex;             // admin / selling / distribution
+    const costOfSales = costOfProduction + otherOverheads + pl.interest;
+    const profit = pl.revenue - costOfSales;
+    return { primeCost, directWages, works, costOfProduction, otherOverheads, costOfSales, profit };
+  }, [pl]);
+
+  const pctRev = (n: number) => (pl.revenue > 0 ? Math.round((n / pl.revenue) * 100) : 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Cost Sheet &amp; Gross-Profit Statement</h2>
+        <p className="text-xs text-[var(--color-muted)]">Classical cost build-up from prime cost to cost of sales for {label}, reconciling to revenue and profit. Useful for pricing and cost-audit-style analysis.</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className={`lg:col-span-2 ${CARD} p-5`}>
+          <Row label="Cost Build-up" level={0} />
+          <Row label="Direct materials / cost of goods (prime cost)" value={rows.primeCost} pct={pctRev(rows.primeCost)} />
+          <Row label="Add: direct labour (payroll)" value={rows.directWages} pct={pctRev(rows.directWages)} />
+          <Row label="Works / factory cost" value={rows.works} level={2} pct={pctRev(rows.works)} />
+          <Row label="Add: depreciation" value={pl.depreciation} pct={pctRev(pl.depreciation)} />
+          <Row label="Cost of production" value={rows.costOfProduction} level={2} pct={pctRev(rows.costOfProduction)} />
+          <Row label="Add: admin / selling / distribution overheads" value={rows.otherOverheads} pct={pctRev(rows.otherOverheads)} />
+          <Row label="Add: finance cost" value={pl.interest} pct={pctRev(pl.interest)} />
+          <Row label="Cost of sales" value={rows.costOfSales} level={2} pct={pctRev(rows.costOfSales)} />
+          <Row label="Sales / revenue" value={pl.revenue} pct={100} accent="green" />
+          <Row label="Profit / (loss)" value={rows.profit} level={3} accent={rows.profit >= 0 ? "green" : "red"} />
+        </div>
+        <div className="space-y-4">
+          {[
+            { label: "Gross margin", value: `${pl.grossMarginPct}%`, ok: pl.grossMarginPct >= 30 },
+            { label: "Prime cost % of sales", value: `${pctRev(rows.primeCost)}%`, ok: pctRev(rows.primeCost) <= 60 },
+            { label: "Overhead % of sales", value: `${pctRev(rows.otherOverheads)}%`, ok: pctRev(rows.otherOverheads) <= 25 },
+          ].map(m => (
+            <div key={m.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{m.label}</p>
+              <p className={`text-2xl font-bold tabular-nums ${m.ok ? "text-green-400" : "text-yellow-400"}`}>{m.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Payroll is treated as direct/works labour and other operating expenses as overheads — a working classification for a cash-centric system. For a formal cost statement, classify each expense into direct/indirect material, labour and overhead with your cost accountant.</p>
+    </div>
+  );
+}
+
+// ── MIS Dashboard Pack (board-ready monthly snapshot) ─────────────────────────────
+function MisPack({ start, end, asOf, label }: { start: string; end: string; asOf: Date; label: string }) {
+  const { store } = useApp();
+  const { firm } = store;
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+  const bs = useMemo(() => balanceSheet(store, asOf), [store, asOf]);
+  const cf = useMemo(() => cashFlowStatement(store, start, end, asOf), [store, start, end, asOf]);
+  const monthly = useMemo(() => monthlyCashFlow(store, 6, asOf), [store, asOf]);
+
+  const kpis = useMemo(() => {
+    const currentRatio = bs.currentLiabilities > 0 ? bs.currentAssets / bs.currentLiabilities : null;
+    return [
+      { label: "Revenue", value: formatAmount(pl.revenue), tone: "text-[var(--color-text)]" },
+      { label: "Net profit", value: formatAmount(pl.netProfit), tone: pl.netProfit >= 0 ? "text-green-400" : "text-red-400" },
+      { label: "Net margin", value: `${pl.netMarginPct}%`, tone: pl.netMarginPct >= 8 ? "text-green-400" : "text-yellow-400" },
+      { label: "EBITDA margin", value: `${pl.ebitdaMarginPct}%`, tone: "text-[var(--color-text)]" },
+      { label: "Cash position", value: formatAmount(bs.cash), tone: "text-[var(--color-primary)]" },
+      { label: "Operating cash flow", value: formatAmount(cf.operating), tone: cf.operating >= 0 ? "text-green-400" : "text-red-400" },
+      { label: "Receivables", value: formatAmount(bs.accountsReceivable), tone: "text-[var(--color-text)]" },
+      { label: "Current ratio", value: currentRatio === null ? "n/a" : `${currentRatio.toFixed(2)}x`, tone: currentRatio !== null && currentRatio >= 1.33 ? "text-green-400" : "text-yellow-400" },
+    ];
+  }, [pl, bs, cf]);
+
+  const doExport = () => {
+    const kpiBody = kpis.map(k => [k.label, k.value]) as (string | number)[][];
+    const plBody: (string | number)[][] = [
+      ["Revenue", pl.revenue], ["Gross profit", pl.grossProfit], ["EBITDA", pl.ebitda],
+      ["Depreciation", -pl.depreciation], ["Finance cost", -pl.interest], ["Net profit", pl.netProfit],
+    ];
+    const bsBody: (string | number)[][] = [
+      ["Total assets", bs.totalAssets], ["Cash", bs.cash], ["Receivables", bs.accountsReceivable],
+      ["Total liabilities", bs.totalLiabilities], ["Total equity", bs.totalEquity],
+    ];
+    exportPdf(`mis-pack-${bs.asOf}.pdf`, `${firm.name} — Management Information System (MIS) Pack`, `${label} · generated by Headroom`, [
+      { title: "Key Performance Indicators", head: ["Metric", "Value"], body: kpiBody },
+      { title: "Profit & Loss Summary", head: ["Line item", "Amount (₹)"], body: plBody },
+      { title: "Balance Sheet Summary", head: ["Line item", "Amount (₹)"], body: bsBody },
+    ]);
+    toast.success("MIS pack PDF downloaded");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className={`${CARD} p-5 flex-1`}>
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LayoutDashboard size={14} className="text-[var(--color-primary)]" /> MIS Dashboard Pack</h2>
+          <p className="text-xs text-[var(--color-muted)]">A board-ready snapshot for {label}: headline KPIs, a P&amp;L and balance-sheet summary, and a 6-month cash trend — all live from your data.</p>
+        </div>
+        <button onClick={doExport}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+          <FileDown size={13} /> Export MIS PDF
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.tone}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${CARD} p-5`}>
+          <p className="text-sm font-semibold mb-3">P&amp;L Summary</p>
+          <Row label="Revenue" value={pl.revenue} accent="green" />
+          <Row label="Gross profit" value={pl.grossProfit} pct={pl.grossMarginPct} />
+          <Row label="EBITDA" value={pl.ebitda} level={2} pct={pl.ebitdaMarginPct} />
+          <Row label="Net profit" value={pl.netProfit} level={3} accent={pl.netProfit >= 0 ? "green" : "red"} pct={pl.netMarginPct} />
+        </div>
+        <div className={`${CARD} p-5`}>
+          <p className="text-sm font-semibold mb-3">Balance Sheet Summary</p>
+          <Row label="Total assets" value={bs.totalAssets} accent="blue" />
+          <Row label="Total liabilities" value={bs.totalLiabilities} accent="red" />
+          <Row label="Total equity" value={bs.totalEquity} level={2} />
+          <Row label="Net working capital" value={bs.currentAssets - bs.currentLiabilities} level={2} accent={bs.currentAssets - bs.currentLiabilities >= 0 ? "green" : "red"} />
+        </div>
+      </div>
+      <div className={`${CARD} overflow-x-auto`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Cash trend · last 6 months</p>
+        </div>
+        <table className="w-full text-xs min-w-[560px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Month", "Receipts", "Operating", "Net", "Closing cash"].map((h, i) => (
+                <th key={h} className={`px-3 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {monthly.map((m, i) => (
+              <tr key={m.monthKey} className={`hover:bg-white/2 ${i === monthly.length - 1 ? "bg-[var(--color-accent)]/30" : ""}`}>
+                <td className="px-3 py-2 font-medium">{m.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{amt(m.operating)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">The MIS pack assembles the same live figures that drive every other statement here, so it always reconciles. Add management commentary and prior-period comparatives before circulating to the board.</p>
     </div>
   );
 }

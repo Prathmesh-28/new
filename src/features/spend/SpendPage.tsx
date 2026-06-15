@@ -6,6 +6,7 @@ import { percentiles } from "@/lib/finance";
 import {
   TrendingUp, TrendingDown, AlertTriangle, Repeat, Eye, ChevronRight,
   PieChart, CreditCard, CalendarClock, Wallet, Copy, Building2, Trash2,
+  BarChart3, RefreshCw, ShieldCheck, Plane, CheckSquare, Lightbulb, LineChart, Gauge,
 } from "lucide-react";
 import { format, startOfMonth, subMonths, isWithinInterval, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
@@ -342,6 +343,16 @@ export default function SpendPage() {
 
       {/* #98 Duplicate / Anomaly Payment Detector */}
       <DuplicateAnomalyDetector />
+
+      {/* New tools */}
+      <CategoryTrend12mo />
+      <RecurringSpendDetector />
+      <BudgetGauge />
+      <SpendForecast />
+      <SavingsOpportunityFinder />
+      <ExpensePolicyChecker />
+      <TravelSpendTracker />
+      <SpendApprovalQueue />
 
       {/* Ramp-style CTA */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/25 rounded-lg p-4 flex items-center justify-between gap-4">
@@ -838,6 +849,643 @@ function DuplicateAnomalyDetector() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)] mt-3">Heuristic checks on live spend: repeated same-payee/same-amount payments inside a 5-day window flag likely double-pays; payments above mean + 2.5σ flag outliers for review. Confirm before acting.</p>
+    </div>
+  );
+}
+
+// ── Shared month helpers for the new tools ───────────────────────────────────────
+function monthKeys(n: number, from: Date): string[] {
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(from.getFullYear(), from.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+// ── Spend-by-Category Trend (12 months) ──────────────────────────────────────────
+function CategoryTrend12mo() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+
+  const { keys, series, totalsByCat, grand } = useMemo(() => {
+    const ks = monthKeys(12, today);
+    const cats = SPEND_CATS as readonly string[];
+    const s: Record<string, number[]> = {};
+    const tot: Record<string, number> = {};
+    cats.forEach(c => { s[c] = ks.map(() => 0); tot[c] = 0; });
+    expenses.forEach(t => {
+      const idx = ks.indexOf(t.date.slice(0, 7));
+      if (idx < 0 || !s[t.category]) return;
+      const a = Math.abs(t.amount);
+      s[t.category][idx] += a;
+      tot[t.category] += a;
+    });
+    const g = Object.values(tot).reduce((x, v) => x + v, 0);
+    return { keys: ks, series: s, totalsByCat: tot, grand: g };
+  }, [expenses, today]);
+
+  const ranked = (SPEND_CATS as readonly string[])
+    .filter(c => totalsByCat[c] > 0)
+    .sort((a, b) => totalsByCat[b] - totalsByCat[a]);
+  const peak = Math.max(1, ...ranked.flatMap(c => series[c]));
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Spend-by-Category Trend (12 months)</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">how each head moves over time</span>
+      </div>
+
+      {grand === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No spend history yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {ranked.map(cat => {
+            const arr = series[cat];
+            const first6 = arr.slice(0, 6).reduce((s, v) => s + v, 0);
+            const last6 = arr.slice(6).reduce((s, v) => s + v, 0);
+            const dir = last6 - first6;
+            return (
+              <div key={cat}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-medium">{SPEND_CAT_LABEL[cat] ?? cat}</p>
+                    {dir > 0 && <span className="text-[10px] text-orange-400 flex items-center gap-0.5"><TrendingUp size={8} /> rising</span>}
+                    {dir < 0 && <span className="text-[10px] text-green-400 flex items-center gap-0.5"><TrendingDown size={8} /> easing</span>}
+                  </div>
+                  <span className="text-xs tabular-nums text-[var(--color-muted)]">{fc(totalsByCat[cat])} total</span>
+                </div>
+                <div className="flex items-end gap-0.5 h-10">
+                  {arr.map((v, i) => (
+                    <div key={keys[i]} className="flex-1 bg-[var(--color-bg)] rounded-sm flex items-end" title={`${keys[i]}: ${fc(v)}`}>
+                      <div className="w-full rounded-sm bg-[var(--color-primary)]/55" style={{ height: `${Math.max((v / peak) * 40, v > 0 ? 2 : 0)}px` }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex justify-between text-[9px] text-[var(--color-muted)]">
+            <span>{keys[0]}</span><span>{keys[keys.length - 1]}</span>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A 12-bar sparkline per category from live transactions. The rising/easing tag compares the last 6 months against the prior 6 so you can see which cost heads are trending up.</p>
+    </div>
+  );
+}
+
+// ── Recurring-Spend (Subscriptions) Detector — auto-found from transactions ───────
+function RecurringSpendDetector() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+
+  type Rec = { vendor: string; category: string; months: number; avg: number; annualised: number; lastSeen: string };
+  const recurring = useMemo<Rec[]>(() => {
+    const ks = monthKeys(6, today);
+    const byVendor: Record<string, { months: Set<string>; total: number; category: string; last: string }> = {};
+    expenses.forEach(t => {
+      const mk = t.date.slice(0, 7);
+      if (!ks.includes(mk)) return;
+      const v = byVendor[t.counterparty] ?? { months: new Set<string>(), total: 0, category: t.category, last: t.date };
+      v.months.add(mk);
+      v.total += Math.abs(t.amount);
+      if (t.date > v.last) v.last = t.date;
+      byVendor[t.counterparty] = v;
+    });
+    return Object.entries(byVendor)
+      .filter(([, v]) => v.months.size >= 3)
+      .map(([vendor, v]) => {
+        const avg = v.total / v.months.size;
+        return { vendor, category: v.category, months: v.months.size, avg, annualised: avg * 12, lastSeen: v.last };
+      })
+      .sort((a, b) => b.annualised - a.annualised)
+      .slice(0, 10);
+  }, [expenses, today]);
+
+  const totalAnnual = recurring.reduce((s, r) => s + r.annualised, 0);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <RefreshCw size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Recurring-Spend Detector</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">auto-found from your transactions</span>
+      </div>
+
+      {recurring.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No vendor billed in ≥3 of the last 6 months yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Recurring vendors found</p>
+              <p className="text-base font-bold tabular-nums text-[var(--color-primary)]">{recurring.length}</p>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Annualised commitment</p>
+              <p className="text-base font-bold tabular-nums text-orange-400">{fc(Math.round(totalAnnual))}</p>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {recurring.map(r => (
+              <div key={r.vendor} className="flex items-center gap-3 py-1.5 border-b border-[var(--color-border)] last:border-0">
+                <Repeat size={12} className="text-[var(--color-muted)] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{r.vendor}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">
+                    {r.months}/6 months · {SPEND_CAT_LABEL[r.category] ?? r.category} · last {format(new Date(r.lastSeen), "dd MMM")}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold tabular-nums text-red-400">{fc(Math.round(r.avg))}/mo</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">≈ {fc(Math.round(r.annualised))}/yr</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Detects implicit subscriptions: any payee that recurs in at least 3 of the last 6 months. Average monthly spend is annualised so you can see the true forward commitment without manually registering anything.</p>
+    </div>
+  );
+}
+
+// ── Budget-vs-Spend Gauge (single overall envelope) ──────────────────────────────
+function BudgetGauge() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const [budgetStr, setBudgetStr] = useFeatureState<string>("spd-monthly-budget", "");
+  const budget = parseFloat(budgetStr) || 0;
+
+  const { spentMTD, dayOfMonth, daysInMonth } = useMemo(() => {
+    const now = new Date();
+    const key = format(now, "yyyy-MM");
+    const spent = store.transactions
+      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return { spentMTD: spent, dayOfMonth: now.getDate(), daysInMonth: dim };
+  }, [store.transactions]);
+
+  const usedPct = budget > 0 ? (spentMTD / budget) * 100 : 0;
+  const projected = dayOfMonth > 0 ? (spentMTD / dayOfMonth) * daysInMonth : spentMTD;
+  const projOver = budget > 0 && projected > budget;
+  const over = budget > 0 && spentMTD > budget;
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Gauge size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Budget-vs-Spend Gauge</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">{format(new Date(), "MMMM yyyy")} · whole-business envelope</span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-3">
+        <input type="number" value={budgetStr} onChange={e => setBudgetStr(e.target.value)} placeholder="Set total monthly spend budget (₹)" className={INP} />
+      </div>
+
+      {budget <= 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-1">Enter a monthly budget to track burn against it. Spend-to-date pulls live from this month's transactions.</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-1 text-xs">
+            <span className="font-medium">{usedPct.toFixed(0)}% of budget used</span>
+            <span className="tabular-nums text-[var(--color-muted)]">{fc(Math.round(spentMTD))} / {fc(budget)}</span>
+          </div>
+          <div className="h-3 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${over ? "bg-red-500/70" : usedPct > 80 ? "bg-yellow-500/70" : "bg-green-500/60"}`} style={{ width: `${Math.min(usedPct, 100)}%` }} />
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            {[
+              { label: "Spent to date", value: fc(Math.round(spentMTD)), color: over ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Run-rate projection", value: fc(Math.round(projected)), color: projOver ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Remaining", value: fc(Math.round(Math.max(budget - spentMTD, 0))), color: "text-[var(--color-muted)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{c.label}</p>
+                <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          {projOver && !over && (
+            <p className="text-[11px] text-yellow-400 mt-2">At the current daily pace you're on track to exceed the budget by month-end.</p>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A single business-wide budget envelope (distinct from per-cost-center budgets above). The run-rate projection extrapolates month-to-date spend across the full month so overruns are visible early.</p>
+    </div>
+  );
+}
+
+// ── Spend Forecast (next 3 months) ───────────────────────────────────────────────
+function SpendForecast() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+
+  const { history, forecast, avg, slope } = useMemo(() => {
+    const ks = monthKeys(6, today);
+    const totals = ks.map(k => expenses.filter(t => t.date.startsWith(k)).reduce((s, t) => s + Math.abs(t.amount), 0));
+    const observed = totals.filter(v => v > 0);
+    const n = observed.length;
+    const a = n > 0 ? observed.reduce((s, v) => s + v, 0) / n : 0;
+    // simple slope: avg of last 2 vs prior 2 (when available)
+    let sl = 0;
+    if (totals.length >= 4) {
+      const recent = (totals[5] + totals[4]) / 2;
+      const prior = (totals[3] + totals[2]) / 2;
+      if (prior > 0) sl = (recent - prior) / 2;
+    }
+    const fkeys = monthKeys(3, new Date(today.getFullYear(), today.getMonth() + 3, 1)).slice(-3);
+    const fc3 = fkeys.map((k, i) => ({ key: k, value: Math.max(a + sl * (i + 1), 0) }));
+    return {
+      history: ks.map((k, i) => ({ key: k, value: totals[i] })),
+      forecast: fc3, avg: a, slope: sl,
+    };
+  }, [expenses, today]);
+
+  const maxV = Math.max(1, ...history.map(h => h.value), ...forecast.map(f => f.value));
+  const next3 = forecast.reduce((s, f) => s + f.value, 0);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <LineChart size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Spend Forecast (next 3 months)</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">trend-projected from 6-month history</span>
+      </div>
+
+      {avg === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">Not enough spend history to forecast yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Avg monthly spend</p>
+              <p className="text-base font-bold tabular-nums">{fc(Math.round(avg))}</p>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Projected next 3 months</p>
+              <p className={`text-base font-bold tabular-nums ${slope > 0 ? "text-orange-400" : "text-[var(--color-text)]"}`}>{fc(Math.round(next3))}</p>
+            </div>
+          </div>
+          <div className="flex items-end gap-1 h-24">
+            {[...history, ...forecast].map((m, i) => {
+              const isFc = i >= history.length;
+              const h = Math.max((m.value / maxV) * 90, m.value > 0 ? 3 : 0);
+              return (
+                <div key={m.key} className="flex-1 flex flex-col items-center gap-1" title={`${m.key}: ${fc(Math.round(m.value))}`}>
+                  <div className={`w-full rounded-t ${isFc ? "bg-[var(--color-primary)]/30 border border-dashed border-[var(--color-primary)]/50" : "bg-[var(--color-primary)]/60"}`} style={{ height: `${h}px` }} />
+                  <p className="text-[8px] text-[var(--color-muted)]">{m.key.slice(5)}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-4 text-[10px] text-[var(--color-muted)] mt-2">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-[var(--color-primary)]/60 rounded inline-block" /> Actual</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-[var(--color-primary)]/30 border border-dashed border-[var(--color-primary)]/50 rounded inline-block" /> Forecast</span>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Projects spend forward using the 6-month average plus a simple trend (last two months vs the prior two). A directional planning estimate, not a guarantee.</p>
+    </div>
+  );
+}
+
+// ── Savings-Opportunity Finder ───────────────────────────────────────────────────
+function SavingsOpportunityFinder() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+
+  type Opp = { id: string; title: string; detail: string; saving: number };
+  const opps = useMemo<Opp[]>(() => {
+    const out: Opp[] = [];
+    const ks = monthKeys(6, today);
+
+    // 1) Vendors with multiple peers in same category — consolidation leverage (~5%)
+    const byCatVendors: Record<string, Record<string, number>> = {};
+    expenses.forEach(t => {
+      const c = (byCatVendors[t.category] ??= {});
+      c[t.counterparty] = (c[t.counterparty] ?? 0) + Math.abs(t.amount);
+    });
+    Object.entries(byCatVendors).forEach(([cat, vendors]) => {
+      const names = Object.keys(vendors);
+      if (names.length >= 3) {
+        const total = Object.values(vendors).reduce((s, v) => s + v, 0);
+        out.push({
+          id: `consolidate-${cat}`,
+          title: `Consolidate ${names.length} ${SPEND_CAT_LABEL[cat] ?? cat} vendors`,
+          detail: `Negotiating one preferred supplier could earn a volume discount.`,
+          saving: total * 0.05,
+        });
+      }
+    });
+
+    // 2) Recurring vendors growing month-on-month — review for downgrade (~half of the increase)
+    const byVendorMonth: Record<string, Record<string, number>> = {};
+    expenses.forEach(t => {
+      const mk = t.date.slice(0, 7);
+      if (!ks.includes(mk)) return;
+      const v = (byVendorMonth[t.counterparty] ??= {});
+      v[mk] = (v[mk] ?? 0) + Math.abs(t.amount);
+    });
+    Object.entries(byVendorMonth).forEach(([vendor, m]) => {
+      const present = ks.filter(k => m[k] > 0);
+      if (present.length >= 4) {
+        const firstHalf = ks.slice(0, 3).reduce((s, k) => s + (m[k] ?? 0), 0);
+        const secondHalf = ks.slice(3).reduce((s, k) => s + (m[k] ?? 0), 0);
+        if (secondHalf > firstHalf * 1.25 && firstHalf > 0) {
+          out.push({
+            id: `review-${vendor}`,
+            title: `Review rising spend with ${vendor}`,
+            detail: `Spend rose from ${fc(Math.round(firstHalf))} to ${fc(Math.round(secondHalf))} across two halves of the last 6 months.`,
+            saving: (secondHalf - firstHalf) * 0.5,
+          });
+        }
+      }
+    });
+
+    return out.sort((a, b) => b.saving - a.saving).slice(0, 8);
+  }, [expenses, today, fc]);
+
+  const totalSaving = opps.reduce((s, o) => s + o.saving, 0);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Lightbulb size={13} className="text-yellow-400" />
+        <h2 className="text-sm font-semibold">Savings-Opportunity Finder</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">estimated, indicative</span>
+      </div>
+
+      {opps.length === 0 ? (
+        <p className="text-xs text-green-400 py-2">No obvious consolidation or rising-spend opportunities found — spend looks lean.</p>
+      ) : (
+        <>
+          <div className="rounded-lg p-3 border border-green-800/40 bg-green-950/20 mb-3">
+            <p className="text-xs text-[var(--color-muted)]">Estimated annual savings potential</p>
+            <p className="text-lg font-bold tabular-nums text-green-400">{fc(Math.round(totalSaving))}</p>
+          </div>
+          <div className="space-y-2">
+            {opps.map(o => (
+              <div key={o.id} className="flex items-start gap-2 py-2 border-b border-[var(--color-border)] last:border-0">
+                <Lightbulb size={12} className="text-yellow-400 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{o.title}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{o.detail}</p>
+                </div>
+                <span className="text-xs font-bold tabular-nums text-green-400 shrink-0">~{fc(Math.round(o.saving))}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Surfaces consolidation leverage (≥3 vendors in one category) and vendors whose spend climbed materially across the last six months. Savings figures are rough heuristics to prioritise where to look, not committed numbers.</p>
+    </div>
+  );
+}
+
+// ── Expense-Policy Threshold Checker ─────────────────────────────────────────────
+type PolicyRule = { id: string; category: string; cap: number };
+function ExpensePolicyChecker() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const [rules, setRules] = useFeatureState<PolicyRule[]>("spd-policy-rules", []);
+  const [cat, setCat] = useState<string>("expense");
+  const [cap, setCap] = useState("");
+
+  const recent = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.date.startsWith(format(today, "yyyy-MM"))), [store.transactions, today]);
+
+  const add = () => {
+    if ((parseFloat(cap) || 0) <= 0) { toast.error("Enter a per-transaction cap"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), category: cat, cap: parseFloat(cap) || 0 }]);
+    setCap("");
+    toast.success("Policy rule added");
+  };
+
+  const breaches = useMemo(() => {
+    const out: { id: string; counterparty: string; amount: number; date: string; cap: number; category: string }[] = [];
+    rules.forEach(r => {
+      recent.filter(t => t.category === r.category && Math.abs(t.amount) > r.cap).forEach(t => {
+        out.push({ id: `${r.id}-${t.id}`, counterparty: t.counterparty, amount: Math.abs(t.amount), date: t.date, cap: r.cap, category: r.category });
+      });
+    });
+    return out.sort((a, b) => b.amount - a.amount).slice(0, 12);
+  }, [rules, recent]);
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <ShieldCheck size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Expense-Policy Threshold Checker</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">{format(today, "MMMM yyyy")} transactions</span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+        <select value={cat} onChange={e => setCat(e.target.value)} className={INP}>
+          {SPEND_CATS.map(k => <option key={k} value={k}>{SPEND_CAT_LABEL[k]}</option>)}
+        </select>
+        <input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="Per-transaction cap (₹)" className={INP} />
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add rule</button>
+      </div>
+
+      {rules.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {rules.map(r => (
+            <span key={r.id} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-full px-2 py-1">
+              {SPEND_CAT_LABEL[r.category] ?? r.category} ≤ {fc(r.cap)}
+              <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={10} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-1">Add a per-transaction cap per category; this month's transactions that exceed it are flagged below.</p>
+      ) : breaches.length === 0 ? (
+        <p className="text-xs text-green-400 py-1">No transactions this month breach the configured caps.</p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-red-400">{breaches.length} policy {breaches.length === 1 ? "breach" : "breaches"} this month</p>
+          {breaches.map(b => (
+            <div key={b.id} className="flex items-start gap-2 py-2 border-b border-[var(--color-border)] last:border-0">
+              <AlertTriangle size={12} className="text-red-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{b.counterparty}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{format(new Date(b.date), "dd MMM")} · {SPEND_CAT_LABEL[b.category] ?? b.category} · cap {fc(b.cap)}</p>
+              </div>
+              <span className="text-xs font-bold tabular-nums text-red-400 shrink-0">{fc(b.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Define plain per-category spend caps and the checker scans this month's live transactions for any single payment that exceeds the threshold — a lightweight policy audit without programmable cards.</p>
+    </div>
+  );
+}
+
+// ── T&E (Travel) Spend Tracker ───────────────────────────────────────────────────
+const TRAVEL_HINTS = ["travel", "flight", "air", "indigo", "vistara", "spicejet", "irctc", "rail", "train", "hotel", "oyo", "taxi", "cab", "uber", "ola", "fuel", "petrol", "makemytrip", "goibibo", "yatra"];
+function TravelSpendTracker() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const today = new Date();
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+
+  const { monthly, total, byVendor, count } = useMemo(() => {
+    const ks = monthKeys(6, today);
+    const isTravel = (t: typeof expenses[number]) => {
+      const blob = `${t.counterparty} ${t.description}`.toLowerCase();
+      return TRAVEL_HINTS.some(h => blob.includes(h));
+    };
+    const matched = expenses.filter(isTravel);
+    const m = ks.map(k => ({ key: k, value: matched.filter(t => t.date.startsWith(k)).reduce((s, t) => s + Math.abs(t.amount), 0) }));
+    const ven: Record<string, number> = {};
+    matched.forEach(t => { ven[t.counterparty] = (ven[t.counterparty] ?? 0) + Math.abs(t.amount); });
+    const top = Object.entries(ven).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 6);
+    return { monthly: m, total: matched.reduce((s, t) => s + Math.abs(t.amount), 0), byVendor: top, count: matched.length };
+  }, [expenses, today]);
+
+  const maxV = Math.max(1, ...monthly.map(m => m.value));
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <Plane size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">T&amp;E (Travel) Spend Tracker</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">flights · hotels · cabs · fuel</span>
+      </div>
+
+      {count === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No travel-related spend detected in your transactions.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[var(--color-muted)]">Monthly travel spend</p>
+              <span className="text-[10px] text-[var(--color-muted)]">{fc(Math.round(total))} over 6 mo · {count} txns</span>
+            </div>
+            <div className="flex items-end gap-1.5 h-20">
+              {monthly.map(m => (
+                <div key={m.key} className="flex-1 flex flex-col items-center gap-1" title={`${m.key}: ${fc(Math.round(m.value))}`}>
+                  <div className="w-full rounded-t bg-[var(--color-primary)]/55" style={{ height: `${Math.max((m.value / maxV) * 70, m.value > 0 ? 3 : 0)}px` }} />
+                  <p className="text-[8px] text-[var(--color-muted)]">{m.key.slice(5)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-muted)] mb-2">Top travel vendors</p>
+            <div className="space-y-1.5">
+              {byVendor.map(v => (
+                <div key={v.name} className="flex items-center gap-2 text-xs py-1 border-b border-[var(--color-border)] last:border-0">
+                  <span className="flex-1 min-w-0 truncate font-medium">{v.name}</span>
+                  <span className="tabular-nums text-red-400 shrink-0">{fc(Math.round(v.amount))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Identifies travel &amp; entertainment spend by matching vendor and description against common airline, rail, hotel, cab and fuel keywords. A keyword heuristic — re-tag any miscategorised line in your books.</p>
+    </div>
+  );
+}
+
+// ── Spend Approval Queue ─────────────────────────────────────────────────────────
+type ApprovalItem = { id: string; vendor: string; amount: number; requester: string; note: string; status: "pending" | "approved" | "rejected"; created: string };
+function SpendApprovalQueue() {
+  const fc = formatCurrency;
+  const [items, setItems] = useFeatureState<ApprovalItem[]>("spd-approval-queue", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [requester, setRequester] = useState("");
+  const [note, setNote] = useState("");
+  const [filter, setFilter] = useState<ApprovalItem["status"] | "all">("pending");
+
+  const add = () => {
+    if (!vendor.trim() || (parseFloat(amount) || 0) <= 0) { toast.error("Enter vendor and amount"); return; }
+    setItems(prev => [{ id: crypto.randomUUID(), vendor: vendor.trim(), amount: parseFloat(amount) || 0, requester: requester.trim(), note: note.trim(), status: "pending", created: new Date().toISOString() }, ...prev]);
+    setVendor(""); setAmount(""); setRequester(""); setNote("");
+    toast.success("Spend request queued");
+  };
+  const setStatus = (id: string, status: ApprovalItem["status"]) => {
+    setItems(prev => prev.map(x => x.id === id ? { ...x, status } : x));
+    toast.success(`Request ${status}`);
+  };
+
+  const pendingTotal = items.filter(i => i.status === "pending").reduce((s, i) => s + i.amount, 0);
+  const filtered = items.filter(i => filter === "all" || i.status === filter);
+  const FILTERS = ["pending", "approved", "rejected", "all"] as const;
+
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-2 mb-3">
+        <CheckSquare size={13} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Spend Approval Queue</h2>
+        <span className="ml-auto text-xs text-[var(--color-muted)]">request → approve / reject</span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+        <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor / purpose *" className={INP} />
+        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹) *" className={INP} />
+        <input value={requester} onChange={e => setRequester(e.target.value)} placeholder="Requested by" className={INP} />
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+      </div>
+      <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">+ Queue request</button>
+
+      {items.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2 px-3">
+              <span className="text-[10px] text-[var(--color-muted)]">Pending value </span>
+              <span className="text-sm font-bold tabular-nums text-yellow-400">{fc(pendingTotal)}</span>
+            </div>
+            <div className="ml-auto flex gap-1">
+              {FILTERS.map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`text-[10px] px-2 py-1 rounded-full border capitalize ${filter === f ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{f}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-[var(--color-muted)] py-1">No {filter} requests.</p>
+            ) : filtered.map(i => (
+              <div key={i.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{i.vendor}</p>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${i.status === "approved" ? "bg-green-900/30 text-green-400 border-green-800/30" : i.status === "rejected" ? "bg-red-900/30 text-red-400 border-red-800/30" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/30"}`}>{i.status}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">
+                    {i.requester ? `by ${i.requester} · ` : ""}{format(new Date(i.created), "dd MMM")}{i.note ? ` · ${i.note}` : ""}
+                  </p>
+                </div>
+                <span className="text-sm font-bold tabular-nums shrink-0">{fc(i.amount)}</span>
+                {i.status === "pending" && (
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => setStatus(i.id, "approved")} className="text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded hover:opacity-80">Approve</button>
+                    <button onClick={() => setStatus(i.id, "rejected")} className="text-[10px] bg-red-900/30 text-red-400 border border-red-800/30 px-2 py-1 rounded hover:opacity-80">Reject</button>
+                  </div>
+                )}
+                <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A simple pre-spend approval workflow: queue a request, review pending value at a glance, then approve or reject with a full status trail — durable across devices.</p>
     </div>
   );
 }

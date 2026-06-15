@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
-import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator, Landmark, Target, Gauge, FileText, Scale, Receipt } from "lucide-react";
+import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator, Landmark, Target, Gauge, FileText, Scale, Receipt, Percent, TrendingDown, Building2, Coins, Wallet, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
@@ -46,7 +46,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -198,6 +198,14 @@ export default function CreditPage() {
           ["discount", "Invoice Discounting"],
           ["docpack",  "Loan Doc Pack"],
           ["foir",     "FOIR / Capacity"],
+          ["emicalc",  "EMI & Schedule"],
+          ["flatred",  "Flat vs Reducing"],
+          ["dscr",     "DSCR"],
+          ["drawing",  "Drawing Power"],
+          ["gstelig",  "GST Eligibility"],
+          ["lap",      "LAP / LTV"],
+          ["prepay",   "Prepayment Optimizer"],
+          ["odterm",   "OD vs Term Loan"],
         ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -726,6 +734,14 @@ export default function CreditPage() {
       {tab === "discount" && <InvoiceDiscountingConnector />}
       {tab === "docpack" && <LoanDocumentPack />}
       {tab === "foir" && <FoirCalculator />}
+      {tab === "emicalc" && <EmiAmortizationTab />}
+      {tab === "flatred" && <FlatVsReducingTab />}
+      {tab === "dscr" && <DscrCalculator />}
+      {tab === "drawing" && <DrawingPowerTab />}
+      {tab === "gstelig" && <GstEligibilityTab />}
+      {tab === "lap" && <LapLtvTab />}
+      {tab === "prepay" && <PrepaymentOptimizer />}
+      {tab === "odterm" && <OdVsTermLoanTab />}
     </div>
   );
 }
@@ -2596,6 +2612,962 @@ function FoirCalculator() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40–55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative — lenders also apply DSCR and bureau checks.
+      </div>
+    </div>
+  );
+}
+
+// ── #105 EMI & AMORTIZATION SCHEDULE ────────────────────────────────────────
+function EmiAmortizationTab() {
+  const [principalStr, setPrincipalStr] = useState("2500000");
+  const [rateStr,      setRateStr]      = useState("16");
+  const [tenureStr,    setTenureStr]    = useState("36");
+
+  const principal = parseFloat(principalStr) || 0;
+  const rate      = parseFloat(rateStr)      || 0;
+  const months    = Math.max(1, Math.min(360, Math.round(parseFloat(tenureStr) || 0)));
+
+  const monthlyEmi = principal > 0 ? emi(principal, rate, months) : 0;
+  const interestTotal = principal > 0 ? totalInterest(principal, rate, months) : 0;
+  const totalPay = principal + interestTotal;
+
+  const rows = useMemo(() => {
+    if (principal <= 0 || monthlyEmi <= 0) return [];
+    const r = rate / 100 / 12;
+    let balance = principal;
+    const out: { month: number; principalPaid: number; interestPaid: number; balance: number }[] = [];
+    for (let m = 1; m <= months; m++) {
+      const interestPaid = balance * r;
+      let principalPaid = monthlyEmi - interestPaid;
+      if (m === months || principalPaid > balance) principalPaid = balance;
+      balance = Math.max(0, balance - principalPaid);
+      out.push({ month: m, principalPaid, interestPaid, balance });
+    }
+    return out;
+  }, [principal, rate, months, monthlyEmi]);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> EMI & Amortization Schedule</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reducing-balance EMI with a full month-by-month split of how much of each instalment goes to interest vs principal.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Loan amount (₹)</label>
+            <input type="number" min={0} value={principalStr} onChange={e => setPrincipalStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Interest rate (% p.a.)</label>
+            <input type="number" min={0} value={rateStr} onChange={e => setRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label>
+            <input type="number" min={1} max={360} value={tenureStr} onChange={e => setTenureStr(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {principal > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Monthly EMI",     value: formatCurrency(monthlyEmi),    color: "text-[var(--color-primary)]" },
+              { label: "Total interest",  value: formatCurrency(interestTotal), color: "text-orange-400" },
+              { label: "Total repayment", value: formatCurrency(totalPay),      color: "text-[var(--color-text)]" },
+              { label: "Interest / principal", value: principal > 0 ? `${Math.round((interestTotal / principal) * 100)}%` : "—", color: "text-[var(--color-muted)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[460px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Month", "Principal", "Interest", "Balance"].map((h, i) => (
+                    <th key={h} className={`text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5 ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.month} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2 tabular-nums">{r.month}</td>
+                    <td className="px-4 py-2 tabular-nums text-right text-green-400">{formatCurrency(r.principalPaid)}</td>
+                    <td className="px-4 py-2 tabular-nums text-right text-orange-400">{formatCurrency(r.interestPaid)}</td>
+                    <td className="px-4 py-2 tabular-nums text-right text-[var(--color-muted)]">{formatCurrency(r.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Standard reducing-balance EMI: EMI = P·r·(1+r)ⁿ ÷ ((1+r)ⁿ−1), where r = monthly rate. Early instalments are interest-heavy; the principal share rises every month. The final EMI is adjusted to clear any rounding residue.
+      </div>
+    </div>
+  );
+}
+
+// ── #106 FLAT VS REDUCING RATE ──────────────────────────────────────────────
+function FlatVsReducingTab() {
+  const [principalStr, setPrincipalStr] = useState("1000000");
+  const [flatRateStr,  setFlatRateStr]  = useState("10");
+  const [tenureStr,    setTenureStr]    = useState("36");
+
+  const principal = parseFloat(principalStr) || 0;
+  const flatRate  = parseFloat(flatRateStr)  || 0;
+  const months    = Math.max(1, Math.round(parseFloat(tenureStr) || 0));
+  const years     = months / 12;
+
+  // Flat: interest on full principal for whole tenure.
+  const flatInterest = principal * (flatRate / 100) * years;
+  const flatEmi      = principal > 0 ? (principal + flatInterest) / months : 0;
+
+  // Solve the reducing rate that yields the SAME EMI (the true effective cost).
+  const effReducingRate = useMemo(() => {
+    if (principal <= 0 || flatEmi <= 0) return 0;
+    let lo = 0, hi = 1; // monthly rate bounds
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      const e = mid === 0 ? principal / months : (principal * mid * Math.pow(1 + mid, months)) / (Math.pow(1 + mid, months) - 1);
+      if (e > flatEmi) hi = mid; else lo = mid;
+    }
+    return ((lo + hi) / 2) * 12 * 100; // annualised %
+  }, [principal, flatEmi, months]);
+
+  // For comparison: a genuine reducing loan quoted at the same nominal rate.
+  const reducingEmiSameNominal = principal > 0 ? emi(principal, flatRate, months) : 0;
+  const reducingInterestSame   = principal > 0 ? totalInterest(principal, flatRate, months) : 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Flat vs Reducing Rate</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A "flat" rate quote always costs far more than the same number quoted on reducing balance. See the true effective rate behind a flat quote.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Loan amount (₹)</label>
+            <input type="number" min={0} value={principalStr} onChange={e => setPrincipalStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Quoted rate (% p.a.)</label>
+            <input type="number" min={0} value={flatRateStr} onChange={e => setFlatRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label>
+            <input type="number" min={1} value={tenureStr} onChange={e => setTenureStr(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {principal > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Flat EMI",            value: formatCurrency(flatEmi),               color: "text-[var(--color-text)]" },
+              { label: "Flat total interest", value: formatCurrency(flatInterest),          color: "text-red-400" },
+              { label: "Effective reducing rate", value: `${effReducingRate.toFixed(1)}%`,  color: "text-orange-400" },
+              { label: "Extra vs true reducing",  value: formatCurrency(Math.max(0, flatInterest - reducingInterestSame)), color: "text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[var(--color-surface)] border border-red-800/40 rounded-lg p-5">
+              <p className="text-sm font-semibold mb-3">Flat-rate quote @ {flatRate}%</p>
+              <div className="space-y-2">
+                {[
+                  { label: "Monthly EMI", value: formatCurrency(flatEmi) },
+                  { label: "Total interest", value: formatCurrency(flatInterest), color: "text-red-400" },
+                  { label: "Total repayment", value: formatCurrency(principal + flatInterest), bold: true },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                    <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5">
+              <p className="text-sm font-semibold mb-3">Reducing-balance @ same {flatRate}%</p>
+              <div className="space-y-2">
+                {[
+                  { label: "Monthly EMI", value: formatCurrency(reducingEmiSameNominal) },
+                  { label: "Total interest", value: formatCurrency(reducingInterestSame), color: "text-green-400" },
+                  { label: "Total repayment", value: formatCurrency(principal + reducingInterestSame), bold: true },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                    <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        A flat rate charges interest on the full original principal every year even though you're repaying it down. Rule of thumb: effective reducing rate ≈ 1.8–1.9× the flat rate. Always ask lenders for the reducing-balance / APR equivalent before signing.
+      </div>
+    </div>
+  );
+}
+
+// ── #107 DEBT-SERVICE COVERAGE RATIO (DSCR) ─────────────────────────────────
+function DscrCalculator() {
+  const { store } = useApp();
+
+  // Seed annual net operating income from live transactions.
+  const seedNoi = useMemo(() => {
+    const txns = store.transactions ?? [];
+    if (txns.length === 0) return 0;
+    const rev = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const exp = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const dates = txns.map(t => t.date).filter(Boolean).sort();
+    const spanDays = dates.length >= 2 ? Math.max(1, (new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) : 30;
+    return Math.max(0, Math.round((rev - exp) * (365 / spanDays)));
+  }, [store.transactions]);
+
+  // Seed existing annual debt service from active loans.
+  const seedDebt = useMemo(() => Math.round((store.activeLoans ?? []).reduce((s, l) => s + l.monthlyEmi, 0) * 12), [store.activeLoans]);
+
+  const [noiStr,        setNoiStr]        = useState(seedNoi > 0 ? String(seedNoi) : "");
+  const [existDebtStr,  setExistDebtStr]  = useState(seedDebt > 0 ? String(seedDebt) : "");
+  const [newAmtStr,     setNewAmtStr]     = useState("");
+  const [newRateStr,    setNewRateStr]    = useState("16");
+  const [newTenureStr,  setNewTenureStr]  = useState("48");
+
+  const noi       = parseFloat(noiStr)       || 0;
+  const existDebt = parseFloat(existDebtStr) || 0;
+  const newAmt    = parseFloat(newAmtStr)    || 0;
+  const newRate   = parseFloat(newRateStr)   || 0;
+  const newTenure = Math.max(1, Math.round(parseFloat(newTenureStr) || 0));
+
+  const newAnnualDebt = newAmt > 0 ? emi(newAmt, newRate, newTenure) * 12 : 0;
+  const totalDebtService = existDebt + newAnnualDebt;
+
+  const currentDscr = existDebt > 0 ? noi / existDebt : 0;
+  const postDscr    = totalDebtService > 0 ? noi / totalDebtService : 0;
+
+  const verdict = (d: number) => d <= 0 ? null
+    : d >= 1.5 ? { label: "Strong — comfortable cover", cls: "text-green-400" }
+    : d >= 1.25 ? { label: "Acceptable — most lenders OK", cls: "text-blue-400" }
+    : d >= 1.0 ? { label: "Tight — barely covers", cls: "text-yellow-400" }
+    : { label: "Below 1.0 — income won't cover debt", cls: "text-red-400" };
+  const postVerdict = verdict(postDscr);
+
+  // Max new annual debt service to keep DSCR ≥ 1.25, and the principal that implies.
+  const minDscr = 1.25;
+  const maxTotalService = noi / minDscr;
+  const maxNewService   = Math.max(0, maxTotalService - existDebt);
+  const r = newRate / 100 / 12;
+  const maxNewPrincipal = maxNewService > 0 && r > 0
+    ? Math.round(((maxNewService / 12) * (Math.pow(1 + r, newTenure) - 1)) / (r * Math.pow(1 + r, newTenure)))
+    : 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Debt-Service Coverage Ratio (DSCR)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">DSCR = net operating income ÷ annual debt service. It's the core covenant lenders test. Income and existing debt are pre-filled from your data — model a new loan to see post-DSCR.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Annual net operating income (₹)</label>
+            <input type="number" min={0} value={noiStr} onChange={e => setNoiStr(e.target.value)} placeholder={seedNoi > 0 ? String(seedNoi) : "e.g. 3000000"} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Existing annual debt service (₹)</label>
+            <input type="number" min={0} value={existDebtStr} onChange={e => setExistDebtStr(e.target.value)} placeholder={seedDebt > 0 ? String(seedDebt) : "EMI × 12"} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">New loan amount (₹)</label>
+            <input type="number" min={0} value={newAmtStr} onChange={e => setNewAmtStr(e.target.value)} placeholder="e.g. 2000000" className={inp} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Rate (% p.a.)</label>
+              <input type="number" min={0} value={newRateStr} onChange={e => setNewRateStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (mo)</label>
+              <input type="number" min={1} value={newTenureStr} onChange={e => setNewTenureStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {noi > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Current DSCR", value: currentDscr > 0 ? `${currentDscr.toFixed(2)}x` : "no debt", color: existDebt > 0 ? (verdict(currentDscr)?.cls ?? "text-[var(--color-text)]") : "text-green-400" },
+              { label: "Post-loan DSCR", value: postDscr > 0 ? `${postDscr.toFixed(2)}x` : "—", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
+              { label: "Assessment", value: postVerdict?.label ?? "—", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
+              { label: "Max new loan @ 1.25x", value: maxNewPrincipal > 0 ? formatCurrency(maxNewPrincipal) : "—", color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">Debt service build-up</h3>
+            <div className="space-y-2">
+              {[
+                { label: "Net operating income (annual)", value: formatCurrency(noi) },
+                { label: "Existing debt service", value: `(${formatCurrency(existDebt)})`, color: "text-red-400" },
+                { label: "New loan debt service (annual)", value: `(${formatCurrency(Math.round(newAnnualDebt))})`, color: "text-orange-400" },
+                { label: "Total debt service", value: formatCurrency(Math.round(totalDebtService)), bold: true },
+                { label: "Income left after debt", value: formatCurrency(Math.round(noi - totalDebtService)), color: noi - totalDebtService >= 0 ? "text-green-400" : "text-red-400", bold: true },
+              ].map(r2 => (
+                <div key={r2.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]">{r2.label}</span>
+                  <span className={`tabular-nums ${r2.bold ? "font-bold" : ""} ${r2.color ?? "text-[var(--color-text)]"}`}>{r2.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Most term lenders require DSCR ≥ 1.25–1.5; below 1.0 means operating income can't service the debt. NOI here ≈ revenue − operating expenses (before interest), annualised from your transactions. The max-loan figure keeps post-DSCR at the 1.25x floor.
+      </div>
+    </div>
+  );
+}
+
+// ── #108 OVERDRAFT / CC DRAWING POWER ───────────────────────────────────────
+function DrawingPowerTab() {
+  const [stockStr,      setStockStr]      = useState("");
+  const [stockMargin,   setStockMargin]   = useState(25);  // % margin on stock
+  const [debtorsStr,    setDebtorsStr]    = useState("");
+  const [debtorMargin,  setDebtorMargin]  = useState(40);  // % margin on debtors
+  const [creditorsStr,  setCreditorsStr]  = useState("");  // creditors against stock
+  const [sanctionStr,   setSanctionStr]   = useState("");  // sanctioned limit
+  const [utilisedStr,   setUtilisedStr]   = useState("");  // currently drawn
+
+  const stock     = parseFloat(stockStr)     || 0;
+  const debtors   = parseFloat(debtorsStr)   || 0;
+  const creditors = parseFloat(creditorsStr) || 0;
+  const sanction  = parseFloat(sanctionStr)  || 0;
+  const utilised  = parseFloat(utilisedStr)  || 0;
+
+  // Paid stock = stock − creditors against it; DP = (paid stock × (1−margin)) + (debtors × (1−margin)).
+  const paidStock = Math.max(0, stock - creditors);
+  const dpStock   = paidStock * (1 - stockMargin / 100);
+  const dpDebtors = debtors * (1 - debtorMargin / 100);
+  const drawingPower = Math.round(dpStock + dpDebtors);
+  // Effective limit a bank allows is the LOWER of sanctioned limit and drawing power.
+  const effectiveLimit = sanction > 0 ? Math.min(sanction, drawingPower) : drawingPower;
+  const available = Math.max(0, effectiveLimit - utilised);
+  const utilPct   = effectiveLimit > 0 ? Math.round((utilised / effectiveLimit) * 100) : 0;
+  const overdrawn = utilised > effectiveLimit;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> OD / CC Drawing Power</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Banks cap how much of your cash-credit limit you can actually draw to the "drawing power" computed from your latest stock & debtor statement, after applying margins.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Closing stock value (₹)</label>
+            <input type="number" min={0} value={stockStr} onChange={e => setStockStr(e.target.value)} placeholder="e.g. 4000000" className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Margin on stock</span><span className="font-semibold text-[var(--color-text)]">{stockMargin}%</span></label>
+            <input type="range" min={10} max={50} value={stockMargin} onChange={e => setStockMargin(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Creditors against stock (₹)</label>
+            <input type="number" min={0} value={creditorsStr} onChange={e => setCreditorsStr(e.target.value)} placeholder="e.g. 800000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Eligible debtors (₹)</label>
+            <input type="number" min={0} value={debtorsStr} onChange={e => setDebtorsStr(e.target.value)} placeholder="e.g. 2500000" className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Margin on debtors</span><span className="font-semibold text-[var(--color-text)]">{debtorMargin}%</span></label>
+            <input type="range" min={20} max={60} value={debtorMargin} onChange={e => setDebtorMargin(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Sanctioned limit (₹, optional)</label>
+            <input type="number" min={0} value={sanctionStr} onChange={e => setSanctionStr(e.target.value)} placeholder="e.g. 5000000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Currently utilised (₹, optional)</label>
+            <input type="number" min={0} value={utilisedStr} onChange={e => setUtilisedStr(e.target.value)} placeholder="e.g. 2000000" className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {(stock > 0 || debtors > 0) && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Drawing power", value: formatCurrency(drawingPower), color: "text-[var(--color-primary)]" },
+              { label: "Effective limit", value: formatCurrency(effectiveLimit), color: "text-[var(--color-text)]" },
+              { label: "Available to draw", value: formatCurrency(available), color: overdrawn ? "text-red-400" : "text-green-400" },
+              { label: "Utilisation", value: sanction > 0 || utilised > 0 ? `${utilPct}%` : "—", color: utilPct > 90 ? "text-red-400" : utilPct > 70 ? "text-orange-400" : "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {overdrawn && (
+            <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+              <AlertTriangle size={14} className="text-red-400 shrink-0" />
+              <span>You've drawn {formatCurrency(utilised)} against an effective limit of {formatCurrency(effectiveLimit)} — the account is over-drawn. Banks charge penal interest and may flag it. Submit a fresh stock statement or reduce the outstanding.</span>
+            </div>
+          )}
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">Drawing power build-up</h3>
+            <div className="space-y-2">
+              {[
+                { label: `Paid stock (stock − creditors)`, value: formatCurrency(Math.round(paidStock)) },
+                { label: `DP from stock (after ${stockMargin}% margin)`, value: formatCurrency(Math.round(dpStock)), color: "text-blue-400" },
+                { label: `DP from debtors (after ${debtorMargin}% margin)`, value: formatCurrency(Math.round(dpDebtors)), color: "text-blue-400" },
+                { label: "Total drawing power", value: formatCurrency(drawingPower), bold: true },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                  <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Drawing power = (paid stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). You can draw only up to the LOWER of the sanctioned limit and the drawing power. Typical margins: 25% on stock, 40–50% on debtors; over-90-day debtors are usually excluded.
+      </div>
+    </div>
+  );
+}
+
+// ── #109 GST-TURNOVER LOAN ELIGIBILITY ──────────────────────────────────────
+function GstEligibilityTab() {
+  const [turnoverStr, setTurnoverStr] = useState("");
+  const [marginPct,   setMarginPct]   = useState(8);   // net profit margin %
+  const [multiplier,  setMultiplier]  = useState(3);    // monthly-sales multiple
+  const [filingMonths,setFilingMonths]= useState(12);   // consecutive GSTR filings
+
+  const annualTurnover = parseFloat(turnoverStr) || 0;
+  const monthlyTurnover = annualTurnover / 12;
+
+  // Two common GST-based methods used by fintech lenders:
+  // 1. Turnover-multiple: a multiple of monthly GST-reported sales.
+  const turnoverMethod = Math.round(monthlyTurnover * multiplier);
+  // 2. Profit-coverage: ~50% of annual net profit serviceable, capitalised over 36 mo @ 18%.
+  const annualProfit = annualTurnover * (marginPct / 100);
+  const serviceable = (annualProfit * 0.5) / 12;
+  const r36 = 0.18 / 12;
+  const profitMethod = serviceable > 0 ? Math.round((serviceable * (Math.pow(1 + r36, 36) - 1)) / (r36 * Math.pow(1 + r36, 36))) : 0;
+
+  // Filing-consistency factor: <6 months filed sharply curtails eligibility.
+  const filingFactor = filingMonths >= 12 ? 1 : filingMonths >= 6 ? 0.7 : filingMonths >= 3 ? 0.4 : 0.15;
+  const indicative = Math.round(Math.min(turnoverMethod, profitMethod) * filingFactor);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> GST-Turnover Loan Eligibility</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Fintech and bank "GST loans" size your limit off filed GSTR turnover. Enter your annual GST-reported sales to estimate the limit under the two common methods.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Annual GST turnover (₹)</label>
+            <input type="number" min={0} value={turnoverStr} onChange={e => setTurnoverStr(e.target.value)} placeholder="e.g. 24000000" className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Net profit margin</span><span className="font-semibold text-[var(--color-text)]">{marginPct}%</span></label>
+            <input type="range" min={2} max={30} value={marginPct} onChange={e => setMarginPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Sales multiple (× monthly)</span><span className="font-semibold text-[var(--color-text)]">{multiplier}×</span></label>
+            <input type="range" min={1} max={6} value={multiplier} onChange={e => setMultiplier(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Consecutive GSTR filings</span><span className="font-semibold text-[var(--color-text)]">{filingMonths} mo</span></label>
+            <input type="range" min={1} max={24} value={filingMonths} onChange={e => setFilingMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {annualTurnover > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Turnover method", value: formatCurrency(turnoverMethod), color: "text-blue-400" },
+              { label: "Profit-coverage method", value: formatCurrency(profitMethod), color: "text-purple-400" },
+              { label: "Filing factor", value: `${Math.round(filingFactor * 100)}%`, color: filingFactor >= 1 ? "text-green-400" : filingFactor >= 0.7 ? "text-yellow-400" : "text-red-400" },
+              { label: "Indicative limit", value: formatCurrency(indicative), color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3">How it's derived</h3>
+            <div className="space-y-2">
+              {[
+                { label: "Monthly GST sales", value: formatCurrency(Math.round(monthlyTurnover)) },
+                { label: `Turnover method (${multiplier}× monthly)`, value: formatCurrency(turnoverMethod), color: "text-blue-400" },
+                { label: `Annual net profit (${marginPct}% margin)`, value: formatCurrency(Math.round(annualProfit)) },
+                { label: "Profit-coverage limit (50% serviceable, 36mo @18%)", value: formatCurrency(profitMethod), color: "text-purple-400" },
+                { label: `Lower method × filing factor (${Math.round(filingFactor * 100)}%)`, value: formatCurrency(indicative), bold: true, color: "text-[var(--color-primary)]" },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                  <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Lenders take the LOWER of a turnover multiple (commonly 2–4× monthly GST sales) and a profit-serviceability cap, then haircut for filing consistency — 12+ months of uninterrupted GSTR-1/3B filings is near-essential. Late or nil filings sharply reduce the limit.
+      </div>
+    </div>
+  );
+}
+
+// ── #110 LOAN-AGAINST-PROPERTY / LTV ────────────────────────────────────────
+function LapLtvTab() {
+  const [valueStr,   setValueStr]   = useState("");
+  const [propType,   setPropType]   = useState<"residential" | "commercial" | "industrial">("residential");
+  const [occupancy,  setOccupancy]  = useState<"self" | "rented" | "vacant">("self");
+  const [rateStr,    setRateStr]    = useState("10.5");
+  const [tenureStr,  setTenureStr]  = useState("120");
+  const [existingStr,setExistingStr]= useState(""); // existing loan on the property
+
+  // LTV norms vary by property type & occupancy.
+  const baseLtv: Record<typeof propType, number> = { residential: 70, commercial: 60, industrial: 50 };
+  const occAdj  = occupancy === "self" ? 0 : occupancy === "rented" ? -5 : -10;
+  const ltvPct  = Math.max(30, baseLtv[propType] + occAdj);
+
+  const value     = parseFloat(valueStr)    || 0;
+  const existing  = parseFloat(existingStr) || 0;
+  const rate      = parseFloat(rateStr)     || 0;
+  const tenure    = Math.max(1, Math.round(parseFloat(tenureStr) || 0));
+
+  const grossEligible = Math.round(value * (ltvPct / 100));
+  const netEligible   = Math.max(0, grossEligible - existing);
+  const monthlyEmi    = netEligible > 0 ? emi(netEligible, rate, tenure) : 0;
+  const interestTotal = netEligible > 0 ? totalInterest(netEligible, rate, tenure) : 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Loan-Against-Property / LTV</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">LAP gives the lowest SME rates but the loan is capped at a loan-to-value (LTV) of the property's market value, varying by type and occupancy.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Property market value (₹)</label>
+            <input type="number" min={0} value={valueStr} onChange={e => setValueStr(e.target.value)} placeholder="e.g. 15000000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Existing loan on property (₹)</label>
+            <input type="number" min={0} value={existingStr} onChange={e => setExistingStr(e.target.value)} placeholder="e.g. 0" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Property type</label>
+            <select value={propType} onChange={e => setPropType(e.target.value as typeof propType)} className={inp}>
+              <option value="residential">Residential (70% LTV)</option>
+              <option value="commercial">Commercial (60% LTV)</option>
+              <option value="industrial">Industrial (50% LTV)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Occupancy</label>
+            <select value={occupancy} onChange={e => setOccupancy(e.target.value as typeof occupancy)} className={inp}>
+              <option value="self">Self-occupied</option>
+              <option value="rented">Rented (−5%)</option>
+              <option value="vacant">Vacant (−10%)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Interest rate (% p.a.)</label>
+            <input type="number" min={0} value={rateStr} onChange={e => setRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Tenure (months)</label>
+            <input type="number" min={1} value={tenureStr} onChange={e => setTenureStr(e.target.value)} className={inp} />
+          </div>
+        </div>
+      </div>
+
+      {value > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Applicable LTV", value: `${ltvPct}%`, color: "text-[var(--color-text)]" },
+              { label: "Gross eligible", value: formatCurrency(grossEligible), color: "text-blue-400" },
+              { label: "Net loan (after existing)", value: formatCurrency(netEligible), color: "text-[var(--color-primary)]" },
+              { label: "Monthly EMI", value: formatCurrency(monthlyEmi), color: "text-[var(--color-text)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex justify-between text-[10px] text-[var(--color-muted)] mb-1">
+              <span>Eligible loan {formatCurrency(grossEligible)}</span>
+              <span>Property value {formatCurrency(value)}</span>
+            </div>
+            <div className="w-full h-3 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${Math.min(100, ltvPct)}%` }} />
+            </div>
+            <div className="space-y-2 mt-4">
+              {[
+                { label: "Property market value", value: formatCurrency(value) },
+                { label: `Gross eligible @ ${ltvPct}% LTV`, value: formatCurrency(grossEligible), color: "text-blue-400" },
+                { label: "Less: existing loan", value: existing > 0 ? `(${formatCurrency(existing)})` : "—", color: "text-red-400" },
+                { label: "Net loan available", value: formatCurrency(netEligible), bold: true, color: "text-[var(--color-primary)]" },
+                { label: "Total interest over tenure", value: formatCurrency(interestTotal), color: "text-orange-400" },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                  <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                  <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        Indicative LTV bands: residential ~65–75%, commercial ~55–65%, industrial ~50%. Lenders value the property conservatively (often below market) and net off any existing charge. LAP tenures run up to 15 years — longer tenure lowers EMI but raises total interest.
+      </div>
+    </div>
+  );
+}
+
+// ── #111 PREPAYMENT / PART-PAYMENT OPTIMIZER ────────────────────────────────
+function PrepaymentOptimizer() {
+  const { store } = useApp();
+  const activeLoans = store.activeLoans ?? [];
+
+  const [outstandingStr, setOutstandingStr] = useState("");
+  const [rateStr,        setRateStr]        = useState("16");
+  const [remTenureStr,   setRemTenureStr]   = useState("36");
+  const [lumpStr,        setLumpStr]        = useState("");
+  const [feePct,         setFeePct]         = useState(0); // prepayment/foreclosure charge %
+
+  // Quick-fill from an active loan.
+  const fillFrom = (id: string) => {
+    const l = activeLoans.find(x => x.id === id);
+    if (!l) return;
+    setOutstandingStr(String(Math.round(l.outstanding)));
+    setRateStr(String(l.rate));
+    setRemTenureStr(String(l.termMonths));
+  };
+
+  const outstanding = parseFloat(outstandingStr) || 0;
+  const rate        = parseFloat(rateStr)        || 0;
+  const remTenure   = Math.max(1, Math.round(parseFloat(remTenureStr) || 0));
+  const lump        = parseFloat(lumpStr)        || 0;
+
+  const baseEmi      = outstanding > 0 ? emi(outstanding, rate, remTenure) : 0;
+  const baseInterest = outstanding > 0 ? totalInterest(outstanding, rate, remTenure) : 0;
+  const fee          = Math.round(lump * (feePct / 100));
+
+  const newPrincipal = Math.max(0, outstanding - lump);
+  // Option A: keep EMI, shorten tenure.
+  const r = rate / 100 / 12;
+  const newTenureKeepEmi = useMemo(() => {
+    if (newPrincipal <= 0 || baseEmi <= 0) return 0;
+    if (r === 0) return Math.ceil(newPrincipal / baseEmi);
+    // n = -ln(1 - P·r/EMI) / ln(1+r)
+    const denom = 1 - (newPrincipal * r) / baseEmi;
+    if (denom <= 0) return remTenure; // EMI too small to amortise — should not happen post-prepay
+    return Math.ceil(-Math.log(denom) / Math.log(1 + r));
+  }, [newPrincipal, baseEmi, r, remTenure]);
+  const interestKeepEmi = baseEmi * newTenureKeepEmi - newPrincipal;
+  const monthsSaved     = Math.max(0, remTenure - newTenureKeepEmi);
+
+  // Option B: keep tenure, reduce EMI.
+  const newEmiKeepTenure = newPrincipal > 0 ? emi(newPrincipal, rate, remTenure) : 0;
+  const interestKeepTenure = newPrincipal > 0 ? totalInterest(newPrincipal, rate, remTenure) : 0;
+  const emiReduction = baseEmi - newEmiKeepTenure;
+
+  const savingKeepEmi     = Math.max(0, baseInterest - interestKeepEmi - fee);
+  const savingKeepTenure  = Math.max(0, baseInterest - interestKeepTenure - fee);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Prepayment / Part-Payment Optimizer</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Make a lump-sum payment and compare the two choices lenders give you: keep the EMI and finish sooner, or keep the tenure and pay a smaller EMI.</p>
+        {activeLoans.length > 0 && (
+          <div className="mb-3">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Pre-fill from an active loan</label>
+            <div className="flex flex-wrap gap-2">
+              {activeLoans.map(l => (
+                <button key={l.id} onClick={() => fillFrom(l.id)} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] px-3 py-1.5 rounded-lg">
+                  {l.lender} · {formatCurrency(l.outstanding)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Outstanding principal (₹)</label>
+            <input type="number" min={0} value={outstandingStr} onChange={e => setOutstandingStr(e.target.value)} placeholder="e.g. 1500000" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Lump-sum prepayment (₹)</label>
+            <input type="number" min={0} value={lumpStr} onChange={e => setLumpStr(e.target.value)} placeholder="e.g. 300000" className={inp} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Rate (% p.a.)</label>
+              <input type="number" min={0} value={rateStr} onChange={e => setRateStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">Months left</label>
+              <input type="number" min={1} value={remTenureStr} onChange={e => setRemTenureStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Prepayment / foreclosure fee</span><span className="font-semibold text-[var(--color-text)]">{feePct}%</span></label>
+            <input type="range" min={0} max={5} step={0.5} value={feePct} onChange={e => setFeePct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {outstanding > 0 && lump > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Current EMI", value: formatCurrency(baseEmi), color: "text-[var(--color-text)]" },
+              { label: "Interest without prepay", value: formatCurrency(baseInterest), color: "text-orange-400" },
+              { label: "New principal", value: formatCurrency(newPrincipal), color: "text-[var(--color-text)]" },
+              { label: "Prepay fee", value: fee > 0 ? formatCurrency(fee) : "nil", color: fee > 0 ? "text-red-400" : "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${savingKeepEmi >= savingKeepTenure ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold flex items-center gap-2"><TrendingDown size={14} className="text-[var(--color-primary)]" /> Keep EMI, finish sooner</p>
+                {savingKeepEmi >= savingKeepTenure && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Saves more</span>}
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "EMI stays at", value: formatCurrency(baseEmi) },
+                  { label: "New tenure", value: `${newTenureKeepEmi} mo (−${monthsSaved})`, color: "text-green-400" },
+                  { label: "Interest now", value: formatCurrency(Math.round(interestKeepEmi)), color: "text-orange-400" },
+                  { label: "Net interest saved", value: formatCurrency(Math.round(savingKeepEmi)), bold: true, color: "text-green-400" },
+                ].map(r2 => (
+                  <div key={r2.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r2.label}</span>
+                    <span className={`tabular-nums ${r2.bold ? "font-bold" : ""} ${r2.color ?? "text-[var(--color-text)]"}`}>{r2.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${savingKeepTenure > savingKeepEmi ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Keep tenure, lower EMI</p>
+                {savingKeepTenure > savingKeepEmi && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Saves more</span>}
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Tenure stays at", value: `${remTenure} mo` },
+                  { label: "New EMI", value: `${formatCurrency(newEmiKeepTenure)} (−${formatCurrency(Math.round(emiReduction))})`, color: "text-green-400" },
+                  { label: "Interest now", value: formatCurrency(Math.round(interestKeepTenure)), color: "text-orange-400" },
+                  { label: "Net interest saved", value: formatCurrency(Math.round(savingKeepTenure)), bold: true, color: "text-green-400" },
+                ].map(r2 => (
+                  <div key={r2.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r2.label}</span>
+                    <span className={`tabular-nums ${r2.bold ? "font-bold" : ""} ${r2.color ?? "text-[var(--color-text)]"}`}>{r2.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        "Keep EMI, finish sooner" almost always saves the most interest because the principal falls fastest. "Keep tenure, lower EMI" eases monthly cash flow. RBI bars foreclosure charges on floating-rate term loans to individuals/MSMEs — check your sanction; a high fee can wipe out the saving.
+      </div>
+    </div>
+  );
+}
+
+// ── #112 OVERDRAFT VS TERM LOAN ─────────────────────────────────────────────
+function OdVsTermLoanTab() {
+  const [needStr,       setNeedStr]       = useState("1000000");
+  const [monthsStr,     setMonthsStr]     = useState("12");
+  const [odRateStr,     setOdRateStr]     = useState("14");
+  const [tlRateStr,     setTlRateStr]     = useState("16");
+  const [utilPct,       setUtilPct]       = useState(50); // avg % of OD limit actually used
+  const [odProcessStr,  setOdProcessStr]  = useState("0.5"); // OD setup fee %
+  const [tlProcessStr,  setTlProcessStr]  = useState("1.5"); // TL processing fee %
+
+  const need    = parseFloat(needStr)    || 0;
+  const months  = Math.max(1, Math.round(parseFloat(monthsStr) || 0));
+  const odRate  = parseFloat(odRateStr)  || 0;
+  const tlRate  = parseFloat(tlRateStr)  || 0;
+
+  // OD: interest only on the average utilised balance; full limit available all the time.
+  const avgUtilised = need * (utilPct / 100);
+  const odInterest  = Math.round(avgUtilised * (odRate / 100) * (months / 12));
+  const odFee       = Math.round(need * (parseFloat(odProcessStr) || 0) / 100);
+  const odTotal     = odInterest + odFee;
+
+  // Term loan: fixed EMI on full amount over the period (reducing balance).
+  const tlEmi      = need > 0 ? emi(need, tlRate, months) : 0;
+  const tlInterest = need > 0 ? Math.round(totalInterest(need, tlRate, months)) : 0;
+  const tlFee      = Math.round(need * (parseFloat(tlProcessStr) || 0) / 100);
+  const tlTotal    = tlInterest + tlFee;
+
+  const winner = need > 0 ? (odTotal <= tlTotal ? "od" : "tl") : null;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Overdraft vs Term Loan</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">For lumpy, in-and-out working-capital needs an overdraft (interest only on what you use) often beats a term loan, even at a similar rate. Compare the true cost for your usage pattern.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount needed / limit (₹)</label>
+            <input type="number" min={0} value={needStr} onChange={e => setNeedStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Period (months)</label>
+            <input type="number" min={1} value={monthsStr} onChange={e => setMonthsStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">OD rate (% p.a.)</label>
+            <input type="number" min={0} value={odRateStr} onChange={e => setOdRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Term loan rate (% p.a.)</label>
+            <input type="number" min={0} value={tlRateStr} onChange={e => setTlRateStr(e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Avg OD utilisation</span><span className="font-semibold text-[var(--color-text)]">{utilPct}%</span></label>
+            <input type="range" min={10} max={100} value={utilPct} onChange={e => setUtilPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">OD fee (%)</label>
+              <input type="number" min={0} step={0.1} value={odProcessStr} onChange={e => setOdProcessStr(e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">TL fee (%)</label>
+              <input type="number" min={0} step={0.1} value={tlProcessStr} onChange={e => setTlProcessStr(e.target.value)} className={inp} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {need > 0 && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${winner === "od" ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Overdraft / Cash Credit</p>
+                {winner === "od" && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Cheaper</span>}
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: `Avg utilised (${utilPct}% of limit)`, value: formatCurrency(Math.round(avgUtilised)) },
+                  { label: `Interest on usage @ ${odRate}%`, value: formatCurrency(odInterest), color: "text-orange-400" },
+                  { label: `Setup fee (${odProcessStr}%)`, value: formatCurrency(odFee), color: "text-red-400" },
+                  { label: "Total cost", value: formatCurrency(odTotal), bold: true, color: winner === "od" ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                    <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${winner === "tl" ? "border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Term Loan</p>
+                {winner === "tl" && <span className="text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded-full font-semibold">Cheaper</span>}
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Fixed EMI", value: `${formatCurrency(tlEmi)} /mo` },
+                  { label: `Interest @ ${tlRate}% (full amount)`, value: formatCurrency(tlInterest), color: "text-orange-400" },
+                  { label: `Processing fee (${tlProcessStr}%)`, value: formatCurrency(tlFee), color: "text-red-400" },
+                  { label: "Total cost", value: formatCurrency(tlTotal), bold: true, color: winner === "tl" ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                    <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                    <span className={`tabular-nums ${r.bold ? "font-bold" : ""} ${r.color ?? "text-[var(--color-text)]"}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {winner && (
+            <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "od" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
+              <span className="font-semibold">{winner === "od" ? "Overdraft" : "Term loan"} is cheaper</span> by {formatCurrency(Math.abs(odTotal - tlTotal))} over {months} months.
+              {winner === "od" ? " The OD wins because you only pay interest on the balance you actually use — ideal for fluctuating needs." : " The term loan wins at high, steady utilisation; a structured EMI also enforces repayment discipline."}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
+        OD interest is charged daily on the drawn balance, so low average utilisation makes it cheap; a term loan charges interest on the full disbursed amount regardless of use. Choose OD for unpredictable working-capital swings, a term loan for one-time capex with steady repayment.
       </div>
     </div>
   );

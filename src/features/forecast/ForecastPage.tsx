@@ -4,22 +4,24 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { runForecast, generateForecast } from "@/lib/forecastEngine";
+import { monthlyAggregates, cmgr, monthlyCashFlow } from "@/lib/finance";
 import { scheduleReminders, cancelReminders } from "@/lib/nativeFeatures";
 import { isNative } from "@/lib/mobile";
 import {
   Plus, Trash2, Eye, EyeOff, TrendingUp, RefreshCw, Sparkles, X,
   CalendarRange, Coins, Waves, GitBranch, ShieldAlert, Activity,
   AlertTriangle, CheckCircle2,
+  LineChart, Receipt, Users, Flame, Layers, ArrowLeftRight, Scale, Target,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Line, ComposedChart, ReferenceLine,
+  Line, ComposedChart, ReferenceLine, Bar, Cell,
 } from "recharts";
 import { format } from "date-fns";
 import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Scenario, CashObligation } from "@/data/types";
+import type { Scenario, CashObligation, Transaction } from "@/data/types";
 
 export default function ForecastPage() {
   const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
@@ -41,6 +43,8 @@ export default function ForecastPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [fcTab, setFcTab] = useState<
     "main" | "13week" | "ar-inflow" | "seasonality" | "three-line" | "buffer-alert"
+    | "revenue-forecast" | "expense-forecast" | "headcount-cost" | "burn-zero-cash"
+    | "cash-bridge" | "ar-ap-timing" | "fixed-variable" | "break-even"
   >("main");
 
   const navigate = useNavigate();
@@ -190,6 +194,14 @@ export default function ForecastPage() {
           ["seasonality", "Seasonality", Waves],
           ["three-line", "Best / Base / Worst", GitBranch],
           ["buffer-alert", "Buffer Alert", ShieldAlert],
+          ["revenue-forecast", "Revenue Forecast", LineChart],
+          ["expense-forecast", "Expense Forecast", Receipt],
+          ["headcount-cost", "Headcount Cost", Users],
+          ["burn-zero-cash", "Burn & Zero-Cash", Flame],
+          ["cash-bridge", "Cash Bridge", Layers],
+          ["ar-ap-timing", "AR / AP Timing", ArrowLeftRight],
+          ["fixed-variable", "Fixed vs Variable", Scale],
+          ["break-even", "Break-Even Date", Target],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setFcTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap ${fcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -203,6 +215,14 @@ export default function ForecastPage() {
       {fcTab === "seasonality"  && <SeasonalityDetector />}
       {fcTab === "three-line"   && <ThreeLineProjection />}
       {fcTab === "buffer-alert" && <CashBufferAlert />}
+      {fcTab === "revenue-forecast" && <RevenueForecast />}
+      {fcTab === "expense-forecast" && <ExpenseForecast />}
+      {fcTab === "headcount-cost"   && <HeadcountCostForecast />}
+      {fcTab === "burn-zero-cash"   && <BurnRateZeroCash />}
+      {fcTab === "cash-bridge"      && <CashBridgeWaterfall />}
+      {fcTab === "ar-ap-timing"     && <ArApTimingForecast />}
+      {fcTab === "fixed-variable"   && <FixedVariableProjection />}
+      {fcTab === "break-even"       && <BreakEvenForecast />}
 
       {fcTab === "main" && <>
 
@@ -1100,3 +1120,675 @@ function CashBufferAlert() {
     </div>
   );
 }
+
+// Shared chrome for the tool cards below — header block with title + blurb.
+function ToolHeader({ icon: Icon, title, blurb }: { icon: typeof TrendingUp; title: string; blurb: string }) {
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <h2 className="text-sm font-semibold flex items-center gap-2 mb-1">
+        <Icon size={14} className="text-[var(--color-primary)]" /> {title}
+      </h2>
+      <p className="text-xs text-[var(--color-muted)]">{blurb}</p>
+    </div>
+  );
+}
+
+function StatGrid({ cols, cards }: { cols: string; cards: { label: string; value: string; color?: string; sub?: string }[] }) {
+  return (
+    <div className={`grid grid-cols-2 ${cols} gap-3`}>
+      {cards.map(c => (
+        <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{c.label}</p>
+          <p className={`text-lg font-bold tabular-nums mt-0.5 ${c.color ?? "text-[var(--color-text)]"}`}>{c.value}</p>
+          {c.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5 leading-tight">{c.sub}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const tooltipStyle = { background: "#161B22", border: "1px solid #21262D", borderRadius: 8, fontSize: 11 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #81 — Revenue Forecast (growth-rate driven)
+// Projects monthly revenue forward 12 months from the trailing run-rate, using a
+// growth rate seeded from the firm's own compound-monthly-growth and overridable.
+// ─────────────────────────────────────────────────────────────────────────────
+function RevenueForecast() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const hist = useMemo(() => monthlyAggregates(transactions ?? [], 12), [transactions]);
+  const seedGrowth = useMemo(() => {
+    const g = cmgr(hist.filter(m => m.revenue > 0).map(m => m.revenue));
+    return g == null ? 2 : Math.round(clampNum(g, -10, 20) * 10) / 10;
+  }, [hist]);
+  const [growth, setGrowth] = useFeatureState<number>("fc-rev-growth-pct", 0);
+  const [horizon, setHorizon] = useState(12);
+  const effGrowth = growth !== 0 ? growth : seedGrowth;
+
+  const lastRev = useMemo(() => {
+    const active = hist.filter(m => m.revenue > 0);
+    if (active.length === 0) return 0;
+    // trailing-3-month average as the base run-rate (smooths a single spike)
+    const tail = active.slice(-3);
+    return tail.reduce((s, m) => s + m.revenue, 0) / tail.length;
+  }, [hist]);
+
+  const proj = useMemo(() => {
+    const out: { label: string; revenue: number }[] = [];
+    let rev = lastRev;
+    const now = new Date();
+    for (let i = 1; i <= horizon; i++) {
+      rev = rev * (1 + effGrowth / 100);
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), revenue: Math.round(rev) });
+    }
+    return out;
+  }, [lastRev, effGrowth, horizon]);
+
+  const chartData = [
+    ...hist.filter(m => m.revenue > 0).map(m => ({ label: m.label, actual: Math.round(m.revenue / 100000), projected: null as number | null })),
+    ...proj.map(p => ({ label: p.label, actual: null as number | null, projected: Math.round(p.revenue / 100000) })),
+  ];
+  const totalProjected = proj.reduce((s, p) => s + p.revenue, 0);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={LineChart} title="Revenue Forecast" blurb="Projects monthly revenue forward from your trailing 3-month run-rate at a growth rate seeded from your own history — override it to test plans." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Base monthly run-rate", value: formatCurrency(Math.round(lastRev)), color: "text-[var(--color-text)]" },
+        { label: `Growth rate (MoM)`, value: `${effGrowth > 0 ? "+" : ""}${effGrowth}%`, color: effGrowth >= 0 ? "text-green-400" : "text-red-400", sub: growth !== 0 ? "your override" : "from history" },
+        { label: `${horizon}-month projected revenue`, value: formatCurrency(totalProjected), color: "text-green-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Monthly growth override</span><span className="font-semibold">{growth !== 0 ? `${growth > 0 ? "+" : ""}${growth}%` : "off"}</span></label>
+          <input type="range" min={-10} max={20} step={0.5} value={growth} onChange={e => setGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Set to 0 to use your historical CMGR ({seedGrowth}%).</p>
+        </div>
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Horizon</span><span className="font-semibold">{horizon} months</span></label>
+          <input type="range" min={3} max={24} step={1} value={horizon} onChange={e => setHorizon(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Revenue: actual vs projected (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={chartData}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "actual" ? "Actual" : "Projected"]} />
+            <Line type="monotone" dataKey="actual" stroke="#1A6B55" strokeWidth={2} dot={false} connectNulls animationDuration={400} />
+            <Line type="monotone" dataKey="projected" stroke="#22c55e" strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #82 — Expense Forecast (category run-rate × inflation)
+// Projects monthly expense forward by category using each category's trailing
+// run-rate, with a single inflation dial that compounds across the horizon.
+// ─────────────────────────────────────────────────────────────────────────────
+const EXP_CATS: Transaction["category"][] = ["expense", "payroll", "tax", "loan"];
+const EXP_LABEL: Record<string, string> = { expense: "Operating", payroll: "Payroll", tax: "Tax", loan: "Loan/EMI" };
+
+function ExpenseForecast() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [inflation, setInflation] = useState(6);
+  const [horizon, setHorizon] = useState(12);
+
+  // trailing-6-month average monthly outflow per category
+  const base = useMemo(() => {
+    const now = new Date();
+    const cut = new Date(now.getFullYear(), now.getMonth() - 6, 1).getTime();
+    const sums: Record<string, number> = {};
+    let months = 0;
+    const seen = new Set<string>();
+    for (const t of transactions ?? []) {
+      if (t.amount >= 0 || t.category === "transfer") continue;
+      const d = new Date(t.date);
+      if (d.getTime() < cut) continue;
+      seen.add(`${d.getFullYear()}-${d.getMonth()}`);
+      const cat = EXP_CATS.includes(t.category) ? t.category : "expense";
+      sums[cat] = (sums[cat] ?? 0) + Math.abs(t.amount);
+    }
+    months = Math.max(1, seen.size);
+    return EXP_CATS.map(c => ({ cat: c, monthly: Math.round((sums[c] ?? 0) / months) }));
+  }, [transactions]);
+
+  const totalBase = base.reduce((s, b) => s + b.monthly, 0);
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; total: number }[] = [];
+    for (let i = 1; i <= horizon; i++) {
+      const f = (1 + inflation / 100) ** (i / 12);
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), total: Math.round(totalBase * f) });
+    }
+    return out;
+  }, [totalBase, inflation, horizon]);
+  const totalProjected = proj.reduce((s, p) => s + p.total, 0);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Receipt} title="Expense Forecast" blurb="Projects monthly outflow by category from each category's trailing 6-month run-rate, with one inflation dial compounding across the horizon." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Base monthly expense", value: formatCurrency(totalBase), color: "text-red-400" },
+        { label: "Annual inflation", value: `${inflation}%`, color: "text-[var(--color-text)]" },
+        { label: `${horizon}-month projected expense`, value: formatCurrency(totalProjected), color: "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Annual cost inflation</span><span className="font-semibold">{inflation}%</span></label>
+          <input type="range" min={0} max={20} step={1} value={inflation} onChange={e => setInflation(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Horizon</span><span className="font-semibold">{horizon} months</span></label>
+          <input type="range" min={3} max={24} step={1} value={horizon} onChange={e => setHorizon(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Base monthly expense by category</h3>
+        <div className="space-y-2">
+          {base.map(b => (
+            <div key={b.cat} className="flex items-center justify-between text-sm">
+              <span className="text-[var(--color-muted)]">{EXP_LABEL[b.cat] ?? b.cat}</span>
+              <span className="tabular-nums font-medium">{formatCurrency(b.monthly)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected monthly expense (₹L)</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={proj.map(p => ({ label: p.label, total: Math.round(p.total / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Expense"]} />
+            <Area type="monotone" dataKey="total" stroke="#d97706" strokeWidth={2} fill="#d9770610" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #83 — Headcount-Cost Forecast
+// Build a roster of roles (salary × count, optional start month) on top of the
+// current payroll run-rate and project total monthly people-cost forward.
+// ─────────────────────────────────────────────────────────────────────────────
+interface PlannedRole { id: string; title: string; monthlyCost: number; startMonth: number; count: number }
+
+function HeadcountCostForecast() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [roles, setRoles] = useFeatureState<PlannedRole[]>("fc-planned-roles", []);
+  const [title, setTitle] = useState("");
+  const [cost, setCost] = useState("");
+  const [count, setCount] = useState("1");
+  const [startMonth, setStartMonth] = useState("1");
+
+  // current payroll run-rate = trailing-3-month average payroll outflow
+  const currentPayroll = useMemo(() => {
+    const now = new Date();
+    const cut = new Date(now.getFullYear(), now.getMonth() - 3, 1).getTime();
+    let sum = 0; const seen = new Set<string>();
+    for (const t of transactions ?? []) {
+      if (t.category !== "payroll" || t.amount >= 0) continue;
+      const d = new Date(t.date);
+      if (d.getTime() < cut) continue;
+      seen.add(`${d.getFullYear()}-${d.getMonth()}`);
+      sum += Math.abs(t.amount);
+    }
+    return Math.round(sum / Math.max(1, seen.size));
+  }, [transactions]);
+
+  const addRole = () => {
+    if (!title || !cost) { toast.error("Add a title and monthly cost"); return; }
+    setRoles(prev => [...prev, { id: generateId(), title, monthlyCost: Number(cost), count: Math.max(1, Number(count) || 1), startMonth: Math.max(0, Number(startMonth) || 0) }]);
+    toast.success("Role added to plan");
+    setTitle(""); setCost(""); setCount("1"); setStartMonth("1");
+  };
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; cost: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      let extra = 0;
+      for (const r of roles) if (i >= r.startMonth) extra += r.monthlyCost * r.count;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), cost: currentPayroll + extra });
+    }
+    return out;
+  }, [roles, currentPayroll]);
+
+  const fullyLoaded = proj[proj.length - 1]?.cost ?? currentPayroll;
+  const headcountAdd = roles.reduce((s, r) => s + r.count, 0);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Users} title="Headcount-Cost Forecast" blurb="Layer planned hires on top of your current payroll run-rate and see total monthly people-cost ramp across the next 12 months." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Current payroll / month", value: formatCurrency(currentPayroll), color: "text-[var(--color-text)]" },
+        { label: "Planned hires", value: `${headcountAdd}`, color: "text-[var(--color-text)]" },
+        { label: "Fully-loaded / month", value: formatCurrency(fullyLoaded), color: "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Add a planned role</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+          <input placeholder="Role title" value={title} onChange={e => setTitle(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] col-span-2 md:col-span-1" />
+          <input type="number" placeholder="Monthly cost (₹)" value={cost} onChange={e => setCost(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Count" value={count} onChange={e => setCount(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Start month" value={startMonth} onChange={e => setStartMonth(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={addRole} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded font-semibold hover:opacity-90"><Plus size={12} /> Add role</button>
+        <div className="mt-3 space-y-2">
+          {roles.map(r => (
+            <div key={r.id} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div>
+                <p className="text-sm font-medium">{r.count > 1 ? `${r.count}× ` : ""}{r.title}</p>
+                <p className="text-xs text-[var(--color-muted)]">{formatCurrency(r.monthlyCost)}/mo · from month {r.startMonth}</p>
+              </div>
+              <button onClick={() => setRoles(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {roles.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No planned roles yet</p>}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Monthly people-cost ramp (₹L)</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={proj.map(p => ({ label: p.label, cost: Math.round(p.cost / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "People cost"]} />
+            <Area type="monotone" dataKey="cost" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5510" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #84 — Burn-Rate & Zero-Cash Date
+// Net monthly burn from trailing history, current cash, and a straight-line
+// zero-cash date if burn continues — with an adjustable burn-change dial.
+// ─────────────────────────────────────────────────────────────────────────────
+function BurnRateZeroCash() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  const [burnAdj, setBurnAdj] = useState(0); // % change to net burn
+  const cash = (bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+
+  const hist = useMemo(() => monthlyAggregates(transactions ?? [], 6), [transactions]);
+  const netBurn = useMemo(() => {
+    const active = hist.filter(m => m.revenue > 0 || m.expense > 0);
+    if (active.length === 0) return 0;
+    const avgNet = active.reduce((s, m) => s + m.net, 0) / active.length;
+    return -avgNet; // positive = burning cash
+  }, [hist]);
+  const effBurn = netBurn * (1 + burnAdj / 100);
+  const monthsLeft = effBurn > 0 ? cash / effBurn : Infinity;
+  const zeroDate = effBurn > 0 ? new Date(Date.now() + monthsLeft * 30 * 86_400_000) : null;
+
+  const chartData = useMemo(() => {
+    const out: { label: string; cash: number }[] = [];
+    let bal = cash;
+    const now = new Date();
+    for (let i = 0; i <= 18; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), cash: Math.round(Math.max(0, bal) / 100000) });
+      bal -= effBurn;
+      if (bal < -cash) break;
+    }
+    return out;
+  }, [cash, effBurn]);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Flame} title="Burn-Rate & Zero-Cash Date" blurb="Net monthly burn from your trailing 6-month history projected straight-line against current cash — adjust the burn to see how the zero-cash date moves." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Current cash", value: formatCurrency(cash), color: "text-[var(--color-text)]" },
+        { label: "Net monthly burn", value: effBurn > 0 ? formatCurrency(Math.round(effBurn)) : "Cash-positive", color: effBurn > 0 ? "text-red-400" : "text-green-400" },
+        { label: "Months of runway", value: monthsLeft === Infinity ? "∞" : monthsLeft.toFixed(1), color: monthsLeft < 6 ? "text-red-400" : monthsLeft < 12 ? "text-yellow-400" : "text-green-400" },
+        { label: "Zero-cash date", value: zeroDate ? format(zeroDate, "MMM yyyy") : "—", color: zeroDate && monthsLeft < 6 ? "text-red-400" : "text-[var(--color-text)]" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Burn change</span><span className={`font-semibold ${burnAdj > 0 ? "text-red-400" : burnAdj < 0 ? "text-green-400" : ""}`}>{burnAdj > 0 ? "+" : ""}{burnAdj}%</span></label>
+        <input type="range" min={-50} max={50} step={5} value={burnAdj} onChange={e => setBurnAdj(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      {effBurn > 0 && monthsLeft < 6 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <Flame size={16} className="text-red-400 shrink-0" />
+          <p className="text-sm">At this burn you run out of cash by <strong className="text-red-400">{zeroDate ? format(zeroDate, "MMM yyyy") : "—"}</strong> — under 6 months. Cut burn or arrange a buffer now.</p>
+        </div>
+      )}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Cash depletion (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={chartData}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Cash"]} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" />
+            <Area type="monotone" dataKey="cash" stroke="#d97706" strokeWidth={2} fill="#d9770610" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #85 — Monthly Cash-Bridge Waterfall
+// Opening → operating → financing → closing for the most recent month, as a
+// waterfall, built from the direct-method monthlyCashFlow ledger in finance.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+function CashBridgeWaterfall() {
+  const { store } = useApp();
+  const rows = useMemo(() => monthlyCashFlow(store, 6), [store]);
+  const [idx, setIdx] = useState(rows.length - 1);
+  const row = rows[Math.min(idx, rows.length - 1)];
+
+  const bars = useMemo(() => {
+    if (!row) return [];
+    const steps = [
+      { name: "Opening", delta: row.opening, total: row.opening },
+      { name: "Receipts", delta: row.receipts },
+      { name: "Suppliers", delta: -row.supplierPayments },
+      { name: "Payroll", delta: -row.payroll },
+      { name: "Taxes", delta: -row.taxes },
+      { name: "Financing", delta: row.financing },
+      { name: "Closing", delta: row.closing, total: row.closing },
+    ];
+    let running = 0;
+    return steps.map((s, i) => {
+      const isAnchor = i === 0 || i === steps.length - 1;
+      const start = isAnchor ? 0 : running;
+      if (!isAnchor) running += s.delta;
+      else running = s.total ?? running;
+      const value = isAnchor ? (s.total ?? 0) : Math.abs(s.delta);
+      return { name: s.name, base: isAnchor ? 0 : Math.min(start, start + s.delta), value: Math.round(value / 100000), positive: isAnchor ? true : s.delta >= 0, baseL: Math.round((isAnchor ? 0 : Math.min(start, start + s.delta)) / 100000), isAnchor };
+    });
+  }, [row]);
+
+  if (!row) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Layers size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <h2 className="text-base font-semibold mb-1">No cash-flow data</h2>
+        <p className="text-sm text-[var(--color-muted)] max-w-xs mx-auto">Add transactions to build a monthly cash-bridge waterfall.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Layers} title="Monthly Cash-Bridge Waterfall" blurb="Opening cash → receipts → suppliers, payroll, taxes → financing → closing, for any of the last 6 months. Shows exactly what moved the balance." />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Month</span><span className="font-semibold">{row.label}</span></label>
+        <input type="range" min={0} max={rows.length - 1} step={1} value={Math.min(idx, rows.length - 1)} onChange={e => setIdx(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Opening", value: formatCurrency(Math.round(row.opening)), color: "text-[var(--color-text)]" },
+        { label: "Operating net", value: formatCurrency(Math.round(row.operating)), color: row.operating >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Financing net", value: formatCurrency(Math.round(row.financing)), color: row.financing >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Closing", value: formatCurrency(Math.round(row.closing)), color: row.closing >= row.opening ? "text-green-400" : "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Cash bridge — {row.label} (₹L)</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={bars}>
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, _n, p) => [`₹${v}L`, (p?.payload as { name: string })?.name ?? ""]} />
+            <Bar dataKey="baseL" stackId="w" fill="transparent" />
+            <Bar dataKey="value" stackId="w" radius={[2, 2, 0, 0]} animationDuration={400}>
+              {bars.map((b, i) => (
+                <Cell key={i} fill={b.isAnchor ? "#8a8060" : b.positive ? "#1A6B55" : "#ef4444"} />
+              ))}
+            </Bar>
+          </ComposedChart>
+        </ResponsiveContainer>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Grey = opening/closing balance. Green steps add cash; red steps drain it.</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #86 — AR / AP Timing Forecast
+// Buckets expected receivable collections (open invoices, due-date based) against
+// scheduled payables (obligations + EMIs) by week, surfacing weeks where outflows
+// outrun inflows — the classic timing-mismatch view.
+// ─────────────────────────────────────────────────────────────────────────────
+function ArApTimingForecast() {
+  const { store } = useApp();
+  const { invoices, obligations, activeLoans } = store;
+
+  const weeks = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const out: { label: string; ar: number; ap: number; net: number }[] = [];
+    const wOf = (s: string) => Math.max(0, Math.floor((new Date(s).getTime() - start.getTime()) / WEEK_MS));
+    for (let w = 0; w < 13; w++) {
+      let ar = 0, ap = 0;
+      for (const inv of invoices ?? []) { if (inv.status === "paid") continue; if (wOf(inv.dueDate) === w) ar += inv.amount; }
+      for (const o of obligations ?? []) { if (wOf(o.dueDate) === w) ap += Math.abs(o.amount); }
+      for (const l of activeLoans ?? []) {
+        if (!l.monthlyEmi || !l.nextPaymentDate) continue;
+        const first = wOf(l.nextPaymentDate);
+        if ((w - first) % 4 === 0 && w >= first) ap += Math.abs(l.monthlyEmi);
+      }
+      const ws = new Date(start.getTime() + w * WEEK_MS);
+      out.push({ label: `W${w + 1} ${format(ws, "d MMM")}`, ar: Math.round(ar), ap: Math.round(ap), net: Math.round(ar - ap) });
+    }
+    return out;
+  }, [invoices, obligations, activeLoans]);
+
+  const totalAr = weeks.reduce((s, w) => s + w.ar, 0);
+  const totalAp = weeks.reduce((s, w) => s + w.ap, 0);
+  const tightWeeks = weeks.filter(w => w.net < 0).length;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={ArrowLeftRight} title="AR / AP Timing Forecast" blurb="Expected receivable collections vs scheduled payables (obligations + EMIs) bucketed by week — surfaces the weeks where money out outruns money in." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "13-week receivables", value: formatCurrency(totalAr), color: "text-green-400" },
+        { label: "13-week payables", value: formatCurrency(totalAp), color: "text-red-400" },
+        { label: "Tight weeks (AP > AR)", value: `${tightWeeks}`, color: tightWeeks > 0 ? "text-red-400" : "text-green-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Weekly inflow vs outflow (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={weeks.map(w => ({ label: w.label, ar: Math.round(w.ar / 100000), ap: Math.round(w.ap / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "ar" ? "Receivables" : "Payables"]} />
+            <Bar dataKey="ar" fill="#1A6B55" radius={[2, 2, 0, 0]} animationDuration={400} />
+            <Bar dataKey="ap" fill="#ef4444" radius={[2, 2, 0, 0]} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Week", "Receivables", "Payables", "Net"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {weeks.map(w => (
+              <tr key={w.label} className={w.net < 0 ? "bg-red-950/15" : "hover:bg-white/2"}>
+                <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{w.label}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-green-400">{formatCurrency(w.ar)}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-red-400">{formatCurrency(w.ap)}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums font-semibold ${w.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(w.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #87 — Fixed-vs-Variable Cost Projection
+// Splits trailing outflows into fixed (recurring: payroll, loan, recurring-flagged
+// expenses) and variable, then projects each forward — fixed flat, variable scaled
+// by a revenue-activity dial — so you see your operating-leverage exposure.
+// ─────────────────────────────────────────────────────────────────────────────
+function FixedVariableProjection() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [activity, setActivity] = useState(100); // variable cost scales with this
+
+  const split = useMemo(() => {
+    const now = new Date();
+    const cut = new Date(now.getFullYear(), now.getMonth() - 6, 1).getTime();
+    let fixed = 0, variable = 0; const seen = new Set<string>();
+    for (const t of transactions ?? []) {
+      if (t.amount >= 0 || t.category === "transfer") continue;
+      const d = new Date(t.date);
+      if (d.getTime() < cut) continue;
+      seen.add(`${d.getFullYear()}-${d.getMonth()}`);
+      const isFixed = t.category === "payroll" || t.category === "loan" || t.category === "tax" || t.isRecurring;
+      if (isFixed) fixed += Math.abs(t.amount); else variable += Math.abs(t.amount);
+    }
+    const m = Math.max(1, seen.size);
+    return { fixed: Math.round(fixed / m), variable: Math.round(variable / m) };
+  }, [transactions]);
+
+  const effVariable = Math.round(split.variable * activity / 100);
+  const total = split.fixed + effVariable;
+  const fixedShare = total > 0 ? Math.round((split.fixed / total) * 100) : 0;
+
+  const chartData = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; fixed: number; variable: number }[] = [];
+    for (let i = 1; i <= 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), fixed: Math.round(split.fixed / 100000), variable: Math.round(effVariable / 100000) });
+    }
+    return out;
+  }, [split.fixed, effVariable]);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Scale} title="Fixed vs Variable Cost Projection" blurb="Splits your trailing outflows into fixed (payroll, loans, tax, recurring) and variable, then projects each forward — slide activity to test your operating leverage." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Fixed / month", value: formatCurrency(split.fixed), color: "text-[var(--color-text)]" },
+        { label: "Variable / month", value: formatCurrency(effVariable), color: "text-[var(--color-text)]", sub: activity !== 100 ? `at ${activity}% activity` : undefined },
+        { label: "Total / month", value: formatCurrency(total), color: "text-red-400" },
+        { label: "Fixed share", value: `${fixedShare}%`, color: fixedShare > 70 ? "text-red-400" : fixedShare > 50 ? "text-yellow-400" : "text-green-400", sub: fixedShare > 70 ? "high operating leverage" : undefined },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Activity level (scales variable cost)</span><span className="font-semibold">{activity}%</span></label>
+        <input type="range" min={40} max={160} step={5} value={activity} onChange={e => setActivity(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected cost split (₹L, stacked)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={chartData}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "fixed" ? "Fixed" : "Variable"]} />
+            <Bar dataKey="fixed" stackId="c" fill="#1A6B55" animationDuration={400} />
+            <Bar dataKey="variable" stackId="c" fill="#d97706" radius={[2, 2, 0, 0]} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <div className="flex gap-4 mt-2 text-[10px] text-[var(--color-muted)]">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#1A6B55] inline-block rounded-sm" /> Fixed</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#d97706] inline-block rounded-sm" /> Variable</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #88 — Break-Even Cash Date
+// Projects cumulative monthly net cash forward from the trailing run-rate plus an
+// editable monthly revenue growth, and pinpoints the month cumulative net turns
+// positive (cash-flow break-even).
+// ─────────────────────────────────────────────────────────────────────────────
+function BreakEvenForecast() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [revGrowth, setRevGrowth] = useState(3);
+  const hist = useMemo(() => monthlyAggregates(transactions ?? [], 6), [transactions]);
+
+  const base = useMemo(() => {
+    const active = hist.filter(m => m.revenue > 0 || m.expense > 0);
+    const n = Math.max(1, active.length);
+    const rev = active.reduce((s, m) => s + m.revenue, 0) / n;
+    const exp = active.reduce((s, m) => s + m.expense, 0) / n;
+    return { rev, exp };
+  }, [hist]);
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; monthlyNet: number; cumulative: number }[] = [];
+    let rev = base.rev, cum = 0, breakMonth: number | null = null;
+    for (let i = 1; i <= 24; i++) {
+      rev = rev * (1 + revGrowth / 100);
+      const net = rev - base.exp;
+      cum += net;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), monthlyNet: Math.round(net), cumulative: Math.round(cum) });
+      if (breakMonth === null && net >= 0) breakMonth = i;
+    }
+    return { rows: out, breakMonth };
+  }, [base, revGrowth]);
+
+  const alreadyPositive = base.rev - base.exp >= 0;
+  const breakDate = proj.breakMonth != null ? new Date(new Date().getFullYear(), new Date().getMonth() + proj.breakMonth, 1) : null;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Target} title="Break-Even Cash Date" blurb="Projects monthly net cash from your trailing run-rate plus a growth assumption, and pinpoints the month you turn cash-flow positive." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Current monthly net", value: formatCurrency(Math.round(base.rev - base.exp)), color: alreadyPositive ? "text-green-400" : "text-red-400" },
+        { label: "Assumed rev growth", value: `${revGrowth > 0 ? "+" : ""}${revGrowth}%/mo`, color: "text-[var(--color-text)]" },
+        { label: "Break-even month", value: alreadyPositive ? "Already positive" : breakDate ? format(breakDate, "MMM yyyy") : "24+ months", color: alreadyPositive || breakDate ? "text-green-400" : "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Monthly revenue growth assumption</span><span className="font-semibold">{revGrowth > 0 ? "+" : ""}{revGrowth}%</span></label>
+        <input type="range" min={-5} max={15} step={0.5} value={revGrowth} onChange={e => setRevGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      {!alreadyPositive && !breakDate && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0" />
+          <p className="text-sm">At {revGrowth}%/mo growth you don't reach cash-flow break-even within 24 months. Raise growth or cut the expense base.</p>
+        </div>
+      )}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Monthly net & cumulative cash (₹L)</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={proj.rows.map(r => ({ label: r.label, monthlyNet: Math.round(r.monthlyNet / 100000), cumulative: Math.round(r.cumulative / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={2} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "monthlyNet" ? "Monthly net" : "Cumulative"]} />
+            <ReferenceLine y={0} stroke="#8a8060" strokeDasharray="4 2" />
+            <Bar dataKey="monthlyNet" radius={[2, 2, 0, 0]} animationDuration={400}>
+              {proj.rows.map((r, i) => <Cell key={i} fill={r.monthlyNet >= 0 ? "#1A6B55" : "#ef4444"} />)}
+            </Bar>
+            <Line type="monotone" dataKey="cumulative" stroke="#22c55e" strokeWidth={2} dot={false} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// Small clamp local to this module's tool helpers (engine's clamp isn't exported as default).
+function clampNum(x: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, x)); }

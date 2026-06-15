@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -117,7 +117,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay">("directory");
+  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -218,6 +218,14 @@ export default function VendorsPage() {
             ["vendor-tds", "Vendor TDS Ledger", Receipt],
             ["kyc-vault", "Onboarding / KYC", Contact],
             ["early-pay", "Early-Pay Discount", Percent],
+            ["pay-run", "Pay-Run Scheduler", CalendarClock],
+            ["spend-analysis", "Spend Analysis", PieChart],
+            ["dup-vendor", "Duplicate Detector", Copy],
+            ["requisition", "Requisition → PO", FileInput],
+            ["vendor-score", "Performance Review", Star],
+            ["rfq", "RFQ Comparison", ListChecks],
+            ["advances", "Advances Tracker", Wallet],
+            ["debit-notes", "Debit / Return Notes", Undo2],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -505,11 +513,19 @@ export default function VendorsPage() {
         );
       })()}
 
-      {view === "po"          && <PurchaseOrderManager />}
-      {view === "three-way"   && <ThreeWayMatch />}
-      {view === "vendor-tds"  && <VendorTdsLedger />}
-      {view === "kyc-vault"   && <VendorKycVault />}
-      {view === "early-pay"   && <EarlyPaymentOptimizer />}
+      {view === "po"            && <PurchaseOrderManager />}
+      {view === "three-way"     && <ThreeWayMatch />}
+      {view === "vendor-tds"    && <VendorTdsLedger />}
+      {view === "kyc-vault"     && <VendorKycVault />}
+      {view === "early-pay"     && <EarlyPaymentOptimizer />}
+      {view === "pay-run"       && <PayRunScheduler />}
+      {view === "spend-analysis" && <SpendAnalysis />}
+      {view === "dup-vendor"    && <DuplicateVendorDetector />}
+      {view === "requisition"   && <RequisitionToPo />}
+      {view === "vendor-score"  && <VendorPerformanceReview />}
+      {view === "rfq"           && <RfqComparison />}
+      {view === "advances"      && <AdvancesTracker />}
+      {view === "debit-notes"   && <DebitNoteTracker />}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
     </div>
@@ -1220,6 +1236,919 @@ function EarlyPaymentOptimizer() {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #65 Pay-Run Scheduler — batch open obligations into a dated pay run.
+   Builds a real cash obligation per included line is not needed (they already
+   exist); instead it groups due payables into a run with a chosen settlement
+   date and shows the cash needed. No payout rail is invoked (gated).
+   ───────────────────────────────────────────────────────────────────────── */
+function PayRunScheduler() {
+  const { store } = useApp();
+  const [runDate, setRunDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().split("T")[0]; });
+  const [selected, setSelected] = useFeatureState<string[]>("ven-pay-run-selected", []);
+  const [horizon, setHorizon] = useState("30");
+
+  const today = new Date();
+  const days = parseFloat(horizon) || 30;
+
+  const payables = useMemo(() => {
+    const limit = new Date(); limit.setDate(limit.getDate() + days);
+    return store.obligations
+      .filter(o => o.type === "other" || o.type === "payroll" || o.type === "tax" || o.type === "loan")
+      .map(o => {
+        const due = new Date(o.dueDate);
+        const overdue = Math.floor((today.getTime() - due.getTime()) / 86400000);
+        return { ...o, due, overdue };
+      })
+      .filter(o => o.due <= limit)
+      .sort((a, b) => a.due.getTime() - b.due.getTime());
+  }, [store.obligations, days]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selSet = new Set(selected);
+  const toggle = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const selectAll = () => setSelected(payables.map(p => p.id));
+  const clear = () => setSelected([]);
+
+  const runTotal = payables.filter(p => selSet.has(p.id)).reduce((s, p) => s + p.amount, 0);
+  const overdueInRun = payables.filter(p => selSet.has(p.id) && p.overdue > 0).length;
+  const available = store.bankAccounts.reduce((s, a) => s + (a.balance ?? 0), 0);
+  const shortfall = runTotal - available;
+
+  const schedule = () => {
+    const n = payables.filter(p => selSet.has(p.id)).length;
+    if (n === 0) { toast.error("Select at least one payable for the run"); return; }
+    if (shortfall > 0) {
+      toast.warning(`Pay run of ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")} exceeds available balance by ${formatCurrency(shortfall)}`);
+    } else {
+      toast.success(`Pay run scheduled — ${n} payable${n !== 1 ? "s" : ""} totalling ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")}`);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Batch your due payables into a single dated pay run instead of paying ad-hoc. MSME and overdue items are surfaced so you clear them first; the run is checked against your live bank balance. Actual disbursement needs a payout rail (gated).</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3 flex-wrap">
+        <CalendarClock size={16} className="text-[var(--color-primary)]" />
+        <label className="text-sm">Settlement date</label>
+        <input type="date" value={runDate} min={new Date().toISOString().split("T")[0]} onChange={e => setRunDate(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        <label className="text-sm ml-2">Include due within</label>
+        <select value={horizon} onChange={e => setHorizon(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]">
+          {["7", "15", "30", "60", "90"].map(d => <option key={d} value={d}>{d} days</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Pay-Run Total", value: formatCurrency(runTotal), color: "text-[var(--color-primary)]" },
+          { label: "Items Selected", value: `${selected.filter(id => payables.some(p => p.id === id)).length}/${payables.length}`, color: "text-blue-400" },
+          { label: "Overdue in Run", value: overdueInRun.toString(), color: overdueInRun > 0 ? "text-red-400" : "text-green-400" },
+          { label: "After Run Balance", value: formatCurrency(available - runTotal), color: shortfall > 0 ? "text-red-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {payables.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CalendarClock size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No payables due in this window. Schedule vendor payments from the Directory tab to build a pay run.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-b border-[var(--color-border)] flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex gap-2">
+              <button onClick={selectAll} className="text-xs text-[var(--color-primary)] hover:underline">Select all</button>
+              <button onClick={clear} className="text-xs text-[var(--color-muted)] hover:underline">Clear</button>
+            </div>
+            <button onClick={schedule} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-1.5 rounded-lg hover:opacity-90">Schedule Pay Run</button>
+          </div>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["", "Payable", "Type", "Due", "Amount"].map((h, i) => (
+                  <th key={h || "chk"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {payables.map(p => (
+                <tr key={p.id} className={`hover:bg-white/2 cursor-pointer ${selSet.has(p.id) ? "bg-[var(--color-primary)]/5" : ""}`} onClick={() => toggle(p.id)}>
+                  <td className="px-4 py-3"><input type="checkbox" checked={selSet.has(p.id)} readOnly className="accent-[var(--color-primary)]" /></td>
+                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">{p.name}</td>
+                  <td className="px-4 py-3"><span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[p.type] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{CATEGORY_LABEL[p.type] ?? p.type}</span></td>
+                  <td className="px-4 py-3 text-xs">{p.overdue > 0 ? <span className="text-red-400">{p.overdue}d overdue</span> : <span className="text-[var(--color-muted)]">{format(p.due, "dd MMM")}</span>}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(p.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #66 Spend Analysis — concentration & consolidation from live transactions.
+   Flags single-vendor dependency risk and top-N share of total spend.
+   ───────────────────────────────────────────────────────────────────────── */
+function SpendAnalysis() {
+  const { store } = useApp();
+  const [riskPct, setRiskPct] = useState("25");
+
+  const rows = useMemo(() => {
+    const map: Record<string, number> = {};
+    store.transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+      map[t.counterparty] = (map[t.counterparty] ?? 0) + Math.abs(t.amount);
+    });
+    return Object.entries(map).map(([vendor, spend]) => ({ vendor, spend })).sort((a, b) => b.spend - a.spend);
+  }, [store.transactions]);
+
+  const total = rows.reduce((s, r) => s + r.spend, 0);
+  const threshold = parseFloat(riskPct) || 25;
+  const concentrated = rows.filter(r => total > 0 && (r.spend / total) * 100 >= threshold);
+  const top5Share = total > 0 ? rows.slice(0, 5).reduce((s, r) => s + r.spend, 0) / total * 100 : 0;
+  // Consolidation opportunity: long tail of small vendors (< 2% each).
+  const tail = rows.filter(r => total > 0 && (r.spend / total) * 100 < 2);
+  const tailSpend = tail.reduce((s, r) => s + r.spend, 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Where does your money actually go? This ranks vendors by total spend, flags any single vendor over your concentration threshold (supplier-dependency risk), and surfaces a long tail of tiny vendors you could consolidate to win better terms.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3 flex-wrap">
+        <PieChart size={16} className="text-[var(--color-primary)]" />
+        <label className="text-sm">Concentration risk threshold (% of total spend)</label>
+        <input type="number" value={riskPct} onChange={e => setRiskPct(e.target.value)} className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Spend", value: formatAmount(total), color: "text-red-400" },
+          { label: "Top-5 Share", value: `${top5Share.toFixed(0)}%`, color: top5Share > 70 ? "text-orange-400" : "text-blue-400" },
+          { label: `Over ${threshold}% (risk)`, value: concentrated.length.toString(), color: concentrated.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Tail Vendors (<2%)", value: tail.length.toString(), color: "text-yellow-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {concentrated.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-[var(--color-muted)]"><span className="text-red-300 font-semibold">{concentrated.map(c => c.vendor).join(", ")}</span> each take ≥{threshold}% of your spend. Heavy reliance on one supplier is a continuity risk — line up a backup vendor or split volume.</p>
+        </div>
+      )}
+      {tail.length >= 3 && (
+        <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
+          <PieChart size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-[var(--color-muted)]">{tail.length} tiny vendors absorb {formatAmount(tailSpend)} ({total > 0 ? (tailSpend / total * 100).toFixed(0) : 0}%). Consolidating them onto fewer suppliers cuts admin overhead and improves your negotiating leverage.</p>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <PieChart size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No spend yet. Import expense transactions to analyse vendor concentration.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["#", "Vendor", "Spend", "Share", ""].map((h, i) => (
+                  <th key={h || "bar"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 2 || i === 3 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map((r, i) => {
+                const share = total > 0 ? r.spend / total * 100 : 0;
+                const risky = share >= threshold;
+                return (
+                  <tr key={r.vendor} className="hover:bg-white/2">
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)] tabular-nums">{i + 1}</td>
+                    <td className="px-4 py-3 font-medium">{r.vendor} {risky && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 ml-1">RISK</span>}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(r.spend)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-xs">{share.toFixed(1)}%</td>
+                    <td className="px-4 py-3 w-[120px]"><div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden"><div className={`h-full ${risky ? "bg-red-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${Math.min(share, 100)}%` }} /></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #67 Duplicate Vendor Detector — fuzzy-match names in live transactions.
+   ───────────────────────────────────────────────────────────────────────── */
+function normVendor(s: string): string {
+  return s.toLowerCase()
+    .replace(/\b(pvt|private|ltd|limited|llp|inc|co|company|enterprises|industries|traders|trading|the|and|&)\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function DuplicateVendorDetector() {
+  const { store } = useApp();
+  const [dismissed, setDismissed] = useFeatureState<string[]>("ven-dup-dismissed", []);
+
+  const groups = useMemo(() => {
+    const names = Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty)));
+    const spend: Record<string, number> = {};
+    store.transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => { spend[t.counterparty] = (spend[t.counterparty] ?? 0) + Math.abs(t.amount); });
+    const byKey: Record<string, string[]> = {};
+    names.forEach(n => {
+      const key = normVendor(n);
+      if (key.length < 2) return;
+      (byKey[key] ??= []).push(n);
+    });
+    return Object.entries(byKey)
+      .filter(([, v]) => v.length > 1)
+      .map(([key, v]) => ({ key, vendors: v.sort(), spend: v.reduce((s, n) => s + (spend[n] ?? 0), 0) }))
+      .sort((a, b) => b.spend - a.spend);
+  }, [store.transactions]);
+
+  const dismissSet = new Set(dismissed);
+  const active = groups.filter(g => !dismissSet.has(g.key));
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">The same vendor entered three different ways ("ABC Traders", "ABC Traders Pvt Ltd", "abc traders") fragments your spend data and hides your true exposure. This normalises names (strips suffixes, case, punctuation) and groups likely duplicates so you can merge them in your books.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Possible Duplicate Sets", value: active.length.toString(), color: active.length > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Vendors Involved", value: active.reduce((s, g) => s + g.vendors.length, 0).toString(), color: "text-blue-400" },
+          { label: "Spend at Risk of Fragmentation", value: formatAmount(active.reduce((s, g) => s + g.spend, 0)), color: "text-red-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {active.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400 opacity-50" />
+          <p className="text-sm text-[var(--color-muted)]">No likely duplicate vendors detected. Your vendor names look clean.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {active.map(g => (
+            <div key={g.key} className="bg-[var(--color-surface)] border border-orange-800/40 rounded-lg p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold flex items-center gap-2"><Copy size={14} className="text-orange-400" /> {g.vendors.length} likely-same vendors</p>
+                  <ul className="mt-2 space-y-1">
+                    {g.vendors.map(v => <li key={v} className="text-xs text-[var(--color-muted)] flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-[var(--color-muted)]" /> {v}</li>)}
+                  </ul>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-2">Combined spend: <span className="font-semibold text-red-400">{formatAmount(g.spend)}</span></p>
+                </div>
+                <button onClick={() => setDismissed(prev => [...prev, g.key])} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-2.5 py-1.5 rounded-lg shrink-0">Not a duplicate</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #68 Purchase Requisition → PO — internal request, approve, convert to PO.
+   ───────────────────────────────────────────────────────────────────────── */
+type ReqStatus = "pending" | "approved" | "rejected" | "converted";
+interface Requisition {
+  id: string;
+  reqNo: string;
+  requester: string;
+  item: string;
+  qty: number;
+  estCost: number;
+  needBy: string;
+  justification: string;
+  status: ReqStatus;
+}
+const REQ_META: Record<ReqStatus, { label: string; cls: string }> = {
+  pending:   { label: "Pending", cls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  approved:  { label: "Approved", cls: "bg-blue-950/30 text-blue-400 border-blue-800/30" },
+  rejected:  { label: "Rejected", cls: "bg-red-950/30 text-red-400 border-red-800/30" },
+  converted: { label: "→ PO", cls: "bg-green-950/30 text-green-400 border-green-800/30" },
+};
+
+function RequisitionToPo() {
+  const [reqs, setReqs] = useFeatureState<Requisition[]>("ven-requisitions", []);
+  const [requester, setRequester] = useState("");
+  const [item, setItem] = useState("");
+  const [qty, setQty] = useState("1");
+  const [estCost, setEstCost] = useState("");
+  const [needBy, setNeedBy] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().split("T")[0]; });
+  const [justification, setJustification] = useState("");
+
+  const raise = () => {
+    if (!requester.trim() || !item.trim()) { toast.error("Enter requester and item"); return; }
+    const seq = reqs.length + 1;
+    const r: Requisition = {
+      id: crypto.randomUUID(), reqNo: `PR-${new Date().getFullYear()}-${String(seq).padStart(3, "0")}`,
+      requester: requester.trim(), item: item.trim(), qty: parseFloat(qty) || 1,
+      estCost: parseFloat(estCost) || 0, needBy, justification: justification.trim(), status: "pending",
+    };
+    setReqs(prev => [r, ...prev]);
+    setItem(""); setEstCost(""); setJustification("");
+    toast.success(`${r.reqNo} raised`);
+  };
+  const setStatus = (id: string, status: ReqStatus) => {
+    setReqs(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    if (status === "approved") toast.success("Requisition approved — ready to convert to PO");
+    if (status === "converted") toast.success("Converted to PO — raise it formally in the Purchase Orders tab");
+  };
+  const remove = (id: string) => setReqs(prev => prev.filter(r => r.id !== id));
+
+  const pendingN = reqs.filter(r => r.status === "pending").length;
+  const approvedVal = reqs.filter(r => r.status === "approved").reduce((s, r) => s + r.estCost * r.qty, 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Anyone on the team can raise a purchase requisition — what they need, why, and by when. The owner approves or rejects, and approved requests convert into a PO. This adds the spend-control step SMBs usually skip.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Pending Approval", value: pendingN.toString(), color: pendingN > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Approved (ready for PO)", value: formatCurrency(approvedVal), color: "text-blue-400" },
+          { label: "Total Requisitions", value: reqs.length.toString(), color: "text-[var(--color-primary)]" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileInput size={15} className="text-[var(--color-primary)]" /> Raise Requisition</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <input value={requester} onChange={e => setRequester(e.target.value)} placeholder="Requested by *" className={inpCls} />
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / service *" className={inpCls} />
+          <input type="date" value={needBy} onChange={e => setNeedBy(e.target.value)} className={inpCls} />
+          <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Qty" className={inpCls} />
+          <input type="number" value={estCost} onChange={e => setEstCost(e.target.value)} placeholder="Est. unit cost (₹)" className={inpCls} />
+          <input value={justification} onChange={e => setJustification(e.target.value)} placeholder="Justification" className={inpCls} />
+        </div>
+        <button onClick={raise} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Raise Requisition</button>
+      </div>
+
+      {reqs.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileInput size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No requisitions yet. Raise one to route a purchase need through approval.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["PR #", "Requester", "Item", "Qty", "Est. Value", "Need By", "Status", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 3 || i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {reqs.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold">{r.reqNo}</td>
+                  <td className="px-4 py-3">{r.requester}</td>
+                  <td className="px-4 py-3 max-w-[160px] truncate" title={r.justification}>{r.item}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{r.qty}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(r.estCost * r.qty)}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.needBy), "dd MMM")}</td>
+                  <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${REQ_META[r.status].cls}`}>{REQ_META[r.status].label}</span></td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {r.status === "pending" && <>
+                        <button onClick={() => setStatus(r.id, "approved")} className="text-[10px] font-semibold px-2 py-1 rounded border border-blue-800/40 text-blue-400 hover:bg-blue-950/30">Approve</button>
+                        <button onClick={() => setStatus(r.id, "rejected")} className="text-[10px] font-semibold px-2 py-1 rounded border border-red-800/40 text-red-400 hover:bg-red-950/30">Reject</button>
+                      </>}
+                      {r.status === "approved" && <button onClick={() => setStatus(r.id, "converted")} className="text-[10px] font-semibold px-2 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">→ PO</button>}
+                      <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #69 Vendor Performance Review — score on delivery, quality, price, support.
+   ───────────────────────────────────────────────────────────────────────── */
+interface VendorReview {
+  id: string;
+  vendor: string;
+  period: string;
+  onTime: number;   // 1-5
+  quality: number;  // 1-5
+  price: number;    // 1-5
+  support: number;  // 1-5
+  notes: string;
+}
+const REVIEW_CRITERIA: { key: keyof Pick<VendorReview, "onTime" | "quality" | "price" | "support">; label: string }[] = [
+  { key: "onTime", label: "On-time delivery" },
+  { key: "quality", label: "Quality / low rejects" },
+  { key: "price", label: "Price competitiveness" },
+  { key: "support", label: "Responsiveness / support" },
+];
+function reviewScore(r: VendorReview): number {
+  return (r.onTime + r.quality + r.price + r.support) / 4;
+}
+
+function VendorPerformanceReview() {
+  const { store } = useApp();
+  const blank = { vendor: "", onTime: 3, quality: 3, price: 3, support: 3, notes: "" };
+  const [reviews, setReviews] = useFeatureState<VendorReview[]>("ven-performance-reviews", []);
+  const [form, setForm] = useState(blank);
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const save = () => {
+    if (!form.vendor.trim()) { toast.error("Pick a vendor to review"); return; }
+    const r: VendorReview = {
+      id: crypto.randomUUID(), vendor: form.vendor.trim(),
+      period: format(new Date(), "MMM yyyy"),
+      onTime: form.onTime, quality: form.quality, price: form.price, support: form.support, notes: form.notes.trim(),
+    };
+    setReviews(prev => [r, ...prev]);
+    setForm(blank);
+    toast.success(`${r.vendor} scored ${reviewScore(r).toFixed(1)}/5`);
+  };
+  const remove = (id: string) => setReviews(prev => prev.filter(r => r.id !== id));
+
+  const avg = reviews.length ? reviews.reduce((s, r) => s + reviewScore(r), 0) / reviews.length : 0;
+  const topVendor = reviews.length ? [...reviews].sort((a, b) => reviewScore(b) - reviewScore(a))[0] : null;
+  const atRisk = reviews.filter(r => reviewScore(r) < 3).length;
+
+  const Stars = ({ n }: { n: number }) => (
+    <span className="flex items-center gap-0.5">{[1, 2, 3, 4, 5].map(i => <Star key={i} size={12} className={i <= Math.round(n) ? "text-yellow-400 fill-yellow-400" : "text-[var(--color-border)]"} />)}</span>
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Rate each vendor on delivery, quality, price and support so supplier choice is based on a track record, not gut feel. Share scores with vendors to drive improvement, and spot at-risk suppliers before they cost you.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Vendors Reviewed", value: reviews.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Avg Score", value: `${avg.toFixed(1)}/5`, color: avg >= 3.5 ? "text-green-400" : avg >= 2.5 ? "text-yellow-400" : "text-red-400" },
+          { label: "Under-performers (<3)", value: atRisk.toString(), color: atRisk > 0 ? "text-red-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Star size={15} className="text-[var(--color-primary)]" /> New Performance Review</h3>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor *</label>
+          <input list="review-vendors" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))} placeholder="Vendor name" className={inpCls} />
+          <datalist id="review-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {REVIEW_CRITERIA.map(c => (
+            <div key={c.key}>
+              <label className="text-xs text-[var(--color-muted)] flex items-center justify-between mb-1">{c.label} <span className="font-semibold text-[var(--color-text)]">{form[c.key]}/5</span></label>
+              <input type="range" min={1} max={5} value={form[c.key]} onChange={e => setForm(f => ({ ...f, [c.key]: parseInt(e.target.value) }))} className="w-full accent-[var(--color-primary)]" />
+            </div>
+          ))}
+        </div>
+        <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes (optional)" className={inpCls} />
+        <button onClick={save} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save Review</button>
+      </div>
+
+      {topVendor && <p className="text-xs text-[var(--color-muted)]">Top performer: <span className="font-semibold text-green-400">{topVendor.vendor}</span> at {reviewScore(topVendor).toFixed(1)}/5</p>}
+
+      {reviews.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Star size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No reviews yet. Score a vendor to start building a reliability track record.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {reviews.map(r => {
+            const sc = reviewScore(r);
+            return (
+              <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">{r.vendor} <span className="text-[var(--color-muted)] font-normal text-xs">· {r.period}</span></p>
+                    <p className={`text-lg font-bold tabular-nums mt-0.5 ${sc >= 3.5 ? "text-green-400" : sc >= 2.5 ? "text-yellow-400" : "text-red-400"}`}>{sc.toFixed(1)}/5</p>
+                  </div>
+                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                </div>
+                <div className="space-y-1.5 mt-3">
+                  {REVIEW_CRITERIA.map(c => (
+                    <div key={c.key} className="flex items-center justify-between text-[11px]">
+                      <span className="text-[var(--color-muted)]">{c.label}</span><Stars n={r[c.key]} />
+                    </div>
+                  ))}
+                </div>
+                {r.notes && <p className="text-[11px] text-[var(--color-muted)] mt-3 border-t border-[var(--color-border)] pt-2">{r.notes}</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #70 RFQ Comparison — quote one item to N vendors, rank price/lead/terms.
+   ───────────────────────────────────────────────────────────────────────── */
+interface Quote {
+  id: string;
+  vendor: string;
+  unitPrice: number;
+  leadDays: number;
+  paymentTermDays: number;
+}
+
+function RfqComparison() {
+  const [item, setItem] = useFeatureState<string>("ven-rfq-item", "");
+  const [qtyStr, setQtyStr] = useFeatureState<string>("ven-rfq-qty", "100");
+  const [quotes, setQuotes] = useFeatureState<Quote[]>("ven-rfq-quotes", []);
+  const [vendor, setVendor] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [leadDays, setLeadDays] = useState("");
+  const [termDays, setTermDays] = useState("30");
+
+  const qty = parseFloat(qtyStr) || 1;
+
+  const add = () => {
+    if (!vendor.trim() || !unitPrice) { toast.error("Enter vendor and unit price"); return; }
+    const q: Quote = {
+      id: crypto.randomUUID(), vendor: vendor.trim(),
+      unitPrice: parseFloat(unitPrice) || 0, leadDays: parseFloat(leadDays) || 0, paymentTermDays: parseFloat(termDays) || 0,
+    };
+    setQuotes(prev => [...prev, q]);
+    setVendor(""); setUnitPrice(""); setLeadDays("");
+    toast.success(`Quote from ${q.vendor} added`);
+  };
+  const remove = (id: string) => setQuotes(prev => prev.filter(q => q.id !== id));
+  const clearAll = () => { setQuotes([]); toast.success("RFQ cleared"); };
+
+  const ranked = useMemo(() => {
+    if (quotes.length === 0) return [];
+    const minPrice = Math.min(...quotes.map(q => q.unitPrice || Infinity));
+    const minLead = Math.min(...quotes.map(q => q.leadDays));
+    const maxTerm = Math.max(...quotes.map(q => q.paymentTermDays));
+    return quotes.map(q => {
+      // Lower price & lead better; longer payment term better. Weighted 0-100.
+      const priceScore = q.unitPrice > 0 ? (minPrice / q.unitPrice) * 50 : 0;
+      const leadScore = q.leadDays > 0 ? (minLead / q.leadDays) * 30 : 30;
+      const termScore = maxTerm > 0 ? (q.paymentTermDays / maxTerm) * 20 : 0;
+      return { ...q, total: q.unitPrice * qty, score: priceScore + leadScore + termScore };
+    }).sort((a, b) => b.score - a.score);
+  }, [quotes, qty]);
+
+  const best = ranked[0];
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Source the same item from several vendors and compare quotes side by side. Each is scored on price (50%), lead time (30%) and payment terms (20%) so you pick on value, not just the lowest sticker price.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Item being sourced</label>
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="e.g. 20mm MS bolts" className={inpCls} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Quantity</label>
+          <input type="number" value={qtyStr} onChange={e => setQtyStr(e.target.value)} className={inpCls} />
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold">Add Quote</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <input type="number" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Unit price ₹ *" className={inpCls} />
+          <input type="number" value={leadDays} onChange={e => setLeadDays(e.target.value)} placeholder="Lead time (days)" className={inpCls} />
+          <input type="number" value={termDays} onChange={e => setTermDays(e.target.value)} placeholder="Payment term (days)" className={inpCls} />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add quote</button>
+          {quotes.length > 0 && <button onClick={clearAll} className="text-xs text-[var(--color-muted)] hover:bg-[var(--color-accent)] px-3 py-2 rounded-lg">Clear RFQ</button>}
+        </div>
+      </div>
+
+      {ranked.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <ListChecks size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No quotes yet. Add at least two vendor quotes to compare and rank.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          {best && <div className="px-4 py-2.5 bg-green-950/15 border-b border-green-800/30 text-xs">Recommended: <span className="font-semibold text-green-400">{best.vendor}</span> — best blended value at {formatCurrency(best.total)} for {qty} {item || "units"}</div>}
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Rank", "Vendor", "Unit ₹", "Lead", "Terms", "Order Total", "Score", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i >= 2 && i <= 6 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ranked.map((q, i) => (
+                <tr key={q.id} className={`hover:bg-white/2 ${i === 0 ? "bg-green-950/10" : ""}`}>
+                  <td className="px-4 py-3 font-bold tabular-nums">{i + 1}</td>
+                  <td className="px-4 py-3 font-medium">{q.vendor}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(q.unitPrice)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-xs">{q.leadDays}d</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-xs">{q.paymentTermDays}d</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(q.total)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-[var(--color-primary)]">{q.score.toFixed(0)}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(q.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #71 Advances Tracker — advances paid to vendors, adjusted vs future bills.
+   ───────────────────────────────────────────────────────────────────────── */
+interface Advance {
+  id: string;
+  vendor: string;
+  amount: number;
+  date: string;
+  purpose: string;
+  adjusted: number;
+}
+
+function AdvancesTracker() {
+  const { store } = useApp();
+  const [advances, setAdvances] = useFeatureState<Advance[]>("ven-advances", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [purpose, setPurpose] = useState("");
+  const [adjustFor, setAdjustFor] = useState<string | null>(null);
+  const [adjAmt, setAdjAmt] = useState("");
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    if (!vendor.trim() || !amount) { toast.error("Enter vendor and advance amount"); return; }
+    const a: Advance = {
+      id: crypto.randomUUID(), vendor: vendor.trim(), amount: parseFloat(amount) || 0,
+      date, purpose: purpose.trim(), adjusted: 0,
+    };
+    setAdvances(prev => [a, ...prev]);
+    setVendor(""); setAmount(""); setPurpose("");
+    toast.success(`Advance of ${formatCurrency(a.amount)} to ${a.vendor} recorded`);
+  };
+  const remove = (id: string) => setAdvances(prev => prev.filter(a => a.id !== id));
+  const applyAdjust = (id: string) => {
+    const amt = parseFloat(adjAmt) || 0;
+    if (amt <= 0) { toast.error("Enter a valid amount to adjust"); return; }
+    setAdvances(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const newAdj = Math.min(a.amount, a.adjusted + amt);
+      return { ...a, adjusted: newAdj };
+    }));
+    setAdjustFor(null); setAdjAmt("");
+    toast.success("Advance adjusted against a bill");
+  };
+
+  const totalAdvanced = advances.reduce((s, a) => s + a.amount, 0);
+  const outstanding = advances.reduce((s, a) => s + (a.amount - a.adjusted), 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Advances paid to vendors are real cash out that's easy to lose track of. Record each advance, then knock it down as you adjust it against incoming bills — so the unrecovered balance never surprises you at year-end.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Advanced", value: formatCurrency(totalAdvanced), color: "text-[var(--color-primary)]" },
+          { label: "Adjusted", value: formatCurrency(totalAdvanced - outstanding), color: "text-green-400" },
+          { label: "Outstanding", value: formatCurrency(outstanding), color: outstanding > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={15} className="text-[var(--color-primary)]" /> Record Advance</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input list="adv-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="adv-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Advance ₹ *" className={inpCls} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+          <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Purpose / PO ref" className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record Advance</button>
+      </div>
+
+      {advances.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Wallet size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No advances recorded. Track money paid upfront so it gets adjusted against bills.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {advances.map(a => {
+            const bal = a.amount - a.adjusted;
+            const pct = a.amount > 0 ? a.adjusted / a.amount * 100 : 0;
+            return (
+              <div key={a.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{a.vendor} <span className="text-[var(--color-muted)] font-normal text-xs">· {format(new Date(a.date), "dd MMM yyyy")}{a.purpose ? ` · ${a.purpose}` : ""}</span></p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-1">Advanced {formatCurrency(a.amount)} · adjusted {formatCurrency(a.adjusted)} · <span className={bal > 0 ? "text-orange-400 font-semibold" : "text-green-400 font-semibold"}>balance {formatCurrency(bal)}</span></p>
+                    <div className="h-1.5 w-48 rounded-full bg-[var(--color-bg)] overflow-hidden mt-2"><div className="h-full bg-green-400" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {bal > 0 && (adjustFor === a.id ? (
+                      <div className="flex items-center gap-1">
+                        <input type="number" value={adjAmt} onChange={e => setAdjAmt(e.target.value)} placeholder="₹" className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
+                        <button onClick={() => applyAdjust(a.id)} className="text-[10px] font-semibold px-2 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">Apply</button>
+                        <button onClick={() => { setAdjustFor(null); setAdjAmt(""); }} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setAdjustFor(a.id); setAdjAmt(bal.toFixed(0)); }} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)]">Adjust vs bill</button>
+                    ))}
+                    <button onClick={() => remove(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #72 Debit Note / Return-to-Vendor — raise debit notes, net vs open bills.
+   ───────────────────────────────────────────────────────────────────────── */
+type DnReason = "return" | "rate-diff" | "shortage" | "damage" | "discount";
+interface DebitNote {
+  id: string;
+  dnNo: string;
+  vendor: string;
+  amount: number;
+  date: string;
+  reason: DnReason;
+  status: "open" | "adjusted";
+}
+const DN_REASON: Record<DnReason, string> = {
+  "return": "Goods returned",
+  "rate-diff": "Rate difference",
+  "shortage": "Short supply",
+  "damage": "Damaged goods",
+  "discount": "Discount claimed",
+};
+
+function DebitNoteTracker() {
+  const { store } = useApp();
+  const [notes, setNotes] = useFeatureState<DebitNote[]>("ven-debit-notes", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState<DnReason>("return");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    if (!vendor.trim() || !amount) { toast.error("Enter vendor and amount"); return; }
+    const seq = notes.length + 1;
+    const dn: DebitNote = {
+      id: crypto.randomUUID(), dnNo: `DN-${new Date().getFullYear()}-${String(seq).padStart(3, "0")}`,
+      vendor: vendor.trim(), amount: parseFloat(amount) || 0, date, reason, status: "open",
+    };
+    setNotes(prev => [dn, ...prev]);
+    setVendor(""); setAmount("");
+    toast.success(`${dn.dnNo} raised — reduces what you owe ${dn.vendor}`);
+  };
+  const remove = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
+  const toggleAdjust = (id: string) => setNotes(prev => prev.map(n => n.id === id ? { ...n, status: n.status === "open" ? "adjusted" : "open" } : n));
+
+  const openCredit = notes.filter(n => n.status === "open").reduce((s, n) => s + n.amount, 0);
+  const byVendor = useMemo(() => {
+    const m: Record<string, number> = {};
+    notes.filter(n => n.status === "open").forEach(n => { m[n.vendor] = (m[n.vendor] ?? 0) + n.amount; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [notes]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When you return goods, get short-supplied, or claim a rate difference, raise a debit note — it reduces what you owe the vendor. Track open debit notes here and net them against the next bill so credits never lapse unclaimed.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Open Debit Notes", value: notes.filter(n => n.status === "open").length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Credit Owed to You", value: formatCurrency(openCredit), color: openCredit > 0 ? "text-green-400" : "text-[var(--color-muted)]" },
+          { label: "Total Raised", value: notes.length.toString(), color: "text-blue-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Undo2 size={15} className="text-[var(--color-primary)]" /> Raise Debit Note</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input list="dn-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="dn-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹ *" className={inpCls} />
+          <select value={reason} onChange={e => setReason(e.target.value as DnReason)} className={inpCls}>
+            {(Object.keys(DN_REASON) as DnReason[]).map(r => <option key={r} value={r}>{DN_REASON[r]}</option>)}
+          </select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Raise Debit Note</button>
+      </div>
+
+      {byVendor.length > 0 && (
+        <div className="bg-green-950/15 border border-green-800/30 rounded-lg px-4 py-3">
+          <p className="text-xs text-[var(--color-muted)]">Net these open credits against the next bill: {byVendor.map(([v, amt]) => <span key={v} className="text-green-400 font-medium">{v} {formatCurrency(amt)}{byVendor[byVendor.length - 1][0] !== v ? " · " : ""}</span>)}</p>
+        </div>
+      )}
+
+      {notes.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Undo2 size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No debit notes yet. Raise one when you return goods or claim a difference.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["DN #", "Vendor", "Reason", "Date", "Amount", "Status", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {notes.map(n => (
+                <tr key={n.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold">{n.dnNo}</td>
+                  <td className="px-4 py-3 font-medium">{n.vendor}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{DN_REASON[n.reason]}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(n.date), "dd MMM")}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(n.amount)}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleAdjust(n.id)} className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${n.status === "adjusted" ? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>
+                      {n.status === "adjusted" ? "Adjusted" : "Open"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(n.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
