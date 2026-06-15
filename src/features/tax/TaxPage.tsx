@@ -10,6 +10,7 @@ import {
   FilePlus2, Globe, PiggyBank, ShoppingCart, CalendarClock, Gavel,
   Home, Building2, Percent, Truck, Umbrella, Heart, Coins, Banknote,
   Landmark, Users, UserPlus, Gift, Wallet,
+  HandCoins, BadgePercent, GitCompare, Sigma,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -72,7 +73,8 @@ export default function TaxPage() {
     | "tds-return" | "form26as" | "tds-finder" | "ldc-197" | "depreciation" | "loss-setoff"
     | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice"
     | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234"
-    | "115ba" | "partner-remun" | "80jjaa" | "esop-tax" | "buyback">("overview");
+    | "115ba" | "partner-remun" | "80jjaa" | "esop-tax" | "buyback"
+    | "194n" | "43bh" | "presumptive-cmp" | "surcharge">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -149,7 +151,8 @@ export default function TaxPage() {
           {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
             ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent],
-            ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet]] as const).map(([id, label, Icon]) => (
+            ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet],
+            ["194n", "Cash Withdrawal 194N", HandCoins], ["43bh", "MSME 43B(h) Disallowance", BadgePercent], ["presumptive-cmp", "Presumptive vs Books", GitCompare], ["surcharge", "Surcharge & Marginal Relief", Sigma]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -800,6 +803,10 @@ export default function TaxPage() {
       {taxTab === "80jjaa"          && <NewEmployee80JJAA />}
       {taxTab === "esop-tax"        && <EsopTaxPlanner />}
       {taxTab === "buyback"         && <BuybackTax115QA />}
+      {taxTab === "194n"            && <CashWithdrawal194N />}
+      {taxTab === "43bh"            && <Msme43BhChecker />}
+      {taxTab === "presumptive-cmp" && <PresumptiveVsBooks />}
+      {taxTab === "surcharge"       && <SurchargeMarginalRelief />}
     </div>
   );
 }
@@ -3465,6 +3472,384 @@ function BuybackTax115QA() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative — confirm with your CA.</p>
+    </div>
+  );
+}
+
+function CashWithdrawal194N() {
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+  const [withdrawal, setWithdrawal] = useState("");
+  const [filedReturns, setFiledReturns] = useState(true); // filed ITR for all 3 preceding years?
+  const [coopOrPost, setCoopOrPost] = useState(false);    // co-operative society payer (₹3cr threshold)
+
+  const amt = parseFloat(withdrawal) || 0;
+  // Filer: threshold ₹1 cr (₹3 cr for co-op society). Non-filer (3 yrs): ₹20L–₹1cr @2%, above ₹1cr @5%.
+  const baseThreshold = coopOrPost ? 30000000 : 10000000;
+  let tds = 0;
+  const breakup: { label: string; value: number }[] = [];
+  if (filedReturns) {
+    if (amt > baseThreshold) {
+      const slab = amt - baseThreshold;
+      tds = Math.round(slab * 0.02);
+      breakup.push({ label: `2% on excess over ${fc(baseThreshold)}`, value: tds });
+    }
+  } else {
+    const t1Lo = 2000000, t1Hi = baseThreshold;
+    const band2 = Math.max(0, Math.min(amt, t1Hi) - t1Lo); // 20L–1cr @2%
+    const band5 = Math.max(0, amt - t1Hi);                 // above 1cr @5%
+    const tds2 = Math.round(band2 * 0.02);
+    const tds5 = Math.round(band5 * 0.05);
+    tds = tds2 + tds5;
+    if (band2 > 0) breakup.push({ label: `2% on ${fc(t1Lo)}–${fc(t1Hi)} band`, value: tds2 });
+    if (band5 > 0) breakup.push({ label: `5% on amount above ${fc(t1Hi)}`, value: tds5 });
+  }
+  const netReceived = amt - tds;
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> TDS on Cash Withdrawal (Sec 194N)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Banks/post offices deduct TDS on aggregate cash withdrawals in a financial year. The threshold and rate depend on whether you have filed income-tax returns for the three preceding years.</p>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Aggregate cash withdrawn this FY (₹)</label>
+          <input type="number" min={0} value={withdrawal} onChange={e => setWithdrawal(e.target.value)} placeholder="e.g. 15000000" className={inp} />
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={filedReturns} onChange={e => setFiledReturns(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span>ITR filed for all 3 preceding years (threshold ₹1 cr, flat 2%)</span>
+        </label>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={coopOrPost} onChange={e => setCoopOrPost(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span>Payer is a co-operative society (threshold raised to ₹3 cr)</span>
+        </label>
+      </div>
+
+      {amt > 0 && (
+        <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${tds > 0 ? "border-orange-700/40" : "border-green-700/40"}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${tds > 0 ? "bg-orange-950/30 text-orange-400 border-orange-800/30" : "bg-green-950/30 text-green-400 border-green-800/30"}`}>
+              {tds > 0 ? "194N TDS applies" : "Below threshold"}
+            </span>
+            <span className="text-xs text-[var(--color-muted)]">{filedReturns ? "Filer" : "Non-filer"} status</span>
+          </div>
+          <div className="space-y-2">
+            {[
+              { label: "Cash withdrawn", value: fc(amt), color: "text-[var(--color-text)]" },
+              ...breakup.map(b => ({ label: b.label, value: fc(b.value), color: "text-orange-400" })),
+              { label: "Total TDS u/s 194N", value: fc(tds), color: "text-red-400 font-bold" },
+              { label: "Net amount received", value: fc(netReceived), color: "text-green-400 font-semibold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-2 border-t border-[var(--color-border)]">194N TDS is not an expense — it is creditable against your final tax liability and shows in Form 26AS. Claim it while filing your ITR.</p>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Filer: 2% above ₹1 cr. Non-filer (no ITR for 3 years): 2% between ₹20 lakh and ₹1 cr, 5% above ₹1 cr. Co-operative society payers get a ₹3 cr threshold (Finance Act 2023). Indicative — confirm with your bank/CA.
+      </div>
+    </div>
+  );
+}
+
+function Msme43BhChecker() {
+  type DueEntry = { id: string; vendor: string; amount: number; hasAgreement: boolean; daysOutstanding: number };
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+  const [entries, setEntries] = useFeatureState<DueEntry[]>("tax-43bh-entries", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [hasAgreement, setHasAgreement] = useState(true);
+  const [days, setDays] = useState("");
+
+  // 43B(h): payments to Micro/Small enterprises must be paid within 45 days (written agreement) or 15 days (no agreement),
+  // else the expense is disallowed in the year of accrual and allowed only in the year of actual payment.
+  const limitFor = (e: { hasAgreement: boolean }) => (e.hasAgreement ? 45 : 15);
+  const isDisallowed = (e: DueEntry) => e.daysOutstanding > limitFor(e);
+
+  const addEntry = () => {
+    const amt = parseFloat(amount) || 0;
+    const d = parseInt(days) || 0;
+    if (!vendor.trim() || amt <= 0) { toast.error("Enter vendor name and amount"); return; }
+    setEntries(prev => [...prev, { id: crypto.randomUUID(), vendor: vendor.trim(), amount: amt, hasAgreement, daysOutstanding: d }]);
+    setVendor(""); setAmount(""); setDays("");
+    toast.success("MSME due added");
+  };
+
+  const disallowed = entries.filter(isDisallowed);
+  const totalDisallowed = disallowed.reduce((s, e) => s + e.amount, 0);
+  const totalDue = entries.reduce((s, e) => s + e.amount, 0);
+  const taxImpact = Math.round(totalDisallowed * 0.30); // ~30% notional rate on disallowed deduction
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BadgePercent size={14} className="text-[var(--color-primary)]" /> MSME Payment Disallowance (Sec 43B(h))</h2>
+        <p className="text-xs text-[var(--color-muted)]">Amounts owed to Micro/Small enterprises (registered under the MSMED Act) unpaid beyond 45 days (with a written agreement) or 15 days (without) are disallowed as a deduction until actually paid. Track ageing here.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="MSME vendor name *" className={inp} />
+          <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount payable (₹) *" className={inp} />
+          <input type="number" min={0} value={days} onChange={e => setDays(e.target.value)} placeholder="Days outstanding" className={inp} />
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={hasAgreement} onChange={e => setHasAgreement(e.target.checked)} className="accent-[var(--color-primary)]" />
+          <span>Written agreement exists (45-day limit; otherwise 15 days)</span>
+        </label>
+        <button onClick={addEntry} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add MSME due</button>
+      </div>
+
+      {entries.length > 0 && (<>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total MSME dues", value: fc(totalDue), color: "text-blue-400" },
+            { label: "At-risk disallowance", value: fc(totalDisallowed), color: totalDisallowed > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Est. extra tax (~30%)", value: fc(taxImpact), color: taxImpact > 0 ? "text-orange-400" : "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Vendor", "Amount", "Limit", "Days", "Status", ""].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {entries.map(e => {
+                const bad = isDisallowed(e);
+                return (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 font-medium text-xs">{e.vendor}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-xs">{fc(e.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{limitFor(e)}d</td>
+                    <td className="px-3 py-2.5 tabular-nums text-xs">{e.daysOutstanding}d</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${bad ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>
+                        {bad ? "Disallowed" : "Within limit"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>)}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        43B(h) applies only to Micro and Small enterprises (not Medium) holding MSME registration. Clearing the dues before 31 March restores the deduction. Verify each vendor's Udyam status — confirm with your CA.
+      </div>
+    </div>
+  );
+}
+
+function PresumptiveVsBooks() {
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+  const [scheme, setScheme] = useState<"44ad" | "44ada">("44ad");
+  const [turnover, setTurnover] = useState("");
+  const [digital, setDigital] = useState(false);
+  const [actualExpenses, setActualExpenses] = useState("");
+
+  const slabTax = (taxable: number) => {
+    const slabs: [number, number, number][] = [
+      [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
+      [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+    ];
+    let tax = 0, rem = taxable;
+    for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); tax += t * r; rem -= t; }
+    return Math.round(tax * 1.04); // incl 4% cess
+  };
+
+  const t = parseFloat(turnover) || 0;
+  const exp = parseFloat(actualExpenses) || 0;
+  const presumptivePct = scheme === "44ad" ? (digital ? 6 : 8) : 50;
+  const presumptiveIncome = Math.round(t * presumptivePct / 100);
+  const booksIncome = Math.max(0, t - exp);
+  const presumptiveTax = slabTax(presumptiveIncome);
+  const booksTax = slabTax(booksIncome);
+  const cheaper = presumptiveTax <= booksTax ? "presumptive" : "books";
+  const saving = Math.abs(presumptiveTax - booksTax);
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><GitCompare size={14} className="text-[var(--color-primary)]" /> Presumptive vs Regular Books</h2>
+        <p className="text-xs text-[var(--color-muted)]">If your actual profit margin is lower than the presumptive 6%/8% (or 50%), maintaining books and getting audited may save tax. Compare both paths side-by-side.</p>
+        <div className="flex gap-2">
+          {([["44ad", "44AD — Business"], ["44ada", "44ADA — Profession"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setScheme(k)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${scheme === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{scheme === "44ad" ? "Turnover" : "Gross receipts"} (₹)</label>
+            <input type="number" min={0} value={turnover} onChange={e => setTurnover(e.target.value)} placeholder="e.g. 5000000" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Actual expenses (₹)</label>
+            <input type="number" min={0} value={actualExpenses} onChange={e => setActualExpenses(e.target.value)} placeholder="e.g. 4000000" className={inp} />
+          </div>
+        </div>
+        {scheme === "44ad" && (
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={digital} onChange={e => setDigital(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <span>All receipts digital (6% presumptive rate instead of 8%)</span>
+          </label>
+        )}
+      </div>
+
+      {t > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {([
+            { key: "presumptive", title: `Presumptive (${presumptivePct}%)`, income: presumptiveIncome, tax: presumptiveTax },
+            { key: "books", title: "Regular Books", income: booksIncome, tax: booksTax },
+          ] as const).map(c => (
+            <div key={c.key} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${cheaper === c.key ? "border-green-700/50" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold">{c.title}</p>
+                {cheaper === c.key && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-800/40 font-medium">Cheaper</span>}
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)]">Taxable income</p>
+              <p className="text-sm font-semibold tabular-nums mb-2">{fc(c.income)}</p>
+              <p className="text-[11px] text-[var(--color-muted)]">Tax (incl. cess)</p>
+              <p className={`text-lg font-bold tabular-nums ${cheaper === c.key ? "text-green-400" : "text-orange-400"}`}>{fc(c.tax)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {t > 0 && saving > 0 && (
+        <div className="bg-green-950/20 border border-green-800/30 rounded-lg px-4 py-3 text-xs text-green-300">
+          Opting for <span className="font-semibold">{cheaper === "presumptive" ? "presumptive scheme" : "regular books"}</span> saves about <span className="font-bold">{fc(saving)}</span> in tax. {cheaper === "books" ? "Note: books route requires bookkeeping and a tax audit if you previously opted out of presumptive." : "Presumptive avoids audit and bookkeeping burden."}
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Declaring below the presumptive rate while above the basic exemption requires books and audit u/s 44AB. Opting out of 44AD locks you out for 5 years. Indicative slabs (new regime) — confirm with your CA.
+      </div>
+    </div>
+  );
+}
+
+function SurchargeMarginalRelief() {
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const fc = formatCurrency;
+  const [income, setIncome] = useState("");
+  const [regime, setRegime] = useState<"new" | "old">("new");
+
+  // Surcharge slabs (individuals). New regime caps surcharge at 25%.
+  const surchargeRate = (inc: number) => {
+    if (inc <= 5000000) return 0;
+    if (inc <= 10000000) return 0.10;
+    if (inc <= 20000000) return 0.15;
+    if (regime === "new") return 0.25; // new regime: max 25% above ₹2 cr
+    if (inc <= 50000000) return 0.25;
+    return 0.37;
+  };
+
+  const baseTax = (taxable: number) => {
+    const slabsNew: [number, number, number][] = [
+      [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
+      [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+    ];
+    const slabsOld: [number, number, number][] = [
+      [0, 250000, 0], [250000, 500000, 0.05], [500000, 1000000, 0.20], [1000000, Infinity, 0.30],
+    ];
+    const slabs = regime === "new" ? slabsNew : slabsOld;
+    let tax = 0, rem = taxable;
+    for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); tax += t * r; rem -= t; }
+    return tax;
+  };
+
+  const inc = parseFloat(income) || 0;
+  const tax = baseTax(inc);
+  const sr = surchargeRate(inc);
+  const surchargeRaw = tax * sr;
+
+  // Marginal relief: surcharge cannot exceed the income above the threshold beyond the extra tax+surcharge.
+  const thresholds = [5000000, 10000000, 20000000, 50000000];
+  let marginalRelief = 0;
+  if (sr > 0) {
+    const applicableThreshold = thresholds.filter(th => inc > th).reduce((a, b) => Math.max(a, b), 0);
+    const taxAtThreshold = baseTax(applicableThreshold);
+    const surchargeAtThreshold = taxAtThreshold * surchargeRate(applicableThreshold);
+    const totalWithSurcharge = tax + surchargeRaw;
+    const totalAtThreshold = taxAtThreshold + surchargeAtThreshold;
+    const incomeAboveThreshold = inc - applicableThreshold;
+    const excessTax = totalWithSurcharge - totalAtThreshold;
+    if (excessTax > incomeAboveThreshold) marginalRelief = excessTax - incomeAboveThreshold;
+  }
+
+  const surchargeAfterRelief = Math.max(0, surchargeRaw - marginalRelief);
+  const cess = Math.round((tax + surchargeAfterRelief) * 0.04);
+  const totalTax = Math.round(tax + surchargeAfterRelief + cess);
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Sigma size={14} className="text-[var(--color-primary)]" /> Surcharge & Marginal Relief</h2>
+        <p className="text-xs text-[var(--color-muted)]">High incomes attract a surcharge on the income tax. Marginal relief ensures the extra tax never exceeds the income earned above the surcharge threshold.</p>
+        <div className="flex gap-2">
+          {([["new", "New Regime (cap 25%)"], ["old", "Old Regime (up to 37%)"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setRegime(k)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${regime === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Total taxable income (₹)</label>
+          <input type="number" min={0} value={income} onChange={e => setIncome(e.target.value)} placeholder="e.g. 5200000" className={inp} />
+        </div>
+      </div>
+
+      {inc > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-bold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/30">Surcharge {Math.round(sr * 100)}%</span>
+            {marginalRelief > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded border bg-green-950/30 text-green-400 border-green-800/30">Marginal relief applies</span>}
+          </div>
+          <div className="space-y-2">
+            {[
+              { label: "Income tax (before surcharge)", value: fc(Math.round(tax)), color: "text-[var(--color-text)]" },
+              { label: `Surcharge @ ${Math.round(sr * 100)}%`, value: fc(Math.round(surchargeRaw)), color: "text-orange-400" },
+              ...(marginalRelief > 0 ? [{ label: "Less: Marginal relief", value: `(${fc(Math.round(marginalRelief))})`, color: "text-green-400" }] : []),
+              { label: "Surcharge after relief", value: fc(Math.round(surchargeAfterRelief)), color: "text-[var(--color-text)]" },
+              { label: "Health & Education Cess (4%)", value: fc(cess), color: "text-orange-400" },
+              { label: "Total tax payable", value: fc(totalTax), color: "text-red-400 font-bold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
+        <AlertTriangle size={12} className="shrink-0 mt-px" />
+        Surcharge: 10% &gt;₹50L, 15% &gt;₹1cr, 25% &gt;₹2cr, 37% &gt;₹5cr (old regime only; new regime caps at 25%). Surcharge on capital gains/dividends is capped at 15%. Indicative individual rates — confirm with your CA.
+      </div>
     </div>
   );
 }

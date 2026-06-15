@@ -10,6 +10,7 @@ import {
   TrendingDown, AlertTriangle, CheckCircle2, Plus, Search, Wand2,
   ClipboardCheck, Calculator, Wallet, CalendarClock, ShieldAlert,
   Scissors, Gauge, Presentation, Circle,
+  LineChart, HandCoins, FilePlus2, Timer, ListTodo, Lightbulb, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -22,7 +23,9 @@ type TabId =
   | "overview" | "brief" | "actions" | "launcher" | "qa" | "goal"
   | "attention" | "guardrails" | "autopilot" | "audit" | "review"
   | "close" | "explain" | "prioritize" | "compliance-digest" | "risks"
-  | "savings" | "targets" | "eod";
+  | "savings" | "targets" | "eod"
+  | "cash-watch" | "collect-first" | "invoice-now" | "vendor-timing"
+  | "this-week" | "kpi-explainer";
 
 const TABS = [
   ["overview", "Overview", Bot],
@@ -39,6 +42,12 @@ const TABS = [
   ["savings", "Savings Finder", Scissors],
   ["targets", "KPI Targets", Gauge],
   ["eod", "End-of-Day Brief", Presentation],
+  ["cash-watch", "Cash Early-Warning", LineChart],
+  ["collect-first", "Collect-First", HandCoins],
+  ["invoice-now", "Invoice Now", FilePlus2],
+  ["vendor-timing", "Pay Now vs Later", Timer],
+  ["this-week", "This Week", ListTodo],
+  ["kpi-explainer", "Off-Track KPI", Lightbulb],
   ["attention", "Attention Feed", Bell],
   ["guardrails", "Guardrails & Limits", ShieldCheck],
   ["autopilot", "Autopilot Toggles", ToggleRight],
@@ -142,6 +151,12 @@ export default function CopilotPage() {
       {tab === "savings" && <SavingsFinder navigate={navigate} />}
       {tab === "targets" && <KpiTargets snap={snap} signals={signals} />}
       {tab === "eod" && <EndOfDayBrief snap={snap} signals={signals} />}
+      {tab === "cash-watch" && <CashEarlyWarning snap={snap} signals={signals} navigate={navigate} />}
+      {tab === "collect-first" && <CollectFirstWorklist navigate={navigate} />}
+      {tab === "invoice-now" && <InvoiceNowCandidates navigate={navigate} />}
+      {tab === "vendor-timing" && <PayNowVsLater signals={signals} navigate={navigate} />}
+      {tab === "this-week" && <ThisWeekFocus snap={snap} signals={signals} navigate={navigate} />}
+      {tab === "kpi-explainer" && <KpiOffTrackExplainer snap={snap} signals={signals} navigate={navigate} />}
       {tab === "attention" && <AttentionFeed signals={signals} navigate={navigate} />}
       {tab === "guardrails" && <GuardrailsConfig />}
       {tab === "autopilot" && <AutopilotToggles />}
@@ -1335,6 +1350,480 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
         <p className="text-xs text-[var(--color-muted)] mb-4">A copy-ready wrap of where the business stands, what moved today and what's still open — paste it into a standup, a WhatsApp update or your meeting notes. Built from your live numbers.</p>
         <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{brief}</pre>
       </div>
+    </div>
+  );
+}
+
+// ── Cash-Shortfall Early-Warning ───────────────────────────────────────────────
+// Projects cash forward week-by-week: starting balance, minus dated obligations
+// and open invoices due, plus the operating run-rate. Flags the first week cash
+// would dip below your safety buffer. Read-only forecast — moves nothing.
+function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const { store } = useApp();
+  const buffer = Math.round(snap.monthlyExpense * 0.5); // ~2 weeks of expense as a safety floor
+
+  const weeks = useMemo(() => {
+    const now = new Date();
+    const dailyNet = signals.monthlyNet / 30; // operating run-rate, +ve or -ve
+    const openInv = store.invoices.filter(i => i.status !== "paid");
+    let balance = signals.cash;
+    const out: { idx: number; start: string; end: string; outflow: number; inflow: number; close: number; breach: boolean }[] = [];
+    for (let w = 0; w < 8; w++) {
+      const start = new Date(now.getTime() + w * 7 * 86400000);
+      const end = new Date(now.getTime() + (w + 1) * 7 * 86400000 - 86400000);
+      const startIso = start.toISOString().split("T")[0];
+      const endIso = end.toISOString().split("T")[0];
+      const inWindow = (d: string) => d >= startIso && d <= endIso;
+      const oblOut = store.obligations.filter(o => inWindow(o.dueDate)).reduce((s, o) => s + o.amount, 0);
+      // Expected collections: invoices due in window, conservatively (full amount).
+      const invIn = openInv.filter(i => inWindow(i.dueDate)).reduce((s, i) => s + i.amount, 0);
+      const opNet = dailyNet * 7;
+      balance = balance + opNet + invIn - oblOut;
+      out.push({ idx: w, start: startIso, end: endIso, outflow: oblOut, inflow: invIn, close: balance, breach: balance < buffer });
+    }
+    return out;
+  }, [store, signals, buffer]);
+
+  const firstBreach = weeks.find(w => w.breach);
+  const lowest = weeks.reduce((m, w) => (w.close < m.close ? w : m), weeks[0]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Cash Early-Warning</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-3">An 8-week projection of your closing cash — opening balance plus operating run-rate, expected collections and dated obligations. It warns when cash would dip below a ~2-week expense buffer. A preview, not a guarantee; nothing here moves money.</p>
+        {firstBreach ? (
+          <div className="rounded-lg p-3 border border-red-800/40 bg-red-950/20 text-sm text-red-300 flex items-start gap-2">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>Projected cash falls below your {formatCurrency(buffer)} buffer in week of <strong>{format(new Date(firstBreach.start), "d MMM")}</strong> (closing ≈ {formatCurrency(Math.round(firstBreach.close))}). Act before then.</span>
+          </div>
+        ) : (
+          <div className="rounded-lg p-3 border border-green-800/40 bg-green-950/20 text-sm text-green-300 flex items-start gap-2">
+            <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+            <span>Cash stays above your {formatCurrency(buffer)} buffer across the next 8 weeks. Lowest point ≈ {formatCurrency(Math.round(lowest.close))} (week of {format(new Date(lowest.start), "d MMM")}).</span>
+          </div>
+        )}
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {weeks.map(w => (
+          <div key={w.idx} className={`flex items-center gap-3 p-3.5 ${w.breach ? "bg-red-950/10" : ""}`}>
+            <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0">{format(new Date(w.start), "d MMM")}–{format(new Date(w.end), "d MMM")}</span>
+            <div className="flex-1 min-w-0 text-[11px] text-[var(--color-muted)]">
+              <span className="text-green-400">+{formatCurrency(Math.round(w.inflow))}</span> in · <span className="text-red-400">−{formatCurrency(Math.round(w.outflow))}</span> due
+            </div>
+            <span className={`text-sm font-semibold tabular-nums shrink-0 ${w.breach ? "text-red-400" : w.close < buffer * 1.5 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{formatCurrency(Math.round(w.close))}</span>
+          </div>
+        ))}
+      </div>
+
+      {firstBreach && (
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Pull collections forward <ArrowRight size={11} /></button>
+          <button onClick={() => navigate("/forecast")} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Open full forecast</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Collect-First Worklist ─────────────────────────────────────────────────────
+// Ranks open invoices by collection priority — amount weighted by how overdue
+// they are — so you chase the biggest, oldest balances first. Suggests an order;
+// the actual chasing happens in Collections.
+function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
+  const { store } = useApp();
+  const [done, setDone] = useFeatureState<string[]>("cop-collect-first-done", []);
+
+  const worklist = useMemo(() => {
+    const today = new Date();
+    const todayIso = today.toISOString().split("T")[0];
+    return store.invoices
+      .filter(i => i.status !== "paid")
+      .map(i => {
+        const daysOverdue = i.dueDate < todayIso
+          ? Math.round((today.getTime() - new Date(i.dueDate).getTime()) / 86400000)
+          : 0;
+        // Priority = amount scaled up the longer it's been overdue.
+        const score = i.amount * (1 + daysOverdue / 30);
+        return { id: i.id, customer: i.customer, amount: i.amount, dueDate: i.dueDate, daysOverdue, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12);
+  }, [store.invoices]);
+
+  const toggle = (id: string) => setDone(done.includes(id) ? done.filter(x => x !== id) : [...done, id]);
+  const outstanding = worklist.filter(w => !done.includes(w.id)).reduce((s, w) => s + w.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Collect-First Worklist</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your open invoices ranked by collection priority — bigger balances and the longest-overdue ones rise to the top, so a morning of chasing recovers the most cash. Tick as you work through them; the copilot never contacts anyone for you.</p>
+        {outstanding > 0 && <p className="text-sm font-semibold mt-3">Still to chase: <span className="tabular-nums">{formatCurrency(Math.round(outstanding))}</span></p>}
+      </div>
+
+      {worklist.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">No open invoices to chase</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything is paid — collections are clean.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {worklist.map((w, i) => {
+            const isDone = done.includes(w.id);
+            return (
+              <div key={w.id} className={`flex items-center gap-3 p-4 ${isDone ? "opacity-50" : ""}`}>
+                <span className="text-xs font-bold text-[var(--color-muted)] w-5 shrink-0">{i + 1}</span>
+                <button onClick={() => toggle(w.id)} className="shrink-0">
+                  {isDone ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} className="text-[var(--color-muted)]" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate ${isDone ? "line-through" : ""}`}>{w.customer}</p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                    due {format(new Date(w.dueDate), "d MMM")}
+                    {w.daysOverdue > 0 ? <span className="text-red-400"> · {w.daysOverdue}d overdue</span> : <span className="text-[var(--color-muted)]"> · not yet due</span>}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(Math.round(w.amount))}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Open Collections <ArrowRight size={11} /></button>
+    </div>
+  );
+}
+
+// ── Invoice-Now Candidates ─────────────────────────────────────────────────────
+// Delivered/dispatched orders that have no matching invoice yet — revenue you've
+// earned but haven't billed. Surfaces the gap; raising the invoice happens on the
+// Receivables page.
+function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
+  const { store } = useApp();
+
+  const candidates = useMemo(() => {
+    const billedCustomers = new Set(store.invoices.map(i => i.customer.trim().toLowerCase()));
+    return store.orders
+      .filter(o => (o.status === "delivered" || o.status === "dispatched") && o.totalValue > 0)
+      .map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        buyerName: o.buyerName,
+        totalValue: o.totalValue,
+        status: o.status,
+        updatedAt: o.updatedAt,
+        // Heuristic: if we have no invoice for this buyer at all, it's very likely unbilled.
+        likelyUnbilled: !billedCustomers.has((o.buyerName || "").trim().toLowerCase()),
+      }))
+      .sort((a, b) => Number(b.likelyUnbilled) - Number(a.likelyUnbilled) || b.totalValue - a.totalValue)
+      .slice(0, 12);
+  }, [store.orders, store.invoices]);
+
+  const unbilledTotal = candidates.filter(c => c.likelyUnbilled).reduce((s, c) => s + c.totalValue, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> Invoice-Now Candidates</h2>
+        <p className="text-xs text-[var(--color-muted)]">Delivered and dispatched orders matched against your invoice list — anything fulfilled but seemingly unbilled is revenue waiting to be raised. It points out the gap; you raise the invoice on Receivables.</p>
+        {unbilledTotal > 0 && <p className="text-sm font-semibold mt-3 text-yellow-400">Likely unbilled: <span className="tabular-nums">{formatCurrency(Math.round(unbilledTotal))}</span></p>}
+      </div>
+
+      {candidates.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">No fulfilled orders pending an invoice</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Either nothing is delivered yet or it all appears to be billed.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {candidates.map(c => (
+            <div key={c.id} className="flex items-center gap-3 p-4">
+              <Receipt size={15} className={`shrink-0 ${c.likelyUnbilled ? "text-yellow-400" : "text-[var(--color-muted)]"}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{c.buyerName} <span className="text-[10px] text-[var(--color-muted)] font-normal">· {c.orderNumber}</span></p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                  {c.status} · {format(new Date(c.updatedAt), "d MMM")}
+                  {c.likelyUnbilled ? <span className="text-yellow-400"> · no matching invoice</span> : <span className="text-[var(--color-muted)]"> · invoice likely exists</span>}
+                </p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(Math.round(c.totalValue))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={() => navigate("/receivables")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Raise invoices on Receivables <ArrowRight size={11} /></button>
+    </div>
+  );
+}
+
+// ── Vendor Pay-Now-vs-Later ────────────────────────────────────────────────────
+// Splits upcoming obligations into "pay now" (due within a few days or overdue)
+// and "can wait", given your spendable cash. A timing suggestion to preserve
+// cash — it never schedules or releases a payment.
+function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const { store } = useApp();
+  const [windowDays, setWindowDays] = useState(7);
+
+  const groups = useMemo(() => {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const soon = new Date(now.getTime() + windowDays * 86400000).toISOString().split("T")[0];
+    const horizon = new Date(now.getTime() + 45 * 86400000).toISOString().split("T")[0];
+    type Item = { id: string; name: string; amount: number; dueDate: string; kind: string };
+    const payNow: Item[] = [];
+    const canWait: Item[] = [];
+    store.obligations
+      .filter(o => o.dueDate <= horizon)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+      .forEach(o => {
+        const item: Item = { id: o.id, name: o.name, amount: o.amount, dueDate: o.dueDate, kind: o.type };
+        // Statutory/payroll due within the window, or anything already overdue → pay now.
+        const urgent = o.dueDate < today || (o.dueDate <= soon && (o.type === "tax" || o.type === "payroll" || o.type === "loan")) || o.dueDate <= soon;
+        (urgent ? payNow : canWait).push(item);
+      });
+    return { payNow, canWait };
+  }, [store.obligations, windowDays]);
+
+  const payNowTotal = groups.payNow.reduce((s, i) => s + i.amount, 0);
+  const canWaitTotal = groups.canWait.reduce((s, i) => s + i.amount, 0);
+  const coversNow = signals.cash >= payNowTotal;
+
+  const Row = ({ name, amount, dueDate, kind, overdue }: { name: string; amount: number; dueDate: string; kind: string; overdue: boolean }) => (
+    <div className="flex items-center gap-3 p-3.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{name}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{kind} · due {format(new Date(dueDate), "d MMM")}{overdue && <span className="text-red-400"> · overdue</span>}</p>
+      </div>
+      <span className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(Math.round(amount))}</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Pay Now vs Later</h2>
+          <div className="flex gap-1">
+            {[3, 7, 14].map(d => (
+              <button key={d} onClick={() => setWindowDays(d)} className={`text-[10px] px-2 py-1 rounded border ${windowDays === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{d}d</button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Splits upcoming obligations into what genuinely needs paying within {windowDays} days — statutory dues, payroll, loans and anything overdue — versus what can safely wait, so you hold onto cash without missing a deadline. Timing advice only; it releases nothing.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { label: "Pay now", value: formatAmount(payNowTotal), color: "text-red-400" },
+            { label: "Can wait", value: formatAmount(canWaitTotal), color: "text-[var(--color-text)]" },
+            { label: "Cash on hand", value: formatAmount(signals.cash), color: coversNow ? "text-green-400" : "text-yellow-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+        {!coversNow && payNowTotal > 0 && (
+          <p className="text-[11px] text-yellow-400 mt-3">Pay-now total exceeds cash on hand — open the Payment Prioritizer to sequence within available funds.</p>
+        )}
+      </div>
+
+      {groups.payNow.length === 0 && groups.canWait.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">No obligations in the next 45 days</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className={`${CARD} overflow-hidden`}>
+            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-red-400 flex items-center gap-1.5"><AlertTriangle size={12} /> Pay now ({groups.payNow.length})</p>
+            <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+              {groups.payNow.length === 0
+                ? <p className="text-[11px] text-[var(--color-muted)] p-4">Nothing due in the next {windowDays} days.</p>
+                : groups.payNow.map(i => <Row key={i.id} name={i.name} amount={i.amount} dueDate={i.dueDate} kind={i.kind} overdue={i.dueDate < new Date().toISOString().split("T")[0]} />)}
+            </div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-[var(--color-muted)] flex items-center gap-1.5"><Timer size={12} /> Can wait ({groups.canWait.length})</p>
+            <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+              {groups.canWait.length === 0
+                ? <p className="text-[11px] text-[var(--color-muted)] p-4">Nothing deferrable in this window.</p>
+                : groups.canWait.map(i => <Row key={i.id} name={i.name} amount={i.amount} dueDate={i.dueDate} kind={i.kind} overdue={false} />)}
+            </div>
+          </div>
+        </div>
+      )}
+      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Review payables on Spend <ArrowRight size={11} /></button>
+    </div>
+  );
+}
+
+// ── This-Week Focus List ───────────────────────────────────────────────────────
+// Picks the handful of actions most worth doing this week, ranked by impact, and
+// renders them as a tickable, copy-ready list. A focusing aid built from the same
+// signals the rest of the copilot reads.
+function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const { store } = useApp();
+  const [done, setDone] = useFeatureState<string[]>("cop-this-week-done", []);
+
+  const tasks = useMemo(() => {
+    const today = new Date();
+    const todayIso = today.toISOString().split("T")[0];
+    const weekEnd = new Date(today.getTime() + 7 * 86400000).toISOString().split("T")[0];
+    const out: { id: string; text: string; rank: number; path: string }[] = [];
+    if (signals.overdueReceivable > 0) out.push({ id: "tw-overdue", text: `Chase ${formatCurrency(Math.round(signals.overdueReceivable))} overdue across ${signals.overdueInvoiceCount} invoice(s).`, rank: 100 + signals.overdueReceivable / 1000, path: "/collections" });
+    const oblThisWeek = store.obligations.filter(o => o.dueDate >= todayIso && o.dueDate <= weekEnd);
+    if (oblThisWeek.length > 0) {
+      const amt = oblThisWeek.reduce((s, o) => s + o.amount, 0);
+      out.push({ id: "tw-obl", text: `Settle ${oblThisWeek.length} obligation(s) due this week (${formatCurrency(Math.round(amt))}).`, rank: 90, path: "/compliance" });
+    }
+    snap.advanceTax.filter(a => a.dueDate >= todayIso && a.dueDate <= weekEnd).forEach((a, i) => {
+      out.push({ id: `tw-tax-${i}`, text: `Pay advance-tax installment (${formatCurrency(Math.round(a.installment))}) due ${format(new Date(a.dueDate), "d MMM")}.`, rank: 85, path: "/tax" });
+    });
+    const unbilled = store.orders.filter(o => o.status === "delivered" || o.status === "dispatched").length;
+    if (unbilled > 0) out.push({ id: "tw-invoice", text: `Review ${unbilled} fulfilled order(s) for unbilled revenue to invoice.`, rank: 70, path: "/receivables" });
+    if (signals.runwayDays < 120 && signals.monthlyNet < 0) out.push({ id: "tw-runway", text: `Runway is ${runwayLabel(signals.runwayDays)} — trim spend or line up working capital.`, rank: 80, path: "/spend" });
+    if (signals.dscr !== null && signals.dscr < 1.25) out.push({ id: "tw-dscr", text: `DSCR is ${signals.dscr.toFixed(2)}x — review debt before any new borrowing.`, rank: 50, path: "/debt" });
+    if (out.length === 0) out.push({ id: "tw-clear", text: "Nothing pressing — keep the forecast fresh and collections tight.", rank: 0, path: "/dashboard" });
+    return out.sort((a, b) => b.rank - a.rank).slice(0, 6);
+  }, [store, snap, signals]);
+
+  const toggle = (id: string) => setDone(done.includes(id) ? done.filter(x => x !== id) : [...done, id]);
+  const copy = () => {
+    const txt = `This week's focus — ${format(new Date(), "d MMM yyyy")}\n` + tasks.map(t => `• ${t.text}`).join("\n");
+    navigator.clipboard?.writeText(txt);
+    toast.success("Focus list copied");
+  };
+  const remaining = tasks.filter(t => !done.includes(t.id)).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> This Week's Focus</h2>
+          <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">Copy list</button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">The handful of moves most worth your time this week, ranked by impact and read straight from your numbers. Tick them off as you go — it's a to-do list, not an executor.</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">{remaining} of {tasks.length} remaining</p>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {tasks.map(t => {
+          const isDone = done.includes(t.id);
+          return (
+            <div key={t.id} className={`flex items-center gap-3 p-4 ${isDone ? "opacity-50" : ""}`}>
+              <button onClick={() => toggle(t.id)} className="shrink-0">
+                {isDone ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} className="text-[var(--color-muted)]" />}
+              </button>
+              <p className={`flex-1 min-w-0 text-sm ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{t.text}</p>
+              <button onClick={() => navigate(t.path)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0">Open <ArrowRight size={11} /></button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── KPI Off-Track Explainer ────────────────────────────────────────────────────
+// Reads your saved KPI targets, finds the one furthest off, and explains in plain
+// words why it's off and which levers move it. Read-only; it links to the page
+// where each lever actually lives.
+function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const [targets] = useFeatureState<KpiTargetState>("cop-kpi-targets", DEFAULT_KPI_TARGETS);
+
+  const analysis = useMemo(() => {
+    const runwayMonths = signals.runwayDays >= 999 ? 999 : signals.runwayDays / 30;
+    const margin = snap.grossMarginPct ?? 0;
+    type Kpi = { id: string; label: string; actual: number; target: number; higherBetter: boolean; gapPct: number; why: string; levers: { text: string; path: string }[] };
+    const rows: Kpi[] = [
+      {
+        id: "runway", label: "Runway (months)", actual: runwayMonths, target: targets.runwayMonths, higherBetter: true,
+        gapPct: targets.runwayMonths > 0 ? ((targets.runwayMonths - runwayMonths) / targets.runwayMonths) * 100 : 0,
+        why: signals.monthlyNet < 0 ? `You're burning ${formatCurrency(Math.round(-signals.monthlyNet))}/month, so cash drains faster than the target allows.` : "Operations are net positive; the shortfall is just a low opening cash balance.",
+        levers: [{ text: "Collect overdue receivables", path: "/collections" }, { text: "Trim discretionary spend", path: "/spend" }, { text: "Arrange working capital", path: "/credit" }],
+      },
+      {
+        id: "margin", label: "Gross margin (%)", actual: margin, target: targets.marginPct, higherBetter: true,
+        gapPct: targets.marginPct > 0 ? ((targets.marginPct - margin) / targets.marginPct) * 100 : 0,
+        why: "Expenses are consuming too much of revenue over the trailing 6 months — either pricing is low or costs have crept up.",
+        levers: [{ text: "Find recurring spend to cut", path: "/spend" }, { text: "Review pricing & sales mix", path: "/analytics" }],
+      },
+      {
+        id: "dso", label: "DSO (days)", actual: snap.dsoDays, target: targets.dsoDays, higherBetter: false,
+        gapPct: snap.dsoDays > 0 ? ((snap.dsoDays - targets.dsoDays) / snap.dsoDays) * 100 : 0,
+        why: `Customers are taking ~${snap.dsoDays} days to pay against your ${targets.dsoDays}-day target — cash is stuck in receivables.`,
+        levers: [{ text: "Chase overdue invoices", path: "/collections" }, { text: "Tighten invoice terms", path: "/receivables" }],
+      },
+      {
+        id: "health", label: "Health score", actual: signals.healthScore, target: targets.healthScore, higherBetter: true,
+        gapPct: targets.healthScore > 0 ? ((targets.healthScore - signals.healthScore) / targets.healthScore) * 100 : 0,
+        why: "Your composite score is dragged down by its weakest drivers — see the breakdown for which ones.",
+        levers: [{ text: "See health driver breakdown", path: "/health" }],
+      },
+    ];
+    const offTrack = rows.filter(r => (r.higherBetter ? r.actual < r.target : r.actual > r.target));
+    const worst = offTrack.sort((a, b) => b.gapPct - a.gapPct)[0] ?? null;
+    return { worst, offTrackCount: offTrack.length, total: rows.length };
+  }, [snap, signals, targets]);
+
+  const fmt = (id: string, n: number) =>
+    id === "runway" ? (n >= 999 ? "∞" : `${n.toFixed(1)} mo`)
+    : id === "margin" ? `${n.toFixed(0)}%`
+    : id === "dso" ? `${Math.round(n)}d`
+    : `${Math.round(n)}`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Lightbulb size={14} className="text-[var(--color-primary)]" /> Off-Track KPI Explainer</h2>
+        <p className="text-xs text-[var(--color-muted)]">Compares your saved KPI targets to live values, picks the one furthest off, and explains in plain words why it's off and which levers move it. Diagnosis only — set targets on the KPI Targets tab; act via the linked pages.</p>
+      </div>
+
+      {!analysis.worst ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">Every tracked KPI is on or above target</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Nothing off-track against your saved targets right now.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} p-5 space-y-4`}>
+          <div className="flex items-baseline justify-between flex-wrap gap-2">
+            <p className="text-sm font-semibold flex items-center gap-1.5"><AlertTriangle size={14} className="text-yellow-400" /> {analysis.worst.label} is your most off-track KPI</p>
+            <span className="text-[10px] text-[var(--color-muted)]">{analysis.offTrackCount} of {analysis.total} KPIs off target</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Now", value: fmt(analysis.worst.id, analysis.worst.actual), color: "text-yellow-400" },
+              { label: "Target", value: fmt(analysis.worst.id, analysis.worst.target), color: "text-[var(--color-text)]" },
+              { label: "Gap", value: `${Math.round(Math.abs(analysis.worst.gapPct))}%`, color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">Why it's off</p>
+            <p className="text-sm">{analysis.worst.why}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">Levers that move it</p>
+            <div className="space-y-2">
+              {analysis.worst.levers.map(l => (
+                <button key={l.path + l.text} onClick={() => navigate(l.path)} className="w-full flex items-center justify-between gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 hover:border-[var(--color-primary)]/40 text-left">
+                  <span className="text-sm">{l.text}</span>
+                  <ArrowRight size={13} className="text-[var(--color-muted)] shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

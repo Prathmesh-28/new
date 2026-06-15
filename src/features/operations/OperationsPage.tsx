@@ -11,6 +11,7 @@ import {
   ArrowDownCircle, ArrowUpCircle,
   PieChart, Calculator, Repeat, Percent, Ship, ClipboardCheck, Trash2, Undo2,
   Scale, ShieldCheck, Coins, Hourglass, AlertOctagon,
+  ListChecks, SlidersHorizontal, Boxes, Ban,
 } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -21,7 +22,8 @@ import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
   | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
   | "abc" | "eoq" | "turnover" | "skumargin" | "landed" | "grn" | "scrap" | "returns"
-  | "valuation" | "safetystock" | "carrying" | "aging" | "stockout";
+  | "valuation" | "safetystock" | "carrying" | "aging" | "stockout"
+  | "cyclecount" | "minmax" | "whutil" | "oversell";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -187,6 +189,10 @@ export default function OperationsPage() {
           ["carrying",      "Carrying Cost", null],
           ["aging",         "Stock Aging", null],
           ["stockout",      "Stockout Cost", null],
+          ["cyclecount",    "Cycle Count", null],
+          ["minmax",        "Min/Max Plan", null],
+          ["whutil",        "Warehouse Use", null],
+          ["oversell",      "Oversell Guard", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -758,6 +764,10 @@ export default function OperationsPage() {
       {tab === "carrying" && <CarryingCostTab />}
       {tab === "aging" && <StockAgingTab />}
       {tab === "stockout" && <StockoutCostTab />}
+      {tab === "cyclecount" && <CycleCountScheduleTab />}
+      {tab === "minmax" && <MinMaxPlannerTab />}
+      {tab === "whutil" && <WarehouseUtilizationTab />}
+      {tab === "oversell" && <OversellGuardTab />}
     </div>
   );
 }
@@ -3911,6 +3921,407 @@ function StockoutCostTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Risk assumes demand continues unmet once stock runs out within the 30-day window. Lost margin = units short × selling price × margin %; goodwill adds a fraction of lost margin for damaged customer trust. Use it to prioritise which SKUs to reorder first.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #20 Cycle-count scheduler ───────────────────────── */
+function CycleCountScheduleTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+
+  // Counting cadence (days) per ABC class — A counted most often, C least.
+  const [freqA, setFreqA] = useFeatureState<number>("ops-cycle-freq-a", 30);
+  const [freqB, setFreqB] = useFeatureState<number>("ops-cycle-freq-b", 90);
+  const [freqC, setFreqC] = useFeatureState<number>("ops-cycle-freq-c", 180);
+  // Last counted date per SKU id (ISO date) — marked when the user records a count.
+  const [lastCounted, setLastCounted] = useFeatureState<Record<string, string>>("ops-cycle-last-counted", {});
+
+  // Sales value per product over fulfilled orders → ABC ranking by revenue contribution.
+  const revByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+      o.items.forEach(it => { map[it.productName] = (map[it.productName] ?? 0) + it.unitPrice * it.quantity; });
+    });
+    return map;
+  }, [orders]);
+
+  const today = new Date();
+  const rows = useMemo(() => {
+    const ranked = [...inventory].map(i => ({ item: i, rev: revByProduct[i.productName] ?? 0 }))
+      .sort((a, b) => b.rev - a.rev);
+    const totalRev = ranked.reduce((s, r) => s + r.rev, 0);
+    let cum = 0;
+    return ranked.map(({ item, rev }) => {
+      cum += rev;
+      const share = totalRev > 0 ? cum / totalRev : (ranked.length > 0 ? 1 : 0);
+      const cls: "A" | "B" | "C" = totalRev === 0 ? "C" : share <= 0.8 ? "A" : share <= 0.95 ? "B" : "C";
+      const freq = cls === "A" ? freqA : cls === "B" ? freqB : freqC;
+      const last = lastCounted[item.id];
+      const daysSince = last ? Math.floor((today.getTime() - new Date(last).getTime()) / 86400000) : null;
+      const due = daysSince === null || daysSince >= freq;
+      const nextInDays = daysSince === null ? 0 : Math.max(0, freq - daysSince);
+      return { item, rev, cls, freq, last, daysSince, due, nextInDays };
+    });
+  }, [inventory, revByProduct, freqA, freqB, freqC, lastCounted]);
+
+  const dueNow = rows.filter(r => r.due).length;
+  const markCounted = (id: string) => {
+    setLastCounted(prev => ({ ...prev, [id]: new Date().toISOString() }));
+    toast.success("Count recorded — next cycle scheduled");
+  };
+  const CLS_STYLE: Record<"A" | "B" | "C", string> = {
+    A: "bg-red-950/30 text-red-400 border-red-800/30",
+    B: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30",
+    C: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <ListChecks size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Cycle-Count Scheduler</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Plan rolling counts by ABC class so you never shut the business down for a full annual stock-take.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-3">Counting Cadence (days between counts)</p>
+        <div className="grid grid-cols-3 gap-3 max-w-md">
+          <div><label className="text-[10px] text-red-400 block mb-0.5">Class A (vital)</label><input type="number" min="1" value={freqA} onChange={e => setFreqA(parseInt(e.target.value) || 1)} className={inp} /></div>
+          <div><label className="text-[10px] text-yellow-400 block mb-0.5">Class B</label><input type="number" min="1" value={freqB} onChange={e => setFreqB(parseInt(e.target.value) || 1)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Class C (trivial)</label><input type="number" min="1" value={freqC} onChange={e => setFreqC(parseInt(e.target.value) || 1)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "SKUs Tracked", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Counts Due Now", value: dueNow.toString(), color: dueNow > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Class A SKUs", value: rows.filter(r => r.cls === "A").length.toString(), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add inventory items to build a rolling count schedule by ABC class.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Class", "Cadence", "Last Counted", "Status", "Action"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => Number(b.due) - Number(a.due) || a.nextInDays - b.nextInDays).map(r => (
+                  <tr key={r.item.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.item.productName}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${CLS_STYLE[r.cls]}`}>{r.cls}</span></td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">every {r.freq}d</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{r.daysSince === null ? "Never" : `${r.daysSince}d ago`}</td>
+                    <td className="px-4 py-2.5">
+                      {r.due ? <span className="text-xs font-semibold text-red-400">Due now</span>
+                        : <span className="text-xs text-green-400">In {r.nextInDays}d</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => markCounted(r.item.id)} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">Mark counted</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">ABC class is derived live from each SKU's revenue contribution (A = top 80% of sales, B = next 15%, C = rest). High-value A items are counted most often. "Mark counted" resets that SKU's clock so the schedule keeps rolling.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #10 Min/Max stock planner ───────────────────────── */
+function MinMaxPlannerTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+
+  // Planning inputs: supplier lead time and how many days of cover the max level should hold.
+  const [leadDays, setLeadDays] = useFeatureState<number>("ops-minmax-lead-days", 7);
+  const [maxCoverDays, setMaxCoverDays] = useFeatureState<number>("ops-minmax-max-cover", 30);
+  const [safetyDays, setSafetyDays] = useFeatureState<number>("ops-minmax-safety-days", 5);
+
+  const daysWindow = 90;
+  const soldByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+      o.items.forEach(it => { map[it.productName] = (map[it.productName] ?? 0) + it.quantity; });
+    });
+    return map;
+  }, [orders]);
+
+  const rows = useMemo(() => inventory.map(i => {
+    const sold = soldByProduct[i.productName] ?? 0;
+    const dailyDemand = sold / daysWindow;
+    // Min = demand over (lead time + safety buffer); Max = min + demand over the cover window.
+    const min = Math.ceil(dailyDemand * (leadDays + safetyDays));
+    const max = Math.ceil(min + dailyDemand * maxCoverDays);
+    const orderUpTo = Math.max(0, max - i.quantity);
+    const status: "below" | "above" | "ok" = i.quantity < min ? "below" : i.quantity > max ? "above" : "ok";
+    return { ...i, dailyDemand, min, max, orderUpTo, status };
+  }), [inventory, soldByProduct, leadDays, maxCoverDays, safetyDays]);
+
+  const belowMin = rows.filter(r => r.status === "below").length;
+  const aboveMax = rows.filter(r => r.status === "above").length;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <SlidersHorizontal size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Min/Max Stock Planner</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Set per-SKU min and max levels from real demand so you reorder up to a target — not by gut feel.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-3 gap-3 max-w-lg">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Lead time (days)</label><input type="number" min="0" value={leadDays} onChange={e => setLeadDays(parseInt(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Safety buffer (days)</label><input type="number" min="0" value={safetyDays} onChange={e => setSafetyDays(parseInt(e.target.value) || 0)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Max cover (days)</label><input type="number" min="0" value={maxCoverDays} onChange={e => setMaxCoverDays(parseInt(e.target.value) || 0)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "SKUs Planned", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Below Min", value: belowMin.toString(), color: belowMin > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Above Max (overstock)", value: aboveMax.toString(), color: aboveMax > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add inventory items to compute min/max levels from demand.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "On Hand", "Daily Demand", "Min", "Max", "Order Up To", "Status"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => Number(a.status === "below" ? 0 : a.status === "above" ? 1 : 2) - Number(b.status === "below" ? 0 : b.status === "above" ? 1 : 2)).map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.status === "below" ? "text-red-400" : r.status === "above" ? "text-orange-400" : ""}`}>{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dailyDemand > 0 ? `${r.dailyDemand.toFixed(2)}/day` : "No history"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.min}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400">{r.max}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{r.status === "below" ? r.orderUpTo : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs font-semibold">
+                      {r.status === "below" ? <span className="text-red-400">Reorder</span>
+                        : r.status === "above" ? <span className="text-orange-400">Overstock</span>
+                        : <span className="text-green-400">Healthy</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Min = demand across (lead time + safety buffer); Max = min plus demand across the cover window. When on-hand drops below Min, "Order Up To" is the quantity that refills back to Max. Items above Max are tying up working capital.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #38 Warehouse-utilization planner ───────────────────────── */
+function WarehouseUtilizationTab() {
+  type Zone = { id: string; name: string; capacity: number; used: number };
+  const [zones, setZones] = useFeatureState<Zone[]>("ops-wh-util-zones", []);
+  const [name, setName] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [used, setUsed] = useState("");
+
+  const addZone = () => {
+    const cap = parseFloat(capacity) || 0;
+    if (!name.trim() || cap <= 0) { toast.error("Zone name and capacity required"); return; }
+    setZones(prev => [...prev, { id: generateId(), name: name.trim(), capacity: cap, used: Math.max(0, parseFloat(used) || 0) }]);
+    setName(""); setCapacity(""); setUsed(""); toast.success("Zone added");
+  };
+  const updateUsed = (id: string, val: string) => {
+    const v = Math.max(0, parseFloat(val) || 0);
+    setZones(prev => prev.map(z => z.id === id ? { ...z, used: v } : z));
+  };
+
+  const totalCap = zones.reduce((s, z) => s + z.capacity, 0);
+  const totalUsed = zones.reduce((s, z) => s + z.used, 0);
+  const overallPct = totalCap > 0 ? (totalUsed / totalCap) * 100 : 0;
+  const overCount = zones.filter(z => z.used > z.capacity).length;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  const barColor = (pct: number) => pct > 100 ? "bg-red-500/70" : pct >= 90 ? "bg-orange-500/70" : pct >= 70 ? "bg-yellow-500/70" : "bg-green-500/70";
+  const txtColor = (pct: number) => pct > 100 ? "text-red-400" : pct >= 90 ? "text-orange-400" : pct >= 70 ? "text-yellow-400" : "text-green-400";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Boxes size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Warehouse-Utilization Planner</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Track used vs available capacity per zone or rack so you know when to expand — or when space is wasted.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Overall Utilization", value: `${overallPct.toFixed(0)}%`, color: txtColor(overallPct) },
+          { label: "Total Capacity", value: totalCap.toLocaleString("en-IN"), color: "text-blue-400" },
+          { label: "Zones Over Capacity", value: overCount.toString(), color: overCount > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-2">Add Zone / Rack</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Zone name (e.g. Rack A)" className={inp} />
+          <input type="number" min="0" value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="Capacity (units / pallets)" className={inp} />
+          <input type="number" min="0" value={used} onChange={e => setUsed(e.target.value)} placeholder="Currently used" className={inp} />
+          <button onClick={addZone} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add Zone</button>
+        </div>
+      </div>
+
+      {zones.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Boxes size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add a zone above to start tracking how full each part of your warehouse is.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {zones.map(z => {
+            const pct = z.capacity > 0 ? (z.used / z.capacity) * 100 : 0;
+            return (
+              <div key={z.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Warehouse size={13} className="text-[var(--color-primary)]" />
+                    <span className="text-sm font-semibold">{z.name}</span>
+                    <span className="text-xs text-[var(--color-muted)]">{z.used.toLocaleString("en-IN")} / {z.capacity.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold tabular-nums ${txtColor(pct)}`}>{pct.toFixed(0)}%</span>
+                    <button onClick={() => setZones(prev => prev.filter(x => x.id !== z.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                  </div>
+                </div>
+                <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full ${barColor(pct)} rounded-full`} style={{ width: `${Math.min(100, pct)}%` }} />
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-[10px] text-[var(--color-muted)]">Update used:</label>
+                  <input type="number" min="0" defaultValue={z.used} onBlur={e => updateUsed(z.id, e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-28" />
+                  {z.used > z.capacity && <span className="text-[10px] text-red-400 font-semibold">Over capacity — rebalance or expand</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Utilization above 90% leaves no room for inbound goods; below 50% across many zones signals wasted rent. Use it to plan transfers, mezzanine adds, or 3PL space before you hit a wall.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #25 Negative-stock / oversell guardrail ───────────────────────── */
+function OversellGuardTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+
+  // Open (not yet fulfilled / cancelled) order demand per product.
+  const committed = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.filter(o => o.status === "pending" || o.status === "confirmed" || o.status === "processing").forEach(o => {
+      o.items.forEach(it => { map[it.productName] = (map[it.productName] ?? 0) + it.quantity; });
+    });
+    return map;
+  }, [orders]);
+
+  const rows = useMemo(() => inventory.map(i => {
+    const reserved = committed[i.productName] ?? 0;
+    const available = i.quantity - reserved;
+    const status: "oversold" | "tight" | "ok" = available < 0 ? "oversold" : available <= i.reorderLevel ? "tight" : "ok";
+    return { ...i, reserved, available, status };
+  }).filter(r => r.reserved > 0 || r.status !== "ok"), [inventory, committed]);
+
+  const oversold = rows.filter(r => r.status === "oversold");
+  const shortUnits = oversold.reduce((s, r) => s + Math.abs(r.available), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Ban size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Oversell / Negative-Stock Guard</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Catch SKUs where open orders promise more than you physically hold — before you ship phantom stock.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Oversold SKUs", value: oversold.length.toString(), color: oversold.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Units Short", value: shortUnits.toLocaleString("en-IN"), color: shortUnits > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "SKUs With Commitments", value: rows.filter(r => r.reserved > 0).length.toString(), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {oversold.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/30 rounded-lg p-4">
+          <p className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-1 flex items-center gap-1.5"><AlertTriangle size={11} /> Overselling Detected</p>
+          <p className="text-xs text-[var(--color-muted)]">{oversold.length} SKU{oversold.length > 1 ? "s have" : " has"} more committed than on hand. Expedite procurement or hold confirmations until stock is replenished.</p>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No open-order commitments yet. Add pending or confirmed orders and this guard will watch for oversell against on-hand stock.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "On Hand", "Committed", "Available", "Status"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => a.available - b.available).map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400">{r.reserved}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.available < 0 ? "text-red-400" : r.status === "tight" ? "text-yellow-400" : "text-green-400"}`}>{r.available}</td>
+                    <td className="px-4 py-2.5 text-xs font-semibold">
+                      {r.status === "oversold" ? <span className="text-red-400 flex items-center gap-1"><Ban size={11} />Oversold</span>
+                        : r.status === "tight" ? <span className="text-yellow-400">Tight</span>
+                        : <span className="text-green-400">OK</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Committed = quantity on open (pending / confirmed / processing) orders. Available = on-hand minus committed; a negative value means you have promised stock you do not have. "Tight" SKUs are at or below reorder level after commitments.</p>
     </div>
   );
 }

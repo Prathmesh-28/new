@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send, Timer, Plane, LogOut, HandCoins, Landmark, Scale, Baby, Target, Calculator, UserMinus, Coins, Umbrella, Sun } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send, Timer, Plane, LogOut, HandCoins, Landmark, Scale, Baby, Target, Calculator, UserMinus, Coins, Umbrella, Sun, ClipboardList, FileSpreadsheet, CalendarClock, Gauge } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -120,7 +120,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi" | "takehome" | "attrition-cost" | "incentive" | "superann" | "gpa">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi" | "takehome" | "attrition-cost" | "incentive" | "superann" | "gpa" | "pf-challan" | "register" | "penalty" | "lwp">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -223,7 +223,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target], ["takehome", "Take-Home Breakup", Calculator], ["attrition-cost", "Attrition Cost", UserMinus], ["incentive", "Incentive Engine", Coins], ["superann", "Superannuation", Sun], ["gpa", "Group Insurance", Umbrella]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target], ["takehome", "Take-Home Breakup", Calculator], ["attrition-cost", "Attrition Cost", UserMinus], ["incentive", "Incentive Engine", Coins], ["superann", "Superannuation", Sun], ["gpa", "Group Insurance", Umbrella], ["pf-challan", "PF / ESI Challan", ClipboardList], ["register", "Payroll Register", FileSpreadsheet], ["penalty", "Penalty Predictor", Gauge], ["lwp", "LWP Impact", CalendarClock]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -983,6 +983,10 @@ export default function PayrollPage() {
       {tab === "incentive" && <IncentiveEngineTab employees={employees} />}
       {tab === "superann" && <SuperannuationTab employees={employees} />}
       {tab === "gpa" && <GroupInsuranceTab employees={employees} />}
+      {tab === "pf-challan" && <PfEsiChallanTab employees={employees} />}
+      {tab === "register" && <PayrollRegisterTab employees={employees} />}
+      {tab === "penalty" && <PenaltyPredictorTab employees={employees} />}
+      {tab === "lwp" && <LwpImpactTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -4483,6 +4487,356 @@ function GroupInsuranceTab({ employees }: { employees: EmpLite[] }) {
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Indicative estimate for {headcount} active lives. Actual premium depends on age mix, claim history, family-floater size and waiting-period waivers. Employer-paid group health premium is a deductible business expense; the employee share deducted via payroll is post-tax.</p>
+    </div>
+  );
+}
+
+// ── 52. PF / ESI Challan Summary ───────────────────────────────────────────────
+// Consolidated EPFO challan (EPF A/C 1, EPS A/C 10, EDLI A/C 21, admin A/C 2)
+// plus the ESIC challan (0.75% / 3.25%) for the month — ready-reckoner before
+// deposit. Mirrors the ECR PF math (₹15k wage ceiling) and ESI ₹21k threshold.
+function PfEsiChallanTab({ employees }: { employees: EmpLite[] }) {
+  const fc = formatCurrency;
+  if (employees.length === 0) return <EmptyState icon={ClipboardList} msg={EMPTY_HINT} />;
+
+  const active = employees.filter(e => (e.status ?? "active") === "active");
+  const PF_CEIL = 15000, ESI_LIMIT = 21000, EPS_CAP = 1250;
+
+  let pfWages = 0, eeEpf = 0, eps = 0, erEpf = 0, edli = 0, adminEpf = 0;
+  let esiWages = 0, eeEsi = 0, erEsi = 0, esiLives = 0;
+  for (const e of active) {
+    const gross = Number(e.gross_salary);
+    const wages = Math.min(gross, PF_CEIL);
+    const ee = Math.round(wages * 0.12);
+    const epsAmt = Math.min(Math.round(wages * 0.0833), EPS_CAP);
+    pfWages += wages;
+    eeEpf += ee;
+    eps += epsAmt;
+    erEpf += ee - epsAmt;                 // employer EPF (A/C 1) = 12% less EPS
+    edli += Math.round(wages * 0.005);    // EDLI A/C 21 @ 0.50%
+    adminEpf += Math.round(wages * 0.005);// admin A/C 2 @ 0.50% (min ₹500 handled below)
+    if (gross <= ESI_LIMIT) {
+      esiWages += gross;
+      eeEsi += Math.round(gross * 0.0075);
+      erEsi += Math.round(gross * 0.0325);
+      esiLives += 1;
+    }
+  }
+  adminEpf = Math.max(adminEpf, active.length > 0 ? 500 : 0); // EPFO minimum admin charge ₹500
+  const ac1 = eeEpf + erEpf;            // A/C 1 = EE EPF + ER EPF difference
+  const pfChallan = ac1 + eps + edli + adminEpf;
+  const esiChallan = eeEsi + erEsi;
+  const due = format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15), "dd MMM yyyy");
+
+  const acRow = (ac: string, label: string, amt: number) => (
+    <tr key={ac} className="border-b border-[var(--color-border)] last:border-0">
+      <td className="px-3 py-2.5 font-mono text-[var(--color-muted)]">{ac}</td>
+      <td className="px-3 py-2.5">{label}</td>
+      <td className="px-3 py-2.5 tabular-nums text-right font-semibold">{fc(amt)}</td>
+    </tr>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} /> PF / ESI Challan Summary — {format(new Date(), "MMMM yyyy")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">Consolidated EPFO and ESIC challan totals for {active.length} active employees, ready to cross-check before depositing. PF on the ₹15,000 wage ceiling; ESI on gross up to ₹21,000. Both due by the 15th of the following month.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "EPFO challan total", value: fc(pfChallan), color: "text-[var(--color-primary)]" },
+          { label: "ESIC challan total", value: fc(esiChallan), color: "text-blue-400" },
+          { label: "Combined remittance", value: fc(pfChallan + esiChallan), color: "text-orange-400" },
+          { label: "Due date", value: due, color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["A/C", "EPFO head", "Amount"].map(h => <th key={h} className={`font-semibold px-3 py-2.5 ${h === "Amount" ? "text-right" : "text-left"}`}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {acRow("A/C 1", "EPF contribution (EE + ER)", ac1)}
+              {acRow("A/C 10", "EPS contribution (8.33%, ≤ ₹1,250)", eps)}
+              {acRow("A/C 21", "EDLI contribution (0.50%)", edli)}
+              {acRow("A/C 2", "EPF administration (0.50%, min ₹500)", adminEpf)}
+            </tbody>
+            <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+              <tr><td className="px-3 py-2.5 font-bold" colSpan={2}>EPFO challan total</td><td className="px-3 py-2.5 tabular-nums text-right font-bold text-[var(--color-primary)]">{fc(pfChallan)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+          <h4 className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">ESIC challan ({esiLives} insured)</h4>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">ESI wages</span><span className="tabular-nums">{fc(esiWages)}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">Employee share (0.75%)</span><span className="tabular-nums">{fc(eeEsi)}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">Employer share (3.25%)</span><span className="tabular-nums">{fc(erEsi)}</span></div>
+          <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">ESIC challan total</span><span className="tabular-nums font-bold text-blue-400">{fc(esiChallan)}</span></div>
+          <p className="text-[10px] text-[var(--color-muted)] pt-1">PF wages base {fc(pfWages)}. Employees above ₹21,000 are out of ESI; those above the ceiling at the start of a contribution period stay covered until it ends.</p>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative totals — generate the actual ECR on the EPFO portal and the ESI return on the ESIC portal, then pay the system-generated challan. Late deposit attracts interest u/s 7Q and damages u/s 14B (PF) and 12% interest (ESI).</p>
+    </div>
+  );
+}
+
+// ── 53. Payroll Register Summary ───────────────────────────────────────────────
+// One-page month register: earnings, statutory deductions and net pay per head
+// with a grand-total footer — the classic MIS "salary register" finance signs off.
+function PayrollRegisterTab({ employees }: { employees: EmpLite[] }) {
+  const fc = formatCurrency;
+  if (employees.length === 0) return <EmptyState icon={FileSpreadsheet} msg={EMPTY_HINT} />;
+
+  const active = employees.filter(e => (e.status ?? "active") === "active");
+  const PF_CEIL = 15000, ESI_LIMIT = 21000;
+
+  const rows = active.map(e => {
+    const gross = Number(e.gross_salary);
+    const pfWages = Math.min(gross, PF_CEIL);
+    const pf = Math.round(pfWages * 0.12);
+    const esi = gross <= ESI_LIMIT ? Math.round(gross * 0.0075) : 0;
+    const tds = Number(e.tds_monthly ?? 0);
+    const ded = pf + esi + tds;
+    const net = gross - ded;
+    return { e, gross, pf, esi, tds, ded, net };
+  });
+  const t = rows.reduce((a, r) => ({
+    gross: a.gross + r.gross, pf: a.pf + r.pf, esi: a.esi + r.esi,
+    tds: a.tds + r.tds, ded: a.ded + r.ded, net: a.net + r.net,
+  }), { gross: 0, pf: 0, esi: 0, tds: 0, ded: 0, net: 0 });
+
+  const downloadCsv = () => {
+    const header = "Employee,Gross,EPF,ESI,TDS,Total Deductions,Net Pay";
+    const body = rows.map(r => `${r.e.name},${Math.round(r.gross)},${r.pf},${r.esi},${Math.round(r.tds)},${Math.round(r.ded)},${Math.round(r.net)}`);
+    const footer = `Total,${Math.round(t.gross)},${t.pf},${t.esi},${Math.round(t.tds)},${Math.round(t.ded)},${Math.round(t.net)}`;
+    const csv = [header, ...body, footer].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Payroll_Register_${format(new Date(), "MMM_yyyy")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Salary register exported");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} /> Payroll Register — {format(new Date(), "MMMM yyyy")}</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Per-employee earnings, statutory deductions and net pay for {active.length} active employees, with a signed-off grand total.</p>
+        </div>
+        <button onClick={downloadCsv} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+          <Download size={12} /> Export register (.csv)
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total gross", value: fc(t.gross), color: "text-[var(--color-text)]" },
+          { label: "Total deductions", value: fc(t.ded), color: "text-orange-400" },
+          { label: "Net disbursement", value: fc(t.net), color: "text-[var(--color-primary)]" },
+          { label: "Statutory (PF+ESI+TDS)", value: fc(t.pf + t.esi + t.tds), color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-xs min-w-[680px]">
+          <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            {["Employee", "Gross", "EPF", "ESI", "TDS", "Deductions", "Net pay"].map(h => <th key={h} className={`font-semibold px-3 py-2.5 ${h === "Employee" ? "text-left" : "text-right"}`}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-3 py-2.5 font-medium">{r.e.name}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right">{fc(r.gross)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right text-orange-400">{fc(r.pf)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right text-blue-400">{r.esi > 0 ? fc(r.esi) : "—"}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right text-purple-400">{r.tds > 0 ? fc(r.tds) : "—"}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right">{fc(r.ded)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-right font-semibold text-[var(--color-primary)]">{fc(r.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-3 py-2.5 font-bold">Total ({active.length})</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-bold">{fc(t.gross)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-semibold text-orange-400">{fc(t.pf)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-semibold text-blue-400">{fc(t.esi)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-semibold text-purple-400">{fc(t.tds)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-bold">{fc(t.ded)}</td>
+              <td className="px-3 py-2.5 tabular-nums text-right font-bold text-[var(--color-primary)]">{fc(t.net)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">EPF shown is the employee 12% share; ESI is the employee 0.75% share. Employer contributions and PT/LWF (handled in their own tabs) are not netted here. TDS is the configured monthly figure per employee.</p>
+    </div>
+  );
+}
+
+// ── 54. Penalty & Interest Predictor ───────────────────────────────────────────
+// Estimate the cost of a late PF / ESI / TDS deposit: PF interest u/s 7Q (12% p.a.)
+// + damages u/s 14B (slab by delay), ESI 12% p.a., and TDS 1.5%/month u/s 201(1A).
+function PenaltyPredictorTab({ employees }: { employees: EmpLite[] }) {
+  const fc = formatCurrency;
+  const [head, setHead]   = useState<"pf" | "esi" | "tds">("pf");
+  const [amount, setAmt]  = useState(100000);
+  const [days, setDays]   = useState(30);
+  if (employees.length === 0) return <EmptyState icon={Gauge} msg={EMPTY_HINT} />;
+
+  // PF: interest 7Q @12% p.a. simple; damages 14B by delay band (annualised %).
+  const damages14bRate = days <= 60 ? 0.05 : days <= 120 ? 0.10 : days <= 180 ? 0.15 : 0.25;
+  const pfInterest = Math.round(amount * 0.12 * (days / 365));
+  const pfDamages  = Math.round(amount * damages14bRate * (days / 365));
+  // ESI: 12% p.a. simple interest for delayed payment.
+  const esiInterest = Math.round(amount * 0.12 * (days / 365));
+  // TDS: 1.5% per month (or part) from deduction to deposit, u/s 201(1A).
+  const tdsMonths = Math.ceil(days / 30);
+  const tdsInterest = Math.round(amount * 0.015 * tdsMonths);
+
+  const result = head === "pf"
+    ? { lines: [["Interest u/s 7Q (12% p.a.)", pfInterest], ["Damages u/s 14B", pfDamages]] as const, total: pfInterest + pfDamages }
+    : head === "esi"
+    ? { lines: [["Interest @ 12% p.a.", esiInterest]] as const, total: esiInterest }
+    : { lines: [[`Interest 1.5%/mo × ${tdsMonths} mo`, tdsInterest]] as const, total: tdsInterest };
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} /> Penalty &amp; Interest Predictor</h3>
+        <p className="text-xs text-[var(--color-muted)]">Estimate the extra cost of depositing PF, ESI or salary TDS late, before the delay actually happens — so you can decide whether to borrow short-term and stay compliant.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className={lbl}>Statutory head</label>
+            <select value={head} onChange={e => setHead(e.target.value as "pf" | "esi" | "tds")} className={`${inp} w-full`}>
+              <option value="pf">Provident Fund (EPF)</option>
+              <option value="esi">ESI</option>
+              <option value="tds">Salary TDS (192)</option>
+            </select>
+          </div>
+          <div><label className={lbl}>Challan amount (₹)</label><input type="number" min="0" value={amount} onChange={e => setAmt(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Delay (days past due)</label><input type="number" min="0" max="730" value={days} onChange={e => setDays(Math.min(730, Math.max(0, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Principal due", value: fc(amount), color: "text-[var(--color-text)]" },
+          { label: "Penalty + interest", value: fc(result.total), color: "text-red-400" },
+          { label: "Effective cost of delay", value: amount > 0 ? `${((result.total / amount) * 100).toFixed(2)}%` : "—", color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        {result.lines.map(([label, amt]) => (
+          <div key={label} className="flex justify-between"><span className="text-[var(--color-muted)]">{label}</span><span className="tabular-nums font-semibold text-red-400">{fc(amt)}</span></div>
+        ))}
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Total payable if deposited late</span><span className="tabular-nums font-bold">{fc(amount + result.total)}</span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Estimates only. PF damages u/s 14B are charged at slab rates (5%–25% p.a. by delay length) plus 12% interest u/s 7Q; ESI levies 12% p.a.; TDS attracts 1.5% per month (or part) u/s 201(1A) from the date deducted to the date deposited. The EPFO/ESIC/TRACES portal computes the exact figure.</p>
+    </div>
+  );
+}
+
+// ── 55. Loss-of-Pay (LWP) Impact ───────────────────────────────────────────────
+// Model how unpaid-leave days for one employee shrink net pay and statutory bases
+// for the month (per-calendar-day proration on gross), before processing the run.
+function LwpImpactTab({ employees }: { employees: EmpLite[] }) {
+  const fc = formatCurrency;
+  const [empId, setEmpId] = useState(employees[0]?.id ?? "");
+  const [lwpDays, setLwp] = useState(2);
+  if (employees.length === 0) return <EmptyState icon={CalendarClock} msg={EMPTY_HINT} />;
+
+  const emp = employees.find(e => e.id === empId) ?? employees[0];
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const clampedLwp = Math.min(Math.max(0, lwpDays), daysInMonth);
+  const paidDays = daysInMonth - clampedLwp;
+
+  const fullGross = Number(emp.gross_salary);
+  const perDay = fullGross / daysInMonth;
+  const lopAmount = Math.round(perDay * clampedLwp);
+  const proratedGross = fullGross - lopAmount;
+
+  const PF_CEIL = 15000, ESI_LIMIT = 21000;
+  const pfFull = Math.round(Math.min(fullGross, PF_CEIL) * 0.12);
+  const pfPro  = Math.round(Math.min(proratedGross, PF_CEIL) * 0.12);
+  const esiFull = fullGross <= ESI_LIMIT ? Math.round(fullGross * 0.0075) : 0;
+  const esiPro  = proratedGross <= ESI_LIMIT ? Math.round(proratedGross * 0.0075) : 0;
+  const tds = Number(emp.tds_monthly ?? 0);
+  const netFull = fullGross - pfFull - esiFull - tds;
+  const netPro  = proratedGross - pfPro - esiPro - tds;
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+  const cmp = (label: string, full: number, pro: number) => (
+    <div key={label} className="flex justify-between gap-3"><span className="text-[var(--color-muted)]">{label}</span><span className="tabular-nums"><span className="text-[var(--color-muted)] line-through mr-2">{fc(full)}</span><span className="font-semibold">{fc(pro)}</span></span></div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} /> Loss-of-Pay (LWP) Impact</h3>
+        <p className="text-xs text-[var(--color-muted)]">See how unpaid / unapproved-absence days for {format(now, "MMMM yyyy")} ({daysInMonth} calendar days) reduce gross, statutory deductions and net pay — before you lock the run.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>LWP / LOP days</label><input type="number" min="0" max={daysInMonth} value={lwpDays} onChange={e => setLwp(Math.min(daysInMonth, Math.max(0, Number(e.target.value))))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Paid days</label><input type="number" value={paidDays} readOnly className={`${inp} w-full opacity-60`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "LOP deduction", value: fc(lopAmount), color: "text-red-400" },
+          { label: "Prorated gross", value: fc(proratedGross), color: "text-[var(--color-text)]" },
+          { label: "Net pay (after LOP)", value: fc(netPro), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        <div className="flex justify-between text-[10px] text-[var(--color-muted)] uppercase tracking-wide pb-1"><span>Component</span><span>Full → after {clampedLwp} LWP day(s)</span></div>
+        {cmp("Gross salary", fullGross, proratedGross)}
+        {cmp("EPF (12%)", pfFull, pfPro)}
+        {cmp("ESI (0.75%)", esiFull, esiPro)}
+        <div className="flex justify-between gap-3"><span className="text-[var(--color-muted)]">TDS (unchanged)</span><span className="tabular-nums font-semibold">{fc(tds)}</span></div>
+        <div className="flex justify-between gap-3 border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Net pay</span><span className="tabular-nums"><span className="text-[var(--color-muted)] line-through mr-2">{fc(netFull)}</span><span className="font-bold text-[var(--color-primary)]">{fc(netPro)}</span></span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Proration is on calendar days (gross ÷ {daysInMonth} × LWP). Some employers prorate on working days or a fixed 30-day base — align with your offer letter. PF/ESI fall as the prorated wage drops; TDS is shown unchanged here and should be re-averaged across the year when finalising the run.</p>
     </div>
   );
 }

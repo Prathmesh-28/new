@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame, ClipboardCheck, Hammer, Network, ArrowLeftRight, Split } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame, ClipboardCheck, Hammer, Network, ArrowLeftRight, Split, Users, Gift, UserCheck, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -19,7 +19,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09" | "cross-charge" | "free-samples" | "pure-agent" | "audit-ready">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -241,7 +241,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split], ["cross-charge", "Cross-Charge", Users], ["free-samples", "Free Samples/Gifts", Gift], ["pure-agent", "Pure Agent", UserCheck], ["audit-ready", "Audit-Readiness", ListChecks]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1460,6 +1460,10 @@ export default function GstPage() {
       {tab === "isd"                && <IsdCreditDistributor />}
       {tab === "branch-transfer"    && <BranchTransferInvoicer />}
       {tab === "pmt09"              && <Pmt09FundTransfer />}
+      {tab === "cross-charge"       && <CrossChargeCalculator />}
+      {tab === "free-samples"       && <FreeSamplesItcReversal />}
+      {tab === "pure-agent"         && <PureAgentTagger />}
+      {tab === "audit-ready"        && <AuditReadinessChecklist />}
     </div>
   );
 }
@@ -4079,6 +4083,311 @@ function Pmt09FundTransfer() {
         </div>
       )}
       <p className="text-[11px] text-[var(--color-muted)]">File the actual transfer at gst.gov.in → Services → Ledgers → Electronic Cash Ledger → File PMT-09. Each row above maps to one transfer line.</p>
+    </div>
+  );
+}
+
+// ── CROSS-CHARGE (distinct persons, Sch. I) — value HO/common costs charged to branches ──
+function CrossChargeCalculator() {
+  type Branch = { id: string; name: string; state: string; turnoverShare: number };
+  const [branches, setBranches] = useFeatureState<Branch[]>("gst-crosscharge-branches", []);
+  const [commonCost, setCommonCost] = useFeatureState<string>("gst-crosscharge-cost", "");
+  const [markup, setMarkup]   = useState("0");
+  const [rate, setRate]       = useState(18);
+  const [hoState, setHoState] = useState("");
+  const [bName, setBName]     = useState("");
+  const [bState, setBState]   = useState("");
+  const [bShare, setBShare]   = useState("");
+
+  const addBranch = () => {
+    if (!bName.trim() || !bState.trim()) { toast.error("Enter branch name and state"); return; }
+    const share = parseFloat(bShare) || 0;
+    if (share <= 0) { toast.error("Turnover share must be positive"); return; }
+    setBranches(prev => [...prev, { id: crypto.randomUUID(), name: bName.trim(), state: bState.trim(), turnoverShare: share }]);
+    setBName(""); setBState(""); setBShare("");
+  };
+  const removeBranch = (id: string) => setBranches(prev => prev.filter(b => b.id !== id));
+
+  const result = useMemo(() => {
+    const base = parseFloat(commonCost) || 0;
+    const mk = parseFloat(markup) || 0;
+    const totalShare = branches.reduce((s, b) => s + b.turnoverShare, 0);
+    // Cross-charge value per branch (allocate common cost by turnover share, add notional markup if no full-ITC concession claimed).
+    const lines = branches.map(b => {
+      const portion = totalShare > 0 ? base * (b.turnoverShare / totalShare) : 0;
+      const taxableValue = portion * (1 + mk / 100);
+      const interState = hoState.trim() !== "" && b.state.trim().toLowerCase() !== hoState.trim().toLowerCase();
+      const tax = Math.round(taxableValue * rate / 100);
+      const half = Math.round(tax / 2);
+      return { ...b, portion, taxableValue, interState, tax, igst: interState ? tax : 0, cgst: interState ? 0 : half, sgst: interState ? 0 : tax - half };
+    });
+    return { base, totalShare, lines, totalTax: lines.reduce((s, l) => s + l.tax, 0) };
+  }, [commonCost, markup, branches, hoState, rate]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Cross-Charge (distinct persons, Sch. I)</strong> — When a head office incurs a common cost (rent, software, in-house staff effort) that benefits its branches in other states, those branches are <strong>distinct persons</strong>. HO must raise a tax invoice cross-charging each branch (Circular 199/2023). Allocate by turnover share; if the branch claims full ITC it is tax-neutral.
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-4"><Users size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Common cost to allocate</h2></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Total common cost (₹)</label><input type="number" value={commonCost} onChange={e => setCommonCost(e.target.value)} placeholder="e.g. 1200000" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">HO state</label><input value={hoState} onChange={e => setHoState(e.target.value)} placeholder="e.g. Maharashtra" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Notional markup %</label><input type="number" value={markup} onChange={e => setMarkup(e.target.value)} placeholder="0" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Recipient branches</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Branch name</label><input value={bName} onChange={e => setBName(e.target.value)} placeholder="e.g. Bengaluru" className={GST_INPUT} /></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">State</label><input value={bState} onChange={e => setBState(e.target.value)} placeholder="e.g. Karnataka" className={GST_INPUT} /></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Turnover share (any unit)</label><input type="number" value={bShare} onChange={e => setBShare(e.target.value)} placeholder="e.g. 40" className={GST_INPUT} /></div>
+          <div className="flex items-end"><button onClick={addBranch} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add branch</button></div>
+        </div>
+      </div>
+
+      {result.lines.length > 0 && result.base > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <p className="text-sm font-semibold">Cross-charge allocation</p>
+            <p className="text-xs text-[var(--color-muted)]">Total GST: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(result.totalTax)}</span></p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Branch", "State", "Supply", "Taxable value", "IGST", "CGST", "SGST", ""].map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i >= 3 && i <= 6 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+              <tbody>
+                {result.lines.map(l => (
+                  <tr key={l.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-medium">{l.name}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)]">{l.state}</td>
+                    <td className="px-3 py-2"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${l.interState ? "bg-blue-950/30 text-blue-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{l.interState ? "IGST" : "CGST+SGST"}</span></td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(l.taxableValue)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-blue-400">{l.igst ? formatCurrency(l.igst) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.cgst ? formatCurrency(l.cgst) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.sgst ? formatCurrency(l.sgst) : "—"}</td>
+                    <td className="px-3 py-2 text-right"><button onClick={() => removeBranch(l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-5 py-2.5 text-[11px] text-[var(--color-muted)] border-t border-[var(--color-border)]">Salary cost of HO employees serving branches need not carry a markup (Circular 199/2023); the cross-charge value can equal the cost. Each branch claims this GST as ITC where eligible.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FREE SAMPLES / GIFTS — Sec 17(5)(h) ITC reversal ──
+function FreeSamplesItcReversal() {
+  type Item = { id: string; desc: string; kind: "Free sample" | "Gift / promo" | "Buy-one-get-one"; costPerUnit: number; qty: number; rate: number };
+  const [items, setItems] = useFeatureState<Item[]>("gst-freesample-items", []);
+  const [desc, setDesc]   = useState("");
+  const [kind, setKind]   = useState<Item["kind"]>("Free sample");
+  const [cost, setCost]   = useState("");
+  const [qty, setQty]     = useState("");
+  const [rate, setRate]   = useState(18);
+
+  const add = () => {
+    if (!desc.trim()) { toast.error("Describe the item"); return; }
+    const c = parseFloat(cost) || 0; const q = parseFloat(qty) || 0;
+    if (c <= 0 || q <= 0) { toast.error("Enter a positive cost and quantity"); return; }
+    setItems(prev => [...prev, { id: crypto.randomUUID(), desc: desc.trim(), kind, costPerUnit: c, qty: q, rate }]);
+    setDesc(""); setCost(""); setQty("");
+  };
+  const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+
+  const totals = useMemo(() => items.reduce((s, i) => {
+    const value = i.costPerUnit * i.qty;
+    // BOGO is a single supply at one price (Circular 92/2018) → no ITC reversal; free samples & gifts → ITC must be reversed u/s 17(5)(h).
+    const reversalRequired = i.kind !== "Buy-one-get-one";
+    const itc = reversalRequired ? Math.round(value * i.rate / 100) : 0;
+    return { value: s.value + value, itc: s.itc + itc };
+  }, { value: 0, itc: 0 }), [items]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Free Samples & Gifts — ITC reversal (Sec 17(5)(h))</strong> — Goods given away as free samples or gifts are not a taxable supply, but the input tax credit on those goods must be <strong>reversed</strong>. Exception: a genuine "buy-one-get-one" is a single composite supply (Circular 92/2018) — the extra unit is not free, so no reversal.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add a giveaway</h3>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="md:col-span-2"><label className="block text-[10px] text-[var(--color-muted)] mb-1">Description</label><input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Trial sachets" className={GST_INPUT} /></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Type</label><select value={kind} onChange={e => setKind(e.target.value as Item["kind"])} className={GST_INPUT}>{(["Free sample", "Gift / promo", "Buy-one-get-one"] as const).map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Cost/unit (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="e.g. 80" className={GST_INPUT} /></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Qty given</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="e.g. 500" className={GST_INPUT} /></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">ITC rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Total giveaway cost</p><p className="text-lg font-bold tabular-nums">{formatCurrency(totals.value)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">ITC to reverse u/s 17(5)(h)</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(totals.itc)}</p></div>
+      </div>
+
+      {items.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Item", "Type", "Cost", "Qty", "Value", "ITC reversal", ""].map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i >= 2 && i <= 5 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+            <tbody>
+              {items.slice().reverse().map(i => {
+                const value = i.costPerUnit * i.qty;
+                const reversalRequired = i.kind !== "Buy-one-get-one";
+                const itc = reversalRequired ? Math.round(value * i.rate / 100) : 0;
+                return (
+                  <tr key={i.id} className="border-t border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-medium">{i.desc}</td>
+                    <td className="px-3 py-2 text-[var(--color-muted)]">{i.kind}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(i.costPerUnit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatAmount(i.qty)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(value)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${itc > 0 ? "text-red-400" : "text-green-400"}`}>{itc > 0 ? formatCurrency(itc) : "No reversal"}</td>
+                    <td className="px-3 py-2 text-right"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)]">Report the reversal in GSTR-3B Table 4(B)(1). Keep proof of cost so the reversal is defensible. Promotional schemes structured as discounts on a taxable supply may avoid reversal — review each scheme's invoicing.</p>
+    </div>
+  );
+}
+
+// ── PURE-AGENT EXPENSE TAGGER — Rule 33 exclusion from taxable value ──
+function PureAgentTagger() {
+  const RULE33 = [
+    { q: "You pay the third party only as authorised by the recipient.", k: "authorised" },
+    { q: "The payment is separately indicated on your invoice (at actual, no markup).", k: "separate" },
+    { q: "The supplies procured are in addition to your own services.", k: "additional" },
+    { q: "You do not hold title to the goods/services so procured.", k: "noTitle" },
+    { q: "You do not use the goods/services for your own benefit.", k: "noUse" },
+  ] as const;
+  type Key = typeof RULE33[number]["k"];
+  const [checks, setChecks] = useState<Record<Key, boolean>>({ authorised: false, separate: false, additional: false, noTitle: false, noUse: false });
+  const [ownFee, setOwnFee]   = useState("");
+  const [reimburse, setReimburse] = useState("");
+  const [rate, setRate]       = useState(18);
+
+  const allMet = RULE33.every(r => checks[r.k]);
+  const calc = useMemo(() => {
+    const fee = parseFloat(ownFee) || 0;
+    const reim = parseFloat(reimburse) || 0;
+    const taxable = allMet ? fee : fee + reim; // reimbursement excluded only if pure-agent conditions are met
+    const tax = Math.round(taxable * rate / 100);
+    return { fee, reim, taxable, tax, total: taxable + tax + (allMet ? reim : 0) };
+  }, [ownFee, reimburse, rate, allMet]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Pure-Agent Expenses (Rule 33)</strong> — Costs you incur purely as an agent on behalf of your client (e.g. ROC fees, government stamp duty, port charges) are <strong>excluded from your taxable value</strong> if all five conditions are met. Otherwise the reimbursement is taxed along with your fee.
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-3"><UserCheck size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Rule 33 conditions</h2></div>
+        <div className="space-y-2">
+          {RULE33.map(r => (
+            <label key={r.k} className="flex items-start gap-2.5 text-xs cursor-pointer">
+              <input type="checkbox" checked={checks[r.k]} onChange={e => setChecks(prev => ({ ...prev, [r.k]: e.target.checked }))} className="mt-0.5 accent-[var(--color-primary)]" />
+              <span className={checks[r.k] ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}>{r.q}</span>
+            </label>
+          ))}
+        </div>
+        <div className={`mt-3 text-[11px] font-semibold ${allMet ? "text-green-400" : "text-yellow-400"}`}>{allMet ? "Qualifies as pure agent — reimbursement excluded from taxable value." : "Not all conditions met — reimbursement is part of the taxable value."}</div>
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Your own fee (₹)</label><input type="number" value={ownFee} onChange={e => setOwnFee(e.target.value)} placeholder="e.g. 15000" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Reimbursed cost (₹)</label><input type="number" value={reimburse} onChange={e => setReimburse(e.target.value)} placeholder="e.g. 40000" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+        </div>
+      </div>
+
+      {(calc.fee > 0 || calc.reim > 0) && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Taxable value", value: calc.taxable, color: "text-[var(--color-text)]" },
+            { label: `GST @ ${rate}%`, value: calc.tax, color: "text-orange-400" },
+            { label: allMet ? "Pass-through (no GST)" : "Reimbursement (taxed)", value: calc.reim, color: allMet ? "text-green-400" : "text-red-400" },
+            { label: "Invoice total", value: calc.total, color: "text-[var(--color-primary)]" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-base font-bold tabular-nums ${k.color}`}>{formatCurrency(k.value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)]">Show pure-agent recoveries as a distinct line on the invoice at actual cost. Treating a taxable reimbursement as pure-agent understates output tax and attracts interest on the shortfall.</p>
+    </div>
+  );
+}
+
+// ── GST AUDIT-READINESS CHECKLIST ──
+function AuditReadinessChecklist() {
+  const ITEMS = [
+    { id: "recon1-3b", area: "Returns", text: "GSTR-1 turnover reconciles with GSTR-3B for every month of the year." },
+    { id: "recon3b-books", area: "Returns", text: "GSTR-3B output tax reconciles with the books / sales ledger." },
+    { id: "itc-2b", area: "ITC", text: "ITC claimed reconciles with GSTR-2B; mismatches are documented." },
+    { id: "blocked", area: "ITC", text: "Sec 17(5) blocked credits identified and excluded from claims." },
+    { id: "reversal", area: "ITC", text: "Rule 42/43 common-credit and 17(5)(h) giveaway reversals computed." },
+    { id: "rule180", area: "ITC", text: "Invoices unpaid beyond 180 days have had ITC reversed." },
+    { id: "rcm", area: "RCM", text: "All RCM liabilities discharged in cash and self-invoices raised." },
+    { id: "einvoice", area: "Documents", text: "E-invoice IRN generated for every B2B invoice (where applicable)." },
+    { id: "eway", area: "Documents", text: "E-way bills generated and matched to invoices > ₹50,000." },
+    { id: "hsn", area: "Documents", text: "Correct HSN/SAC and rate applied; HSN summary tallies in GSTR-1." },
+    { id: "annual", area: "Annual", text: "GSTR-9 / 9C filed and reconciled with audited financials." },
+    { id: "ledger", area: "Records", text: "Electronic cash & credit ledger balances tally with books." },
+    { id: "vendor", area: "Records", text: "Supplier GSTINs verified active; cancelled-dealer purchases flagged." },
+    { id: "notices", area: "Records", text: "All notices (ASMT-10/DRC) responded to within deadline; copies filed." },
+  ] as const;
+  type ItemId = typeof ITEMS[number]["id"];
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("gst-audit-checklist", {});
+
+  const toggle = (id: ItemId) => setDone(prev => ({ ...prev, [id]: !prev[id] }));
+  const completed = ITEMS.filter(i => done[i.id]).length;
+  const pct = Math.round((completed / ITEMS.length) * 100);
+  const areas = Array.from(new Set(ITEMS.map(i => i.area)));
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Audit-Readiness Checklist</strong> — A departmental audit (Sec 65) or scrutiny (Sec 61) can land with little notice. Keep these reconciliations and documents perpetually ready so a visit needs zero scramble. Your progress is saved locally.
+      </div>
+
+      <div className={GST_CARD}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2"><ListChecks size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Readiness</h2></div>
+          <span className={`text-sm font-bold tabular-nums ${pct === 100 ? "text-green-400" : pct >= 60 ? "text-yellow-400" : "text-red-400"}`}>{pct}% · {completed}/{ITEMS.length}</span>
+        </div>
+        <div className="h-2 w-full bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className={`h-full transition-all ${pct === 100 ? "bg-green-500" : pct >= 60 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      {areas.map(area => (
+        <div key={area} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-2.5 border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">{area}</div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {ITEMS.filter(i => i.area === area).map(i => (
+              <label key={i.id} className="flex items-start gap-3 px-5 py-3 text-xs cursor-pointer hover:bg-white/2">
+                <input type="checkbox" checked={!!done[i.id]} onChange={() => toggle(i.id)} className="mt-0.5 accent-[var(--color-primary)]" />
+                <span className={done[i.id] ? "text-[var(--color-muted)] line-through" : "text-[var(--color-text)]"}>{i.text}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import {
   Boxes, Sparkles, SlidersHorizontal, Dices, GitCompareArrows, AlertTriangle,
   TrendingUp, Users, Target, Activity, Gauge, ShieldAlert, CheckCircle2, Info,
   Rocket, Flame, Heart, Clock, LayoutGrid, Wallet, Waypoints, CalendarRange,
-  PieChart, Repeat,
+  PieChart, Repeat, Banknote, CalendarCheck2, Landmark, Coins, CreditCard, TrendingDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO, differenceInCalendarDays, startOfMonth, subMonths } from "date-fns";
@@ -24,7 +24,8 @@ type TabId =
   | "overview" | "twin" | "whatif" | "montecarlo" | "scenarios" | "earlywarning"
   | "trend" | "churn" | "breakeven" | "sensitivity" | "goal"
   | "runrate" | "expensecreep" | "ltv" | "paydelay" | "cohort" | "workcap"
-  | "confband" | "seasonality" | "concentration" | "recurring";
+  | "confband" | "seasonality" | "concentration" | "recurring"
+  | "cashbalance" | "invoicepay" | "gstforecast" | "payrollstress" | "debtsim" | "profittraj";
 
 const TABS = [
   ["overview", "Overview", Sparkles],
@@ -48,6 +49,12 @@ const TABS = [
   ["seasonality", "Seasonality", CalendarRange],
   ["concentration", "Concentration", PieChart],
   ["recurring", "Recurring Spend", Repeat],
+  ["cashbalance", "Cash-Out Day", Banknote],
+  ["invoicepay", "Invoice Pay-Date", CalendarCheck2],
+  ["gstforecast", "GST Liability", Landmark],
+  ["payrollstress", "Payroll Stress", Coins],
+  ["debtsim", "Debt Service", CreditCard],
+  ["profittraj", "Profit Trajectory", TrendingDown],
 ] as const;
 
 // ── derived metrics from live store ──────────────────────────────────────────────
@@ -193,6 +200,12 @@ export default function PredictPage() {
       {tab === "seasonality" && <SeasonalityForecast />}
       {tab === "concentration" && <ConcentrationRisk />}
       {tab === "recurring" && <RecurringSpendForecast />}
+      {tab === "cashbalance" && <CashBalanceProjection />}
+      {tab === "invoicepay" && <InvoicePayDatePredictor />}
+      {tab === "gstforecast" && <GstLiabilityForecast />}
+      {tab === "payrollstress" && <PayrollStressPredictor />}
+      {tab === "debtsim" && <DebtServiceProjection />}
+      {tab === "profittraj" && <ProfitTrajectory />}
     </div>
   );
 }
@@ -278,6 +291,12 @@ const TOOL_BLURB: Record<Exclude<TabId, "overview">, string> = {
   seasonality: "Strip the trend and reveal which months over/under-perform.",
   concentration: "Cash hit if your largest customers walk away.",
   recurring: "Projected annual cost of recurring vendor charges.",
+  cashbalance: "Project your cash balance forward and name the day it runs dry.",
+  invoicepay: "Predict the likely settlement date of each open invoice.",
+  gstforecast: "Estimate next period's net GST outflow so you reserve cash early.",
+  payrollstress: "Warn when an upcoming salary run breaches your cash buffer.",
+  debtsim: "Project EMI outflow and payoff timeline across your active loans.",
+  profittraj: "Cumulative profit path with a margin-trend adjustment.",
 };
 
 // ── 1. Digital Twin snapshot ──────────────────────────────────────────────────────
@@ -1651,6 +1670,414 @@ function Slider({ label, value, min, max, step, suffix = "", onChange }: {
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))}
         className="w-full accent-[var(--color-primary)]" />
+    </div>
+  );
+}
+
+// ── 21. Cash-balance projection & cash-out day ────────────────────────────────────
+function CashBalanceProjection() {
+  const m = useTwinMetrics();
+  const { store } = useApp();
+  const bankCash = useMemo(
+    () => (store.bankAccounts ?? []).reduce((s, b) => s + (b.balance ?? 0), 0),
+    [store],
+  );
+  const [opening, setOpening] = useState(String(Math.max(0, Math.round(bankCash || m.cash))));
+  const [months, setMonths] = useState(12);
+
+  const out = useMemo(() => {
+    const start = parseFloat(opening) || 0;
+    const net = m.monthlyNet;
+    const rows: { month: string; balance: number }[] = [];
+    let bal = start;
+    let cashOut: string | null = null;
+    const now = new Date();
+    for (let i = 1; i <= months; i++) {
+      bal += net;
+      const label = format(startOfMonth(subMonths(now, -i)), "MMM yy");
+      rows.push({ month: label, balance: Math.round(bal) });
+      if (bal < 0 && !cashOut) cashOut = label;
+    }
+    const lowest = rows.reduce((a, b) => (b.balance < a.balance ? b : a), rows[0] ?? { month: "—", balance: start });
+    return { rows, cashOut, lowest, net, start };
+  }, [opening, months, m]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Projects your cash balance forward by adding your average monthly net to an opening balance, and names the first month it would turn negative. Linear projection of the current run-rate — not a daily-accurate forecast." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Opening cash (₹)</label>
+          <input type="number" value={opening} onChange={e => setOpening(e.target.value)} className={INP} />
+        </div>
+        <Slider label="Project ahead" value={months} min={3} max={36} step={1} suffix=" mo" onChange={setMonths} />
+      </div>
+      <KpiGrid items={[
+        { label: "Opening cash", value: formatCurrency(Math.round(out.start)), color: "text-[var(--color-text)]" },
+        { label: "Avg monthly net", value: formatCurrency(Math.round(out.net)), color: out.net >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Lowest balance", value: formatCurrency(out.lowest.balance), color: out.lowest.balance < 0 ? "text-red-400" : "text-yellow-400", sub: out.lowest.month },
+        { label: "Cash-out month (est.)", value: out.cashOut ?? "None in window", color: out.cashOut ? "text-red-400" : "text-green-400" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Projected cash balance</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={out.rows}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number) => [formatCurrency(v), "Balance"]} contentStyle={TOOLTIP_STYLE} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" />
+            <Area type="monotone" dataKey="balance" name="Balance" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.15} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 22. Invoice pay-date predictor ────────────────────────────────────────────────
+function InvoicePayDatePredictor() {
+  const { store } = useApp();
+  const rows = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    // Learn each customer's typical days-from-invoice-to-due (their effective term)
+    // from settled invoices; fall back to the portfolio median where history is thin.
+    const termsByCust = new Map<string, number[]>();
+    for (const i of invoices) {
+      if (!i.invoiceDate || !i.dueDate) continue;
+      const term = differenceInCalendarDays(parseISO(i.dueDate), parseISO(i.invoiceDate));
+      if (term < 0) continue;
+      const arr = termsByCust.get(i.customer) ?? [];
+      arr.push(term);
+      termsByCust.set(i.customer, arr);
+    }
+    const allTerms = [...termsByCust.values()].flat().sort((a, b) => a - b);
+    const medianTerm = allTerms.length ? percentile(allTerms, 50) : 30;
+    const today = new Date();
+
+    return invoices
+      .filter(i => i.status !== "paid")
+      .map(i => {
+        const hist = termsByCust.get(i.customer) ?? [];
+        const typical = hist.length ? Math.round(hist.reduce((s, d) => s + d, 0) / hist.length) : medianTerm;
+        const base = i.invoiceDate ? parseISO(i.invoiceDate) : today;
+        const predictedDate = new Date(base);
+        predictedDate.setDate(predictedDate.getDate() + typical);
+        const daysOut = differenceInCalendarDays(predictedDate, today);
+        const confidence = hist.length >= 3 ? "High" : hist.length >= 1 ? "Medium" : "Low";
+        return {
+          id: i.id, customer: i.customer, amount: i.amount, status: i.status,
+          typical, predictedDate, daysOut, confidence, samples: hist.length,
+        };
+      })
+      .sort((a, b) => a.predictedDate.getTime() - b.predictedDate.getTime());
+  }, [store]);
+
+  const expected30 = rows.filter(r => r.daysOut <= 30).reduce((s, r) => s + r.amount, 0);
+  const totalOpen = rows.reduce((s, r) => s + r.amount, 0);
+
+  const CONF: Record<string, string> = {
+    High: "text-green-400 bg-green-950/30 border-green-800/40",
+    Medium: "text-yellow-400 bg-yellow-950/30 border-yellow-800/40",
+    Low: "text-[var(--color-muted)] bg-[var(--color-bg)] border-[var(--color-border)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Predicts when each open invoice is likely to be settled, using the customer's typical invoice-to-due term from history (portfolio median where a customer is new). Estimates from payment terms, not a guarantee of when cash lands." />
+      {rows.length === 0 ? (
+        <EmptyState Icon={CalendarCheck2} title="No open invoices" body="Raise invoices and their predicted settlement dates will appear here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Open invoices", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+            { label: "Total open A/R", value: formatCurrency(Math.round(totalOpen)), color: "text-yellow-400" },
+            { label: "Expected within 30d", value: formatCurrency(Math.round(expected30)), color: "text-green-400" },
+            { label: "Expected later", value: formatCurrency(Math.round(totalOpen - expected30)), color: "text-[var(--color-muted)]" },
+          ]} />
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Customer", "Amount", "Status", "Predicted pay date", "In", "Confidence"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.amount))}</td>
+                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.status}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{format(r.predictedDate, "dd MMM yy")}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.daysOut < 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{r.daysOut < 0 ? `${-r.daysOut}d overdue` : `${r.daysOut}d`}</td>
+                      <td className="px-4 py-2.5"><span className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${CONF[r.confidence]}`}>{r.confidence}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 23. GST-liability forecast ────────────────────────────────────────────────────
+function GstLiabilityForecast() {
+  const m = useTwinMetrics();
+  const { store } = useApp();
+  const firmRate = store.firm?.gstRate ?? 18;
+  const registered = store.firm?.gstRegistered ?? false;
+  const [rate, setRate] = useState(firmRate);
+  const [itcPct, setItcPct] = useState(40); // input-tax-credit as % of output tax
+
+  const out = useMemo(() => {
+    // Output GST is levied on taxable sales (use revenue run-rate as the base);
+    // net liability = output tax less estimated input-tax credit on purchases.
+    const outputTax = m.monthlyRevenue * (rate / 100);
+    const inputCredit = outputTax * (itcPct / 100);
+    const netGst = Math.max(0, outputTax - inputCredit);
+    const series = m.revSeries.map(d => ({
+      month: d.month,
+      gst: Math.round(d.revenue * (rate / 100) * (1 - itcPct / 100)),
+    }));
+    return { outputTax, inputCredit, netGst, quarter: netGst * 3, series };
+  }, [m, rate, itcPct]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Estimates your net GST outflow by applying the output rate to your revenue run-rate, then deducting an assumed input-tax-credit share. A planning reserve estimate — your filed GSTR-3B liability depends on actual taxable supply and eligible ITC." />
+      {!registered && (
+        <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-3 py-2 text-[11px] text-yellow-400">
+          <Info size={12} className="shrink-0 mt-px" />
+          <span>Your firm isn't marked GST-registered. Figures below are illustrative — set your GST details in Settings for a relevant estimate.</span>
+        </div>
+      )}
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <Slider label="Output GST rate" value={rate} min={0} max={28} step={1} suffix="%" onChange={setRate} />
+        <Slider label="Input-tax credit (of output)" value={itcPct} min={0} max={90} step={5} suffix="%" onChange={setItcPct} />
+      </div>
+      <KpiGrid items={[
+        { label: "Output tax / mo", value: formatCurrency(Math.round(out.outputTax)), color: "text-[var(--color-text)]" },
+        { label: "Input credit / mo", value: formatCurrency(Math.round(out.inputCredit)), color: "text-green-400" },
+        { label: "Net GST / mo (est.)", value: formatCurrency(Math.round(out.netGst)), color: "text-red-400" },
+        { label: "Reserve for quarter", value: formatCurrency(Math.round(out.quarter)), color: "text-yellow-400" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Estimated net GST by month</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={out.series}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number) => [formatCurrency(v), "Net GST"]} contentStyle={TOOLTIP_STYLE} />
+            <Bar dataKey="gst" name="Net GST" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 24. Payroll cash-stress predictor ─────────────────────────────────────────────
+function PayrollStressPredictor() {
+  const m = useTwinMetrics();
+  const { store } = useApp();
+  const payrollMonthly = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const now = new Date();
+    const keys = Array.from({ length: 3 }, (_, i) => format(startOfMonth(subMonths(now, i)), "yyyy-MM"));
+    const seen = new Set<string>();
+    let total = 0;
+    for (const t of txns) {
+      if (t.category !== "payroll" || t.amount >= 0 || !t.date) continue;
+      const key = t.date.slice(0, 7);
+      if (!keys.includes(key)) continue;
+      seen.add(key);
+      total += Math.abs(t.amount);
+    }
+    return seen.size ? total / seen.size : 0;
+  }, [store]);
+
+  const bankCash = useMemo(() => (store.bankAccounts ?? []).reduce((s, b) => s + (b.balance ?? 0), 0), [store]);
+  const [opening, setOpening] = useState(String(Math.max(0, Math.round(bankCash || m.cash))));
+  const [payroll, setPayroll] = useState(String(Math.round(payrollMonthly || Math.max(0, m.monthlyExpense * 0.4))));
+  const [buffer, setBuffer] = useState(String(Math.round(Math.max(0, m.monthlyExpense)))); // minimum safe cash buffer
+
+  const out = useMemo(() => {
+    const start = parseFloat(opening) || 0;
+    const pay = parseFloat(payroll) || 0;
+    const buf = parseFloat(buffer) || 0;
+    const nonPayrollNet = m.monthlyNet + pay; // net before payroll is deducted
+    const rows: { month: string; afterPayroll: number; breach: boolean }[] = [];
+    let bal = start;
+    let firstBreach: string | null = null;
+    const now = new Date();
+    for (let i = 1; i <= 12; i++) {
+      bal += nonPayrollNet - pay;
+      const label = format(startOfMonth(subMonths(now, -i)), "MMM yy");
+      const breach = bal < buf;
+      if (breach && !firstBreach) firstBreach = label;
+      rows.push({ month: label, afterPayroll: Math.round(bal), breach });
+    }
+    return { rows, firstBreach, pay, buf, coverMonths: pay > 0 ? start / pay : Infinity };
+  }, [opening, payroll, buffer, m]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Projects cash after each monthly salary run and warns when the balance would breach your minimum safe buffer. Payroll is pre-filled from your recent 'payroll' transactions — override with your real wage bill. Estimates, not a payroll guarantee." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-3 gap-4`}>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Opening cash (₹)</label>
+          <input type="number" value={opening} onChange={e => setOpening(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly payroll (₹)</label>
+          <input type="number" value={payroll} onChange={e => setPayroll(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Minimum cash buffer (₹)</label>
+          <input type="number" value={buffer} onChange={e => setBuffer(e.target.value)} className={INP} />
+        </div>
+      </div>
+      <KpiGrid items={[
+        { label: "Monthly payroll", value: formatCurrency(Math.round(out.pay)), color: "text-[var(--color-text)]" },
+        { label: "Payroll runs covered", value: out.coverMonths === Infinity ? "—" : `${out.coverMonths.toFixed(1)}`, color: out.coverMonths < 3 ? "text-red-400" : out.coverMonths < 6 ? "text-yellow-400" : "text-green-400", sub: "by opening cash alone" },
+        { label: "Safe buffer", value: formatCurrency(Math.round(out.buf)), color: "text-[var(--color-muted)]" },
+        { label: "First breach month", value: out.firstBreach ?? "None in 12 mo", color: out.firstBreach ? "text-red-400" : "text-green-400" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Cash after payroll vs safe buffer</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={out.rows}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number) => [formatCurrency(v), "After payroll"]} contentStyle={TOOLTIP_STYLE} />
+            <ReferenceLine y={out.buf} stroke="#eab308" strokeDasharray="4 4" />
+            <Bar dataKey="afterPayroll" name="After payroll">
+              {out.rows.map((d, i) => <Cell key={i} fill={d.breach ? "#ef4444" : "#22c55e"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 25. Debt-service projection (from active loans) ───────────────────────────────
+function DebtServiceProjection() {
+  const { store } = useApp();
+  const [extra, setExtra] = useState(0); // extra principal % paid each month
+
+  const data = useMemo(() => {
+    const loans = store.activeLoans ?? [];
+    const totalOutstanding = loans.reduce((s, l) => s + (l.outstanding ?? 0), 0);
+    const totalEmi = loans.reduce((s, l) => s + (l.monthlyEmi ?? 0), 0);
+    const avgRate = totalOutstanding > 0
+      ? loans.reduce((s, l) => s + (l.rate ?? 0) * (l.outstanding ?? 0), 0) / totalOutstanding
+      : 0;
+
+    // Amortise the aggregate balance month-by-month at the weighted rate, adding any
+    // extra principal, until cleared or a 60-month cap.
+    const monthlyRate = avgRate / 100 / 12;
+    const extraAmt = totalEmi * (extra / 100);
+    const series: { month: string; balance: number }[] = [];
+    let bal = totalOutstanding;
+    let payoffMonth: number | null = null;
+    let totalInterest = 0;
+    for (let i = 1; i <= 60 && bal > 0; i++) {
+      const interest = bal * monthlyRate;
+      totalInterest += interest;
+      const pay = totalEmi + extraAmt;
+      bal = Math.max(0, bal + interest - pay);
+      series.push({ month: `M${i}`, balance: Math.round(bal) });
+      if (bal === 0 && payoffMonth === null) payoffMonth = i;
+    }
+    return { loans, totalOutstanding, totalEmi, avgRate, series, payoffMonth, totalInterest, extraAmt };
+  }, [store, extra]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Amortises your combined loan balance at the outstanding-weighted average rate, projecting the payoff month and total interest. Add extra principal to see the payoff pull forward. A model of your current EMIs — actual schedules vary per loan." />
+      {data.loans.length === 0 ? (
+        <EmptyState Icon={CreditCard} title="No active loans" body="Once you record active loans, their combined repayment trajectory will project here." />
+      ) : (
+        <>
+          <div className={`${CARD} p-5`}>
+            <Slider label="Extra principal (of EMI)" value={extra} min={0} max={100} step={5} suffix="%" onChange={setExtra} />
+          </div>
+          <KpiGrid items={[
+            { label: "Total outstanding", value: formatCurrency(Math.round(data.totalOutstanding)), color: "text-[var(--color-text)]" },
+            { label: "Monthly EMI", value: formatCurrency(Math.round(data.totalEmi + data.extraAmt)), color: "text-red-400", sub: data.extraAmt > 0 ? `incl. ${formatCurrency(Math.round(data.extraAmt))} extra` : "base EMI" },
+            { label: "Avg rate (weighted)", value: `${data.avgRate.toFixed(1)}%`, color: "text-yellow-400" },
+            { label: "Payoff (est.)", value: data.payoffMonth ? `${data.payoffMonth} mo` : ">60 mo", color: data.payoffMonth && data.payoffMonth <= 36 ? "text-green-400" : "text-yellow-400", sub: `~${formatCurrency(Math.round(data.totalInterest))} interest` },
+          ]} />
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3">Projected outstanding balance</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={data.series}>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(data.series.length / 12) - 1)} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+                <Tooltip formatter={(v: number) => [formatCurrency(v), "Balance"]} contentStyle={TOOLTIP_STYLE} />
+                <Area type="monotone" dataKey="balance" name="Balance" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.15} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 26. Profit-trajectory projection ──────────────────────────────────────────────
+function ProfitTrajectory() {
+  const m = useTwinMetrics();
+  const [months, setMonths] = useState(12);
+  const [marginDrift, setMarginDrift] = useState(0); // net-margin change in pts per month
+
+  const data = useMemo(() => {
+    // Project net profit forward, drifting the net margin by a chosen pts/month so the
+    // owner can see margin compression or expansion compound over time.
+    const baseMargin = m.monthlyRevenue > 0 ? (m.monthlyNet / m.monthlyRevenue) * 100 : 0;
+    const rows: { month: string; net: number; cumulative: number; margin: number }[] = [];
+    let cumulative = 0;
+    const now = new Date();
+    for (let i = 1; i <= months; i++) {
+      const margin = baseMargin + marginDrift * i;
+      const net = m.monthlyRevenue * (margin / 100);
+      cumulative += net;
+      rows.push({ month: format(startOfMonth(subMonths(now, -i)), "MMM yy"), net: Math.round(net), cumulative: Math.round(cumulative), margin: Math.round(margin * 10) / 10 });
+    }
+    const endMargin = baseMargin + marginDrift * months;
+    return { rows, baseMargin, endMargin, cumulative };
+  }, [m, months, marginDrift]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Projects net profit forward from your current revenue run-rate and net margin, optionally drifting the margin a few points per month to model creeping cost pressure or improving efficiency. A scenario aid, not a budget." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <Slider label="Project ahead" value={months} min={3} max={36} step={1} suffix=" mo" onChange={setMonths} />
+        <Slider label="Margin drift" value={marginDrift} min={-3} max={3} step={0.5} suffix=" pts/mo" onChange={setMarginDrift} />
+      </div>
+      <KpiGrid items={[
+        { label: "Current net margin", value: `${data.baseMargin.toFixed(1)}%`, color: data.baseMargin >= 0 ? "text-green-400" : "text-red-400" },
+        { label: `Margin at month ${months}`, value: `${data.endMargin.toFixed(1)}%`, color: data.endMargin >= data.baseMargin ? "text-green-400" : "text-red-400" },
+        { label: `Cumulative profit (${months} mo)`, value: formatCurrency(Math.round(data.cumulative)), color: data.cumulative >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Trajectory", value: marginDrift > 0 ? "Expanding" : marginDrift < 0 ? "Compressing" : "Flat", color: marginDrift > 0 ? "text-green-400" : marginDrift < 0 ? "text-red-400" : "text-[var(--color-muted)]" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Monthly net & cumulative profit</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={data.rows}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number, n: string) => [formatCurrency(v), n]} contentStyle={TOOLTIP_STYLE} />
+            <ReferenceLine y={0} stroke="var(--color-border)" />
+            <Line type="monotone" dataKey="net" name="Monthly net" stroke="var(--color-muted)" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="cumulative" name="Cumulative" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   Palette, Truck, Percent, Trash2, ArrowRight, Copy,
   Layers, UploadCloud, FileSearch, Calculator, MessageSquareWarning, ScrollText, Milestone, PiggyBank,
   FileJson, BookUser, Wallet, TrendingUp, Receipt,
+  Table2, CalendarClock, CopyCheck, BadgePercent,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -291,6 +292,7 @@ export default function InvoicesPage() {
     | "multicurrency" | "approval" | "template" | "challan" | "latefee"
     | "ageing" | "bulk" | "pomatch" | "tds" | "dispute" | "terms" | "milestone" | "advance"
     | "einvoicejson" | "statement" | "partial" | "profit" | "tcs"
+    | "gstr1" | "duedate" | "duplicate" | "discount"
   >("all");
 
   // Mirror the backend invoices into the shared store so the analytics engine,
@@ -430,6 +432,10 @@ export default function InvoicesPage() {
           ["partial", "Partial Payments", Wallet],
           ["profit", "Invoice Margin", TrendingUp],
           ["tcs", "TCS u/s 206C", Receipt],
+          ["gstr1", "GSTR-1 Summary", Table2],
+          ["duedate", "Smart Due-Date", CalendarClock],
+          ["duplicate", "Duplicate Check", CopyCheck],
+          ["discount", "Discount + GST", BadgePercent],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -462,6 +468,10 @@ export default function InvoicesPage() {
        tab === "partial"       ? <PartialPaymentTracker invoices={invoices} /> :
        tab === "profit"        ? <InvoiceMarginAnalyzer invoices={invoices} /> :
        tab === "tcs"           ? <TcsCalculator /> :
+       tab === "gstr1"         ? <Gstr1Summary invoices={invoices} /> :
+       tab === "duedate"       ? <DueDateSuggester invoices={invoices} /> :
+       tab === "duplicate"     ? <DuplicateDetector invoices={invoices} /> :
+       tab === "discount"      ? <DiscountTaxCalculator /> :
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
       ) : loading ? (
@@ -2423,6 +2433,297 @@ function TcsCalculator() {
         </div>
       </div>
       {NOTE("TCS is collected over and above the sale value and shown as a separate line. 206C(1H) applies only to receipts beyond the ₹50L cumulative threshold per buyer per FY. No-PAN buyers attract the higher 206CC rate. Verify current rates before filing.")}
+    </div>
+  );
+}
+
+// #52/#53 ── GSTR-1 Summary (B2B / B2CL / B2CS split) ─────────────────────────
+// Outward-supply summary for filing. B2CL = inter-state B2C invoice > ₹2.5L.
+// Here all parties are treated intra-state for the B2CL test only when no GSTIN.
+function Gstr1Summary({ invoices }: { invoices: Invoice[] }) {
+  const elig = invoices.filter(i => i.status !== "cancelled");
+
+  type Bucket = { label: string; count: number; taxable: number; tax: number };
+  const buckets: Record<"b2b" | "b2cl" | "b2cs", Bucket> = {
+    b2b:  { label: "B2B (registered buyer)", count: 0, taxable: 0, tax: 0 },
+    b2cl: { label: "B2CL (unregistered, invoice > ₹2.5L)", count: 0, taxable: 0, tax: 0 },
+    b2cs: { label: "B2CS (unregistered, ≤ ₹2.5L)", count: 0, taxable: 0, tax: 0 },
+  };
+  for (const i of elig) {
+    const taxable = parseFloat(String(i.subtotal)) || 0;
+    const tax = parseFloat(String(i.gst_amount)) || 0;
+    const total = parseFloat(String(i.total_amount)) || 0;
+    const key: "b2b" | "b2cl" | "b2cs" = i.customer_gstin
+      ? "b2b"
+      : total > 250000 ? "b2cl" : "b2cs";
+    buckets[key].count += 1;
+    buckets[key].taxable += taxable;
+    buckets[key].tax += tax;
+  }
+  const order = ["b2b", "b2cl", "b2cs"] as const;
+  const totTaxable = order.reduce((s, k) => s + buckets[k].taxable, 0);
+  const totTax = order.reduce((s, k) => s + buckets[k].tax, 0);
+
+  // Rate-wise breakup for the GSTR-1 HSN/rate summary.
+  const byRate = new Map<string, { taxable: number; tax: number }>();
+  for (const i of elig) {
+    const r = String(i.gst_rate ?? 0);
+    const cur = byRate.get(r) ?? { taxable: 0, tax: 0 };
+    cur.taxable += parseFloat(String(i.subtotal)) || 0;
+    cur.tax += parseFloat(String(i.gst_amount)) || 0;
+    byRate.set(r, cur);
+  }
+  const rateRows = [...byRate.entries()].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+
+  const exportCsv = () => {
+    const header = "Table,Invoices,Taxable Value,Tax";
+    const lines = order.map(k => `${buckets[k].label},${buckets[k].count},${buckets[k].taxable.toFixed(2)},${buckets[k].tax.toFixed(2)}`);
+    const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `GSTR1-summary-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    toast.success("GSTR-1 summary exported");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Table2 size={14} className="text-[var(--color-primary)]" /> GSTR-1 Outward-Supply Summary</h2>
+          <button onClick={exportCsv} disabled={elig.length === 0} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg disabled:opacity-40"><Download size={12} /> Export CSV</button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Invoices are auto-classified into GSTR-1 tables: B2B when the buyer has a GSTIN, else B2CL (large, &gt; ₹2.5L) or B2CS. Cross-check before filing.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Total taxable value</p><p className="text-base font-bold tabular-nums">{formatCurrency(totTaxable)}</p></div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Total GST</p><p className="text-base font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(totTax)}</p></div>
+        </div>
+      </div>
+      {elig.length > 0 ? (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["GSTR-1 table", "Invoices", "Taxable value", "GST"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {order.map(k => (
+                  <tr key={k} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5">{buckets[k].label}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{buckets[k].count}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(buckets[k].taxable)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(buckets[k].tax)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["GST rate", "Taxable value", "Tax"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rateRows.map(([r, v]) => (
+                  <tr key={r} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5">{r}%</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(v.taxable)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(v.tax)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : <p className="text-sm text-[var(--color-muted)] px-1">No invoices to summarise.</p>}
+      {NOTE("This mirrors GSTR-1 tables 4 (B2B), 5 (B2CL) and 7 (B2CS) plus a rate-wise breakup. Place-of-supply and HSN tables still need review against your GSTIN before filing on the portal.")}
+    </div>
+  );
+}
+
+// #27 ── Smart Due-Date Suggester ────────────────────────────────────────────
+// Suggests terms from this buyer's historic average days-to-pay (paid invoices).
+function DueDateSuggester({ invoices }: { invoices: Invoice[] }) {
+  const customers = useMemo(() => [...new Set(invoices.map(i => i.customer_name))].sort(), [invoices]);
+  const [customer, setCustomer] = useState("");
+  const [defaultDays, setDefaultDays] = useFeatureState<string>("inv-duedate-default", "30");
+
+  const paid = invoices.filter(i => i.customer_name === customer && i.status === "paid" && i.paid_at && i.created_at);
+  const daysList = paid.map(i => {
+    const created = new Date(i.created_at).getTime();
+    const settled = new Date(i.paid_at as string).getTime();
+    return Math.max(0, Math.round((settled - created) / 86400000));
+  });
+  const avgDays = daysList.length > 0 ? Math.round(daysList.reduce((s, d) => s + d, 0) / daysList.length) : null;
+  const fallback = parseInt(defaultDays, 10) || 30;
+  const suggested = avgDays ?? fallback;
+  // Pad the riskier (slower) payers slightly to set a realistic, collectable date.
+  const suggestedDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + suggested);
+    return d.toISOString().split("T")[0];
+  })();
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Smart Due-Date Suggester</h2>
+        <p className="text-xs text-[var(--color-muted)]">Recommends payment terms from this buyer's historic days-to-pay on settled invoices. New buyers fall back to your default term.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LBL}>Customer</label>
+            <select value={customer} onChange={e => setCustomer(e.target.value)} className={INP}>
+              <option value="">— select customer —</option>
+              {customers.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><label className={LBL}>Default term for new buyers (days)</label><input type="number" min="0" value={defaultDays} onChange={e => setDefaultDays(e.target.value)} className={INP} /></div>
+        </div>
+        {customer && (
+          <div className="border-t border-[var(--color-border)] pt-3 grid grid-cols-3 gap-3">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Paid invoices</p><p className="text-base font-bold tabular-nums">{paid.length}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Avg days-to-pay</p><p className="text-base font-bold tabular-nums">{avgDays === null ? "—" : `${avgDays}d`}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Suggested due date</p><p className="text-base font-bold tabular-nums text-[var(--color-primary)]">{suggestedDate}</p></div>
+          </div>
+        )}
+        {customer && (
+          <div className="text-xs text-[var(--color-muted)]">
+            {avgDays === null
+              ? `No settled history for this buyer — using your default of ${fallback} days (Net ${fallback}).`
+              : `Based on ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}, this buyer pays in ~${avgDays} days. Suggested term: Net ${suggested}.`}
+          </div>
+        )}
+      </div>
+      {NOTE("Days-to-pay is measured from invoice creation to the recorded payment date. Use the suggested term as the due date on the next invoice to set realistic, collectable expectations.")}
+    </div>
+  );
+}
+
+// #55 ── Duplicate Invoice Detector ──────────────────────────────────────────
+// Flags likely double-billing: same customer + same GST-inclusive total within
+// a short window. Revenue-leak / double-charge prevention before sending.
+function DuplicateDetector({ invoices }: { invoices: Invoice[] }) {
+  const [windowDays, setWindowDays] = useFeatureState<string>("inv-duplicate-window", "14");
+  const days = parseInt(windowDays, 10) || 14;
+
+  const elig = invoices.filter(i => i.status !== "cancelled");
+  const groups = useMemo(() => {
+    const out: { key: string; customer: string; amount: number; rows: Invoice[] }[] = [];
+    const byKey = new Map<string, Invoice[]>();
+    for (const i of elig) {
+      const amt = Math.round((parseFloat(String(i.total_amount)) || 0) * 100) / 100;
+      const key = `${i.customer_name.trim().toLowerCase()}|${amt}`;
+      byKey.set(key, [...(byKey.get(key) ?? []), i]);
+    }
+    for (const [key, rows] of byKey) {
+      if (rows.length < 2) continue;
+      const sorted = [...rows].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      let near = false;
+      for (let j = 1; j < sorted.length; j++) {
+        const gap = (new Date(sorted[j].created_at).getTime() - new Date(sorted[j - 1].created_at).getTime()) / 86400000;
+        if (gap <= days) { near = true; break; }
+      }
+      if (near) {
+        const amt = Math.round((parseFloat(String(sorted[0].total_amount)) || 0) * 100) / 100;
+        out.push({ key, customer: sorted[0].customer_name, amount: amt, rows: sorted });
+      }
+    }
+    return out;
+  }, [elig, days]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate Invoice Detector</h2>
+        <p className="text-xs text-[var(--color-muted)]">Flags invoices to the same customer for an identical total raised within a short window — a common double-billing slip.</p>
+        <div className="w-48"><label className={LBL}>Match window (days)</label><input type="number" min="1" value={windowDays} onChange={e => setWindowDays(e.target.value)} className={INP} /></div>
+      </div>
+      {groups.length > 0 ? (
+        <div className="space-y-3">
+          {groups.map(g => (
+            <div key={g.key} className="bg-[var(--color-surface)] border border-yellow-700/40 rounded-lg overflow-hidden">
+              <div className="px-4 py-2.5 bg-yellow-900/15 border-b border-yellow-800/30 flex items-center gap-2">
+                <AlertCircle size={13} className="text-yellow-400 shrink-0" />
+                <span className="text-sm font-medium">{g.customer}</span>
+                <span className="text-xs text-[var(--color-muted)]">· {g.rows.length} invoices at {formatCurrency(g.amount)}</span>
+              </div>
+              <table className="w-full text-sm min-w-[480px]">
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {g.rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-mono text-xs">{r.invoice_number}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{new Date(r.created_at).toLocaleDateString("en-IN")}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(parseFloat(String(r.total_amount)) || 0)}</td>
+                      <td className="px-4 py-2.5"><span className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[r.status] ?? ""}`}>{r.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <Check size={14} className="text-green-400 shrink-0" />
+          <p className="text-sm text-green-300">No suspected duplicates within a {days}-day window.</p>
+        </div>
+      )}
+      {NOTE("Detection is heuristic — matched by customer name and identical GST-inclusive total. Genuine repeat orders may appear; verify before cancelling. Cancel a true duplicate within the IRN window to avoid GST mismatch.")}
+    </div>
+  );
+}
+
+// #34/#35 ── Item Discount + GST Calculator ──────────────────────────────────
+// Discount is applied to the taxable value BEFORE GST (GST law), with round-off.
+function DiscountTaxCalculator() {
+  const [items, setItems] = useState<DocItem[]>([blankItem()]);
+  const [discountMode, setDiscountMode] = useState<"pct" | "amt">("pct");
+  const [discountVal, setDiscountVal] = useState("0");
+
+  const upd = (id: string, k: keyof DocItem, v: string) => setItems(p => p.map(r => r.id === id ? { ...r, [k]: v } : r));
+
+  // Gross taxable (pre-discount) and proportional discount applied per line, then GST per line.
+  const grossTaxable = items.reduce((s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0), 0);
+  const discount = discountMode === "pct"
+    ? Math.round(grossTaxable * ((parseFloat(discountVal) || 0) / 100) * 100) / 100
+    : Math.min(grossTaxable, parseFloat(discountVal) || 0);
+  const factor = grossTaxable > 0 ? (grossTaxable - discount) / grossTaxable : 1;
+
+  let netTaxable = 0, gst = 0;
+  for (const it of items) {
+    const lineGross = (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0);
+    const lineNet = lineGross * factor;
+    netTaxable += lineNet;
+    gst += lineNet * ((parseFloat(it.gst) || 0) / 100);
+  }
+  netTaxable = Math.round(netTaxable * 100) / 100;
+  gst = Math.round(gst * 100) / 100;
+  const preRound = netTaxable + gst;
+  const roundedTotal = Math.round(preRound);
+  const roundOff = Math.round((roundedTotal - preRound) * 100) / 100;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BadgePercent size={14} className="text-[var(--color-primary)]" /> Item Discount + GST Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Trade discount is reduced from the taxable value <em>before</em> GST (Sec 15 CGST Act), then GST is charged per-line and the total is rounded to the nearest rupee.</p>
+        <LineItemsEditor items={items} setItems={setItems} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LBL}>Discount type</label>
+            <select value={discountMode} onChange={e => setDiscountMode(e.target.value as "pct" | "amt")} className={INP}>
+              <option value="pct">Percentage (%)</option>
+              <option value="amt">Flat amount (₹)</option>
+            </select>
+          </div>
+          <div><label className={LBL}>Discount {discountMode === "pct" ? "(%)" : "(₹)"}</label><input type="number" min="0" step="0.01" value={discountVal} onChange={e => setDiscountVal(e.target.value)} className={INP} /></div>
+        </div>
+        <div className="border-t border-[var(--color-border)] pt-3 space-y-1 text-sm">
+          <div className="flex justify-between text-[var(--color-muted)]"><span>Gross taxable value</span><span className="tabular-nums">{formatCurrency(Math.round(grossTaxable * 100) / 100)}</span></div>
+          <div className="flex justify-between text-orange-400"><span>Less: discount</span><span className="tabular-nums">− {formatCurrency(discount)}</span></div>
+          <div className="flex justify-between text-[var(--color-muted)]"><span>Net taxable value</span><span className="tabular-nums">{formatCurrency(netTaxable)}</span></div>
+          <div className="flex justify-between text-[var(--color-muted)]"><span>GST</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
+          <div className="flex justify-between text-[var(--color-muted)]"><span>Round-off</span><span className="tabular-nums">{roundOff >= 0 ? "+" : "−"} {formatCurrency(Math.abs(roundOff))}</span></div>
+          <div className="flex justify-between font-bold text-base text-[var(--color-primary)]"><span>Invoice total</span><span className="tabular-nums">{formatCurrency(roundedTotal)}</span></div>
+        </div>
+      </div>
+      {NOTE("Discount is spread proportionally across lines so each rate's GST falls on its post-discount value. Only discounts known at or before supply are deductible from taxable value; post-supply discounts need a credit note. Round-off is booked to the round-off ledger.")}
     </div>
   );
 }
