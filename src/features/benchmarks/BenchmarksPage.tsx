@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { percentiles, cmgr, dso, dio, dpo, gstSummary } from "@/lib/finance";
-import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins, Layers, Waves, Wallet, Landmark, SlidersHorizontal } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins, Layers, Waves, Wallet, Landmark, SlidersHorizontal, Banknote, Timer, HeartHandshake } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 
 const SECTORS = [
@@ -84,7 +84,8 @@ function getLabel(pct: number): { label: string; color: string } {
 type BmTab = "overview" | "ratios" | "cost-structure" | "growth-percentile" | "working-capital"
   | "profitability-percentile" | "expense-ratio" | "productivity" | "digital-maturity"
   | "valuation-multiple" | "stock-turn" | "tax-burden"
-  | "ebitda-margin" | "revenue-volatility" | "liquidity-buffer" | "debt-leverage" | "opex-efficiency";
+  | "ebitda-margin" | "revenue-volatility" | "liquidity-buffer" | "debt-leverage" | "opex-efficiency"
+  | "net-margin" | "cash-runway" | "customer-retention";
 
 export default function BenchmarksPage() {
   const { store }    = useApp();
@@ -219,7 +220,7 @@ export default function BenchmarksPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Award], ["ratios", "Industry Ratios", Scale], ["cost-structure", "Cost Structure", PieChart], ["growth-percentile", "Growth Percentile", Gauge], ["working-capital", "Working-Capital", Recycle], ["profitability-percentile", "Profitability", Percent], ["expense-ratio", "Expense Ratios", Receipt], ["productivity", "Per-Employee", UsersRound], ["digital-maturity", "Digital Score", Activity], ["valuation-multiple", "Valuation Multiple", Building2], ["stock-turn", "Stock Turn", Boxes], ["tax-burden", "Tax Burden", Coins], ["ebitda-margin", "EBITDA Margin", Layers], ["revenue-volatility", "Revenue Stability", Waves], ["liquidity-buffer", "Liquidity Buffer", Wallet], ["debt-leverage", "Debt Leverage", Landmark], ["opex-efficiency", "Opex Efficiency", SlidersHorizontal]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", Award], ["ratios", "Industry Ratios", Scale], ["cost-structure", "Cost Structure", PieChart], ["growth-percentile", "Growth Percentile", Gauge], ["working-capital", "Working-Capital", Recycle], ["profitability-percentile", "Profitability", Percent], ["expense-ratio", "Expense Ratios", Receipt], ["productivity", "Per-Employee", UsersRound], ["digital-maturity", "Digital Score", Activity], ["valuation-multiple", "Valuation Multiple", Building2], ["stock-turn", "Stock Turn", Boxes], ["tax-burden", "Tax Burden", Coins], ["ebitda-margin", "EBITDA Margin", Layers], ["revenue-volatility", "Revenue Stability", Waves], ["liquidity-buffer", "Liquidity Buffer", Wallet], ["debt-leverage", "Debt Leverage", Landmark], ["opex-efficiency", "Opex Efficiency", SlidersHorizontal], ["net-margin", "Net Margin Band", Banknote], ["cash-runway", "Cash Runway Band", Timer], ["customer-retention", "Customer Retention", HeartHandshake]] as const).map(([id, label, Icon]) => (
           <button
             key={id}
             onClick={() => setBmTab(id)}
@@ -246,6 +247,9 @@ export default function BenchmarksPage() {
       {bmTab === "liquidity-buffer" && <LiquidityBufferBenchmark sector={sector} />}
       {bmTab === "debt-leverage"    && <DebtLeverageBenchmark sector={sector} />}
       {bmTab === "opex-efficiency"  && <OpexEfficiencyBenchmark sector={sector} />}
+      {bmTab === "net-margin"       && <NetMarginBandBenchmark sector={sector} />}
+      {bmTab === "cash-runway"      && <CashRunwayBandBenchmark sector={sector} />}
+      {bmTab === "customer-retention" && <CustomerRetentionBandBenchmark sector={sector} />}
 
       {bmTab === "overview" && <>
       {!hasData && (
@@ -1750,4 +1754,212 @@ function OpexEfficiencyBenchmark({ sector }: { sector: string }) {
       <p className="text-[10px] text-[var(--color-muted)]">Operating spend excludes payroll (benchmarked separately) and is taken net of nothing — it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Net-Margin Band — TTM net margin (after payroll + estimated interest) vs sector
+// ─────────────────────────────────────────────────────────────────────────────
+const NET_MARGIN_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 2, mid: 8,  high: 18 },
+  "Manufacturing (SMB)": { low: 1, mid: 6,  high: 14 },
+  "IT Services":         { low: 6, mid: 16, high: 28 },
+};
+
+function NetMarginBandBenchmark({ sector }: { sector: string }) {
+  const band = NET_MARGIN_BANDS[sector] ?? NET_MARGIN_BANDS["default"];
+  const { store } = useApp();
+  const { revenue, cost, payroll, hasRev } = useTtm();
+  const emiMonthly = (store.activeLoans ?? []).reduce((s, l) => s + l.monthlyEmi, 0);
+  const interestY = emiMonthly * 12 * 0.4; // ~40% of EMI is interest early in tenure
+  const netProfit = revenue - cost - payroll - interestY;
+  const netMargin = hasRev ? +((netProfit / revenue) * 100).toFixed(1) : null;
+  const pct = netMargin !== null ? bandPercentile(netMargin, band.low, band.mid, band.high, true) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  // Rupee upside of reaching the sector-median net margin.
+  const upside = netMargin !== null && netMargin < band.mid ? Math.round(((band.mid - netMargin) / 100) * revenue) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Net-Margin Band</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your trailing-12-month net margin — revenue less direct costs, payroll and estimated loan interest — placed against indicative <span className="text-[var(--color-text)]">{sector}</span> bands.</p>
+        {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue and expense transactions to compute your net margin.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Net margin</p>
+          <p className={`text-2xl font-bold tabular-nums ${netMargin === null ? "text-[var(--color-muted)]" : netMargin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{netMargin !== null ? `${netMargin}%` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">TTM net profit</p>
+          <p className={`text-2xl font-bold tabular-nums ${netProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(netProfit) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{band.mid}%</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Upside to median</p>
+          <p className={`text-2xl font-bold tabular-nums ${upside > 0 ? "text-[var(--color-primary)]" : "text-green-400"}`}>{upside > 0 ? `+${formatCurrency(upside)}` : "At/above"}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Net margin vs sector</h3>
+        <BandRow label="Net margin (after payroll & interest)" desc="TTM net profit ÷ TTM revenue. Higher is healthier." yours={netMargin} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
+        {netMargin !== null && netMargin < band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Net margin is below the typical range — review pricing, direct costs and overhead to widen the gap.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Interest is estimated at ~40% of total EMI; tax is not deducted, so this is a pre-tax operating net margin. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your CA before acting.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cash-Runway Band — months of burn covered by current cash vs sector
+// ─────────────────────────────────────────────────────────────────────────────
+const RUNWAY_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 1.5, mid: 2.6, high: 4.0 },
+  "Manufacturing (SMB)": { low: 1.0, mid: 2.0, high: 3.7 },
+  "IT Services":         { low: 2.0, mid: 3.2, high: 5.0 },
+};
+
+function CashRunwayBandBenchmark({ sector }: { sector: string }) {
+  const band = RUNWAY_BANDS[sector] ?? RUNWAY_BANDS["default"];
+  const { store } = useApp();
+  const balance = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const burn = monthlyBurn(store.transactions ?? []);
+  const months = burn > 0 ? +(balance / burn).toFixed(1) : null;
+  const pct = months !== null ? bandPercentile(months, band.low, band.mid, band.high, true) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  // Cash needed to reach the sector-median runway.
+  const gapCash = months !== null && months < band.mid ? Math.round((band.mid - months) * burn) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Cash-Runway Band</h2>
+        <p className="text-xs text-[var(--color-muted)]">How many months of net burn your current cash balance covers, against indicative <span className="text-[var(--color-text)]">{sector}</span> runway bands. A longer runway is a stronger safety buffer.</p>
+        {months === null && <p className="text-xs text-yellow-400 mt-2">No net monthly burn detected — add expense transactions to compute your runway.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Runway</p>
+          <p className={`text-2xl font-bold tabular-nums ${months === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{months !== null ? `${months} mo` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Cash balance</p>
+          <p className="text-2xl font-bold tabular-nums">{formatCurrency(balance)}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Monthly burn</p>
+          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(burn) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Cash to median runway</p>
+          <p className={`text-2xl font-bold tabular-nums ${gapCash > 0 ? "text-[var(--color-primary)]" : "text-green-400"}`}>{gapCash > 0 ? `+${formatCurrency(gapCash)}` : "At/above"}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Runway vs sector</h3>
+        <BandRow label="Months of burn covered" desc="Cash balance ÷ net monthly burn. Higher is safer." yours={months} unit=" mo" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
+        {months !== null && months < band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Runway is below the typical range — accelerate collections, trim burn or secure a credit line before cash tightens.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Burn is net monthly outflow from recent transactions; a single lumpy month can distort it. Cash-to-median multiplies the runway gap by monthly burn. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer-Retention Band — % of prior customers who reordered, vs sector
+// ─────────────────────────────────────────────────────────────────────────────
+const RETENTION_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 45, mid: 62, high: 80 },
+  "Manufacturing (SMB)": { low: 55, mid: 72, high: 88 },
+  "IT Services":         { low: 60, mid: 78, high: 92 },
+};
+
+function CustomerRetentionBandBenchmark({ sector }: { sector: string }) {
+  const band = RETENTION_BANDS[sector] ?? RETENTION_BANDS["default"];
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
+  const named = (s: string) => (s ?? "").trim().toLowerCase();
+
+  // Prior window: customers invoiced before the last 6 months. Recent window: last 6 months.
+  const priorSet = new Set<string>();
+  const recentSet = new Set<string>();
+  for (const inv of invoices) {
+    const d = (inv.invoiceDate ?? "").slice(0, 7);
+    const c = named(inv.customer);
+    if (!c || !d) continue;
+    if (d < cutoffKey) priorSet.add(c);
+    else recentSet.add(c);
+  }
+  const priorCount = priorSet.size;
+  let retained = 0;
+  priorSet.forEach(c => { if (recentSet.has(c)) retained += 1; });
+  const retention = priorCount > 0 ? +((retained / priorCount) * 100).toFixed(1) : null;
+  const pct = retention !== null ? bandPercentile(retention, band.low, band.mid, band.high, true) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  const lapsed = priorCount - retained;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HeartHandshake size={14} className="text-[var(--color-primary)]" /> Customer-Retention Band</h2>
+        <p className="text-xs text-[var(--color-muted)]">The share of customers invoiced before the last 6 months who were invoiced again in the last 6 months, against indicative <span className="text-[var(--color-text)]">{sector}</span> retention bands.</p>
+        {retention === null && (
+          <EmptyStateInline description="Add invoices spanning more than 6 months so prior customers can be matched against recent ones." />
+        )}
+      </div>
+
+      {retention !== null && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Retention</p>
+            <p className={`text-2xl font-bold tabular-nums ${(pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{retention}%</p>
+            {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Prior customers</p>
+            <p className="text-2xl font-bold tabular-nums">{priorCount}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Retained</p>
+            <p className="text-2xl font-bold tabular-nums text-green-400">{retained}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Lapsed</p>
+            <p className={`text-2xl font-bold tabular-nums ${lapsed > 0 ? "text-yellow-400" : "text-green-400"}`}>{lapsed}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Retention vs sector</h3>
+        <BandRow label="Repeat-customer rate" desc="Prior customers who reordered ÷ all prior customers. Higher is stickier." yours={retention} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
+        {retention !== null && retention < band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Retention is below the typical range — {lapsed} prior customer(s) haven't reordered; a win-back outreach could recover revenue.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Customers are matched by name (case-insensitive); naming inconsistencies can understate retention. Windows are split at 6 months before today. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+/** Tiny inline empty-state used inside header cards above. */
+function EmptyStateInline({ description }: { description: string }) {
+  return <p className="text-xs text-yellow-400 mt-2">{description}</p>;
 }

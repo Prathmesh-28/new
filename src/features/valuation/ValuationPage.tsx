@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, dcfValuation, dilution } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock, Activity, Scale, Receipt, TrendingDown, TrendingUp } from "lucide-react";
+import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock, Activity, Scale, Receipt, TrendingDown, TrendingUp, GitBranch, Infinity as InfinityIcon, Timer } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
@@ -81,6 +81,9 @@ export default function ValuationPage() {
           ["secondary-tax", "Secondary Tax", Receipt],
           ["down-round", "Down-Round Impact", TrendingDown],
           ["investor-moic", "Investor MOIC / IRR", TrendingUp],
+          ["ev-ebitda-bridge", "EV → Equity Bridge", GitBranch],
+          ["arr-multiple", "ARR-Multiple Value", InfinityIcon],
+          ["discounted-payback", "Discounted Payback", Timer],
         ] as const).map(([id, label, Icon]) => (
           <a key={id} href={`#${id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-accent)] transition-colors">
@@ -328,6 +331,21 @@ export default function ValuationPage() {
       {/* Investor MOIC / IRR backsolve */}
       <section id="investor-moic" className="scroll-mt-4">
         <InvestorMoic preMoney={range.mid} raiseAmount={raiseAmount} />
+      </section>
+
+      {/* EV → equity bridge */}
+      <section id="ev-ebitda-bridge" className="scroll-mt-4">
+        <EvEquityBridge enterpriseValue={dcf.enterpriseValue} cash={snap.cash} />
+      </section>
+
+      {/* ARR-multiple SaaS valuation */}
+      <section id="arr-multiple" className="scroll-mt-4">
+        <ArrMultiple annualRevenue={annualRevenue} growthPct={growth} />
+      </section>
+
+      {/* Discounted-payback period */}
+      <section id="discounted-payback" className="scroll-mt-4">
+        <DiscountedPayback baseAnnualFcf={baseFcf > 0 ? baseFcf : annualRevenue * 0.1} growthPct={growth} discountPct={discount} />
       </section>
     </div>
   );
@@ -1694,6 +1712,251 @@ function InvestorMoic({ preMoney, raiseAmount }: { preMoney: number; raiseAmount
       <p className="text-[10px] text-[var(--color-muted)]">
         Exit proceeds to the investor: <strong className="tabular-nums">{formatCurrency(Math.round(exitProceeds))}</strong> (~{paybackYears > 0 && isFinite(paybackYears) ? `${paybackYears.toFixed(1)}y` : "—"} to recover cost at this growth rate). VCs typically want a fund-returning 3x+ at ~25%+ IRR; show them how this entry price gets there.
       </p>
+    </div>
+  );
+}
+
+// ── EV → EQUITY BRIDGE ──────────────────────────────────────────────────────────
+function EvEquityBridge({ enterpriseValue, cash }: { enterpriseValue: number; cash: number }) {
+  const [evInput, setEvInput] = useState(() => String(Math.max(0, Math.round(enterpriseValue))));
+  const [cashInput, setCashInput] = useState(() => String(Math.max(0, Math.round(cash))));
+  const [debtInput, setDebtInput] = useState("0");
+  const [minorityInput, setMinorityInput] = useState("0");
+
+  const ev = parseFloat(evInput) || 0;
+  const cashOnHand = parseFloat(cashInput) || 0;
+  const debt = parseFloat(debtInput) || 0;
+  const minority = parseFloat(minorityInput) || 0;
+
+  const netDebt = debt - cashOnHand;
+  const equityValue = ev - netDebt - minority;
+
+  const steps = [
+    { name: "Enterprise value", value: ev, sign: "+", color: "text-[var(--color-text)]" },
+    { name: "Less: total debt", value: -debt, sign: "−", color: "text-red-400" },
+    { name: "Plus: cash & equivalents", value: cashOnHand, sign: "+", color: "text-green-400" },
+    { name: "Less: minority interest", value: -minority, sign: "−", color: "text-red-400" },
+  ] as const;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> EV → Equity Value Bridge</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">DCF and multiples give enterprise value; founders care about equity value. Net out debt, add back cash, and subtract minority interests to bridge the two.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Enterprise value (₹)</label>
+          <input type="number" min={0} value={evInput} onChange={e => setEvInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Total debt (₹)</label>
+          <input type="number" min={0} value={debtInput} onChange={e => setDebtInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Cash & equivalents (₹)</label>
+          <input type="number" min={0} value={cashInput} onChange={e => setCashInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Minority interest (₹)</label>
+          <input type="number" min={0} value={minorityInput} onChange={e => setMinorityInput(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        {steps.map(s => (
+          <div key={s.name} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+            <span className="font-medium">{s.name}</span>
+            <span className={`tabular-nums font-semibold ${s.color}`}>{s.sign} {formatCurrency(Math.abs(Math.round(s.value)))}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-primary)]">Equity value to shareholders</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Net {netDebt >= 0 ? "debt" : "cash"} position {formatCurrency(Math.abs(Math.round(netDebt)))}</p>
+        </div>
+        <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(equityValue))}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── ARR-MULTIPLE SAAS VALUATION ─────────────────────────────────────────────────
+function ArrMultiple({ annualRevenue, growthPct }: { annualRevenue: number; growthPct: number }) {
+  const [arrInput, setArrInput] = useState(() => (annualRevenue > 0 ? String(Math.round(annualRevenue)) : ""));
+  const [grossMargin, setGrossMargin] = useState(75);
+  const [nrr, setNrr] = useState(110);            // net revenue retention %
+  const [grossGrowth, setGrossGrowth] = useState(() => Math.round(Math.max(0, growthPct)));
+
+  const arr = parseFloat(arrInput) || 0;
+
+  // Base SaaS multiple anchored at 6x, flexed by growth, retention and margin quality.
+  const baseMultiple = 6;
+  const growthAdj = (grossGrowth - 30) / 30 * 2;       // ±2x per 30pts off a 30% baseline
+  const nrrAdj = (nrr - 100) / 10 * 0.6;               // 0.6x per 10pts of NRR over 100
+  const marginAdj = (grossMargin - 70) / 10 * 0.4;     // 0.4x per 10pts of margin over 70
+  const multiple = Math.max(0.5, baseMultiple + growthAdj + nrrAdj + marginAdj);
+  const valuation = arr * multiple;
+
+  const tiers = [
+    { name: "Conservative", m: Math.max(0.5, multiple * 0.75), fill: "#64748b" },
+    { name: "Base", m: multiple, fill: "#8b5cf6" },
+    { name: "Premium", m: multiple * 1.25, fill: "#22c55e" },
+  ];
+  const bars = tiers.map(t => ({ name: `${t.name} (${t.m.toFixed(1)}x)`, value: Math.round(arr * t.m), fill: t.fill }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><InfinityIcon size={14} className="text-purple-400" /> ARR-Multiple Valuation</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Forward ARR × a quality-adjusted multiple — the dominant lens for recurring-revenue SaaS. Growth, net retention and gross margin pull the multiple up or down from a 6x anchor.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Annual recurring revenue (₹)</label>
+          <input type="number" min={0} value={arrInput} onChange={e => setArrInput(e.target.value)} placeholder="e.g. 60000000" className={INP} />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">YoY growth</span><strong>{grossGrowth}%</strong></div>
+          <input type="range" min={0} max={150} step={5} value={grossGrowth} onChange={e => setGrossGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Net retention (NRR)</span><strong>{nrr}%</strong></div>
+          <input type="range" min={70} max={150} step={1} value={nrr} onChange={e => setNrr(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Gross margin</span><strong>{grossMargin}%</strong></div>
+          <input type="range" min={30} max={95} step={1} value={grossMargin} onChange={e => setGrossMargin(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {arr > 0 && (
+        <>
+          <div className="bg-purple-950/20 border border-purple-800/40 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-purple-300">ARR-multiple valuation</p>
+              <p className="text-[10px] text-[var(--color-muted)]">Quality-adjusted multiple {multiple.toFixed(1)}x (anchor 6.0x)</p>
+            </div>
+            <p className="text-xl font-bold tabular-nums text-purple-300">{formatCurrency(Math.round(valuation))}</p>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <BarChart data={bars} layout="vertical" barCategoryGap="28%">
+              <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={130} />
+              <Tooltip formatter={(v: number) => [formatCurrency(v), "Valuation"]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]}>{bars.map((b, i) => <Cell key={i} fill={b.fill} />)}</Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Public SaaS multiples compressed sharply post-2022 — private rounds now skew toward profitable-growth (Rule-of-40) names. Treat above 10x as exceptional.</p>
+    </div>
+  );
+}
+
+// ── DISCOUNTED-PAYBACK PERIOD ───────────────────────────────────────────────────
+function DiscountedPayback({ baseAnnualFcf, growthPct, discountPct }: { baseAnnualFcf: number; growthPct: number; discountPct: number }) {
+  const [investInput, setInvestInput] = useState(() => String(Math.max(0, Math.round(baseAnnualFcf * 2))));
+  const [rate, setRate] = useState(() => Math.round(Math.max(1, discountPct)));
+  const [horizon, setHorizon] = useState(8);
+
+  const invest = parseFloat(investInput) || 0;
+
+  const rows = useMemo(() => {
+    const g = growthPct / 100;
+    const d = rate / 100;
+    let cumDisc = 0;
+    let cumUndisc = 0;
+    const out: { year: number; cf: number; pv: number; cumPv: number; cumCf: number }[] = [];
+    for (let y = 1; y <= horizon; y++) {
+      const cf = baseAnnualFcf * Math.pow(1 + g, y - 1);
+      const pv = cf / Math.pow(1 + d, y);
+      cumDisc += pv;
+      cumUndisc += cf;
+      out.push({ year: y, cf, pv, cumPv: cumDisc, cumCf: cumUndisc });
+    }
+    return out;
+  }, [baseAnnualFcf, growthPct, rate, horizon]);
+
+  const findPayback = (key: "cumPv" | "cumCf") => {
+    let prev = 0;
+    for (const r of rows) {
+      const cum = r[key];
+      if (cum >= invest) {
+        const inYearFlow = cum - prev;
+        const frac = inYearFlow > 0 ? (invest - prev) / inYearFlow : 0;
+        return r.year - 1 + frac;
+      }
+      prev = cum;
+    }
+    return Infinity;
+  };
+
+  const discPayback = invest > 0 ? findPayback("cumPv") : 0;
+  const simplePayback = invest > 0 ? findPayback("cumCf") : 0;
+  const recovered = isFinite(discPayback);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Discounted-Payback Period</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How many years of discounted cash flow it takes to recover an investment — a risk lens DCF's single NPV hides. Uses your live FCF base, growth and discount rate.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Up-front investment (₹)</label>
+          <input type="number" min={0} value={investInput} onChange={e => setInvestInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Discount rate</span><strong>{rate}%</strong></div>
+          <input type="range" min={1} max={40} step={1} value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Horizon</span><strong>{horizon}y</strong></div>
+          <input type="range" min={3} max={15} step={1} value={horizon} onChange={e => setHorizon(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "Discounted payback", value: recovered ? `${discPayback.toFixed(1)} yrs` : `> ${horizon} yrs`, color: recovered ? "text-[var(--color-primary)]" : "text-red-400" },
+          { label: "Simple payback", value: isFinite(simplePayback) ? `${simplePayback.toFixed(1)} yrs` : `> ${horizon} yrs`, color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>{["Year", "Cash flow", "PV @ rate", "Cumulative PV"].map(h =>
+              <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => {
+              const crossed = r.cumPv >= invest;
+              return (
+                <tr key={r.year} className={crossed ? "bg-[var(--color-primary)]/5" : ""}>
+                  <td className="px-3 py-2">Year {r.year}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatCurrency(Math.round(r.cf))}</td>
+                  <td className="px-3 py-2 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.pv))}</td>
+                  <td className="px-3 py-2 tabular-nums font-semibold">{formatCurrency(Math.round(r.cumPv))}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Discounted payback is always longer than simple payback because later rupees are worth less. If it exceeds your horizon, the investment never fully recovers on a present-value basis.</p>
     </div>
   );
 }

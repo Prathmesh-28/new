@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy, Tag, Users, PieChart, Target, ShieldAlert, Scissors, Rocket, Factory, Clock, Megaphone, Building2, Scale, UserMinus, Wallet, Boxes, Globe } from "lucide-react";
+import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy, Tag, Users, PieChart, Target, ShieldAlert, Scissors, Rocket, Factory, Clock, Megaphone, Building2, Scale, UserMinus, Wallet, Boxes, Globe, Bot, HeartCrack, Gauge, Flame } from "lucide-react";
 import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
@@ -59,7 +59,7 @@ const TYPE_COLORS: Record<string, string> = {
   deal:    "text-purple-400",
 };
 
-type ScenarioTab = "planner" | "price-sim" | "headcount" | "dilution" | "breakeven" | "revenue-shock" | "cost-cut" | "product-launch" | "supplier-hike" | "payment-terms" | "marketing-roi" | "capex" | "debt-vs-equity" | "client-loss" | "salary-hike" | "inventory-buildup" | "fx-shock";
+type ScenarioTab = "planner" | "price-sim" | "headcount" | "dilution" | "breakeven" | "revenue-shock" | "cost-cut" | "product-launch" | "supplier-hike" | "payment-terms" | "marketing-roi" | "capex" | "debt-vs-equity" | "client-loss" | "salary-hike" | "inventory-buildup" | "fx-shock" | "automation-roi" | "churn-impact" | "capacity-expansion" | "cost-inflation";
 
 export default function ScenariosPage() {
   const { store } = useApp();
@@ -172,6 +172,10 @@ export default function ScenariosPage() {
           ["salary-hike", "Salary-Hike Afford", Wallet],
           ["inventory-buildup", "Inventory Build-up", Boxes],
           ["fx-shock", "FX-Rate Shock", Globe],
+          ["automation-roi", "Automation ROI", Bot],
+          ["churn-impact", "Churn Increase", HeartCrack],
+          ["capacity-expansion", "Capacity Expansion", Gauge],
+          ["cost-inflation", "Cost-Inflation Passthrough", Flame],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setScenTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${scenTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -196,6 +200,10 @@ export default function ScenariosPage() {
       {scenTab === "salary-hike" && <SalaryHikeAffordability />}
       {scenTab === "inventory-buildup" && <InventoryBuildupImpact />}
       {scenTab === "fx-shock" && <FxRateShock />}
+      {scenTab === "automation-roi" && <AutomationRoiScenario />}
+      {scenTab === "churn-impact" && <ChurnIncreaseImpact />}
+      {scenTab === "capacity-expansion" && <CapacityExpansionModel />}
+      {scenTab === "cost-inflation" && <CostInflationPassthrough />}
 
       {scenTab === "planner" && <>
       {/* Presets */}
@@ -2017,6 +2025,367 @@ function FxRateShock() {
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">A single-rate sensitivity, not a hedge price. Forward/option premiums, settlement timing and GIFT-City routing aren't priced here — confirm cover with your banker.</p>
+    </div>
+  );
+}
+
+// ── AUTOMATION-INVESTMENT ROI ────────────────────────────────────────────────
+// One-time tool/automation spend vs the recurring labour hours it frees, with
+// payback period, annual net saving and a 3-year ROI.
+function AutomationRoiScenario() {
+  const fc = formatCurrency;
+  const [upfront, setUpfront]   = useState("200000"); // one-time build/licence
+  const [monthly, setMonthly]   = useState("8000");   // recurring subscription/upkeep
+  const [hours, setHours]       = useState("60");     // labour hours saved / month
+  const [wage, setWage]         = useState("400");    // fully-loaded cost / hour
+
+  const up   = parseFloat(upfront) || 0;
+  const mo   = parseFloat(monthly) || 0;
+  const hrs  = parseFloat(hours) || 0;
+  const wg   = parseFloat(wage) || 0;
+
+  const grossSaving = hrs * wg;            // labour value freed / month
+  const netSaving   = grossSaving - mo;    // after recurring upkeep
+  const paybackMo   = netSaving > 0 ? up / netSaving : Infinity;
+  const annualNet   = netSaving * 12;
+  const threeYrNet  = netSaving * 36 - up;
+  const roi3yr      = up > 0 ? (threeYrNet / up) * 100 : 0;
+  const worth       = netSaving > 0 && threeYrNet > 0;
+  const paybackLbl  = paybackMo === Infinity ? "never" : `${paybackMo.toFixed(1)} mo`;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Bot size={14} className="text-[var(--color-primary)]" /> Automation-Investment ROI</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Upfront cost (₹)</label><input type="number" value={upfront} onChange={e => setUpfront(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Recurring cost / mo (₹)</label><input type="number" value={monthly} onChange={e => setMonthly(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Hours saved / mo</label><input type="number" value={hours} onChange={e => setHours(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Loaded cost / hour (₹)</label><input type="number" value={wage} onChange={e => setWage(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Net monthly saving = (hours saved × loaded hourly cost) − recurring upkeep. Payback = upfront ÷ net monthly saving.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Labour value freed", value: `${fc(Math.round(grossSaving))}/mo`, color: "text-[var(--color-text)]" },
+          { label: "Net saving", value: netSaving >= 0 ? `${fc(Math.round(netSaving))}/mo` : `−${fc(Math.abs(Math.round(netSaving)))}/mo`, color: netSaving >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Payback period", value: paybackLbl, color: paybackMo <= 12 ? "text-green-400" : paybackMo === Infinity ? "text-red-400" : "text-orange-400" },
+          { label: "3-year ROI", value: `${roi3yr >= 0 ? "+" : "−"}${Math.abs(roi3yr).toFixed(0)}%`, color: roi3yr >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Horizon", "Cumulative cost", "Cumulative saving", "Net"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[12, 24, 36].map(m => {
+              const cost = up + mo * m;
+              const save = grossSaving * m;
+              const net  = save - cost;
+              return (
+                <tr key={m} className={`border-b border-[var(--color-border)] last:border-0 ${m === 36 ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                  <td className="px-4 py-2.5">{m} months</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(cost))}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(save))}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{net >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(net)))}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${worth ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${worth ? "text-green-400" : "text-red-400"}`}>
+          {worth
+            ? `✓ This automation pays for itself in ${paybackLbl} and nets ${fc(Math.round(annualNet))}/yr — a clear win at these volumes.`
+            : `⚠ Net saving is ${fc(Math.round(netSaving))}/mo — the upkeep eats the gain. Increase hours saved or cut recurring cost before committing.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Assumes freed hours convert to real cost savings (redeployment or headcount avoidance). Ramp-up, training time and reliability risk aren't modelled.</p>
+    </div>
+  );
+}
+
+// ── CHURN-INCREASE IMPACT ────────────────────────────────────────────────────
+// Shows how a rise in monthly churn shortens average customer lifetime and
+// erodes recurring revenue + lifetime value.
+function ChurnIncreaseImpact() {
+  const fc = formatCurrency;
+  const [customers, setCustomers] = useState("400");
+  const [arpu, setArpu]           = useState("3000");  // monthly revenue / customer
+  const [churn, setChurn]         = useState("3");     // current monthly churn %
+  const [delta, setDelta]         = useState("2");     // additional churn points
+
+  const n     = parseFloat(customers) || 0;
+  const arpuV = parseFloat(arpu) || 0;
+  const c0    = (parseFloat(churn) || 0) / 100;
+  const c1    = Math.min(1, c0 + (parseFloat(delta) || 0) / 100);
+
+  const life  = (c: number) => c > 0 ? 1 / c : Infinity;        // avg lifetime (months)
+  const ltv   = (c: number) => c > 0 ? arpuV / c : Infinity;    // simple LTV
+  const life0 = life(c0), life1 = life(c1);
+  const ltv0  = ltv(c0),  ltv1 = ltv(c1);
+
+  // Customers lost in month 1 from the higher churn, and the MRR they take.
+  const extraLost   = n * (c1 - c0);
+  const mrr0        = n * arpuV;
+  const mrrAfter12  = arpuV * n * Math.pow(1 - c1, 12);
+  const mrrBase12   = arpuV * n * Math.pow(1 - c0, 12);
+  const mrrGap12    = mrrBase12 - mrrAfter12;
+  const lifeLbl     = (m: number) => m === Infinity ? "∞" : `${m.toFixed(1)} mo`;
+  const ltvLbl      = (v: number) => v === Infinity ? "∞" : fc(Math.round(v));
+  const severe      = c1 - c0 > 0 && mrrGap12 > mrr0 * 0.1;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><HeartCrack size={14} className="text-[var(--color-primary)]" /> Churn-Increase Impact</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Active customers</label><input type="number" value={customers} onChange={e => setCustomers(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Revenue / customer / mo (₹)</label><input type="number" value={arpu} onChange={e => setArpu(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Current churn % / mo</label><input type="number" value={churn} onChange={e => setChurn(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Churn increase (pts)</label><input type="number" value={delta} onChange={e => setDelta(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Avg lifetime ≈ 1 ÷ monthly churn. LTV ≈ monthly revenue ÷ churn (no discounting). Going from {(c0 * 100).toFixed(1)}% to {(c1 * 100).toFixed(1)}% churn.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Avg lifetime after", value: lifeLbl(life1), color: "text-orange-400" },
+          { label: "LTV after", value: ltvLbl(ltv1), color: "text-red-400" },
+          { label: "Extra lost / mo", value: `${Math.round(extraLost)} cust`, color: "text-red-400" },
+          { label: "MRR gap by mo 12", value: `−${fc(Math.round(mrrGap12))}`, color: "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Current churn", "Higher churn"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Monthly churn", b: `${(c0 * 100).toFixed(1)}%`, a: `${(c1 * 100).toFixed(1)}%` },
+              { label: "Avg lifetime", b: lifeLbl(life0), a: lifeLbl(life1) },
+              { label: "LTV / customer", b: ltvLbl(ltv0), a: ltvLbl(ltv1) },
+              { label: "MRR after 12 mo", b: fc(Math.round(mrrBase12)), a: fc(Math.round(mrrAfter12)), bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${severe ? "border-red-800/40 bg-red-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm font-bold ${severe ? "text-red-400" : "text-orange-400"}`}>
+          {severe
+            ? `⚠ A ${(parseFloat(delta) || 0)}-point churn rise cuts avg lifetime to ${lifeLbl(life1)} and drains ${fc(Math.round(mrrGap12))} of MRR within a year. Retention is now your highest-leverage lever.`
+            : `A ${(parseFloat(delta) || 0)}-point churn rise trims lifetime to ${lifeLbl(life1)} — manageable, but watch the LTV/CAC ratio as it compounds.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Simple geometric-decay model with no new-customer acquisition or discounting. Cohort behaviour and seasonality aren't modelled — use as a directional sensitivity.</p>
+    </div>
+  );
+}
+
+// ── CAPACITY-EXPANSION MODEL ─────────────────────────────────────────────────
+// Adding production/service capacity: incremental fixed + variable cost vs the
+// extra revenue at a given utilisation, with payback on the expansion outlay.
+function CapacityExpansionModel() {
+  const fc = formatCurrency;
+  const [outlay, setOutlay]     = useState("1500000"); // one-time expansion capex
+  const [addUnits, setAddUnits] = useState("300");     // extra units/mo at full use
+  const [util, setUtil]         = useState("70");      // expected utilisation %
+  const [price, setPrice]       = useState("1200");
+  const [varCost, setVar]       = useState("700");     // variable cost / unit
+  const [fixedAdd, setFixedAdd] = useState("90000");   // extra fixed cost / mo
+
+  const cap   = parseFloat(outlay) || 0;
+  const units = parseFloat(addUnits) || 0;
+  const u     = (parseFloat(util) || 0) / 100;
+  const P     = parseFloat(price) || 0;
+  const V     = parseFloat(varCost) || 0;
+  const fixed = parseFloat(fixedAdd) || 0;
+
+  const realUnits   = units * u;
+  const contrib     = P - V;
+  const addRevenue  = realUnits * P;
+  const addProfit   = realUnits * contrib - fixed;
+  const paybackMo   = addProfit > 0 ? cap / addProfit : Infinity;
+  const breakEvenU  = contrib > 0 ? fixed / contrib : Infinity;          // units/mo to cover added fixed
+  const breakEvenUtil = units > 0 && breakEvenU !== Infinity ? (breakEvenU / units) * 100 : Infinity;
+  const annualProfit  = addProfit * 12;
+  const worth       = addProfit > 0 && paybackMo <= 36;
+  const paybackLbl  = paybackMo === Infinity ? "never" : `${paybackMo.toFixed(1)} mo`;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Capacity-Expansion Model</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Expansion capex (₹)</label><input type="number" value={outlay} onChange={e => setOutlay(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Added units / mo (full)</label><input type="number" value={addUnits} onChange={e => setAddUnits(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Expected utilisation %</label><input type="number" value={util} onChange={e => setUtil(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Price / unit (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Variable cost / unit (₹)</label><input type="number" value={varCost} onChange={e => setVar(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Added fixed cost / mo (₹)</label><input type="number" value={fixedAdd} onChange={e => setFixedAdd(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Real output = added capacity × utilisation. Added profit / mo = real units × (price − variable cost) − added fixed cost.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Added revenue", value: `${fc(Math.round(addRevenue))}/mo`, color: "text-[var(--color-text)]" },
+          { label: "Added profit", value: addProfit >= 0 ? `${fc(Math.round(addProfit))}/mo` : `−${fc(Math.abs(Math.round(addProfit)))}/mo`, color: addProfit >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Payback", value: paybackLbl, color: paybackMo <= 24 ? "text-green-400" : paybackMo === Infinity ? "text-red-400" : "text-orange-400" },
+          { label: "Break-even util.", value: breakEvenUtil === Infinity ? "n/a" : `${breakEvenUtil.toFixed(0)}%`, color: "text-[var(--color-muted)]" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Utilisation", "Units / mo", "Added profit / mo", "Payback"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[0.5, 0.7, 0.9, 1].map(uu => {
+              const ru = units * uu;
+              const prof = ru * contrib - fixed;
+              const pb = prof > 0 ? cap / prof : Infinity;
+              return (
+                <tr key={uu} className={`border-b border-[var(--color-border)] last:border-0 ${Math.abs(uu - u) < 0.001 ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                  <td className="px-4 py-2.5">{(uu * 100).toFixed(0)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums">{Math.round(ru)}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${prof >= 0 ? "text-green-400" : "text-red-400"}`}>{prof >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(prof)))}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{pb === Infinity ? "never" : `${pb.toFixed(1)} mo`}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${worth ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${worth ? "text-green-400" : "text-red-400"}`}>
+          {worth
+            ? `✓ At ${(u * 100).toFixed(0)}% utilisation the expansion adds ${fc(Math.round(annualProfit))}/yr and pays back in ${paybackLbl}. Demand cover above ${breakEvenUtil === Infinity ? "—" : `${breakEvenUtil.toFixed(0)}%`} keeps it profitable.`
+            : `⚠ At ${(u * 100).toFixed(0)}% utilisation this expansion ${addProfit < 0 ? "loses money" : `pays back only in ${paybackLbl}`}. You need utilisation above ${breakEvenUtil === Infinity ? "—" : `${breakEvenUtil.toFixed(0)}%`} just to cover the added fixed cost.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Steady-state model — ramp-up to full utilisation, financing cost on the capex and demand risk aren't included. Stress-test the utilisation assumption above.</p>
+    </div>
+  );
+}
+
+// ── COST-INFLATION PASSTHROUGH ───────────────────────────────────────────────
+// An input-cost rise: how much of it you pass to price to protect margin, the
+// price hike needed to fully recover, and the margin left if you absorb it.
+function CostInflationPassthrough() {
+  const fc = formatCurrency;
+  const [price, setPrice]       = useState("1000");
+  const [cost, setCost]         = useState("650");   // current variable cost / unit
+  const [inflPct, setInfl]      = useState("12");    // input-cost rise %
+  const [passPct, setPass]      = useState("60");    // % of cost rise passed to price
+  const [units, setUnits]       = useState("800");
+
+  const P     = parseFloat(price) || 0;
+  const C     = parseFloat(cost) || 0;
+  const infl  = (parseFloat(inflPct) || 0) / 100;
+  const pass  = (parseFloat(passPct) || 0) / 100;
+  const q     = parseFloat(units) || 0;
+
+  const newCost   = C * (1 + infl);
+  const costRise  = newCost - C;
+  const newPrice  = P + costRise * pass;          // pass a share of the ₹ rise
+  const fullPrice = P + costRise;                 // full passthrough price
+  const fullHikePct = P > 0 ? (costRise / P) * 100 : 0;
+
+  const oldMargin   = P - C;
+  const newMargin   = newPrice - newCost;          // margin if you partially pass
+  const absorbMargin = P - newCost;                // margin if you absorb fully
+  const oldMarginPct = P > 0 ? (oldMargin / P) * 100 : 0;
+  const newMarginPct = newPrice > 0 ? (newMargin / newPrice) * 100 : 0;
+
+  const oldProfit  = oldMargin * q;
+  const newProfit  = newMargin * q;
+  const profitDiff = newProfit - oldProfit;
+  const protectsMargin = newMargin >= oldMargin - 0.005 * P;
+  const priceUpPct = P > 0 ? ((newPrice - P) / P) * 100 : 0;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Flame size={14} className="text-[var(--color-primary)]" /> Cost-Inflation Passthrough</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Price / unit (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Input cost / unit (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cost inflation %</label><input type="number" value={inflPct} onChange={e => setInfl(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Passthrough %</label><input type="number" value={passPct} onChange={e => setPass(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Units / mo</label><input type="number" value={units} onChange={e => setUnits(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Cost rises {fc(Math.round(costRise))}/unit. Passing {(pass * 100).toFixed(0)}% lifts price to {fc(Math.round(newPrice))}. Full recovery needs a {fullHikePct.toFixed(1)}% hike to {fc(Math.round(fullPrice))}.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "New price", value: fc(Math.round(newPrice)), color: "text-[var(--color-text)]" },
+          { label: "Price hike", value: `+${priceUpPct.toFixed(1)}%`, color: "text-orange-400" },
+          { label: "Margin after", value: `${newMarginPct.toFixed(1)}%`, color: protectsMargin ? "text-green-400" : "text-red-400" },
+          { label: "Profit change", value: `${profitDiff >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(profitDiff)))}`, color: profitDiff >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Strategy", "Price", "Margin / unit", "Margin %"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Before inflation", pr: P, mg: oldMargin, mp: oldMarginPct },
+              { label: "Absorb fully", pr: P, mg: absorbMargin, mp: P > 0 ? (absorbMargin / P) * 100 : 0 },
+              { label: `Pass ${(pass * 100).toFixed(0)}%`, pr: newPrice, mg: newMargin, mp: newMarginPct, bold: true },
+              { label: "Full passthrough", pr: fullPrice, mg: fullPrice - newCost, mp: fullPrice > 0 ? ((fullPrice - newCost) / fullPrice) * 100 : 0 },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.pr))}</td>
+                <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.mg))}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.mp.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${protectsMargin ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${protectsMargin ? "text-green-400" : "text-red-400"}`}>
+          {protectsMargin
+            ? `✓ Passing ${(pass * 100).toFixed(0)}% holds margin near ${newMarginPct.toFixed(1)}% with only a ${priceUpPct.toFixed(1)}% price rise — likely palatable to customers.`
+            : `⚠ Passing only ${(pass * 100).toFixed(0)}% drops margin to ${newMarginPct.toFixed(1)}% and cuts profit by ${fc(Math.abs(Math.round(profitDiff)))}/mo. Full recovery needs a ${fullHikePct.toFixed(1)}% hike — test price sensitivity first.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Holds volume constant — a real price rise may reduce demand (see the Price-Change Profit tool for the elasticity trade-off). Models variable cost only.</p>
     </div>
   );
 }
