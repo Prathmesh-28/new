@@ -7,6 +7,7 @@ import {
   Gauge, Truck, Trees, Target, CheckCircle2, AlertTriangle, Plus, TrendingDown,
   Users, Plane, Trash2, Sun, Car, Globe, Landmark, Banknote,
   Route, ClipboardList, FileText, ShieldAlert, ShoppingCart, HeartHandshake, PiggyBank,
+  UserCheck, BatteryCharging, Award, ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,7 +21,8 @@ type Tab =
   | "commute" | "travel" | "waste" | "renewable" | "evfleet" | "diversity"
   | "governance" | "cbam" | "epr" | "greenloan"
   | "netzero" | "questionnaire" | "report" | "climaterisk" | "procurement"
-  | "csr" | "energysavings";
+  | "csr" | "energysavings"
+  | "empintensity" | "renewmix" | "certs" | "ratingplan";
 
 export default function EsgPage() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -66,6 +68,10 @@ export default function EsgPage() {
             ["procurement", "Green Procurement", ShoppingCart],
             ["csr", "CSR Impact", HeartHandshake],
             ["energysavings", "Energy Savings", PiggyBank],
+            ["empintensity", "Per Employee", UserCheck],
+            ["renewmix", "Renewable Mix", BatteryCharging],
+            ["certs", "Certifications", Award],
+            ["ratingplan", "Rating Planner", ListChecks],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -103,6 +109,10 @@ export default function EsgPage() {
       {tab === "procurement" && <SustainableProcurementScorecard />}
       {tab === "csr" && <CsrImpactTracker />}
       {tab === "energysavings" && <EnergySavingsTracker />}
+      {tab === "empintensity" && <EmissionsPerEmployee />}
+      {tab === "renewmix" && <RenewableGridMix />}
+      {tab === "certs" && <GreenCertificationChecklist />}
+      {tab === "ratingplan" && <EsgRatingPlanner />}
     </div>
   );
 }
@@ -2500,6 +2510,278 @@ function EnergySavingsTracker() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Measures are ranked by payback — fastest first. Energy efficiency is usually the cheapest abatement; many measures also qualify for accelerated depreciation.</p>
+    </div>
+  );
+}
+
+// ── Emissions per Employee ──────────────────────────────────────────────────────
+function EmissionsPerEmployee() {
+  const [emissionsT, setEmissionsT] = useState("");
+  const [headcount, setHeadcount] = useState("");
+  const [prevPerHead, setPrevPerHead] = useState("");
+
+  const tonnes = parseFloat(emissionsT) || 0;
+  const heads = parseFloat(headcount) || 0;
+  const perHead = heads > 0 ? tonnes / heads : 0;
+  const prev = parseFloat(prevPerHead) || 0;
+  const delta = prev > 0 && perHead > 0 ? ((perHead - prev) / prev) * 100 : null;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> Emissions per Employee</h3>
+        <p className="text-xs text-[var(--color-muted)]">Per-head intensity is the headcount-normalised metric investors use to compare service firms. Pull total emissions from the Scope calculator.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total emissions (tCO₂e/yr)</label>
+            <input type="number" value={emissionsT} onChange={e => setEmissionsT(e.target.value)} placeholder="e.g. 120" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Full-time-equivalent headcount</label>
+            <input type="number" value={headcount} onChange={e => setHeadcount(e.target.value)} placeholder="e.g. 45" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Prior-year per-head (optional)</label>
+            <input type="number" value={prevPerHead} onChange={e => setPrevPerHead(e.target.value)} placeholder="tCO₂e / FTE" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {tonnes > 0 && heads > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Per employee", value: `${perHead.toFixed(2)}`, sub: "tCO₂e / FTE", color: "text-orange-400" },
+              { label: "Per employee (kg)", value: `${Math.round(perHead * 1000).toLocaleString("en-IN")}`, sub: "kg CO₂e / FTE", color: "text-[var(--color-text)]" },
+              { label: "YoY change", value: delta === null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`, sub: delta === null ? "Add prior year" : delta < 0 ? "Improving" : "Worsening", color: delta === null ? "text-[var(--color-muted)]" : delta < 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Per-FTE emissions normalise for company size — useful for benchmarking against peers and for office-based businesses where revenue intensity is less comparable.</p>
+    </div>
+  );
+}
+
+// ── Renewable vs Grid Mix ───────────────────────────────────────────────────────
+function RenewableGridMix() {
+  const [grid, setGrid] = useState("");
+  const [solar, setSolar] = useState("");
+  const [rec, setRec] = useState("");
+
+  const n = (v: string) => parseFloat(v) || 0;
+  const gridKwh = n(grid), solarKwh = n(solar), recKwh = n(rec);
+  const total = gridKwh + solarKwh + recKwh;
+  const renewable = solarKwh + recKwh;
+  const renewablePct = total > 0 ? (renewable / total) * 100 : 0;
+  // Grid emissions only on the grid portion; renewables assumed zero-emission.
+  const gridEmissions = gridKwh * GRID_FACTOR;
+  const avoided = renewable * GRID_FACTOR;
+
+  const segs = [
+    { label: "On-site solar", kwh: solarKwh, color: "#22c55e" },
+    { label: "RECs / green tariff", kwh: recKwh, color: "#3b82f6" },
+    { label: "Grid (fossil-heavy)", kwh: gridKwh, color: "#ef4444" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BatteryCharging size={14} className="text-green-400" /> Renewable vs Grid Mix</h3>
+        <p className="text-xs text-[var(--color-muted)]">Split your annual electricity into grid, on-site solar and REC/green-tariff units to compute your renewable share — the headline number for RE100-style commitments.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Grid electricity (kWh/yr)</label>
+            <input type="number" value={grid} onChange={e => setGrid(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">On-site solar (kWh/yr)</label>
+            <input type="number" value={solar} onChange={e => setSolar(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">RECs / green tariff (kWh/yr)</label>
+            <input type="number" value={rec} onChange={e => setRec(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {total > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Renewable share", value: `${renewablePct.toFixed(1)}%`, color: renewablePct >= 50 ? "text-green-400" : "text-orange-400" },
+              { label: "Total consumption", value: `${total.toLocaleString("en-IN")} kWh`, color: "text-[var(--color-text)]" },
+              { label: "Grid emissions", value: fmtT(gridEmissions), color: "text-red-400" },
+              { label: "Emissions avoided", value: fmtT(avoided), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4 space-y-2`}>
+            <p className="text-sm font-semibold mb-1">Energy mix</p>
+            <div className="flex h-4 w-full rounded-full overflow-hidden bg-[var(--color-bg)]">
+              {segs.map(s => (
+                <div key={s.label} style={{ width: `${total > 0 ? (s.kwh / total) * 100 : 0}%`, background: s.color }} title={`${s.label}: ${s.kwh.toLocaleString("en-IN")} kWh`} />
+              ))}
+            </div>
+            {segs.filter(s => s.kwh > 0).map(s => (
+              <p key={s.label} className="text-[11px] text-[var(--color-muted)]">
+                <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: s.color }} />
+                {s.label} — {s.kwh.toLocaleString("en-IN")} kWh · {((s.kwh / total) * 100).toFixed(0)}%
+              </p>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">RECs and green tariffs count toward your renewable share only if retired/unbundled in your name. On-site generation is the most defensible. Grid factor {GRID_FACTOR} kg CO₂e/kWh.</p>
+    </div>
+  );
+}
+
+// ── Green Certification Checklist ───────────────────────────────────────────────
+type CertItem = { id: string; name: string; group: string; note: string };
+const CERT_ITEMS: CertItem[] = [
+  { id: "c1", group: "Environment", name: "ISO 14001 — Environmental management", note: "Most-requested by procurement teams" },
+  { id: "c2", group: "Environment", name: "ISO 50001 — Energy management", note: "Pairs well with energy audits" },
+  { id: "c3", group: "Environment", name: "IGBC / GRIHA green building rating", note: "For owned/leased premises" },
+  { id: "c4", group: "Product", name: "BIS / Ecomark eco-label", note: "Indian product environmental label" },
+  { id: "c5", group: "Product", name: "EPR registration (CPCB)", note: "Mandatory for plastic/e-waste producers" },
+  { id: "c6", group: "Social", name: "ISO 45001 — Occupational health & safety", note: "Worker safety assurance" },
+  { id: "c7", group: "Social", name: "SA8000 — Social accountability", note: "Labour-rights audit for exporters" },
+  { id: "c8", group: "Governance", name: "ISO 27001 — Information security", note: "Often bundled in ESG questionnaires" },
+];
+function GreenCertificationChecklist() {
+  const [status, setStatus] = useFeatureState<Record<string, "none" | "progress" | "held">>("esg-certifications", {});
+  const cycle = (id: string) => {
+    const cur = status[id] ?? "none";
+    const next = cur === "none" ? "progress" : cur === "progress" ? "held" : "none";
+    setStatus({ ...status, [id]: next });
+  };
+  const groups = Array.from(new Set(CERT_ITEMS.map(i => i.group)));
+  const held = CERT_ITEMS.filter(i => status[i.id] === "held").length;
+  const progress = CERT_ITEMS.filter(i => status[i.id] === "progress").length;
+  const STYLE = {
+    none: { label: "Not started", cls: "text-[var(--color-muted)] border-[var(--color-border)]" },
+    progress: { label: "In progress", cls: "text-yellow-400 border-yellow-800/40" },
+    held: { label: "Certified", cls: "text-green-400 border-green-800/40" },
+  } as const;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Green Certification Checklist</h3>
+          <span className="text-sm font-bold tabular-nums text-green-400">{held} held · <span className="text-yellow-400">{progress} in progress</span></span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Track the certifications buyers and lenders ask for. Click a row to cycle Not started → In progress → Certified.</p>
+      </div>
+
+      {groups.map(g => (
+        <div key={g} className={`${CARD} p-4 space-y-2`}>
+          <p className="text-sm font-semibold">{g}</p>
+          {CERT_ITEMS.filter(i => i.group === g).map(i => {
+            const st = STYLE[status[i.id] ?? "none"];
+            return (
+              <button key={i.id} onClick={() => cycle(i.id)}
+                className={`w-full text-left flex items-center justify-between gap-3 p-2.5 rounded-lg border transition-colors hover:border-[var(--color-primary)]/40 ${st.cls}`}>
+                <span>
+                  <span className="text-sm font-medium text-[var(--color-text)] block">{i.name}</span>
+                  <span className="text-[10px] text-[var(--color-muted)]">{i.note}</span>
+                </span>
+                <span className={`text-xs font-semibold whitespace-nowrap ${st.cls.split(" ")[0]}`}>{st.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative shortlist of common India-relevant certifications. Scope, cost and applicability vary — confirm requirements with the issuing body or your auditor before applying.</p>
+    </div>
+  );
+}
+
+// ── ESG Rating Improvement Planner ──────────────────────────────────────────────
+type RatingAction = { id: string; pillar: "E" | "S" | "G"; action: string; points: number; effort: "Low" | "Medium" | "High" };
+const RATING_ACTIONS: RatingAction[] = [
+  { id: "r1", pillar: "E", action: "Complete a Scope 1 & 2 GHG inventory", points: 12, effort: "Medium" },
+  { id: "r2", pillar: "E", action: "Publish a net-zero / reduction target", points: 8, effort: "Low" },
+  { id: "r3", pillar: "E", action: "Source 25%+ electricity from renewables", points: 10, effort: "High" },
+  { id: "r4", pillar: "E", action: "Implement a waste-segregation & recycling process", points: 6, effort: "Low" },
+  { id: "r5", pillar: "S", action: "Formalise health, safety & POSH policies", points: 8, effort: "Low" },
+  { id: "r6", pillar: "S", action: "Track and disclose gender diversity ratios", points: 6, effort: "Low" },
+  { id: "r7", pillar: "S", action: "Run a measurable CSR / community programme", points: 7, effort: "Medium" },
+  { id: "r8", pillar: "G", action: "Adopt a board-approved code of conduct", points: 7, effort: "Low" },
+  { id: "r9", pillar: "G", action: "Document a whistleblower / grievance mechanism", points: 6, effort: "Low" },
+  { id: "r10", pillar: "G", action: "Obtain independent assurance on ESG data", points: 10, effort: "High" },
+];
+function EsgRatingPlanner() {
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("esg-rating-plan", {});
+  const toggle = (id: string) => setDone({ ...done, [id]: !done[id] });
+
+  const maxPoints = RATING_ACTIONS.reduce((s, a) => s + a.points, 0);
+  const earned = RATING_ACTIONS.filter(a => done[a.id]).reduce((s, a) => s + a.points, 0);
+  const score = Math.round((earned / maxPoints) * 100);
+  const open = RATING_ACTIONS.filter(a => !done[a.id]);
+  // Quick wins: highest points per effort, low effort first.
+  const effortRank = { Low: 1, Medium: 2, High: 3 } as const;
+  const quickWins = [...open].sort((a, b) => effortRank[a.effort] - effortRank[b.effort] || b.points - a.points).slice(0, 3);
+  const band = score >= 75 ? { label: "Strong", color: "text-green-400" } : score >= 50 ? { label: "Moderate", color: "text-yellow-400" } : { label: "Emerging", color: "text-orange-400" };
+
+  const PILLAR_NAME = { E: "Environment", S: "Social", G: "Governance" } as const;
+  const pillars: ("E" | "S" | "G")[] = ["E", "S", "G"];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Projected rating", value: `${score}/100`, sub: band.label, color: band.color },
+          { label: "Points earned", value: `${earned}`, sub: `of ${maxPoints}`, color: "text-[var(--color-text)]" },
+          { label: "Actions done", value: `${RATING_ACTIONS.filter(a => done[a.id]).length}`, sub: `of ${RATING_ACTIONS.length}`, color: "text-[var(--color-primary)]" },
+          { label: "Open actions", value: `${open.length}`, sub: "to close gaps", color: "text-orange-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {quickWins.length > 0 && (
+        <div className={`${CARD} p-4 space-y-2`}>
+          <p className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Recommended quick wins</p>
+          {quickWins.map(a => (
+            <div key={a.id} className="flex items-center justify-between text-xs">
+              <span className="text-[var(--color-text)]">{a.action}</span>
+              <span className="tabular-nums text-[var(--color-muted)]">+{a.points} pts · {a.effort} effort</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pillars.map(p => (
+        <div key={p} className={`${CARD} p-4 space-y-2`}>
+          <p className="text-sm font-semibold">{PILLAR_NAME[p]}</p>
+          {RATING_ACTIONS.filter(a => a.pillar === p).map(a => (
+            <label key={a.id} className="flex items-center justify-between gap-3 cursor-pointer text-sm py-1">
+              <span className="flex items-center gap-2.5">
+                <input type="checkbox" checked={!!done[a.id]} onChange={() => toggle(a.id)} className="accent-[var(--color-primary)]" />
+                <span className={done[a.id] ? "text-[var(--color-text)] line-through opacity-70" : "text-[var(--color-text)]"}>{a.action}</span>
+              </span>
+              <span className="text-[10px] text-[var(--color-muted)] whitespace-nowrap tabular-nums">+{a.points} · {a.effort}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <p className="text-[10px] text-[var(--color-muted)]">A directional planner weighted by typical rater impact and effort — not a substitute for a CRISIL/CDP/EcoVadis methodology. Use it to sequence improvements, not to predict an exact agency score.</p>
     </div>
   );
 }

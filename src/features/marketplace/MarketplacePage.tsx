@@ -8,6 +8,7 @@ import {
   Crosshair, Boxes, Warehouse, PieChart, RefreshCw, Star,
   FileCheck, RotateCcw, ListChecks, Wallet,
   Trophy, Lock, ShieldAlert, Package, Scale, PartyPopper, Hourglass,
+  Ticket, MousePointerClick, PackageX, ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,7 +21,8 @@ type MktTab =
   | "payout-cycle" | "tcs52" | "sku-pnl" | "channel-compare" | "ondc-ready" | "roas"
   | "target-price" | "inventory-sync" | "fba-fees" | "ppc-budget" | "repricer"
   | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix"
-  | "buy-box" | "reserve" | "chargeback" | "bundle" | "break-even" | "festival" | "holding-cost";
+  | "buy-box" | "reserve" | "chargeback" | "bundle" | "break-even" | "festival" | "holding-cost"
+  | "promo-roi" | "conversion" | "return-rate" | "fee-recon";
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
@@ -69,6 +71,10 @@ export default function MarketplacePage() {
             ["break-even", "Break-even Price", Scale],
             ["festival", "Festival Planner", PartyPopper],
             ["holding-cost", "Cash-Cycle Cost", Hourglass],
+            ["promo-roi", "Coupon ROI", Ticket],
+            ["conversion", "Conversion Tracker", MousePointerClick],
+            ["return-rate", "Return Rate / SKU", PackageX],
+            ["fee-recon", "Fee Reconciliation", ScrollText],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -106,6 +112,10 @@ export default function MarketplacePage() {
       {tab === "break-even" && <BreakEvenCalculator />}
       {tab === "festival" && <FestivalPlanner />}
       {tab === "holding-cost" && <HoldingCostCalculator />}
+      {tab === "promo-roi" && <CouponRoi />}
+      {tab === "conversion" && <ConversionTracker />}
+      {tab === "return-rate" && <ReturnRateBySku />}
+      {tab === "fee-recon" && <FeeReconciliation />}
     </div>
   );
 }
@@ -2409,6 +2419,297 @@ function HoldingCostCalculator() {
             </div>
           </div>
           <p className="text-[10px] text-[var(--color-muted)]">Capital locked ≈ daily GMV × payout-lag days. Faster payouts or settlement financing cut this carry cost — compare it against any financing fee before deciding.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Coupon / Promo ROI ─────────────────────────────────────────────────────────
+type PromoRow = { id: string; name: string; spend: number; baselineUnits: number; promoUnits: number; marginPerUnit: number };
+function CouponRoi() {
+  const [rows, setRows] = useFeatureState<PromoRow[]>("mkt-promo-roi", []);
+  const [name, setName] = useState("");
+  const [spend, setSpend] = useState("");
+  const [baseline, setBaseline] = useState("");
+  const [promo, setPromo] = useState("");
+  const [margin, setMargin] = useState("");
+
+  const add = () => {
+    const s = parseFloat(spend) || 0;
+    const bu = Math.max(0, Math.round(parseFloat(baseline) || 0));
+    const pu = Math.max(0, Math.round(parseFloat(promo) || 0));
+    const m = parseFloat(margin) || 0;
+    if (!name.trim() || s <= 0) { toast.error("Enter a promo name and discount spend"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), spend: s, baselineUnits: bu, promoUnits: pu, marginPerUnit: m }]);
+    setName(""); setSpend(""); setBaseline(""); setPromo(""); setMargin("");
+    toast.success("Promo added");
+  };
+
+  const enriched = rows.map(r => {
+    const incrUnits = Math.max(0, r.promoUnits - r.baselineUnits);
+    const incrMargin = incrUnits * r.marginPerUnit;
+    const netGain = incrMargin - r.spend;
+    const roi = r.spend > 0 ? netGain / r.spend : 0;
+    return { ...r, incrUnits, incrMargin, netGain, roi };
+  });
+  const totSpend = enriched.reduce((s, r) => s + r.spend, 0);
+  const totNet = enriched.reduce((s, r) => s + r.netGain, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Ticket size={14} className="text-[var(--color-primary)]" /> Coupon / Promo ROI</h2>
+        <p className="text-xs text-[var(--color-muted)]">A coupon only pays off if the extra units it drives earn more margin than the discount costs. Enter baseline units (what you'd sell anyway) and promo-period units — we count only the incremental ones.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Promo name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="10% off — Diwali" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Discount spend (₹)</label><input type="number" value={spend} onChange={e => setSpend(e.target.value)} placeholder="15000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Baseline units</label><input type="number" value={baseline} onChange={e => setBaseline(e.target.value)} placeholder="200" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Promo units</label><input type="number" value={promo} onChange={e => setPromo(e.target.value)} placeholder="320" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Margin / unit (₹)</label><input type="number" value={margin} onChange={e => setMargin(e.target.value)} placeholder="120" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add promo</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3 max-w-2xl">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total discount spend</p><p className="text-xl font-bold tabular-nums">{formatCurrency(Math.round(totSpend))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Net margin gain</p><p className={`text-xl font-bold tabular-nums ${totNet >= 0 ? "text-green-400" : "text-red-400"}`}>{totNet >= 0 ? "+" : ""}{formatCurrency(Math.round(totNet))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Promo", "Spend", "Incr. units", "Incr. margin", "Net", "ROI", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.spend))}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.incrUnits}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.incrMargin))}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.netGain >= 0 ? "text-green-400" : "text-red-400"}`}>{r.netGain >= 0 ? "+" : ""}{formatCurrency(Math.round(r.netGain))}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.roi >= 0 ? "text-green-400" : "text-red-400"}`}>{(r.roi * 100).toFixed(0)}%</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Net = incremental units × margin/unit − discount spend. A negative net means you subsidised sales you'd have made anyway.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Listing conversion tracker ──────────────────────────────────────────────────
+type ConvRow = { id: string; listing: string; sessions: number; orders: number };
+function ConversionTracker() {
+  const [rows, setRows] = useFeatureState<ConvRow[]>("mkt-conversion-rows", []);
+  const [listing, setListing] = useState("");
+  const [sessions, setSessions] = useState("");
+  const [orders, setOrders] = useState("");
+
+  const add = () => {
+    const s = Math.max(0, Math.round(parseFloat(sessions) || 0));
+    const o = Math.max(0, Math.round(parseFloat(orders) || 0));
+    if (!listing.trim() || s <= 0) { toast.error("Enter a listing and session count"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), listing: listing.trim(), sessions: s, orders: o }]);
+    setListing(""); setSessions(""); setOrders("");
+    toast.success("Listing added");
+  };
+
+  const enriched = rows.map(r => ({ ...r, cvr: r.sessions > 0 ? r.orders / r.sessions : 0 }));
+  const totSess = enriched.reduce((s, r) => s + r.sessions, 0);
+  const totOrders = enriched.reduce((s, r) => s + r.orders, 0);
+  const blended = totSess > 0 ? totOrders / totSess : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MousePointerClick size={14} className="text-[var(--color-primary)]" /> Listing Conversion Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Conversion rate (orders ÷ sessions) is the fastest read on listing health. Low CVR with high sessions usually means price, images or reviews — not traffic. Pull sessions from your Seller/Flipkart dashboard.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Listing / ASIN</label><input value={listing} onChange={e => setListing(e.target.value)} placeholder="Steel Bottle 1L" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Sessions</label><input type="number" value={sessions} onChange={e => setSessions(e.target.value)} placeholder="1200" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Orders</label><input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="48" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add listing</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className={`${CARD} p-4 max-w-2xl`}><p className="text-xs text-[var(--color-muted)] mb-1">Blended conversion across {enriched.length} listing(s)</p><p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{(blended * 100).toFixed(1)}%</p></div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Listing", "Sessions", "Orders", "CVR", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => {
+                    const flag = r.cvr < blended * 0.6;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium flex items-center gap-1.5">{flag && <AlertTriangle size={12} className="text-yellow-400" />}{r.listing}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.sessions}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${flag ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{(r.cvr * 100).toFixed(1)}%</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Listings flagged ⚠ convert below 60% of your blended rate — review price, hero image and Q&amp;A first.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Return rate by SKU ──────────────────────────────────────────────────────────
+type RetRow = { id: string; sku: string; delivered: number; returned: number };
+function ReturnRateBySku() {
+  const [rows, setRows] = useFeatureState<RetRow[]>("mkt-return-rate-rows", []);
+  const [sku, setSku] = useState("");
+  const [delivered, setDelivered] = useState("");
+  const [returned, setReturned] = useState("");
+
+  const add = () => {
+    const d = Math.max(0, Math.round(parseFloat(delivered) || 0));
+    const rt = Math.max(0, Math.round(parseFloat(returned) || 0));
+    if (!sku.trim() || d <= 0) { toast.error("Enter a SKU and delivered units"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), sku: sku.trim(), delivered: d, returned: rt }]);
+    setSku(""); setDelivered(""); setReturned("");
+    toast.success("SKU added");
+  };
+
+  const enriched = rows.map(r => ({ ...r, rate: r.delivered > 0 ? r.returned / r.delivered : 0 }))
+    .sort((a, b) => b.rate - a.rate);
+  const totDel = enriched.reduce((s, r) => s + r.delivered, 0);
+  const totRet = enriched.reduce((s, r) => s + r.returned, 0);
+  const avg = totDel > 0 ? totRet / totDel : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PackageX size={14} className="text-[var(--color-primary)]" /> Return Rate by SKU</h2>
+        <p className="text-xs text-[var(--color-muted)]">Return rate (returns ÷ delivered) isolates which products customers send back — a sizing, quality or expectation problem. High-rate SKUs quietly erase margin through reverse logistics, so fix the listing or drop them.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="TSHIRT-BLK-M" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Delivered</label><input type="number" value={delivered} onChange={e => setDelivered(e.target.value)} placeholder="500" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Returned</label><input type="number" value={returned} onChange={e => setReturned(e.target.value)} placeholder="65" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add SKU</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className={`${CARD} p-4 max-w-2xl`}><p className="text-xs text-[var(--color-muted)] mb-1">Portfolio return rate ({totRet} of {totDel} units)</p><p className={`text-xl font-bold tabular-nums ${avg > 0.2 ? "text-red-400" : avg > 0.1 ? "text-yellow-400" : "text-green-400"}`}>{(avg * 100).toFixed(1)}%</p></div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["SKU", "Delivered", "Returned", "Return rate", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => {
+                    const color = r.rate > 0.2 ? "text-red-400" : r.rate > 0.1 ? "text-yellow-400" : "text-green-400";
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.sku}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.delivered}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.returned}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${color}`}>{(r.rate * 100).toFixed(1)}%</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Sorted worst-first. Above 20% (red) usually flags a fit or quality issue worth fixing before it eats your reverse-logistics budget.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Marketplace fee reconciliation ──────────────────────────────────────────────
+type FeeReconRow = { id: string; order: string; expected: number; charged: number };
+function FeeReconciliation() {
+  const [rows, setRows] = useFeatureState<FeeReconRow[]>("mkt-fee-recon-rows", []);
+  const [order, setOrder] = useState("");
+  const [expected, setExpected] = useState("");
+  const [charged, setCharged] = useState("");
+  const [tol, setTol] = useState("2");
+
+  const add = () => {
+    const ex = parseFloat(expected) || 0;
+    const ch = parseFloat(charged) || 0;
+    if (!order.trim()) { toast.error("Enter an order / settlement ID"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), order: order.trim(), expected: ex, charged: ch }]);
+    setOrder(""); setExpected(""); setCharged("");
+    toast.success("Line added");
+  };
+
+  const tolPct = (parseFloat(tol) || 0) / 100;
+  const enriched = rows.map(r => {
+    const diff = r.charged - r.expected;
+    const overcharged = r.expected > 0 ? diff > r.expected * tolPct : diff > 0;
+    return { ...r, diff, overcharged };
+  });
+  const totDiff = enriched.reduce((s, r) => s + r.diff, 0);
+  const totOver = enriched.filter(r => r.overcharged).reduce((s, r) => s + r.diff, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Marketplace Fee Reconciliation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Marketplaces routinely deduct more commission, shipping or closing fees than their own rate card implies. Enter what you expected to be charged versus what the settlement actually deducted — we flag the overcharges worth disputing.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Order / settlement ID</label><input value={order} onChange={e => setOrder(e.target.value)} placeholder="402-1234567" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Expected fee (₹)</label><input type="number" value={expected} onChange={e => setExpected(e.target.value)} placeholder="85" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Charged fee (₹)</label><input type="number" value={charged} onChange={e => setCharged(e.target.value)} placeholder="98" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Tolerance %</label><input type="number" value={tol} onChange={e => setTol(e.target.value)} placeholder="2" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add line</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3 max-w-2xl">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Net fee variance</p><p className={`text-xl font-bold tabular-nums ${totDiff > 0 ? "text-red-400" : "text-green-400"}`}>{totDiff > 0 ? "+" : ""}{formatCurrency(Math.round(totDiff))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Disputable overcharge</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(totOver))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Order", "Expected", "Charged", "Variance", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.order}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.expected))}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.charged))}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.diff > 0 ? "text-red-400" : r.diff < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.diff > 0 ? "+" : ""}{formatCurrency(Math.round(r.diff))}</td>
+                      <td className="px-4 py-2.5">{r.overcharged
+                        ? <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={12} /> Overcharged</span>
+                        : <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={12} /> OK</span>}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Lines charged more than {tol || 0}% above the expected fee are flagged. Raise a reimbursement / FBA fee-correction case with the order IDs above.</p>
         </>
       )}
     </div>

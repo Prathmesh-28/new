@@ -8,6 +8,7 @@ import {
   Plus, CheckCircle2, AlertTriangle, Trash2,
   Layers, Smartphone, Wallet, PiggyBank, Scale, ClipboardList, Map, BadgeCheck, Percent,
   FileCode2, CalendarClock, CalendarCheck, Building2, ShieldAlert, Building, Boxes,
+  Coins, HandCoins, Hourglass, Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -26,7 +27,8 @@ type TabId =
   | "lc-tracker" | "customs" | "payment-fees" | "transfer-pricing" | "gst-export" | "rodtep"
   | "fx-forward" | "bank-consolidate" | "swift-upi" | "packing-credit" | "eefc-tracker"
   | "dtaa-lookup" | "advance-auth" | "country-sales" | "iec-adcode" | "tcs-lrs"
-  | "softex" | "lut-renewal" | "fema-calendar" | "odi-fdi" | "country-risk" | "gift-city" | "incoterms";
+  | "softex" | "lut-renewal" | "fema-calendar" | "odi-fdi" | "country-risk" | "gift-city" | "incoterms"
+  | "mc-pnl" | "wht-recovery" | "edpms-aging" | "bank-charge-recon";
 
 export default function GlobalPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -72,6 +74,10 @@ export default function GlobalPage() {
             ["country-risk", "Country Risk", ShieldAlert],
             ["gift-city", "GIFT City", Building],
             ["incoterms", "Incoterms Split", Boxes],
+            ["mc-pnl", "Multi-Currency P&L", Coins],
+            ["wht-recovery", "WHT Recovery", HandCoins],
+            ["edpms-aging", "Realisation Aging", Hourglass],
+            ["bank-charge-recon", "Bank Charge Recon", Banknote],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -109,6 +115,10 @@ export default function GlobalPage() {
       {tab === "country-risk" && <CountryRiskScorecard />}
       {tab === "gift-city" && <GiftCityEstimator />}
       {tab === "incoterms" && <IncotermsSplitter />}
+      {tab === "mc-pnl" && <MultiCurrencyPnl />}
+      {tab === "wht-recovery" && <WhtRecoveryTracker />}
+      {tab === "edpms-aging" && <ExportRealisationAging />}
+      {tab === "bank-charge-recon" && <ForeignBankChargeRecon />}
     </div>
   );
 }
@@ -2387,6 +2397,348 @@ function IncotermsSplitter() {
         </div>
         <p className="text-[11px] text-[var(--color-muted)] mt-3">Risk transfers to the buyer at the named point for each term (e.g. on board the vessel under FOB/CFR/CIF). Cost allocation here follows Incoterms 2020 norms — your contract terms prevail. Insurance is mandatory only under CIF and CIP.</p>
       </div>
+    </div>
+  );
+}
+
+// ── Multi-Currency P&L (INR-normalised) ─────────────────────────────────────────
+type McLine = { id: string; label: string; kind: "revenue" | "cost"; ccy: string; amount: string };
+function MultiCurrencyPnl() {
+  const [lines, setLines] = useFeatureState<McLine[]>("glb-mc-pnl", [
+    { id: "r1", label: "US client retainer", kind: "revenue", ccy: "USD", amount: "" },
+    { id: "c1", label: "EU cloud hosting", kind: "cost", ccy: "EUR", amount: "" },
+  ]);
+  const [rates] = useFeatureState<Record<string, number>>("glb-fx-rates", DEFAULT_RATES);
+
+  const rate = (code: string) => (code === "INR" ? 1 : rates[code] ?? DEFAULT_RATES[code] ?? 0);
+  const ALL = ["INR", ...CURRENCIES];
+
+  const evaluated = lines.map(l => {
+    const amt = parseFloat(l.amount) || 0;
+    return { ...l, inr: amt * rate(l.ccy) };
+  });
+  const revenue = evaluated.filter(l => l.kind === "revenue").reduce((s, l) => s + l.inr, 0);
+  const cost = evaluated.filter(l => l.kind === "cost").reduce((s, l) => s + l.inr, 0);
+  const profit = revenue - cost;
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  const setLine = (id: string, k: "label" | "kind" | "ccy" | "amount", v: string) =>
+    setLines(lines.map(l => l.id === id ? { ...l, [k]: v } : l));
+  const addLine = () => setLines([...lines, { id: crypto.randomUUID(), label: "", kind: "revenue", ccy: "USD", amount: "" }]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Multi-Currency P&amp;L</h2>
+        <p className="text-xs text-[var(--color-muted)]">Mix revenue and costs across currencies and see a single INR-normalised profit. Uses your reference rates from the converter.</p>
+        <div className="space-y-2">
+          {lines.map(l => (
+            <div key={l.id} className="grid grid-cols-12 gap-2 items-center">
+              <input value={l.label} onChange={e => setLine(l.id, "label", e.target.value)} placeholder="Line item" className={`${INP} col-span-4`} />
+              <select value={l.kind} onChange={e => setLine(l.id, "kind", e.target.value)} className={`${INP} col-span-3`}>
+                <option value="revenue">Revenue</option>
+                <option value="cost">Cost</option>
+              </select>
+              <select value={l.ccy} onChange={e => setLine(l.id, "ccy", e.target.value)} className={`${INP} col-span-2`}>
+                {ALL.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input type="number" value={l.amount} onChange={e => setLine(l.id, "amount", e.target.value)} placeholder="Amount" className={`${INP} col-span-2`} />
+              <button onClick={() => setLines(lines.filter(x => x.id !== l.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 flex justify-center"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <button onClick={addLine} className="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1 mt-1"><Plus size={12} /> Add line</button>
+        </div>
+      </div>
+
+      {revenue + cost > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Total revenue (INR)</span><span className="tabular-nums text-green-400">{formatCurrency(Math.round(revenue))}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Total cost (INR)</span><span className="tabular-nums text-orange-400">{formatCurrency(Math.round(cost))}</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">Net profit</span>
+              <span className={`font-bold tabular-nums ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(profit))} <span className="text-[var(--color-muted)] font-normal">({margin.toFixed(1)}%)</span></span>
+            </div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">INR figures are translated at your manual reference rates — actual booked values depend on the rate on each transaction date (AS 11 / Ind-AS 21).</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Foreign Withholding Tax / FTC Recovery Tracker ───────────────────────────────
+type WhtRow = { id: string; payer: string; country: string; ccy: string; gross: number; whtPct: number; fxRate: number; claimed: boolean };
+function WhtRecoveryTracker() {
+  const [rows, setRows] = useFeatureState<WhtRow[]>("glb-wht-recovery", []);
+  const [payer, setPayer] = useState("");
+  const [country, setCountry] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [gross, setGross] = useState("");
+  const [whtPct, setWhtPct] = useState("10");
+  const [fxRate, setFxRate] = useState(String(DEFAULT_RATES.USD));
+
+  const add = () => {
+    const g = parseFloat(gross), w = parseFloat(whtPct), fx = parseFloat(fxRate);
+    if (!payer.trim() || isNaN(g) || g <= 0 || isNaN(fx) || fx <= 0) { toast.error("Enter a payer, gross amount and FX rate"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), payer: payer.trim(), country: country.trim(), ccy, gross: g, whtPct: isNaN(w) ? 0 : w, fxRate: fx, claimed: false }]);
+    setPayer(""); setCountry(""); setGross("");
+    toast.success("Withholding entry added");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, claimed: !r.claimed } : r));
+
+  const totals = rows.reduce((a, r) => {
+    const whtInr = r.gross * (r.whtPct / 100) * r.fxRate;
+    a.wht += whtInr;
+    if (!r.claimed) a.unclaimed += whtInr;
+    return a;
+  }, { wht: 0, unclaimed: 0 });
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Foreign Withholding Tax Recovery</h2>
+        <p className="text-xs text-[var(--color-muted)]">When an overseas client deducts tax at source, you can usually claim it as a Foreign Tax Credit (Form 67) against Indian tax. Track what is still to be claimed.</p>
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Payer</label>
+            <input value={payer} onChange={e => setPayer(e.target.value)} placeholder="Client" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Country</label>
+            <input value={country} onChange={e => setCountry(e.target.value)} placeholder="USA" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => { setCcy(e.target.value); setFxRate(String(DEFAULT_RATES[e.target.value] ?? fxRate)); }} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Gross ({ccy})</label>
+            <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="10000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">WHT %</label>
+            <input type="number" value={whtPct} onChange={e => setWhtPct(e.target.value)} placeholder="10" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">FX rate (₹)</label>
+            <input type="number" value={fxRate} onChange={e => setFxRate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total tax withheld abroad</p><p className="text-xl font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(totals.wht))}</p></div>
+          <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">FTC yet to be claimed</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(totals.unclaimed))}</p></div>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No withholding entries yet. Add a foreign receipt where tax was deducted at source.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Payer", "Country", "Gross", "WHT", "Credit (₹)", "FTC", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const whtInr = r.gross * (r.whtPct / 100) * r.fxRate;
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-3 py-2.5 font-medium">{r.payer}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.country || "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.gross.toLocaleString()} {r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.whtPct}%</td>
+                      <td className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(whtInr))}</td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.claimed ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.claimed ? "Claimed" : "Pending"}</button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Foreign Tax Credit is claimed via Form 67 before filing your return, subject to the relevant DTAA. Keep the foreign withholding certificate / Form 1042-S equivalent as proof.</p>
+    </div>
+  );
+}
+
+// ── Export Realisation Aging (EDPMS buckets) ─────────────────────────────────────
+type ShipRow = { id: string; ref: string; ccy: string; amount: number; exportDate: string; realised: boolean };
+function ExportRealisationAging() {
+  const [rows, setRows] = useFeatureState<ShipRow[]>("glb-edpms-aging", []);
+  const [ref, setRef] = useState("");
+  const [ccy, setCcy] = useState("USD");
+  const [amount, setAmount] = useState("");
+  const [exportDate, setExportDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const today = new Date();
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!ref.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter a shipping-bill ref and amount"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), ref: ref.trim(), ccy, amount: amt, exportDate, realised: false }]);
+    setRef(""); setAmount("");
+    toast.success("Shipment added");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, realised: !r.realised } : r));
+
+  const open = rows.filter(r => !r.realised);
+  const buckets = [
+    { label: "0–90 days", test: (d: number) => d <= 90 },
+    { label: "91–180 days", test: (d: number) => d > 90 && d <= 180 },
+    { label: "181–270 days", test: (d: number) => d > 180 && d <= 270 },
+    { label: "Over 270 days (FEMA breach)", test: (d: number) => d > 270 },
+  ].map(b => ({
+    ...b,
+    count: open.filter(r => b.test(differenceInCalendarDays(today, new Date(r.exportDate)))).length,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Export Realisation Aging</h2>
+        <p className="text-xs text-[var(--color-muted)]">Age your unrealised shipping bills into buckets against the 9-month (270-day) FEMA window — the same way EDPMS flags overdue exports.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Shipping bill ref</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="SB-001" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Ccy</label>
+            <select value={ccy} onChange={e => setCcy(e.target.value)} className={INP}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Amount</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="10000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Export date</label>
+            <input type="date" value={exportDate} onChange={e => setExportDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {buckets.map(b => (
+            <div key={b.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{b.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${b.label.includes("breach") && b.count > 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{b.count}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No shipments tracked. Add a shipping bill to monitor its realisation age.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Ref", "Amount", "Export date", "Age", "Status", ""].map(h =>
+                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const age = differenceInCalendarDays(today, new Date(r.exportDate));
+                  const breach = !r.realised && age > 270;
+                  return (
+                    <tr key={r.id} className={`hover:bg-white/2 ${breach ? "bg-red-950/20" : ""}`}>
+                      <td className="px-3 py-2.5 font-medium">{r.ref}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{format(new Date(r.exportDate), "d MMM yyyy")}</td>
+                      <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.realised ? "text-green-400" : breach ? "text-red-400" : age > 180 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{r.realised ? "—" : `${age}d`}</td>
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.realised ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.realised ? "Realised" : "Open"}</button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Exports unrealised beyond 270 days appear as overdue in EDPMS and may need AD-bank extension or RBI write-off approval. Mark realised once full proceeds are received.</p>
+    </div>
+  );
+}
+
+// ── Foreign Bank Charge Reconciliation ──────────────────────────────────────────
+function ForeignBankChargeRecon() {
+  const [ccy, setCcy] = useState("USD");
+  const [invoiced, setInvoiced] = useState("");
+  const [received, setReceived] = useState("");
+  const [fxRate, setFxRate] = useState(String(DEFAULT_RATES.USD));
+
+  const inv = parseFloat(invoiced) || 0;
+  const rec = parseFloat(received) || 0;
+  const rate = parseFloat(fxRate) || 0;
+  const valid = inv > 0 && rec > 0 && rate > 0;
+
+  const shortfall = inv - rec;
+  const pct = inv > 0 ? (shortfall / inv) * 100 : 0;
+  const shortfallInr = shortfall * rate;
+  const flagged = pct > 3;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Foreign Bank Charge Reconciliation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Intermediary and correspondent banks deduct charges en route. Compare what you invoiced against what actually landed to see the bite.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Currency</label>
+            <select value={ccy} onChange={e => { setCcy(e.target.value); setFxRate(String(DEFAULT_RATES[e.target.value] ?? rate)); }} className={INP}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Invoiced ({ccy})</label>
+            <input type="number" value={invoiced} onChange={e => setInvoiced(e.target.value)} placeholder="10000" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Received ({ccy})</label>
+            <input type="number" value={received} onChange={e => setReceived(e.target.value)} placeholder="9955" className={INP} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">FX rate (₹)</label>
+            <input type="number" value={fxRate} onChange={e => setFxRate(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {valid && (
+        <div className={`${CARD} p-5`}>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">Charges deducted</span><span className="tabular-nums">{shortfall.toLocaleString("en-US", { maximumFractionDigits: 2 })} {ccy} ({pct.toFixed(2)}%)</span></div>
+            <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
+              <span className="font-semibold">INR value of charges</span>
+              <span className={`font-bold tabular-nums ${flagged ? "text-red-400" : "text-orange-400"}`}>{formatCurrency(Math.round(shortfallInr))}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3 flex items-start gap-1.5">
+            {flagged ? <AlertTriangle size={12} className="shrink-0 mt-px text-red-400" /> : <CheckCircle2 size={12} className="shrink-0 mt-px text-green-400" />}
+            {flagged
+              ? `${pct.toFixed(2)}% deducted is high — ask your buyer to remit under "OUR" charges (sender bears all fees) and check for intermediary-bank deductions.`
+              : `${pct.toFixed(2)}% deducted is within a normal correspondent-bank range. For FIRC/realisation, the gross invoice value still applies.`}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
