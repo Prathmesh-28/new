@@ -10,6 +10,7 @@ import {
   Scale, Landmark, ArrowRight, Zap, Calculator, ShieldAlert, GitCompareArrows, PauseCircle,
   Plus, CheckCircle2, AlertTriangle, TrendingDown,
   CalendarRange, Target, Percent, DoorClosed, CircleDollarSign, ArrowDownUp, BadgeIndianRupee,
+  PiggyBank, Gem, Factory, RefreshCw, Layers, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, format, parseISO } from "date-fns";
@@ -33,6 +34,7 @@ export default function DebtPage() {
   const [tab, setTab] = useState<
     | "overview" | "amortise" | "dscr" | "refinance" | "moratorium"
     | "schedule" | "optimizer" | "wacd" | "foreclosure" | "balloon" | "stepemi" | "subsidy"
+    | "lasf" | "gold" | "equip" | "reset" | "stacking" | "wcdl"
   >("overview");
   const [selectedId, setSelectedId] = useState<string | null>(loans[0]?.id ?? null);
   const [prepay, setPrepay] = useState(100000);
@@ -86,6 +88,12 @@ export default function DebtPage() {
             ["balloon", "Balloon / Bullet", CircleDollarSign],
             ["stepemi", "Step-Up / Down EMI", ArrowDownUp],
             ["subsidy", "Interest Subsidy", BadgeIndianRupee],
+            ["lasf", "Loan vs FD / Securities", PiggyBank],
+            ["gold", "Gold-Loan Estimator", Gem],
+            ["equip", "Equipment: Buy vs Lease", Factory],
+            ["reset", "Rate-Reset Impact", RefreshCw],
+            ["stacking", "Exposure / Stacking", Layers],
+            ["wcdl", "WC Demand Loan / OD", Wallet],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -106,6 +114,12 @@ export default function DebtPage() {
       {tab === "balloon" && <BalloonPlanner />}
       {tab === "stepemi" && <StepEmiPlanner loans={loans} />}
       {tab === "subsidy" && <InterestSubsidyEstimator loans={loans} />}
+      {tab === "lasf" && <LoanAgainstAssetEstimator />}
+      {tab === "gold" && <GoldLoanEstimator />}
+      {tab === "equip" && <EquipmentBuyVsLease />}
+      {tab === "reset" && <RateResetImpact loans={loans} />}
+      {tab === "stacking" && <ExposureStackingTracker loans={loans} />}
+      {tab === "wcdl" && <WorkingCapitalLineCalculator />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -1760,6 +1774,601 @@ function InterestSubsidyEstimator({ loans }: { loans: ActiveLoanLike[] }) {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Indicative only. Actual subvention rates, caps and eligibility (Udyam registration, manufacturing/service category, scheme validity) vary and change with notifications. Confirm with your lender / the scheme portal before relying on these figures.</p>
+    </div>
+  );
+}
+
+// ── #97 Loan-Against-FD / Securities Estimator ───────────────────────────────────
+// Borrowing against your own fixed deposit or shares/MFs is cheap secured credit:
+// the limit is an LTV slice of the asset and the rate is usually a thin spread over
+// the FD rate. This shows the sanctionable limit and the true net carry cost — the
+// loan interest you pay minus the yield you keep earning on the pledged asset.
+function LoanAgainstAssetEstimator() {
+  const [assetType, setAssetType] = useState<"fd" | "securities">("fd");
+  const [assetValue, setAssetValue] = useState("");
+  const [yieldPct, setYieldPct] = useState("7");
+  const [drawPct, setDrawPct] = useState(80);
+  const [tenureMonths, setTenureMonths] = useState("12");
+  const fc = formatCurrency;
+
+  // RBI/market norms: ~90% LTV against own FD, ~50% against listed equity/MF.
+  const maxLtv = assetType === "fd" ? 90 : 50;
+  // Loan rate: FD-backed ≈ FD rate + ~1.5–2%; securities (LAS) ≈ 9–11% flat-ish.
+  const av = parseFloat(assetValue) || 0;
+  const ay = parseFloat(yieldPct) || 0;
+  const N = Math.max(0, Math.round(parseFloat(tenureMonths) || 0));
+  const drawn = useMemo(() => av * (Math.min(drawPct, maxLtv) / 100), [av, drawPct, maxLtv]);
+  const loanRate = assetType === "fd" ? ay + 2 : 10.5;
+
+  const result = useMemo(() => {
+    if (av <= 0 || N <= 0) return null;
+    const sanctionLimit = av * (maxLtv / 100);
+    const interest = totalInterest(drawn, loanRate, N) || (drawn * (loanRate / 100) * (N / 12));
+    // Yield you keep earning on the still-pledged asset over the same period.
+    const yieldKept = av * (ay / 100) * (N / 12);
+    const netCarry = interest - yieldKept;
+    const emiAmt = emi(drawn, loanRate, N);
+    return { sanctionLimit, drawn, interest, yieldKept, netCarry, loanRate, emiAmt };
+  }, [av, ay, N, drawn, loanRate, maxLtv]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Loan Against FD / Securities Estimator</h3>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-[var(--color-muted)]">Pledge:</span>
+          {([["fd", "Fixed Deposit (up to 90% LTV)"], ["securities", "Shares / Mutual Funds (up to 50% LTV)"]] as const).map(([id, label]) => (
+            <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="lasfType" checked={assetType === id} onChange={() => { setAssetType(id); setDrawPct(id === "fd" ? 80 : 45); }} className="accent-[var(--color-primary)]" />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Asset value (₹)</label>
+            <input type="number" value={assetValue} onChange={e => setAssetValue(e.target.value)} placeholder="1000000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{assetType === "fd" ? "FD rate" : "Portfolio yield"} (% p.a.)</label>
+            <input type="number" value={yieldPct} onChange={e => setYieldPct(e.target.value)} placeholder="7" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+            <input type="number" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="12" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Draw: <strong className="text-[var(--color-text)]">{Math.min(drawPct, maxLtv)}%</strong> of value</label>
+            <input type="range" min={10} max={maxLtv} step={5} value={Math.min(drawPct, maxLtv)} onChange={e => setDrawPct(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the asset value and tenure to size your secured credit line.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Max sanctionable limit", value: formatAmount(Math.round(result.sanctionLimit)), color: "text-[var(--color-text)]", sub: `${maxLtv}% LTV cap` },
+              { label: "Amount drawn", value: formatAmount(Math.round(result.drawn)), color: "text-[var(--color-text)]", sub: `EMI ${fc(Math.round(result.emiAmt))}/mo` },
+              { label: "Loan interest paid", value: formatAmount(Math.round(result.interest)), color: "text-red-400", sub: `~${result.loanRate.toFixed(1)}% rate` },
+              { label: "Net carry cost", value: formatAmount(Math.round(result.netCarry)), color: result.netCarry > 0 ? "text-orange-400" : "text-green-400", sub: "interest − yield kept" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <CheckCircle2 size={14} /> Pledging keeps your {assetType === "fd" ? "deposit earning" : "portfolio invested"} — the real cost is only {formatAmount(Math.round(result.netCarry))} (the {result.loanRate.toFixed(1)}% loan rate net of the {ay}% you still earn). Far cheaper than breaking the FD or selling at a loss.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">FD-backed overdrafts typically allow up to 90% LTV at ~1.5–2% over the FD rate; equity/MF loans (LAS) cap near 50% with mark-to-market margin calls if prices fall. Interest is usually charged only on the utilised amount.</p>
+    </div>
+  );
+}
+
+// ── #98 Gold-Loan Estimator (digital pledge) ─────────────────────────────────────
+// Size a working-capital draw against pledged gold: net weight × purity × market
+// rate gives the gold value, RBI caps the loan at 75% LTV, and you compare a regular
+// EMI against a bullet (interest-serviced, principal-at-maturity) structure common
+// for short-tenor gold loans.
+function GoldLoanEstimator() {
+  const [grams, setGrams] = useState("");
+  const [purity, setPurity] = useState<"24" | "22" | "18">("22");
+  const [ratePerGram, setRatePerGram] = useState("7200");
+  const [ltvPct, setLtvPct] = useState(75);
+  const [loanRate, setLoanRate] = useState("11");
+  const [tenureMonths, setTenureMonths] = useState("12");
+  const [structure, setStructure] = useState<"emi" | "bullet">("emi");
+  const fc = formatCurrency;
+
+  const g = parseFloat(grams) || 0;
+  const r24 = parseFloat(ratePerGram) || 0; // rate quoted for pure 24K gold per gram
+  const purityFactor = purity === "24" ? 1 : purity === "22" ? 22 / 24 : 18 / 24;
+  const N = Math.max(0, Math.round(parseFloat(tenureMonths) || 0));
+  const lr = parseFloat(loanRate) || 0;
+
+  const result = useMemo(() => {
+    if (g <= 0 || N <= 0) return null;
+    const goldValue = g * purityFactor * r24;
+    const maxLoan = goldValue * (Math.min(ltvPct, 75) / 100);
+    let interest: number, emiAmt: number, bulletDue: number;
+    if (structure === "emi") {
+      interest = totalInterest(maxLoan, lr, N);
+      emiAmt = emi(maxLoan, lr, N);
+      bulletDue = 0;
+    } else {
+      // interest-only servicing, full principal at maturity
+      interest = maxLoan * (lr / 100) * (N / 12);
+      emiAmt = maxLoan * (lr / 100) / 12; // monthly interest only
+      bulletDue = maxLoan;
+    }
+    return { goldValue, maxLoan, interest, emiAmt, bulletDue };
+  }, [g, purityFactor, r24, ltvPct, lr, N, structure]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gem size={14} className="text-[var(--color-primary)]" /> Gold-Loan Estimator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Net gold weight (grams)</label>
+            <input type="number" value={grams} onChange={e => setGrams(e.target.value)} placeholder="100" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purity</label>
+            <select value={purity} onChange={e => setPurity(e.target.value as "24" | "22" | "18")} className={DINP}>
+              <option value="24">24K (pure)</option>
+              <option value="22">22K (jewellery)</option>
+              <option value="18">18K</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">24K rate (₹/gram)</label>
+            <input type="number" value={ratePerGram} onChange={e => setRatePerGram(e.target.value)} placeholder="7200" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan rate (% p.a.)</label>
+            <input type="number" value={loanRate} onChange={e => setLoanRate(e.target.value)} placeholder="11" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+            <input type="number" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="12" className={DINP} />
+          </div>
+          <div className="md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">LTV: <strong className="text-[var(--color-text)]">{Math.min(ltvPct, 75)}%</strong></label>
+            <input type="range" min={40} max={75} step={5} value={Math.min(ltvPct, 75)} onChange={e => setLtvPct(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+          <div className="md:col-span-2 flex items-end gap-3 text-xs">
+            <span className="text-[var(--color-muted)]">Structure:</span>
+            {([["emi", "EMI (principal + interest)"], ["bullet", "Interest-only, principal at end"]] as const).map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="goldStruct" checked={structure === id} onChange={() => setStructure(id)} className="accent-[var(--color-primary)]" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the gold weight and tenure to estimate the eligible loan.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Pledged gold value", value: formatAmount(Math.round(result.goldValue)), color: "text-[var(--color-text)]", sub: `${purity}K · ${g} g` },
+              { label: "Eligible loan", value: formatAmount(Math.round(result.maxLoan)), color: "text-[var(--color-primary)]", sub: `${Math.min(ltvPct, 75)}% LTV` },
+              { label: structure === "emi" ? "Monthly EMI" : "Monthly interest", value: fc(Math.round(result.emiAmt)), color: "text-[var(--color-text)]", sub: structure === "bullet" ? "interest-only" : `${N} months` },
+              { label: "Total interest", value: formatAmount(Math.round(result.interest)), color: "text-red-400", sub: result.bulletDue > 0 ? `+ ${formatAmount(Math.round(result.bulletDue))} bullet` : "" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                {k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2">
+              <AlertTriangle size={14} /> Gold loans disburse same-day but the lender holds your gold and can auction it on default. RBI caps LTV at 75% of value — if gold prices fall the lender may seek a top-up. Reserve the principal {result.bulletDue > 0 ? "for the maturity bullet" : "via your EMIs"} to redeem the pledge.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Eligible loan = net weight × purity factor × 24K rate × LTV (RBI cap 75%). Stones and impurities are deducted before valuation; lenders also levy valuation/processing charges. Use today's quoted rate for an accurate figure.</p>
+    </div>
+  );
+}
+
+// ── #99 Equipment Finance vs Operating Lease Comparator ──────────────────────────
+// Capex decision for machinery/vehicles: buy on a term loan (you own a depreciating
+// asset with a residual value) vs an operating lease (lower outflow, no ownership).
+// Compares total cash out and the net cost after accounting for the residual value
+// you keep if you buy.
+function EquipmentBuyVsLease() {
+  const [assetCost, setAssetCost] = useState("");
+  const [loanRate, setLoanRate] = useState("13");
+  const [downPct, setDownPct] = useState("15");
+  const [termMonths, setTermMonths] = useState("48");
+  const [residualPct, setResidualPct] = useState("20");
+  const [leaseMonthly, setLeaseMonthly] = useState("");
+  const fc = formatCurrency;
+
+  const cost = parseFloat(assetCost) || 0;
+  const N = Math.max(0, Math.round(parseFloat(termMonths) || 0));
+
+  const result = useMemo(() => {
+    if (cost <= 0 || N <= 0) return null;
+    const down = cost * ((parseFloat(downPct) || 0) / 100);
+    const financed = cost - down;
+    const buyEmi = emi(financed, parseFloat(loanRate) || 0, N);
+    const buyInterest = totalInterest(financed, parseFloat(loanRate) || 0, N);
+    const residual = cost * ((parseFloat(residualPct) || 0) / 100);
+    const buyCashOut = down + buyEmi * N;
+    const buyNetCost = buyCashOut - residual; // you keep the asset worth `residual`
+    const leaseM = parseFloat(leaseMonthly) || 0;
+    const leaseCashOut = leaseM * N; // no ownership at end
+    const leaseNetCost = leaseCashOut;
+    return { down, financed, buyEmi, buyInterest, residual, buyCashOut, buyNetCost, leaseM, leaseCashOut, leaseNetCost };
+  }, [cost, loanRate, downPct, N, residualPct, leaseMonthly]);
+
+  const buyCheaper = result ? result.buyNetCost < result.leaseNetCost : true;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Factory size={14} className="text-[var(--color-primary)]" /> Equipment Finance vs Lease Comparator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Asset cost (₹)</label>
+            <input type="number" value={assetCost} onChange={e => setAssetCost(e.target.value)} placeholder="2500000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan rate (% p.a.)</label>
+            <input type="number" value={loanRate} onChange={e => setLoanRate(e.target.value)} placeholder="13" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Down payment (%)</label>
+            <input type="number" value={downPct} onChange={e => setDownPct(e.target.value)} placeholder="15" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Term (months)</label>
+            <input type="number" value={termMonths} onChange={e => setTermMonths(e.target.value)} placeholder="48" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Residual value at end (%)</label>
+            <input type="number" value={residualPct} onChange={e => setResidualPct(e.target.value)} placeholder="20" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lease rental (₹/mo)</label>
+            <input type="number" value={leaseMonthly} onChange={e => setLeaseMonthly(e.target.value)} placeholder="55000" className={DINP} />
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the asset cost, term and a lease quote to compare ownership vs renting.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`${CARD} p-4 space-y-2 text-sm ${buyCheaper ? "border-green-800/40" : ""}`}>
+              <p className="text-sm font-semibold flex items-center gap-2">Buy on loan {buyCheaper && <span className="text-[9px] text-green-400 font-semibold">CHEAPER</span>}</p>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Down payment</span><span className="tabular-nums">{fc(Math.round(result.down))}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">EMI × {N}</span><span className="tabular-nums">{fc(Math.round(result.buyEmi))} → {formatAmount(Math.round(result.buyEmi * N))}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Interest paid</span><span className="tabular-nums text-red-400">{formatAmount(Math.round(result.buyInterest))}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Asset kept (residual)</span><span className="tabular-nums text-green-400">−{formatAmount(Math.round(result.residual))}</span></div>
+              <div className="flex justify-between pt-2 border-t border-[var(--color-border)]"><span className="font-semibold">Net cost of ownership</span><span className="font-bold tabular-nums">{formatAmount(Math.round(result.buyNetCost))}</span></div>
+            </div>
+            <div className={`${CARD} p-4 space-y-2 text-sm ${!buyCheaper ? "border-green-800/40" : ""}`}>
+              <p className="text-sm font-semibold flex items-center gap-2">Operating lease {!buyCheaper && <span className="text-[9px] text-green-400 font-semibold">CHEAPER</span>}</p>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Down payment</span><span className="tabular-nums">{fc(0)}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Rental × {N}</span><span className="tabular-nums">{fc(Math.round(result.leaseM))} → {formatAmount(Math.round(result.leaseCashOut))}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Tax-deductible</span><span className="tabular-nums">Full rental</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Asset owned at end</span><span className="tabular-nums text-red-400">None</span></div>
+              <div className="flex justify-between pt-2 border-t border-[var(--color-border)]"><span className="font-semibold">Net cost of leasing</span><span className="font-bold tabular-nums">{formatAmount(Math.round(result.leaseNetCost))}</span></div>
+            </div>
+          </div>
+          {result.leaseM > 0 && (
+            <div className={`rounded-lg p-4 border ${buyCheaper ? "border-green-800/40 bg-green-950/20" : "border-blue-800/40 bg-blue-950/20"}`}>
+              <p className={`text-sm font-bold ${buyCheaper ? "text-green-400" : "text-blue-400"} flex items-center gap-2`}>
+                {buyCheaper ? <CheckCircle2 size={14} /> : <GitCompareArrows size={14} />}
+                {buyCheaper
+                  ? `Buying is ~${formatAmount(Math.round(result.leaseNetCost - result.buyNetCost))} cheaper net of the ${formatAmount(Math.round(result.residual))} residual you keep — sensible if the asset stays useful past the term.`
+                  : `Leasing is ~${formatAmount(Math.round(result.buyNetCost - result.leaseNetCost))} cheaper and keeps the asset off your balance sheet — better if the equipment dates fast or you want to preserve cash and limits.`}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Simplified pre-tax cash comparison. Leasing rentals are fully deductible while ownership lets you claim depreciation and input tax credit — your CA can quantify the post-tax difference, which often shifts the verdict.</p>
+    </div>
+  );
+}
+
+// ── #100 Interest-Rate Reset (Repo / MCLR) Impact ────────────────────────────────
+// Floating-rate loans reprice when the RBI repo or the bank's MCLR moves. Drag the
+// bps change to see, for every active loan, the new EMI (tenure held) or the new
+// payoff term (EMI held) and the rupee impact on your combined debt service.
+function RateResetImpact({ loans }: { loans: ActiveLoanLike[] }) {
+  const [bps, setBps] = useFeatureState<number>("debt-reset-bps", 25);
+  const [mode, setMode] = useState<"emi" | "tenure">("emi");
+  const fc = formatCurrency;
+  const deltaPct = bps / 100;
+
+  const rows = useMemo(() => loans.map(l => {
+    const rem = remainingMonths(l);
+    const newRate = Math.max(0, l.rate + deltaPct);
+    const newEmi = emi(l.outstanding, newRate, rem);
+    const newTerm = remainingMonths({ outstanding: l.outstanding, rate: newRate, monthlyEmi: l.monthlyEmi });
+    const oldInterest = totalInterest(l.outstanding, l.rate, rem);
+    const newInterestEmi = totalInterest(l.outstanding, newRate, rem);
+    const newInterestTenure = totalInterest(l.outstanding, newRate, newTerm);
+    return {
+      id: l.id, lender: l.lender, outstanding: l.outstanding, rate: l.rate, newRate,
+      emi: l.monthlyEmi, newEmi, rem, newTerm,
+      emiDelta: newEmi - l.monthlyEmi,
+      extraInterest: mode === "emi" ? newInterestEmi - oldInterest : newInterestTenure - oldInterest,
+    };
+  }), [loans, deltaPct, mode]);
+
+  const totals = useMemo(() => ({
+    emiDelta: rows.reduce((s, r) => s + r.emiDelta, 0),
+    extraInterest: rows.reduce((s, r) => s + r.extraInterest, 0),
+    monthsAdded: rows.reduce((s, r) => s + Math.max(0, r.newTerm - r.rem), 0),
+  }), [rows]);
+
+  if (loans.length === 0) return <NoLoansHint what="The EMI / tenure impact of a rate reset" />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Interest-Rate Reset (Repo / MCLR) Impact</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate change: <strong className={deltaPct >= 0 ? "text-red-400" : "text-green-400"}>{bps >= 0 ? "+" : ""}{bps} bps ({deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(2)}%)</strong></label>
+            <input type="range" min={-200} max={200} step={25} value={bps} onChange={e => setBps(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+          <div className="flex items-center gap-3 text-xs pb-1">
+            <span className="text-[var(--color-muted)]">On reset:</span>
+            {([["emi", "Reset EMI (hold tenure)"], ["tenure", "Hold EMI (reset tenure)"]] as const).map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="resetMode" checked={mode === id} onChange={() => setMode(id)} className="accent-[var(--color-primary)]" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: mode === "emi" ? "Combined EMI change" : "Combined extra interest", value: mode === "emi" ? `${totals.emiDelta >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(totals.emiDelta)))}/mo` : formatAmount(Math.round(totals.extraInterest)), color: (mode === "emi" ? totals.emiDelta : totals.extraInterest) > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Extra lifetime interest", value: `${totals.extraInterest >= 0 ? "+" : "−"}${formatAmount(Math.abs(Math.round(totals.extraInterest)))}`, color: totals.extraInterest > 0 ? "text-red-400" : "text-green-400" },
+          { label: mode === "tenure" ? "Months added (sum)" : "Loans repriced", value: mode === "tenure" ? `${totals.monthsAdded} mo` : `${loans.length}`, color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Per-loan reset — {mode === "emi" ? "EMI held to tenure" : "EMI fixed, tenure flexes"}</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Lender", "Old rate", "New rate", mode === "emi" ? "New EMI" : "New term", "Impact"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.newRate > r.rate ? "text-red-400" : "text-green-400"}`}>{r.newRate.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums">{mode === "emi" ? `${fc(Math.round(r.emi))} → ${fc(Math.round(r.newEmi))}` : `${r.rem} → ${r.newTerm} mo`}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.extraInterest > 0 ? "text-red-400" : "text-green-400"}`}>{mode === "emi" ? `${r.emiDelta >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(r.emiDelta)))}/mo` : `${r.newTerm - r.rem >= 0 ? "+" : "−"}${Math.abs(r.newTerm - r.rem)} mo`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">External-benchmark (repo-linked) loans reprice within a quarter of an RBI move; MCLR loans reset on their reset date. Banks usually hold your EMI and stretch the tenure on a hike — watch for tenure ballooning past your plan. Fixed-rate loans are unaffected.</p>
+    </div>
+  );
+}
+
+// ── #101 Group Exposure / Loan-Stacking Tracker ──────────────────────────────────
+// Total leverage across every lender against your real income. Computes FOIR
+// (fixed-obligations-to-income), debt-to-annual-revenue and per-lender concentration
+// so you can spot over-leverage before a lender's stacking check flags you.
+function ExposureStackingTracker({ loans }: { loans: ActiveLoanLike[] }) {
+  const { store } = useApp();
+  const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
+  const fc = formatCurrency;
+
+  const data = useMemo(() => {
+    const totalOutstanding = loans.reduce((s, l) => s + l.outstanding, 0);
+    const totalEmi = loans.reduce((s, l) => s + l.monthlyEmi, 0);
+    const monthlyIncome = Math.max(0, snap.monthlyRevenue);
+    const annualRevenue = monthlyIncome * 12;
+    const foir = monthlyIncome > 0 ? (totalEmi / monthlyIncome) * 100 : null;
+    const debtToRevenue = annualRevenue > 0 ? totalOutstanding / annualRevenue : null;
+    const rows = loans.map(l => ({
+      id: l.id, lender: l.lender, outstanding: l.outstanding, emi: l.monthlyEmi,
+      sharePct: totalOutstanding > 0 ? (l.outstanding / totalOutstanding) * 100 : 0,
+    })).sort((a, b) => b.outstanding - a.outstanding);
+    const topConcentration = rows[0]?.sharePct ?? 0;
+    return { totalOutstanding, totalEmi, monthlyIncome, foir, debtToRevenue, rows, topConcentration, lenderCount: loans.length };
+  }, [loans, snap]);
+
+  const foirHot = data.foir !== null && data.foir > 50;
+  const stackingRisk = data.lenderCount >= 4 || foirHot;
+
+  if (loans.length === 0) return <NoLoansHint what="Your group exposure and over-leverage check" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "FOIR (EMIs ÷ income)", value: data.foir !== null ? `${data.foir.toFixed(0)}%` : "—", color: foirHot ? "text-red-400" : "text-green-400", sub: "lenders cap ~50%" },
+          { label: "Debt ÷ annual revenue", value: data.debtToRevenue !== null ? `${data.debtToRevenue.toFixed(2)}x` : "—", color: data.debtToRevenue !== null && data.debtToRevenue > 1 ? "text-yellow-400" : "text-green-400", sub: "leverage vs turnover" },
+          { label: "Active lenders", value: `${data.lenderCount}`, color: data.lenderCount >= 4 ? "text-yellow-400" : "text-[var(--color-text)]", sub: "stacking flag at 4+" },
+          { label: "Top-lender concentration", value: `${data.topConcentration.toFixed(0)}%`, color: "text-[var(--color-text)]", sub: data.rows[0]?.lender ?? "" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Exposure by lender</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Lender", "Outstanding", "Monthly EMI", "Share of debt"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.emi))}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                        <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${Math.min(100, r.sharePct)}%` }} />
+                      </div>
+                      <span className="text-xs text-[var(--color-muted)] tabular-nums">{r.sharePct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${stackingRisk ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold ${stackingRisk ? "text-red-400" : "text-green-400"} flex items-center gap-2`}>
+          {stackingRisk ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          {stackingRisk
+            ? `Over-leverage risk: ${foirHot ? `EMIs eat ${data.foir?.toFixed(0)}% of income (above the ~50% FOIR bar)` : `${data.lenderCount} active lenders can trip a loan-stacking check`}. A new lender may decline or reprice — consolidate before applying.`
+            : `Healthy exposure: EMIs are ${data.foir !== null ? `${data.foir.toFixed(0)}% of income` : "well covered"} across ${data.lenderCount} lender(s), within typical underwriting bars.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">FOIR = total EMIs ÷ monthly income (3-month average revenue used as a proxy). Most lenders cap FOIR near 50–55% and watch for borrowing across many lenders ("stacking"). Bureau data may show obligations not tracked here — keep this list complete.</p>
+    </div>
+  );
+}
+
+// ── #102 Working-Capital Demand Loan / OD-CC Interest Calculator ─────────────────
+// Cash-credit / overdraft lines charge interest only on what you draw, plus a
+// commitment fee on the idle sanctioned limit. This sizes the real monthly cost of
+// a revolving line at your average utilisation versus a fully-drawn term loan.
+function WorkingCapitalLineCalculator() {
+  const [sanctioned, setSanctioned] = useState("");
+  const [avgUtilPct, setAvgUtilPct] = useState(60);
+  const [rate, setRate] = useState("12");
+  const [commitmentPct, setCommitmentPct] = useState("0.5");
+  const [renewalFee, setRenewalFee] = useState("0");
+  const fc = formatCurrency;
+
+  const limit = parseFloat(sanctioned) || 0;
+  const lr = parseFloat(rate) || 0;
+
+  const result = useMemo(() => {
+    if (limit <= 0) return null;
+    const drawn = limit * (avgUtilPct / 100);
+    const undrawn = limit - drawn;
+    const monthlyInterest = (drawn * (lr / 100)) / 12;
+    const annualInterest = drawn * (lr / 100);
+    // Commitment / non-utilisation fee on the idle portion (annual).
+    const commitmentFee = undrawn * ((parseFloat(commitmentPct) || 0) / 100);
+    const renewal = parseFloat(renewalFee) || 0;
+    const annualCost = annualInterest + commitmentFee + renewal;
+    // Effective rate on the money you actually use.
+    const effRateOnDrawn = drawn > 0 ? (annualCost / drawn) * 100 : 0;
+    // A term loan would charge interest on the full limit even when idle.
+    const termLoanInterest = limit * (lr / 100);
+    const saved = termLoanInterest - annualInterest;
+    return { drawn, undrawn, monthlyInterest, annualInterest, commitmentFee, renewal, annualCost, effRateOnDrawn, termLoanInterest, saved };
+  }, [limit, avgUtilPct, lr, commitmentPct, renewalFee]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Working-Capital Demand Loan / OD-CC Calculator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned limit (₹)</label>
+            <input type="number" value={sanctioned} onChange={e => setSanctioned(e.target.value)} placeholder="5000000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Interest rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="12" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Commitment fee (% on idle)</label>
+            <input type="number" value={commitmentPct} onChange={e => setCommitmentPct(e.target.value)} placeholder="0.5" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal / processing (₹/yr)</label>
+            <input type="number" value={renewalFee} onChange={e => setRenewalFee(e.target.value)} placeholder="0" className={DINP} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Average utilisation: <strong className="text-[var(--color-text)]">{avgUtilPct}%</strong> of limit</label>
+          <input type="range" min={0} max={100} step={5} value={avgUtilPct} onChange={e => setAvgUtilPct(Number(e.target.value))} className="w-full mt-1 accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the sanctioned limit and your typical utilisation to size the line's real cost.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Avg drawn balance", value: formatAmount(Math.round(result.drawn)), color: "text-[var(--color-text)]", sub: `${formatAmount(Math.round(result.undrawn))} idle` },
+              { label: "Monthly interest", value: fc(Math.round(result.monthlyInterest)), color: "text-red-400", sub: "on drawn balance only" },
+              { label: "All-in annual cost", value: formatAmount(Math.round(result.annualCost)), color: "text-red-400", sub: result.commitmentFee > 0 ? `incl. ${fc(Math.round(result.commitmentFee))} commitment fee` : "no idle-fee" },
+              { label: "Effective rate on drawn", value: `${result.effRateOnDrawn.toFixed(2)}%`, color: "text-yellow-400", sub: `nominal ${lr}%` },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <CheckCircle2 size={14} /> At {avgUtilPct}% utilisation a revolving line costs {formatAmount(Math.round(result.annualInterest))} interest/yr versus {formatAmount(Math.round(result.termLoanInterest))} for a fully-drawn term loan of the same size — saving ~{formatAmount(Math.round(result.saved))} by paying only for what you use. The lower your steady-state draw, the bigger the saving.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">CC/OD interest is charged on the daily drawn balance, so light users pay far less than on a term loan. Some lenders levy a commitment / non-utilisation fee on the idle limit and an annual renewal charge — include both for the true cost. Drawing power is also capped by your stock-and-debtor statements.</p>
     </div>
   );
 }

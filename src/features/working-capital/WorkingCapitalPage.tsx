@@ -5,15 +5,17 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn, paymentTermsSuggestions } from "@/lib/finance";
 import type { FinancialSnapshot, AgingBucket } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank } from "lucide-react";
+import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank, Calculator, FileSpreadsheet, FileText, Repeat, Split } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 
 export default function WorkingCapitalPage() {
   const { store } = useApp();
   const navigate = useNavigate();
-  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios">("overview");
+  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od">("overview");
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const aging = useMemo(() => agingBuckets(store.invoices), [store.invoices]);
   const options = useMemo(
@@ -42,7 +44,7 @@ export default function WorkingCapitalPage() {
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setWcTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${wcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -369,6 +371,12 @@ export default function WorkingCapitalPage() {
       {wcTab === "cash-locked" && <CashLockedInWc snap={snap} />}
       {wcTab === "ar-acceleration" && <ReceivablesAcceleration snap={snap} aging={aging} />}
       {wcTab === "liquidity-ratios" && <LiquidityRatiosTracker snap={snap} />}
+      {wcTab === "mpbf-tandon" && <MpbfTandonCalculator snap={snap} />}
+      {wcTab === "stock-statement" && <StockStatementGenerator snap={snap} />}
+      {wcTab === "debtor-financing" && <DebtorFinancingEligibility snap={snap} />}
+      {wcTab === "creditor-stretch" && <CreditorStretchImpact snap={snap} />}
+      {wcTab === "wc-turnover" && <WorkingCapitalTurnover snap={snap} />}
+      {wcTab === "factoring-vs-od" && <FactoringVsOdDecision snap={snap} />}
     </div>
   );
 }
@@ -1400,6 +1408,583 @@ function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Current liabilities = payables + obligations due within 90 days. Ratios above target signal comfortable short-term liquidity; the cash ratio is the strictest test lenders apply in a stress scenario.</p>
+    </div>
+  );
+}
+
+// ── #93 MPBF (Tandon Committee) Limit Calculator — Method I vs II ────────────────
+function MpbfTandonCalculator({ snap }: { snap: FinancialSnapshot }) {
+  // Other current assets (e.g. advances, prepaid) the bank counts beyond stock+debtors.
+  const [otherCa, setOtherCa] = useFeatureState<string>("wc-mpbf-other-ca", "0");
+  // Other current liabilities besides trade creditors (e.g. statutory dues).
+  const [otherCl, setOtherCl] = useFeatureState<string>("wc-mpbf-other-cl", "0");
+  // Core current assets (permanent minimum stock) excluded under Method III thinking
+  // but here used to show the margin lenders expect from long-term sources.
+
+  const oCa = Math.max(0, parseFloat(otherCa) || 0);
+  const oCl = Math.max(0, parseFloat(otherCl) || 0);
+
+  const currentAssets = snap.inventoryValue + snap.accountsReceivable + oCa;
+  const otherCurrentLiab = snap.accountsPayable + oCl; // current liab other than bank borrowing
+  const workingCapitalGap = Math.max(0, currentAssets - otherCurrentLiab);
+
+  // Method I: borrower funds 25% of WORKING CAPITAL GAP from long-term sources.
+  const margin1 = Math.round(workingCapitalGap * 0.25);
+  const mpbf1 = Math.max(0, workingCapitalGap - margin1);
+  // Method II: borrower funds 25% of TOTAL CURRENT ASSETS from long-term sources.
+  const margin2 = Math.round(currentAssets * 0.25);
+  const mpbf2 = Math.max(0, currentAssets - otherCurrentLiab - margin2);
+
+  // Net working capital (own contribution) implied and the resulting current ratio.
+  const nwc1 = currentAssets - otherCurrentLiab - mpbf1;
+  const nwc2 = currentAssets - otherCurrentLiab - mpbf2;
+  const cr1 = (otherCurrentLiab + mpbf1) > 0 ? currentAssets / (otherCurrentLiab + mpbf1) : 0;
+  const cr2 = (otherCurrentLiab + mpbf2) > 0 ? currentAssets / (otherCurrentLiab + mpbf2) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Calculator size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">MPBF Calculator — Tandon Committee Method I vs II</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Maximum Permissible Bank Finance is how banks cap your cash-credit limit. Method II (the RBI norm for larger limits) makes you fund 25% of all current assets from long-term sources — a stricter current ratio of ~1.33. Computed live from your stock ({formatAmount(snap.inventoryValue)}) and debtors ({formatAmount(snap.accountsReceivable)}).
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Other current assets (₹)</label>
+            <input type="number" value={otherCa} onChange={e => setOtherCa(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Other current liabilities (₹)</label>
+            <input type="number" value={otherCl} onChange={e => setOtherCl(e.target.value)} className={WC_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Current Assets", value: formatAmount(currentAssets), color: "text-[var(--color-text)]" },
+          { label: "Current Liab. (ex-bank)", value: formatAmount(otherCurrentLiab), color: "text-[var(--color-text)]" },
+          { label: "Working-Capital Gap", value: formatAmount(workingCapitalGap), color: "text-orange-400" },
+          { label: "MPBF (Method II)", value: formatAmount(mpbf2), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Particulars", "Method I (25% of WC gap)", "Method II (25% of CA)"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { l: "Stipulated margin (own funds)", a: margin1, b: margin2 },
+              { l: "Permissible bank finance (MPBF)", a: mpbf1, b: mpbf2, strong: true },
+              { l: "Implied net working capital", a: nwc1, b: nwc2 },
+            ].map(r => (
+              <tr key={r.l} className="border-b border-[var(--color-border)] last:border-0">
+                <td className={`px-4 py-2.5 ${r.strong ? "font-semibold" : ""}`}>{r.l}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${r.strong ? "text-[var(--color-primary)] font-semibold" : ""}`}>{formatAmount(r.a)}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${r.strong ? "text-green-400 font-semibold" : ""}`}>{formatAmount(r.b)}</td>
+              </tr>
+            ))}
+            <tr className="bg-[var(--color-accent)]">
+              <td className="px-4 py-2.5 font-medium">Resulting current ratio</td>
+              <td className="px-4 py-2.5 tabular-nums">{cr1.toFixed(2)}x</td>
+              <td className="px-4 py-2.5 tabular-nums">{cr2.toFixed(2)}x</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
+        <p className="text-sm text-blue-400">
+          Banks now sanction the lower, more conservative <strong>Method II</strong> figure ({formatAmount(mpbf2)}) for limits above ₹6 crore. The {formatAmount(mpbf1 - mpbf2)} extra you'd get under Method I must come from your own NWC — plan that long-term funding before the limit review.
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Method I: MPBF = WC gap − 25% of WC gap (current ratio ~1.17). Method II: MPBF = current assets − other current liabilities − 25% of current assets (current ratio ~1.33). WC gap = current assets − current liabilities other than bank borrowing.</p>
+    </div>
+  );
+}
+
+// ── #94 Stock & Book-Debt Statement Generator (for monthly bank submission) ──────
+function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
+  const [stockMargin, setStockMargin] = useFeatureState<string>("wc-stockstmt-stock-margin", "25");
+  const [debtorMargin, setDebtorMargin] = useFeatureState<string>("wc-stockstmt-debtor-margin", "40");
+  const [excludeOver90, setExcludeOver90] = useFeatureState<string>("wc-stockstmt-excl90", "yes");
+  const [creditors, setCreditors] = useFeatureState<string>("wc-stockstmt-creditors", String(Math.round(snap.accountsPayable)));
+
+  const sMargin = (parseFloat(stockMargin) || 0) / 100;
+  const dMargin = (parseFloat(debtorMargin) || 0) / 100;
+  const excl90 = excludeOver90 === "yes";
+
+  // Banks fund only debtors up to 90 days; over-90 are excluded from drawing power.
+  const eligibleDebtorsBase = excl90 ? Math.max(0, snap.accountsReceivable - snap.overdueReceivable) : snap.accountsReceivable;
+  const creditorsForStock = Math.max(0, parseFloat(creditors) || 0);
+
+  // Drawing power = stock less creditors (paid-for stock) less margin, plus debtors less margin.
+  const paidStock = Math.max(0, snap.inventoryValue - creditorsForStock);
+  const eligibleStock = Math.round(paidStock * (1 - sMargin));
+  const eligibleDebtors = Math.round(eligibleDebtorsBase * (1 - dMargin));
+  const drawingPower = eligibleStock + eligibleDebtors;
+
+  const statementMonth = format(new Date(), "MMMM yyyy");
+
+  const rows = [
+    { particular: "A. Stock / inventory (as per books)", gross: snap.inventoryValue, margin: "—", net: snap.inventoryValue },
+    { particular: "Less: creditors for paid stock", gross: -creditorsForStock, margin: "—", net: -creditorsForStock },
+    { particular: "Paid-for stock", gross: paidStock, margin: `${stockMargin}%`, net: eligibleStock },
+    { particular: `B. Book debts ${excl90 ? "(≤90 days only)" : "(all ages)"}`, gross: eligibleDebtorsBase, margin: `${debtorMargin}%`, net: eligibleDebtors },
+  ];
+
+  const copyStatement = () => {
+    const text = [
+      `STOCK & BOOK-DEBT STATEMENT — ${statementMonth}`,
+      `Stock (books): ${formatCurrency(snap.inventoryValue)}`,
+      `Less creditors for stock: ${formatCurrency(creditorsForStock)}`,
+      `Paid-for stock after ${stockMargin}% margin: ${formatCurrency(eligibleStock)}`,
+      `Book debts ${excl90 ? "(<=90d)" : "(all)"} after ${debtorMargin}% margin: ${formatCurrency(eligibleDebtors)}`,
+      `DRAWING POWER: ${formatCurrency(drawingPower)}`,
+    ].join("\n");
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => toast.success("Stock statement copied — paste into your bank's format"),
+        () => toast.error("Could not copy to clipboard"),
+      );
+    } else {
+      toast.error("Clipboard not available in this browser");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet size={16} className="text-[var(--color-primary)]" />
+            <h3 className="text-sm font-semibold">Stock & Book-Debt Statement — {statementMonth}</h3>
+          </div>
+          <button onClick={copyStatement} className="text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/25">
+            Copy for bank
+          </button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Every cash-credit borrower files this monthly to keep the limit alive. We build it from your live stock and debtors, net of creditors and bank margins, and compute the drawing power the bank will allow.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Stock margin %</label>
+            <input type="number" value={stockMargin} onChange={e => setStockMargin(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Debtor margin %</label>
+            <input type="number" value={debtorMargin} onChange={e => setDebtorMargin(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Creditors for stock (₹)</label>
+            <input type="number" value={creditors} onChange={e => setCreditors(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Exclude debtors &gt;90d</label>
+            <select value={excludeOver90} onChange={e => setExcludeOver90(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+              <option value="yes">Yes (bank norm)</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WC_CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Particulars", "Value (₹)", "Margin", "Eligible (₹)"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.particular} className="border-b border-[var(--color-border)]">
+                <td className="px-4 py-2.5">{r.particular}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.gross)}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.margin}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.net === r.gross ? "—" : formatAmount(r.net)}</td>
+              </tr>
+            ))}
+            <tr className="bg-[var(--color-accent)] font-semibold">
+              <td className="px-4 py-2.5" colSpan={3}>Drawing Power (Stock + Debtors, net of margin)</td>
+              <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatAmount(drawingPower)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Drawing power = (paid-for stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). Paid-for stock excludes creditors so the bank doesn't fund supplier-funded inventory twice. Debtors over 90 days are excluded per standard sanction terms. File this by the 7th–10th of each month.</p>
+    </div>
+  );
+}
+
+// ── #95 Debtor / Bill-Discounting Eligibility & Advance Calculator ──────────────
+function DebtorFinancingEligibility({ snap }: { snap: FinancialSnapshot }) {
+  const [advancePct, setAdvancePct] = useFeatureState<string>("wc-debtorfin-advance", "80");
+  const [discountRatePct, setDiscountRatePct] = useFeatureState<string>("wc-debtorfin-rate", "13");
+  const [tenorDays, setTenorDays] = useState("60");
+  const [processingPct, setProcessingPct] = useState("0.5");
+
+  const advance = Math.min(95, Math.max(0, parseFloat(advancePct) || 0)) / 100;
+  const rate = (parseFloat(discountRatePct) || 0) / 100;
+  const tenor = Math.max(1, parseFloat(tenorDays) || 1);
+  const processing = (parseFloat(processingPct) || 0) / 100;
+
+  // Only non-overdue (current) receivables are reliably financeable.
+  const eligible = Math.max(0, snap.accountsReceivable - snap.overdueReceivable);
+  const advanceAmount = Math.round(eligible * advance);
+  const holdback = eligible - advanceAmount;
+  const interestCost = Math.round(advanceAmount * rate * (tenor / 365));
+  const processingCost = Math.round(advanceAmount * processing);
+  const totalCost = interestCost + processingCost;
+  const effectiveAnnualCost = advanceAmount > 0 ? (totalCost / advanceAmount) * (365 / tenor) * 100 : 0;
+
+  const dailyOpex = snap.monthlyExpense / 30;
+  const daysOfRunway = dailyOpex > 0 ? Math.round(advanceAmount / dailyOpex) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <FileText size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Debtor / Bill-Discounting Eligibility</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Convert unpaid invoices to cash today by discounting them with a financier (TReDS / bill-discounting). We size the advance against your current (non-overdue) receivables of {formatAmount(eligible)} and show the true cost.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Advance rate %</label>
+            <input type="number" value={advancePct} onChange={e => setAdvancePct(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount rate %/yr</label>
+            <input type="number" value={discountRatePct} onChange={e => setDiscountRatePct(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Average tenor (days)</label>
+            <input type="number" value={tenorDays} onChange={e => setTenorDays(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Processing fee %</label>
+            <input type="number" value={processingPct} onChange={e => setProcessingPct(e.target.value)} className={WC_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Eligible Receivables", value: formatAmount(eligible), color: "text-[var(--color-text)]" },
+          { label: "Cash Advance Today", value: formatAmount(advanceAmount), color: "text-green-400" },
+          { label: "Holdback (on collection)", value: formatAmount(holdback), color: "text-[var(--color-muted)]" },
+          { label: "Effective Cost", value: `${effectiveAnnualCost.toFixed(1)}%`, color: effectiveAnnualCost <= 16 ? "text-green-400" : "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Cost of unlocking {formatAmount(advanceAmount)}</p>
+        <div className="space-y-2 text-sm">
+          {[
+            { l: `Interest @ ${discountRatePct}% for ${tenorDays} days`, v: interestCost },
+            { l: `Processing fee @ ${processingPct}%`, v: processingCost },
+          ].map(r => (
+            <div key={r.l} className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5">
+              <span>{r.l}</span>
+              <span className="tabular-nums text-orange-400">{formatAmount(r.v)}</span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between px-4 pt-2 border-t border-[var(--color-border)]">
+            <span className="font-semibold">Total cost</span>
+            <span className="tabular-nums font-bold text-orange-400">{formatAmount(totalCost)}</span>
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-3">
+          {eligible === 0
+            ? "No current receivables to finance — overdue invoices are excluded as financiers won't fund them."
+            : `This advance buys roughly ${daysOfRunway} days of operating runway at your ${formatAmount(Math.round(dailyOpex))}/day burn — compare against OD before committing.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Eligible = receivables minus overdue (financiers fund current invoices only). Effective annual cost = total cost ÷ advance × 365 ÷ tenor. On TReDS this is typically 9–14% for buyers with good ratings; weigh it against your CC line rate.</p>
+    </div>
+  );
+}
+
+// ── #96 Creditor-Stretch Impact — DPO extension, cash freed & MSME risk ─────────
+function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
+  const [extraDays, setExtraDays] = useState("15");
+  const [msmeSharePct, setMsmeSharePct] = useState("30"); // % of payables owed to MSME vendors
+  const extend = Math.max(0, parseFloat(extraDays) || 0);
+  const msmeShare = Math.min(100, Math.max(0, parseFloat(msmeSharePct) || 0)) / 100;
+
+  // Daily purchase run-rate implied by payables and current DPO.
+  const dailyPurchases = snap.dpoDays > 0 ? snap.accountsPayable / snap.dpoDays : snap.monthlyExpense / 30;
+  const newDpo = snap.dpoDays + extend;
+  const cashFreed = Math.round(dailyPurchases * extend);
+  const newCcc = snap.cccDays - extend;
+  const dailyOpex = snap.monthlyExpense / 30;
+
+  // Sec 43B(h): payments to MSME vendors beyond 45 days are disallowed as expense
+  // until paid — stretching MSME creditors carries a tax cost, not just relationship risk.
+  const msmePayables = Math.round(snap.accountsPayable * msmeShare);
+  const exposedToMsmeRule = newDpo > 45 && msmeShare > 0;
+  const msmeAtRisk = exposedToMsmeRule ? msmePayables : 0;
+
+  // Value of the freed cash if it offsets OD borrowing at ~14%/yr.
+  const annualSaving = Math.round(cashFreed * 0.14);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Repeat size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Creditor-Stretch Impact — DPO, Cash Freed & MSME Risk</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Holding supplier payments longer is the cheapest funding there is — but stretch MSME vendors past 45 days and Sec 43B(h) disallows the expense until paid. Model the cash freed against the tax exposure.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Extend payment by (days)</label>
+            <input type="number" value={extraDays} onChange={e => setExtraDays(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">% of payables to MSME vendors</label>
+            <input type="number" value={msmeSharePct} onChange={e => setMsmeSharePct(e.target.value)} className={WC_INP} />
+          </div>
+        </div>
+        <div>
+          <input type="range" min={0} max={60} value={extend} onChange={e => setExtraDays(e.target.value)} className="w-full accent-[var(--color-primary)]" />
+          <div className="flex justify-between text-[10px] text-[var(--color-muted)] mt-1"><span>+0d</span><span>DPO {snap.dpoDays}d → {newDpo}d</span><span>+60d</span></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "New DPO", value: `${newDpo}d`, color: "text-green-400" },
+          { label: "Cash Freed", value: formatAmount(cashFreed), color: "text-[var(--color-primary)]" },
+          { label: "New CCC", value: `${newCcc}d`, color: newCcc <= snap.cccDays ? "text-green-400" : "text-red-400" },
+          { label: "Interest Saved / yr", value: formatAmount(annualSaving), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-2">Stretching {extend} days frees {formatAmount(cashFreed)}</p>
+        <p className="text-xs text-[var(--color-muted)]">That's roughly {dailyOpex > 0 ? Math.round(cashFreed / dailyOpex) : 0} days of operating runway, freed at zero interest if vendors agree. Negotiate it as a term, don't simply default.</p>
+      </div>
+
+      {exposedToMsmeRule ? (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 flex items-start gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-400">
+            New DPO of {newDpo} days breaches the 45-day MSME limit. ~{formatAmount(msmeAtRisk)} owed to MSME vendors would be <strong>disallowed under Sec 43B(h)</strong> until actually paid — inflating this year's taxable profit. Pay MSME vendors within 45 days; stretch only non-MSME creditors.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm text-green-400">New DPO of {newDpo} days stays within the 45-day MSME limit — no Sec 43B(h) disallowance. Safe to negotiate.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Daily purchases = payables ÷ current DPO. Cash freed = daily purchases × extra days. Sec 43B(h) of the Income-tax Act disallows expenses to micro/small (registered MSME) suppliers paid beyond 45 days until the year they're actually settled.</p>
+    </div>
+  );
+}
+
+// ── #97 Working-Capital Turnover Ratio — sales generated per rupee of WC ─────────
+function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
+  const annualRevenue = snap.monthlyRevenue * 12;
+  const nwc = snap.accountsReceivable + snap.inventoryValue - snap.accountsPayable;
+  const turnover = nwc > 0 ? annualRevenue / nwc : 0;
+  // Higher turnover = leaner WC. A turnover of 6x means ₹6 of sales per ₹1 of WC.
+  const wcPerRupeeSales = annualRevenue > 0 ? nwc / annualRevenue : 0;
+
+  // Directional sector benchmarks for WC turnover (annual sales ÷ net WC).
+  const BENCH = [
+    { label: "Lean / efficient", min: 6 },
+    { label: "Healthy", min: 4 },
+    { label: "Average", min: 2.5 },
+    { label: "WC-heavy", min: 0 },
+  ];
+  const band = BENCH.find(b => turnover >= b.min) ?? BENCH[BENCH.length - 1];
+
+  // What freeing 10 days of WC would do to the ratio.
+  const dailyOpex = snap.monthlyExpense / 30;
+  const leanerNwc = Math.max(1, nwc - dailyOpex * 10);
+  const leanerTurnover = annualRevenue > 0 ? annualRevenue / leanerNwc : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Gauge size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Working-Capital Turnover Ratio</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          How many rupees of annual sales each rupee of working capital supports. Higher is leaner — you're sweating your capital harder. Computed from your annualised revenue ({formatAmount(annualRevenue)}) and net WC ({formatAmount(nwc)}).
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "WC Turnover", value: nwc > 0 ? `${turnover.toFixed(1)}x` : "—", color: turnover >= 4 ? "text-green-400" : turnover >= 2.5 ? "text-yellow-400" : "text-orange-400" },
+          { label: "WC per ₹ of Sales", value: `${(wcPerRupeeSales * 100).toFixed(0)} paise`, color: "text-[var(--color-text)]" },
+          { label: "Efficiency Band", value: band.label, color: turnover >= 4 ? "text-green-400" : "text-orange-400" },
+          { label: "Net Working Capital", value: formatAmount(nwc), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5 space-y-3`}>
+        <p className="text-sm font-semibold">Where you sit</p>
+        {BENCH.map(b => {
+          const active = b.label === band.label;
+          return (
+            <div key={b.label} className={`flex items-center justify-between px-4 py-2.5 rounded-lg border ${active ? "border-[var(--color-primary)]/40 bg-[var(--color-primary)]/10" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
+              <span className={`text-sm ${active ? "font-semibold text-[var(--color-primary)]" : ""}`}>{b.label}</span>
+              <span className="text-xs tabular-nums text-[var(--color-muted)]">{b.min > 0 ? `≥ ${b.min}x` : `< 2.5x`}{active ? " — you" : ""}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {nwc > 0 && (
+        <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
+          <p className="text-sm text-blue-400">
+            Freeing just 10 days of WC ({formatAmount(Math.round(dailyOpex * 10))}) would lift your turnover from {turnover.toFixed(1)}x to <strong>{leanerTurnover.toFixed(1)}x</strong> — the same sales on less trapped cash.
+          </p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">WC turnover = annual sales ÷ net working capital (AR + inventory − payables). A ratio below ~2.5x suggests capital is trapped in receivables or stock; above ~6x signals a very lean, possibly cash-strained, cycle. Benchmarks are directional.</p>
+    </div>
+  );
+}
+
+// ── #98 Factoring vs Overdraft — funding-cost decision ──────────────────────────
+function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
+  const [need, setNeed] = useState(String(Math.round(snap.workingCapitalGap) || 500000));
+  const [tenorDays, setTenorDays] = useState("60");
+  const [odRatePct, setOdRatePct] = useState("14");
+  const [factorRatePct, setFactorRatePct] = useState("12");
+  const [factorFeePct, setFactorFeePct] = useState("1");
+  const [recourse, setRecourse] = useState("recourse");
+
+  const amount = Math.max(0, parseFloat(need) || 0);
+  const tenor = Math.max(1, parseFloat(tenorDays) || 1);
+  const odRate = (parseFloat(odRatePct) || 0) / 100;
+  const factorRate = (parseFloat(factorRatePct) || 0) / 100;
+  const factorFee = (parseFloat(factorFeePct) || 0) / 100;
+
+  // OD: interest only on drawn amount for the days used.
+  const odCost = Math.round(amount * odRate * (tenor / 365));
+  // Factoring: discount interest for the tenor + a one-off service/factoring fee.
+  const factorInterest = Math.round(amount * factorRate * (tenor / 365));
+  const factorFeeAmt = Math.round(amount * factorFee);
+  const factorCost = factorInterest + factorFeeAmt;
+
+  const odEff = amount > 0 ? (odCost / amount) * (365 / tenor) * 100 : 0;
+  const factorEff = amount > 0 ? (factorCost / amount) * (365 / tenor) * 100 : 0;
+
+  const factoringWins = factorCost < odCost;
+  const nonRecourse = recourse === "nonrecourse";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Split size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Factoring vs Overdraft — Which Costs Less?</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Both bridge a {formatAmount(amount)} gap, but they price differently: an OD charges interest only on what you draw, while factoring adds a service fee but can transfer bad-debt risk (non-recourse). Compare the true cost for your tenor.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { l: "Funding need (₹)", v: need, s: setNeed },
+            { l: "Tenor / days outstanding", v: tenorDays, s: setTenorDays },
+            { l: "OD rate %/yr", v: odRatePct, s: setOdRatePct },
+            { l: "Factoring rate %/yr", v: factorRatePct, s: setFactorRatePct },
+            { l: "Factoring fee %", v: factorFeePct, s: setFactorFeePct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Factoring type</label>
+            <select value={recourse} onChange={e => setRecourse(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+              <option value="recourse">With recourse</option>
+              <option value="nonrecourse">Non-recourse</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`${WC_CARD} p-5 ${!factoringWins ? "ring-1 ring-green-700/40" : ""}`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold">Overdraft / Cash Credit</p>
+            {!factoringWins && <span className="text-[9px] bg-green-900/40 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">CHEAPER</span>}
+          </div>
+          <p className="text-2xl font-bold tabular-nums">{formatAmount(odCost)}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">cost for {tenorDays} days · {odEff.toFixed(1)}% effective/yr</p>
+          <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1 text-xs text-[var(--color-muted)]">
+            <p>You keep collection responsibility and bad-debt risk.</p>
+            <p>Interest accrues only on the drawn balance.</p>
+          </div>
+        </div>
+
+        <div className={`${WC_CARD} p-5 ${factoringWins ? "ring-1 ring-green-700/40" : ""}`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold">Factoring</p>
+            {factoringWins && <span className="text-[9px] bg-green-900/40 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">CHEAPER</span>}
+          </div>
+          <p className="text-2xl font-bold tabular-nums">{formatAmount(factorCost)}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">interest {formatAmount(factorInterest)} + fee {formatAmount(factorFeeAmt)} · {factorEff.toFixed(1)}% effective/yr</p>
+          <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1 text-xs text-[var(--color-muted)]">
+            <p>{nonRecourse ? "Non-recourse: factor absorbs buyer default — worth the premium for risky debtors." : "With recourse: you still carry the bad-debt risk."}</p>
+            <p>Factor manages collection — frees up your team.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${factoringWins ? "border-blue-800/40 bg-blue-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold ${factoringWins ? "text-blue-400" : "text-green-400"}`}>
+          {factoringWins
+            ? `Factoring is ${formatAmount(odCost - factorCost)} cheaper here${nonRecourse ? " and offloads bad-debt risk" : ""} — but only if you have clean invoices to assign.`
+            : `The overdraft is ${formatAmount(factorCost - odCost)} cheaper for this tenor. Use factoring only when you also want collection support or ${nonRecourse ? "non-recourse" : "default"} protection.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">OD cost = amount × OD rate × days/365. Factoring cost = amount × factoring rate × days/365 + one-off fee. Effective annual cost annualises each over the tenor. Non-recourse factoring costs more but transfers buyer-default risk — value that against your debtor quality.</p>
     </div>
   );
 }

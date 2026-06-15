@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2 } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -117,7 +117,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes">("directory");
+  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -226,6 +226,12 @@ export default function VendorsPage() {
             ["rfq", "RFQ Comparison", ListChecks],
             ["advances", "Advances Tracker", Wallet],
             ["debit-notes", "Debit / Return Notes", Undo2],
+            ["pay-forecast", "Payables Forecast", LineChart],
+            ["blanket-po", "Blanket PO Drawdown", Layers],
+            ["concentration", "Concentration Risk", Network],
+            ["stmt-recon", "Statement Recon", FileCheck2],
+            ["msme-interest", "MSME Interest 43B(h)", Gavel],
+            ["savings", "Savings Tracker", PiggyBank],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -526,6 +532,12 @@ export default function VendorsPage() {
       {view === "rfq"           && <RfqComparison />}
       {view === "advances"      && <AdvancesTracker />}
       {view === "debit-notes"   && <DebitNoteTracker />}
+      {view === "pay-forecast"  && <PayablesForecast />}
+      {view === "blanket-po"    && <BlanketPoDrawdown />}
+      {view === "concentration" && <ConcentrationRisk />}
+      {view === "stmt-recon"    && <StatementReconciliation />}
+      {view === "msme-interest" && <MsmeInterestLiability />}
+      {view === "savings"       && <SavingsTracker />}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
     </div>
@@ -2147,6 +2159,705 @@ function DebitNoteTracker() {
                   <td className="px-4 py-3 text-right"><button onClick={() => remove(n.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #82 Payables Forecast — project the next 30/60/90 days of vendor outflows
+   from scheduled obligations plus the run-rate of recurring vendor spend.
+   ───────────────────────────────────────────────────────────────────────── */
+function PayablesForecast() {
+  const { store } = useApp();
+  const { transactions, obligations } = store;
+
+  const buckets = useMemo(() => {
+    const today = new Date();
+    const day0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const windows = [
+      { key: "0_30",  label: "Next 30 days", from: 0,  to: 30 },
+      { key: "31_60", label: "31–60 days",   from: 31, to: 60 },
+      { key: "61_90", label: "61–90 days",   from: 61, to: 90 },
+    ];
+    // Scheduled payables = obligations payable to vendors / statutory dues.
+    const payable = obligations.filter(o => o.type === "other" || o.type === "payroll" || o.type === "tax");
+    return windows.map(w => {
+      const scheduled = payable
+        .map(o => ({ o, d: Math.floor((new Date(o.dueDate).getTime() - day0.getTime()) / 86400000) }))
+        .filter(x => x.d >= w.from && x.d <= w.to)
+        .reduce((s, x) => s + x.o.amount, 0);
+      return { ...w, scheduled };
+    });
+  }, [obligations]);
+
+  // Recurring run-rate: avg monthly spend on vendors seen >=2 times in last 90 days.
+  const monthlyRunRate = useMemo(() => {
+    const today = new Date();
+    const cutoff = new Date(today.getTime() - 90 * 86400000).toISOString().split("T")[0];
+    const recent = transactions.filter(t => t.amount < 0 && t.counterparty && t.date >= cutoff);
+    const byVendor: Record<string, number> = {};
+    recent.forEach(t => { byVendor[t.counterparty] = (byVendor[t.counterparty] ?? 0) + 1; });
+    const recurringSpend = recent
+      .filter(t => (byVendor[t.counterparty] ?? 0) >= 2)
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    return recurringSpend / 3; // 90 days -> per month
+  }, [transactions]);
+
+  const rows = buckets.map(b => ({ ...b, runRate: monthlyRunRate, total: b.scheduled + monthlyRunRate }));
+  const total90 = rows.reduce((s, r) => s + r.total, 0);
+
+  const exportCsv = () => {
+    const lines = ["Window,Scheduled Obligations,Recurring Run-Rate,Projected Outflow"];
+    rows.forEach(r => lines.push(`${r.label},${Math.round(r.scheduled)},${Math.round(r.runRate)},${Math.round(r.total)}`));
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "payables-forecast.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success("Payables forecast exported");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">Projected vendor cash outflow over the next 90 days — combining your scheduled obligations with the run-rate of recurring vendor spend (vendors paid 2+ times in the last quarter). Use it to spot a cash crunch before it lands.</p>
+        <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-3 py-2 rounded-lg shrink-0">
+          <FileInput size={13} /> Export CSV
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {rows.map(r => (
+          <div key={r.key} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{r.label}</p>
+            <p className="text-xl font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(r.total))}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">Scheduled {formatCurrency(Math.round(r.scheduled))} · Recurring {formatCurrency(Math.round(r.runRate))}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Window", "Scheduled", "Recurring Run-Rate", "Projected Outflow"].map((h, i) => (
+                <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <tr key={r.key} className="hover:bg-white/2">
+                <td className="px-4 py-3 font-medium">{r.label}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.scheduled))}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.runRate))}</td>
+                <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.total))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-[var(--color-border)] bg-[var(--color-bg)]">
+              <td className="px-4 py-3 font-semibold" colSpan={3}>Total 90-day vendor outflow</td>
+              <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(total90))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #52 Blanket PO Drawdown — set an umbrella PO value and draw releases
+   against it; track committed vs remaining headroom.
+   ───────────────────────────────────────────────────────────────────────── */
+interface BlanketRelease { id: string; date: string; amount: number; note: string; }
+interface BlanketPo { id: string; vendor: string; totalValue: number; validTill: string; releases: BlanketRelease[]; }
+
+function BlanketPoDrawdown() {
+  const { store } = useApp();
+  const [bpos, setBpos] = useFeatureState<BlanketPo[]>("ven-blanket-pos", []);
+  const [vendor, setVendor] = useState("");
+  const [totalValue, setTotalValue] = useState("");
+  const [validTill, setValidTill] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 12); return d.toISOString().split("T")[0]; });
+  const [relAmt, setRelAmt] = useState<Record<string, string>>({});
+  const [relNote, setRelNote] = useState<Record<string, string>>({});
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const drawn = (b: BlanketPo) => b.releases.reduce((s, r) => s + r.amount, 0);
+
+  const create = () => {
+    const tv = parseFloat(totalValue) || 0;
+    if (!vendor.trim() || tv <= 0) { toast.error("Enter vendor and total value"); return; }
+    const bpo: BlanketPo = { id: crypto.randomUUID(), vendor: vendor.trim(), totalValue: tv, validTill, releases: [] };
+    setBpos(prev => [bpo, ...prev]);
+    setVendor(""); setTotalValue("");
+    toast.success(`Blanket PO for ${bpo.vendor} created — ${formatCurrency(tv)} headroom`);
+  };
+
+  const release = (id: string) => {
+    const amt = parseFloat(relAmt[id] ?? "") || 0;
+    if (amt <= 0) { toast.error("Enter a release amount"); return; }
+    setBpos(prev => prev.map(b => {
+      if (b.id !== id) return b;
+      const remaining = b.totalValue - drawn(b);
+      if (amt > remaining) { toast.error(`Release exceeds remaining headroom ${formatCurrency(remaining)}`); return b; }
+      toast.success(`${formatCurrency(amt)} released against ${b.vendor}`);
+      return { ...b, releases: [{ id: crypto.randomUUID(), date: new Date().toISOString().split("T")[0], amount: amt, note: (relNote[id] ?? "").trim() }, ...b.releases] };
+    }));
+    setRelAmt(p => ({ ...p, [id]: "" })); setRelNote(p => ({ ...p, [id]: "" }));
+  };
+
+  const remove = (id: string) => setBpos(prev => prev.filter(b => b.id !== id));
+
+  const totalCommitted = bpos.reduce((s, b) => s + b.totalValue, 0);
+  const totalDrawn = bpos.reduce((s, b) => s + drawn(b), 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">For repeat purchasing, agree an annual umbrella value with a vendor and draw smaller releases against it — no fresh PO each time. Track how much of each blanket PO you've consumed and how much headroom is left.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Blanket POs", value: bpos.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Total Committed", value: formatCurrency(totalCommitted), color: "text-blue-400" },
+          { label: "Drawn to Date", value: formatCurrency(totalDrawn), color: "text-orange-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={15} className="text-[var(--color-primary)]" /> New Blanket PO</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <input list="bpo-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="bpo-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input type="number" value={totalValue} onChange={e => setTotalValue(e.target.value)} placeholder="Annual value ₹ *" className={inpCls} />
+          <input type="date" value={validTill} onChange={e => setValidTill(e.target.value)} className={inpCls} />
+        </div>
+        <button onClick={create} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Create Blanket PO</button>
+      </div>
+
+      {bpos.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Layers size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No blanket POs yet. Create one to draw releases against an annual commitment.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {bpos.map(b => {
+            const used = drawn(b);
+            const remaining = b.totalValue - used;
+            const pct = b.totalValue > 0 ? Math.min(100, (used / b.totalValue) * 100) : 0;
+            const expired = new Date(b.validTill) < new Date();
+            return (
+              <div key={b.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{b.vendor}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                      Valid till {format(new Date(b.validTill), "dd MMM yyyy")}
+                      {expired && <span className="text-red-400 ml-1">· expired</span>}
+                      {" · "}{b.releases.length} release{b.releases.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-[var(--color-muted)]">Drawn {formatCurrency(used)} of {formatCurrency(b.totalValue)}</span>
+                    <span className={remaining <= 0 ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>{formatCurrency(remaining)} left</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                    <div className={`h-full ${pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-orange-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1fr_1.5fr_auto] gap-2">
+                  <input type="number" value={relAmt[b.id] ?? ""} onChange={e => setRelAmt(p => ({ ...p, [b.id]: e.target.value }))} placeholder="Release ₹" className={inpCls} />
+                  <input value={relNote[b.id] ?? ""} onChange={e => setRelNote(p => ({ ...p, [b.id]: e.target.value }))} placeholder="Note (optional)" className={inpCls} />
+                  <button onClick={() => release(b.id)} disabled={remaining <= 0} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">Draw</button>
+                </div>
+
+                {b.releases.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    {b.releases.map(r => (
+                      <div key={r.id} className="flex items-center justify-between text-[11px] text-[var(--color-muted)]">
+                        <span>{format(new Date(r.date), "dd MMM")}{r.note ? ` · ${r.note}` : ""}</span>
+                        <span className="tabular-nums font-medium text-[var(--color-text)]">{formatCurrency(r.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #44 Vendor Spend Concentration / Single-Source Risk — flag vendors that
+   take a risky share of category or total spend (dependency risk).
+   ───────────────────────────────────────────────────────────────────────── */
+function ConcentrationRisk() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [threshold, setThreshold] = useFeatureState<number>("ven-concentration-threshold", 30);
+
+  const analysis = useMemo(() => {
+    const spend = transactions.filter(t => t.amount < 0 && t.counterparty);
+    const total = spend.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+    const byVendor: Record<string, { spend: number; category: string }> = {};
+    spend.forEach(t => {
+      if (!byVendor[t.counterparty]) byVendor[t.counterparty] = { spend: 0, category: t.category };
+      byVendor[t.counterparty].spend += Math.abs(t.amount);
+    });
+
+    const byCategory: Record<string, number> = {};
+    spend.forEach(t => { byCategory[t.category] = (byCategory[t.category] ?? 0) + Math.abs(t.amount); });
+
+    const vendors = Object.entries(byVendor).map(([name, d]) => {
+      const catTotal = byCategory[d.category] || 1;
+      return {
+        name,
+        category: d.category,
+        spend: d.spend,
+        totalShare: total > 0 ? (d.spend / total) * 100 : 0,
+        catShare: (d.spend / catTotal) * 100,
+      };
+    }).sort((a, b) => b.spend - a.spend);
+
+    // Herfindahl-Hirschman Index on total-share fractions (0–10000).
+    const hhi = vendors.reduce((s, v) => s + Math.pow(v.totalShare, 2), 0);
+    return { total, vendors, hhi };
+  }, [transactions]);
+
+  const flagged = analysis.vendors.filter(v => v.totalShare >= threshold || v.catShare >= 60);
+  const hhiLabel = analysis.hhi >= 2500 ? "Highly concentrated" : analysis.hhi >= 1500 ? "Moderately concentrated" : "Diversified";
+  const hhiColor = analysis.hhi >= 2500 ? "text-red-400" : analysis.hhi >= 1500 ? "text-orange-400" : "text-green-400";
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When too much of your spend rides on one supplier, a disruption there hits you hard. This maps single-source dependency by total and category share, and scores overall concentration with the HHI index.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Concentration (HHI)", value: Math.round(analysis.hhi).toString(), color: hhiColor, sub: hhiLabel },
+          { label: "Vendors Over Threshold", value: flagged.length.toString(), color: flagged.length > 0 ? "text-red-400" : "text-green-400", sub: `≥ ${threshold}% of spend` },
+          { label: "Total Spend Mapped", value: formatCurrency(Math.round(analysis.total)), color: "text-[var(--color-primary)]", sub: `${analysis.vendors.length} vendors` },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-xs text-[var(--color-muted)]">Risk threshold (% of total spend)</label>
+        <input type="range" min={10} max={60} step={5} value={threshold} onChange={e => setThreshold(parseInt(e.target.value, 10))} className="accent-[var(--color-primary)]" />
+        <span className="text-sm font-semibold tabular-nums">{threshold}%</span>
+      </div>
+
+      {analysis.vendors.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Network size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No vendor spend to analyse yet. Import expense transactions to map concentration.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Category", "Spend", "% of Total", "% of Category", "Risk"].map((h, i) => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i <= 1 ? "text-left" : i === 5 ? "text-center" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {analysis.vendors.slice(0, 30).map(v => {
+                const risky = v.totalShare >= threshold || v.catShare >= 60;
+                return (
+                  <tr key={v.name} className={`hover:bg-white/2 ${risky ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-3 font-medium max-w-[200px] truncate">{v.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                        {CATEGORY_LABEL[v.category] ?? v.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(v.spend))}</td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${v.totalShare >= threshold ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.totalShare.toFixed(1)}%</td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${v.catShare >= 60 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.catShare.toFixed(0)}%</td>
+                    <td className="px-4 py-3 text-center">
+                      {risky
+                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 inline-flex items-center gap-1"><AlertTriangle size={9} /> Single-source</span>
+                        : <span className="text-[10px] text-green-400">OK</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #63 Vendor Statement Reconciliation — paste a vendor's statement lines and
+   match them against your ledger (transactions) to surface gaps fast.
+   ───────────────────────────────────────────────────────────────────────── */
+function StatementReconciliation() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [vendor, setVendor] = useState("");
+  const [raw, setRaw] = useState("");
+  const [tolerance, setTolerance] = useState("1");
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [transactions]);
+
+  // Parse each non-empty line: take the last number on the line as the amount.
+  const statementAmounts = useMemo(() => {
+    return raw.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      const nums = line.replace(/,/g, "").match(/\d+(\.\d+)?/g);
+      const amt = nums && nums.length > 0 ? parseFloat(nums[nums.length - 1]) : NaN;
+      return { line, amount: isNaN(amt) ? 0 : amt };
+    }).filter(x => x.amount > 0);
+  }, [raw]);
+
+  const ledgerAmounts = useMemo(() => {
+    if (!vendor.trim()) return [];
+    return transactions
+      .filter(t => t.amount < 0 && t.counterparty === vendor.trim())
+      .map(t => ({ id: t.id, date: t.date, amount: Math.abs(t.amount), desc: t.description }));
+  }, [transactions, vendor]);
+
+  const result = useMemo(() => {
+    const tol = parseFloat(tolerance) || 0;
+    const ledgerPool = ledgerAmounts.map(l => ({ ...l, used: false }));
+    const matched: { stmt: number; ledger: number; date: string }[] = [];
+    const unmatchedStmt: number[] = [];
+
+    statementAmounts.forEach(s => {
+      const hit = ledgerPool.find(l => !l.used && Math.abs(l.amount - s.amount) <= tol);
+      if (hit) { hit.used = true; matched.push({ stmt: s.amount, ledger: hit.amount, date: hit.date }); }
+      else unmatchedStmt.push(s.amount);
+    });
+    const unmatchedLedger = ledgerPool.filter(l => !l.used);
+
+    const stmtTotal = statementAmounts.reduce((s, x) => s + x.amount, 0);
+    const ledgerTotal = ledgerAmounts.reduce((s, x) => s + x.amount, 0);
+    return { matched, unmatchedStmt, unmatchedLedger, stmtTotal, ledgerTotal, diff: stmtTotal - ledgerTotal };
+  }, [statementAmounts, ledgerAmounts, tolerance]);
+
+  const hasData = vendor.trim() && statementAmounts.length > 0;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Paste the line items off a vendor's statement of account, pick the vendor, and we'll match each amount against your own ledger — surfacing entries on their statement you haven't booked (and bills you've recorded that they've missed). This is the month-end reconciliation that eats hours by hand.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+          <input list="recon-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor (matches your ledger) *" className={inpCls} />
+          <datalist id="recon-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input type="number" value={tolerance} onChange={e => setTolerance(e.target.value)} placeholder="Match tolerance ₹" className={inpCls} />
+        </div>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={5} placeholder={"Paste statement lines — one per row. We read the last number on each line as the amount.\ne.g.  12 Apr  Invoice INV-204   45,000"} className={`${inpCls} font-mono text-xs resize-y`} />
+        <p className="text-[11px] text-[var(--color-muted)]">{statementAmounts.length} statement line{statementAmounts.length !== 1 ? "s" : ""} parsed · {ledgerAmounts.length} ledger entr{ledgerAmounts.length !== 1 ? "ies" : "y"} for this vendor</p>
+      </div>
+
+      {!hasData ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileCheck2 size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Pick a vendor and paste their statement to reconcile against your ledger.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Matched", value: result.matched.length.toString(), color: "text-green-400" },
+              { label: "On Statement Only", value: result.unmatchedStmt.length.toString(), color: result.unmatchedStmt.length > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+              { label: "In Ledger Only", value: result.unmatchedLedger.length.toString(), color: result.unmatchedLedger.length > 0 ? "text-blue-400" : "text-[var(--color-muted)]" },
+              { label: "Balance Difference", value: formatCurrency(Math.round(Math.abs(result.diff))), color: Math.abs(result.diff) > 1 ? "text-red-400" : "text-green-400" },
+            ].map(s => (
+              <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4">
+              <p className="text-sm font-semibold text-orange-400 mb-2">On their statement, not in your books</p>
+              {result.unmatchedStmt.length === 0 ? (
+                <p className="text-xs text-[var(--color-muted)]">Nothing — every statement line is booked.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {result.unmatchedStmt.map((a, i) => <li key={i} className="text-xs flex justify-between"><span className="text-[var(--color-muted)]">Unbooked entry</span><span className="tabular-nums font-medium">{formatCurrency(a)}</span></li>)}
+                </ul>
+              )}
+            </div>
+            <div className="bg-[var(--color-surface)] border border-blue-800/30 rounded-lg p-4">
+              <p className="text-sm font-semibold text-blue-400 mb-2">In your books, not on their statement</p>
+              {result.unmatchedLedger.length === 0 ? (
+                <p className="text-xs text-[var(--color-muted)]">Nothing — they've captured every payment.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {result.unmatchedLedger.map(l => <li key={l.id} className="text-xs flex justify-between gap-2"><span className="text-[var(--color-muted)] truncate">{format(new Date(l.date), "dd MMM")} · {l.desc}</span><span className="tabular-nums font-medium shrink-0">{formatCurrency(l.amount)}</span></li>)}
+                </ul>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #8 / #11 MSME Interest Liability (43B(h)) — estimate the compound interest
+   owed on MSME dues paid beyond the 45-day limit at 3× the RBI bank rate.
+   ───────────────────────────────────────────────────────────────────────── */
+interface MsmeDue { id: string; vendor: string; amount: string; acceptedOn: string; }
+
+function MsmeInterestLiability() {
+  const [dues, setDues] = useFeatureState<MsmeDue[]>("ven-msme-dues", []);
+  const [bankRate, setBankRate] = useFeatureState<number>("ven-msme-bank-rate", 6.5);
+
+  const add = () => setDues(prev => [{ id: crypto.randomUUID(), vendor: "", amount: "", acceptedOn: new Date().toISOString().split("T")[0] }, ...prev]);
+  const update = (id: string, patch: Partial<MsmeDue>) => setDues(prev => prev.map(d => d.id === id ? { ...d, ...patch } : d));
+  const remove = (id: string) => setDues(prev => prev.filter(d => d.id !== id));
+
+  // Section 16 MSMED Act: interest = 3× RBI bank rate, compounded monthly,
+  // on amounts unpaid beyond 45 days from acceptance. Disallowed under 43B(h).
+  const annualRate = bankRate * 3;
+  const today = new Date();
+
+  const computed = useMemo(() => dues.map(d => {
+    const amt = parseFloat(d.amount) || 0;
+    const accepted = new Date(d.acceptedOn);
+    const daysHeld = Math.floor((today.getTime() - accepted.getTime()) / 86400000);
+    const overdueDays = Math.max(0, daysHeld - 45);
+    const months = overdueDays / 30;
+    const interest = amt > 0 && months > 0 ? amt * (Math.pow(1 + annualRate / 100 / 12, months) - 1) : 0;
+    return { ...d, amt, overdueDays, interest };
+  }), [dues, annualRate, today]);
+
+  const totalInterest = computed.reduce((s, c) => s + c.interest, 0);
+  const totalPrincipal = computed.reduce((s, c) => s + c.amt, 0);
+  const breachCount = computed.filter(c => c.overdueDays > 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
+        <Gavel size={16} className="text-red-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-red-300">Section 16 MSMED Act — Interest on Delayed Payment</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Dues to a Micro/Small vendor unpaid beyond 45 days attract compound interest at 3× the RBI bank rate, compounded monthly. This interest is <span className="font-medium">not</span> tax-deductible (Sec 23). Estimate the running liability per vendor below.</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-xs text-[var(--color-muted)]">RBI bank rate (%)</label>
+        <input type="number" step="0.25" value={bankRate} onChange={e => setBankRate(parseFloat(e.target.value) || 0)} className={`${inpCls} max-w-[100px]`} />
+        <span className="text-xs text-[var(--color-muted)]">Penal rate applied: <span className="font-semibold text-[var(--color-text)]">{annualRate.toFixed(2)}% p.a.</span></span>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 ml-auto">
+          <Plus size={13} /> Add MSME Due
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Tracked Principal", value: formatCurrency(Math.round(totalPrincipal)), color: "text-[var(--color-primary)]" },
+          { label: "Dues Past 45 Days", value: breachCount.toString(), color: breachCount > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Est. Interest Liability", value: formatCurrency(Math.round(totalInterest)), color: totalInterest > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {dues.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Gavel size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No MSME dues tracked. Add a due with its acceptance date to estimate the 43B(h) interest exposure.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["MSME Vendor", "Due Amount", "Accepted On", "Overdue (>45d)", "Est. Interest", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {computed.map(c => (
+                <tr key={c.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3"><input value={c.vendor} onChange={e => update(c.id, { vendor: e.target.value })} placeholder="Vendor name" className={`${inpCls} min-w-[140px]`} /></td>
+                  <td className="px-4 py-3 text-right"><input type="number" value={c.amount} onChange={e => update(c.id, { amount: e.target.value })} placeholder="₹" className={`${inpCls} max-w-[120px] text-right`} /></td>
+                  <td className="px-4 py-3 text-right"><input type="date" value={c.acceptedOn} onChange={e => update(c.id, { acceptedOn: e.target.value })} className={`${inpCls} max-w-[150px]`} /></td>
+                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${c.overdueDays > 0 ? "text-red-400" : "text-green-400"}`}>{c.overdueDays > 0 ? `${c.overdueDays}d` : "Within limit"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(c.interest))}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-[var(--color-border)] bg-[var(--color-bg)]">
+                <td className="px-4 py-3 font-semibold" colSpan={4}>Total estimated non-deductible interest</td>
+                <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(totalInterest))}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #42 / #76 Procurement Savings Tracker — log realised savings (negotiated
+   discounts, avoided spend, early-pay capture) and total the impact.
+   ───────────────────────────────────────────────────────────────────────── */
+type SavingType = "negotiation" | "early-pay" | "consolidation" | "avoided" | "rebate";
+const SAVING_META: Record<SavingType, { label: string; cls: string }> = {
+  "negotiation":   { label: "Negotiated rate", cls: "bg-blue-950/30 text-blue-400 border-blue-800/30" },
+  "early-pay":     { label: "Early-pay discount", cls: "bg-green-950/30 text-green-400 border-green-800/30" },
+  "consolidation": { label: "Consolidation", cls: "bg-purple-950/30 text-purple-400 border-purple-800/30" },
+  "avoided":       { label: "Avoided spend", cls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  "rebate":        { label: "Rebate / credit", cls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+};
+
+interface SavingEntry { id: string; vendor: string; type: SavingType; baseline: number; final: number; date: string; note: string; }
+
+function SavingsTracker() {
+  const { store } = useApp();
+  const [entries, setEntries] = useFeatureState<SavingEntry[]>("ven-savings-entries", []);
+  const [vendor, setVendor] = useState("");
+  const [type, setType] = useState<SavingType>("negotiation");
+  const [baseline, setBaseline] = useState("");
+  const [final, setFinal] = useState("");
+  const [note, setNote] = useState("");
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    const b = parseFloat(baseline) || 0;
+    const f = parseFloat(final) || 0;
+    if (!vendor.trim() || b <= 0) { toast.error("Enter vendor and a baseline cost"); return; }
+    if (f > b) { toast.error("Final cost should be at or below the baseline"); return; }
+    const e: SavingEntry = { id: crypto.randomUUID(), vendor: vendor.trim(), type, baseline: b, final: f, date: new Date().toISOString().split("T")[0], note: note.trim() };
+    setEntries(prev => [e, ...prev]);
+    setVendor(""); setBaseline(""); setFinal(""); setNote("");
+    toast.success(`${formatCurrency(b - f)} saved logged for ${e.vendor}`);
+  };
+  const remove = (id: string) => setEntries(prev => prev.filter(e => e.id !== id));
+
+  const totalSaved = entries.reduce((s, e) => s + (e.baseline - e.final), 0);
+  const totalBaseline = entries.reduce((s, e) => s + e.baseline, 0);
+  const savingsRate = totalBaseline > 0 ? (totalSaved / totalBaseline) * 100 : 0;
+
+  const ytdSaved = useMemo(() => {
+    const yr = new Date().getFullYear();
+    return entries.filter(e => new Date(e.date).getFullYear() === yr).reduce((s, e) => s + (e.baseline - e.final), 0);
+  }, [entries]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Procurement saves money in ways that never show on the P&L — a negotiated rate cut, an early-pay discount, a consolidated contract. Log each win against its baseline cost here so you can prove the function pays for itself.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Saved", value: formatCurrency(Math.round(totalSaved)), color: "text-green-400" },
+          { label: "Saved This Year", value: formatCurrency(Math.round(ytdSaved)), color: "text-[var(--color-primary)]" },
+          { label: "Avg Savings Rate", value: `${savingsRate.toFixed(1)}%`, color: "text-blue-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={15} className="text-[var(--color-primary)]" /> Log a Saving</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input list="sav-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="sav-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <select value={type} onChange={e => setType(e.target.value as SavingType)} className={inpCls}>
+            {(Object.keys(SAVING_META) as SavingType[]).map(t => <option key={t} value={t}>{SAVING_META[t].label}</option>)}
+          </select>
+          <input type="number" value={baseline} onChange={e => setBaseline(e.target.value)} placeholder="Baseline cost ₹ *" className={inpCls} />
+          <input type="number" value={final} onChange={e => setFinal(e.target.value)} placeholder="Final cost ₹ (0 if avoided)" className={inpCls} />
+        </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={inpCls} />
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Log Saving</button>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <PiggyBank size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No savings logged yet. Record a negotiated rate, early-pay discount, or avoided spend to start tracking.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Type", "Baseline", "Final", "Saved", "Date", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i <= 1 ? "text-left" : i === 5 ? "text-right" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {entries.map(e => {
+                const saved = e.baseline - e.final;
+                const pct = e.baseline > 0 ? (saved / e.baseline) * 100 : 0;
+                return (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{e.vendor}</p>
+                      {e.note && <p className="text-[10px] text-[var(--color-muted)]">{e.note}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${SAVING_META[e.type].cls}`}>{SAVING_META[e.type].label}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.baseline))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.final))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(saved))} <span className="text-[10px] text-[var(--color-muted)]">({pct.toFixed(0)}%)</span></td>
+                    <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)]">{format(new Date(e.date), "dd MMM")}</td>
+                    <td className="px-4 py-3 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

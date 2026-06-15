@@ -12,6 +12,7 @@ import {
   CalendarRange, Coins, Waves, GitBranch, ShieldAlert, Activity,
   AlertTriangle, CheckCircle2,
   LineChart, Receipt, Users, Flame, Layers, ArrowLeftRight, Scale, Target,
+  CalendarClock, Wallet, HandCoins, Clock, Gauge, Boxes,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -45,6 +46,8 @@ export default function ForecastPage() {
     "main" | "13week" | "ar-inflow" | "seasonality" | "three-line" | "buffer-alert"
     | "revenue-forecast" | "expense-forecast" | "headcount-cost" | "burn-zero-cash"
     | "cash-bridge" | "ar-ap-timing" | "fixed-variable" | "break-even"
+    | "rolling-pl" | "capex-plan" | "owner-draw" | "credit-aging"
+    | "forecast-accuracy" | "product-mix"
   >("main");
 
   const navigate = useNavigate();
@@ -202,6 +205,12 @@ export default function ForecastPage() {
           ["ar-ap-timing", "AR / AP Timing", ArrowLeftRight],
           ["fixed-variable", "Fixed vs Variable", Scale],
           ["break-even", "Break-Even Date", Target],
+          ["rolling-pl", "Rolling 12-Mo P&L", Wallet],
+          ["capex-plan", "Capex / Funding Plan", CalendarClock],
+          ["owner-draw", "Owner Draw Planner", HandCoins],
+          ["credit-aging", "Credit-Sale Aging", Clock],
+          ["forecast-accuracy", "Forecast Accuracy", Gauge],
+          ["product-mix", "Product Mix Forecast", Boxes],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setFcTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap ${fcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -223,6 +232,12 @@ export default function ForecastPage() {
       {fcTab === "ar-ap-timing"     && <ArApTimingForecast />}
       {fcTab === "fixed-variable"   && <FixedVariableProjection />}
       {fcTab === "break-even"       && <BreakEvenForecast />}
+      {fcTab === "rolling-pl"        && <RollingPLForecast />}
+      {fcTab === "capex-plan"        && <CapexFundingPlan />}
+      {fcTab === "owner-draw"        && <OwnerDrawPlanner />}
+      {fcTab === "credit-aging"      && <CreditSaleAgingForecast />}
+      {fcTab === "forecast-accuracy" && <ForecastAccuracyTracker />}
+      {fcTab === "product-mix"       && <ProductMixForecast />}
 
       {fcTab === "main" && <>
 
@@ -1792,3 +1807,576 @@ function BreakEvenForecast() {
 
 // Small clamp local to this module's tool helpers (engine's clamp isn't exported as default).
 function clampNum(x: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, x)); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #89 — Rolling 12-Month P&L Forecast
+// Blends trailing actuals (revenue + expense run-rate, grown by your own CMGR) into
+// a forward 12-month P&L: revenue, expense, net profit and a cumulative-profit line.
+// ─────────────────────────────────────────────────────────────────────────────
+function RollingPLForecast() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const hist = useMemo(() => monthlyAggregates(transactions ?? [], 12), [transactions]);
+
+  const seedGrowth = useMemo(() => {
+    const g = cmgr(hist.filter(m => m.revenue > 0).map(m => m.revenue));
+    return g == null ? 2 : Math.round(clampNum(g, -10, 20) * 10) / 10;
+  }, [hist]);
+  const [revGrowth, setRevGrowth] = useState(0);
+  const [expGrowth, setExpGrowth] = useState(0.5);
+  const effRevGrowth = revGrowth !== 0 ? revGrowth : seedGrowth;
+
+  const baseRates = useMemo(() => {
+    const active = hist.filter(m => m.revenue > 0 || m.expense > 0);
+    const tail = active.slice(-3);
+    const n = Math.max(1, tail.length);
+    const rev = tail.reduce((s, m) => s + m.revenue, 0) / n;
+    const exp = tail.reduce((s, m) => s + m.expense, 0) / n;
+    return { rev, exp };
+  }, [hist]);
+
+  const rows = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; revenue: number; expense: number; net: number; cumulative: number }[] = [];
+    let rev = baseRates.rev, exp = baseRates.exp, cum = 0;
+    for (let i = 1; i <= 12; i++) {
+      rev = rev * (1 + effRevGrowth / 100);
+      exp = exp * (1 + expGrowth / 100);
+      const net = rev - exp;
+      cum += net;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), revenue: Math.round(rev), expense: Math.round(exp), net: Math.round(net), cumulative: Math.round(cum) });
+    }
+    return out;
+  }, [baseRates, effRevGrowth, expGrowth]);
+
+  const totalRev = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalExp = rows.reduce((s, r) => s + r.expense, 0);
+  const totalNet = totalRev - totalExp;
+  const margin = totalRev > 0 ? Math.round((totalNet / totalRev) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Wallet} title="Rolling 12-Month P&L Forecast" blurb="Projects revenue, expense and net profit forward 12 months from your trailing 3-month run-rate — revenue grows at your own CMGR (overridable), expenses at a separate dial." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "12-mo revenue", value: formatCurrency(totalRev), color: "text-green-400" },
+        { label: "12-mo expense", value: formatCurrency(totalExp), color: "text-red-400" },
+        { label: "12-mo net profit", value: formatCurrency(totalNet), color: totalNet >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Net margin", value: `${margin}%`, color: margin >= 10 ? "text-green-400" : margin >= 0 ? "text-yellow-400" : "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Revenue growth (MoM)</span><span className="font-semibold">{revGrowth !== 0 ? `${revGrowth > 0 ? "+" : ""}${revGrowth}%` : `${seedGrowth}% (history)`}</span></label>
+          <input type="range" min={-10} max={20} step={0.5} value={revGrowth} onChange={e => setRevGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Set to 0 to use your historical CMGR ({seedGrowth}%).</p>
+        </div>
+        <div>
+          <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Expense growth (MoM)</span><span className="font-semibold">{expGrowth > 0 ? "+" : ""}{expGrowth}%</span></label>
+          <input type="range" min={-5} max={10} step={0.5} value={expGrowth} onChange={e => setExpGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Revenue vs expense & cumulative profit (₹L)</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={rows.map(r => ({ label: r.label, revenue: Math.round(r.revenue / 100000), expense: Math.round(r.expense / 100000), cumulative: Math.round(r.cumulative / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "revenue" ? "Revenue" : name === "expense" ? "Expense" : "Cumulative net"]} />
+            <ReferenceLine y={0} stroke="#8a8060" strokeDasharray="4 2" />
+            <Bar dataKey="revenue" fill="#1A6B55" radius={[2, 2, 0, 0]} animationDuration={400} />
+            <Bar dataKey="expense" fill="#ef4444" radius={[2, 2, 0, 0]} animationDuration={400} />
+            <Line type="monotone" dataKey="cumulative" stroke="#22c55e" strokeWidth={2} dot={false} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Month", "Revenue", "Expense", "Net", "Cumulative"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <tr key={r.label} className="hover:bg-white/2">
+                <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{r.label}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-green-400">{formatCurrency(r.revenue)}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-red-400">{formatCurrency(r.expense)}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(r.net)}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums font-semibold ${r.cumulative >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(r.cumulative)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #90 — Capex / Funding Plan
+// Plan one-off capital purchases (amount + month + optional loan-funded share);
+// projects current cash forward against the trailing net run-rate and the planned
+// outlays, flagging the cash-safest month and any month that breaches zero.
+// ─────────────────────────────────────────────────────────────────────────────
+interface CapexItem { id: string; name: string; amount: number; month: number; loanPct: number }
+
+function CapexFundingPlan() {
+  const { store } = useApp();
+  const { transactions, bankAccounts } = store;
+  const cash = (bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+  const [items, setItems] = useFeatureState<CapexItem[]>("fc-capex-items", []);
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [month, setMonth] = useState("3");
+  const [loanPct, setLoanPct] = useState("0");
+
+  const monthlyNet = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const active = hist.filter(m => m.revenue > 0 || m.expense > 0);
+    if (active.length === 0) return 0;
+    return active.reduce((s, m) => s + m.net, 0) / active.length;
+  }, [transactions]);
+
+  const add = () => {
+    if (!name || !amount) { toast.error("Add a name and amount"); return; }
+    setItems(prev => [...prev, { id: generateId(), name, amount: Number(amount), month: clampNum(Number(month) || 1, 1, 12), loanPct: clampNum(Number(loanPct) || 0, 0, 100) }]);
+    toast.success("Capex item added to plan");
+    setName(""); setAmount(""); setMonth("3"); setLoanPct("0");
+  };
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; cash: number; outlay: number }[] = [];
+    let bal = cash;
+    for (let i = 0; i <= 12; i++) {
+      if (i > 0) bal += monthlyNet;
+      let outlay = 0;
+      for (const it of items) if (it.month === i) outlay += it.amount * (1 - it.loanPct / 100);
+      bal -= outlay;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), cash: Math.round(bal), outlay: Math.round(outlay) });
+    }
+    return out;
+  }, [cash, monthlyNet, items]);
+
+  const totalCapex = items.reduce((s, it) => s + it.amount, 0);
+  const ownFunded = items.reduce((s, it) => s + it.amount * (1 - it.loanPct / 100), 0);
+  const lowest = proj.reduce((m, r) => (r.cash < m.cash ? r : m), proj[0]);
+  const breaches = proj.some(r => r.cash < 0);
+  const safest = proj.slice(1).reduce((m, r) => (r.cash > m.cash ? r : m), proj[1] ?? proj[0]);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={CalendarClock} title="Capex / Funding Plan" blurb="Plan capital purchases (amount, month, loan-funded share) and project cash forward against your trailing net run-rate — see the cash-safest month and any month that goes negative." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Total planned capex", value: formatCurrency(Math.round(totalCapex)), color: "text-[var(--color-text)]" },
+        { label: "Self-funded outlay", value: formatCurrency(Math.round(ownFunded)), color: "text-red-400" },
+        { label: "Lowest projected cash", value: formatCurrency(lowest?.cash ?? 0), color: (lowest?.cash ?? 0) < 0 ? "text-red-400" : "text-green-400" },
+        { label: "Cash-safest month", value: items.length ? (safest?.label ?? "—") : "—", color: "text-[var(--color-text)]" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Add a capex item</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+          <input placeholder="Item (e.g. machine)" value={name} onChange={e => setName(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] col-span-2 md:col-span-1" />
+          <input type="number" placeholder="Amount (₹)" value={amount} onChange={e => setAmount(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Month (1-12)" value={month} onChange={e => setMonth(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Loan-funded %" value={loanPct} onChange={e => setLoanPct(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded font-semibold hover:opacity-90"><Plus size={12} /> Add capex</button>
+        <div className="mt-3 space-y-2">
+          {items.map(it => (
+            <div key={it.id} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div>
+                <p className="text-sm font-medium">{it.name}</p>
+                <p className="text-xs text-[var(--color-muted)]">{formatCurrency(it.amount)} · month {it.month}{it.loanPct > 0 ? ` · ${it.loanPct}% loan-funded` : ""}</p>
+              </div>
+              <button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {items.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No capex planned yet</p>}
+        </div>
+      </div>
+      {breaches && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0" />
+          <p className="text-sm">This plan pushes projected cash below zero. Defer an item, raise the loan-funded share, or arrange a buffer.</p>
+        </div>
+      )}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected cash with capex outlays (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={proj.map(r => ({ label: r.label, cash: Math.round(r.cash / 100000), outlay: Math.round(r.outlay / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "cash" ? "Cash" : "Capex outlay"]} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" />
+            <Bar dataKey="outlay" fill="#d97706" radius={[2, 2, 0, 0]} animationDuration={400} />
+            <Line type="monotone" dataKey="cash" stroke="#1A6B55" strokeWidth={2} dot={false} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #91 — Owner Draw / Dividend Planner
+// Computes a safe monthly proprietor withdrawal: trailing net cash run-rate minus
+// a buffer reserve, with a draw-% dial — projects the buffer over 12 months and
+// flags if the chosen draw erodes the safety floor.
+// ─────────────────────────────────────────────────────────────────────────────
+function OwnerDrawPlanner() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, firm } = store;
+  const cash = (bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+
+  const monthlyNet = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const active = hist.filter(m => m.revenue > 0 || m.expense > 0);
+    if (active.length === 0) return 0;
+    return active.reduce((s, m) => s + m.net, 0) / active.length;
+  }, [transactions]);
+
+  // Suggested floor = days-of-burn safety reserve.
+  const dailyBurn = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const active = hist.filter(m => m.expense > 0);
+    if (active.length === 0) return 0;
+    return (active.reduce((s, m) => s + m.expense, 0) / active.length) / 30;
+  }, [transactions]);
+  const floor = Math.round((firm?.safetyThresholdDays ?? 14) * dailyBurn);
+
+  const [drawPct, setDrawPct] = useFeatureState<number>("fc-owner-draw-pct", 50);
+  // Safe draw budget = positive net run-rate × draw% (never draw from a loss).
+  const safeDraw = Math.max(0, Math.round(monthlyNet * (drawPct / 100)));
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; balance: number }[] = [];
+    let bal = cash;
+    for (let i = 0; i <= 12; i++) {
+      if (i > 0) { bal += monthlyNet; bal -= safeDraw; }
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), balance: Math.round(bal) });
+    }
+    return out;
+  }, [cash, monthlyNet, safeDraw]);
+
+  const endBal = proj[proj.length - 1]?.balance ?? cash;
+  const breachesFloor = proj.some(r => r.balance < floor);
+  const annualDraw = safeDraw * 12;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={HandCoins} title="Owner Draw / Dividend Planner" blurb="Works out a safe monthly proprietor withdrawal from your trailing net cash run-rate, keeping a days-of-burn reserve intact — slide the draw and watch the buffer over 12 months." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Monthly net run-rate", value: monthlyNet >= 0 ? formatCurrency(Math.round(monthlyNet)) : `−${formatCurrency(Math.round(-monthlyNet))}`, color: monthlyNet >= 0 ? "text-green-400" : "text-red-400" },
+        { label: "Safe monthly draw", value: formatCurrency(safeDraw), color: "text-[var(--color-text)]" },
+        { label: "Annualised draw", value: formatCurrency(annualDraw), color: "text-[var(--color-text)]" },
+        { label: "Safety reserve floor", value: formatCurrency(floor), color: breachesFloor ? "text-red-400" : "text-green-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Draw % of monthly surplus</span><span className="font-semibold">{drawPct}%</span></label>
+        <input type="range" min={0} max={100} step={5} value={drawPct} onChange={e => setDrawPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        <p className="text-[10px] text-[var(--color-muted)] mt-1">Draws are taken only from a positive net run-rate — never from a loss month.</p>
+      </div>
+      {breachesFloor ? (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0" />
+          <p className="text-sm">A {drawPct}% draw erodes your {formatCurrency(floor)} safety reserve within 12 months. Lower the draw % to protect the buffer.</p>
+        </div>
+      ) : (
+        <div className="bg-green-950/20 border border-green-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
+          <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+          <p className="text-sm">A {formatCurrency(safeDraw)}/month draw keeps you above the {formatCurrency(floor)} reserve all year — projected closing cash {formatCurrency(endBal)}.</p>
+        </div>
+      )}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected cash after draws vs reserve floor (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={proj.map(r => ({ label: r.label, balance: Math.round(r.balance / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Cash"]} />
+            <ReferenceLine y={Math.round(floor / 100000)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "Reserve", position: "insideTopRight", fontSize: 8, fill: "#ef4444" }} />
+            <Area type="monotone" dataKey="balance" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5510" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #92 — Credit-Sale Aging Forecast
+// Buckets open invoices by how overdue they are (current, 1-30, 31-60, 61-90, 90+)
+// and projects when each ageing bucket is likely to convert to cash, using a
+// bucket-based collection-probability curve.
+// ─────────────────────────────────────────────────────────────────────────────
+interface AgingBucket { key: string; label: string; gross: number; count: number; collectProb: number; expected: number }
+
+function CreditSaleAgingForecast() {
+  const { store } = useApp();
+  const { invoices } = store;
+
+  const buckets = useMemo<AgingBucket[]>(() => {
+    const today = new Date();
+    const defs = [
+      { key: "current", label: "Current", lo: -Infinity, hi: 0, prob: 0.92 },
+      { key: "1-30", label: "1–30 days", lo: 1, hi: 30, prob: 0.8 },
+      { key: "31-60", label: "31–60 days", lo: 31, hi: 60, prob: 0.6 },
+      { key: "61-90", label: "61–90 days", lo: 61, hi: 90, prob: 0.42 },
+      { key: "90+", label: "90+ days", lo: 91, hi: Infinity, prob: 0.25 },
+    ];
+    const acc = defs.map(d => ({ key: d.key, label: d.label, gross: 0, count: 0, collectProb: d.prob, expected: 0 }));
+    for (const inv of invoices ?? []) {
+      if (inv.status === "paid") continue;
+      const overdue = Math.round((today.getTime() - new Date(inv.dueDate).getTime()) / 86_400_000);
+      const di = defs.findIndex(d => overdue >= d.lo && overdue <= d.hi);
+      const b = acc[di < 0 ? 0 : di];
+      b.gross += inv.amount; b.count += 1;
+    }
+    for (const b of acc) b.expected = Math.round(b.gross * b.collectProb);
+    return acc;
+  }, [invoices]);
+
+  const totalGross = buckets.reduce((s, b) => s + b.gross, 0);
+  const totalExpected = buckets.reduce((s, b) => s + b.expected, 0);
+  const overdueGross = buckets.filter(b => b.key !== "current").reduce((s, b) => s + b.gross, 0);
+
+  if (totalGross === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Clock size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <h2 className="text-base font-semibold mb-1">No open credit sales</h2>
+        <p className="text-sm text-[var(--color-muted)] max-w-xs mx-auto">Add or import unpaid invoices to forecast when ageing credit sales convert to cash.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Clock} title="Credit-Sale Aging Forecast" blurb="Buckets open invoices by how overdue they are and forecasts how much of each ageing bucket actually converts to cash, using a probability curve that decays with age." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Total credit outstanding", value: formatCurrency(totalGross), color: "text-[var(--color-text)]" },
+        { label: "Overdue outstanding", value: formatCurrency(overdueGross), color: overdueGross > 0 ? "text-red-400" : "text-green-400", sub: totalGross > 0 ? `${Math.round((overdueGross / totalGross) * 100)}% of book` : undefined },
+        { label: "Expected to collect", value: formatCurrency(totalExpected), color: "text-green-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Gross vs expected collection by age bucket (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={buckets.map(b => ({ label: b.label, gross: Math.round(b.gross / 100000), expected: Math.round(b.expected / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "gross" ? "Gross" : "Expected"]} />
+            <Bar dataKey="gross" fill="#8a8060" radius={[2, 2, 0, 0]} animationDuration={400} />
+            <Bar dataKey="expected" fill="#1A6B55" radius={[2, 2, 0, 0]} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Age bucket", "Invoices", "Gross", "Collect prob.", "Expected ₹"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {buckets.map(b => (
+              <tr key={b.key} className={b.gross === 0 ? "opacity-40" : "hover:bg-white/2"}>
+                <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{b.label}</td>
+                <td className="px-3 py-2 text-xs tabular-nums">{b.count}</td>
+                <td className="px-3 py-2 text-xs tabular-nums">{formatCurrency(b.gross)}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums ${b.collectProb < 0.5 ? "text-red-400" : b.collectProb < 0.8 ? "text-yellow-400" : "text-green-400"}`}>{Math.round(b.collectProb * 100)}%</td>
+                <td className="px-3 py-2 text-xs tabular-nums font-semibold text-green-400">{formatCurrency(b.expected)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Collection probabilities decay with age (current 92% → 90+ days 25%) — the standard ageing-bucket discount lenders apply to a debtor book.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #93 — Forecast Accuracy Tracker
+// Grades the run-rate model's historical accuracy: for each of the last N months,
+// the prediction (trailing 3-month average revenue made before that month) vs the
+// actual, reporting MAPE, bias and a 0-100 accuracy score so users trust the range.
+// ─────────────────────────────────────────────────────────────────────────────
+function ForecastAccuracyTracker() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const hist = useMemo(() => monthlyAggregates(transactions ?? [], 12), [transactions]);
+
+  const rows = useMemo(() => {
+    const out: { label: string; predicted: number; actual: number; errorPct: number }[] = [];
+    // Walk-forward: predict month i as the trailing-3-month average of revenue.
+    for (let i = 3; i < hist.length; i++) {
+      const window = [hist[i - 3], hist[i - 2], hist[i - 1]];
+      if (window.some(m => m.revenue <= 0)) continue;
+      const predicted = window.reduce((s, m) => s + m.revenue, 0) / 3;
+      const actual = hist[i].revenue;
+      if (actual <= 0) continue;
+      out.push({ label: hist[i].label, predicted: Math.round(predicted), actual: Math.round(actual), errorPct: ((predicted - actual) / actual) * 100 });
+    }
+    return out;
+  }, [hist]);
+
+  const mape = rows.length ? rows.reduce((s, r) => s + Math.abs(r.errorPct), 0) / rows.length : 0;
+  const bias = rows.length ? rows.reduce((s, r) => s + r.errorPct, 0) / rows.length : 0;
+  const accuracy = Math.max(0, Math.round(100 - mape));
+  const grade = accuracy >= 85 ? "A" : accuracy >= 70 ? "B" : accuracy >= 55 ? "C" : "D";
+
+  if (rows.length < 2) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Gauge size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <h2 className="text-base font-semibold mb-1">Not enough history to grade</h2>
+        <p className="text-sm text-[var(--color-muted)] max-w-xs mx-auto">Forecast-accuracy scoring needs several months of revenue history to back-test the run-rate model.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Gauge} title="Forecast Accuracy Tracker" blurb="Back-tests the run-rate model month by month — each prediction (trailing 3-month average) against what actually happened — and reports MAPE, bias and a 0-100 accuracy score." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Accuracy score", value: `${accuracy} (${grade})`, color: accuracy >= 70 ? "text-green-400" : accuracy >= 55 ? "text-yellow-400" : "text-red-400" },
+        { label: "MAPE", value: `${mape.toFixed(1)}%`, color: mape <= 15 ? "text-green-400" : mape <= 30 ? "text-yellow-400" : "text-red-400", sub: "mean abs. % error" },
+        { label: "Bias", value: `${bias > 0 ? "+" : ""}${bias.toFixed(1)}%`, color: Math.abs(bias) <= 5 ? "text-green-400" : "text-yellow-400", sub: bias > 0 ? "over-forecasting" : "under-forecasting" },
+        { label: "Months tested", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Predicted vs actual revenue (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={rows.map(r => ({ label: r.label, predicted: Math.round(r.predicted / 100000), actual: Math.round(r.actual / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [`₹${v}L`, name === "predicted" ? "Predicted" : "Actual"]} />
+            <Line type="monotone" dataKey="predicted" stroke="#d97706" strokeWidth={1.5} strokeDasharray="4 2" dot={false} animationDuration={400} />
+            <Line type="monotone" dataKey="actual" stroke="#1A6B55" strokeWidth={2} dot={false} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <div className="flex gap-4 mt-2 text-[10px] text-[var(--color-muted)]">
+          <span className="flex items-center gap-1"><span className="w-3 h-px bg-[#d97706] inline-block" /> Predicted</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-px bg-[#1A6B55] inline-block" /> Actual</span>
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[440px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Month", "Predicted", "Actual", "Error %"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <tr key={r.label} className="hover:bg-white/2">
+                <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{r.label}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{formatCurrency(r.predicted)}</td>
+                <td className="px-3 py-2 text-xs tabular-nums">{formatCurrency(r.actual)}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums font-semibold ${Math.abs(r.errorPct) <= 15 ? "text-green-400" : Math.abs(r.errorPct) <= 30 ? "text-yellow-400" : "text-red-400"}`}>{r.errorPct > 0 ? "+" : ""}{r.errorPct.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #94 — Product / Service Mix Forecast (driver-based: units × price)
+// Build a line of products (units/month × unit price × MoM unit growth) and project
+// total revenue forward 12 months — a bottom-up, driver-based revenue model.
+// ─────────────────────────────────────────────────────────────────────────────
+interface ProductLine { id: string; name: string; units: number; price: number; growth: number }
+
+function ProductMixForecast() {
+  const [lines, setLines] = useFeatureState<ProductLine[]>("fc-products", []);
+  const [name, setName] = useState("");
+  const [units, setUnits] = useState("");
+  const [price, setPrice] = useState("");
+  const [growth, setGrowth] = useState("2");
+
+  const add = () => {
+    if (!name || !units || !price) { toast.error("Add a name, units and price"); return; }
+    setLines(prev => [...prev, { id: generateId(), name, units: Number(units), price: Number(price), growth: clampNum(Number(growth) || 0, -20, 30) }]);
+    toast.success("Product line added");
+    setName(""); setUnits(""); setPrice(""); setGrowth("2");
+  };
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; revenue: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      let rev = 0;
+      for (const l of lines) {
+        const units = l.units * (1 + l.growth / 100) ** i;
+        rev += units * l.price;
+      }
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      out.push({ label: format(d, "MMM yy"), revenue: Math.round(rev) });
+    }
+    return out;
+  }, [lines]);
+
+  const month1 = lines.reduce((s, l) => s + l.units * l.price, 0);
+  const totalRev = proj.reduce((s, p) => s + p.revenue, 0);
+  const mix = lines.map(l => ({ name: l.name, rev: l.units * l.price })).sort((a, b) => b.rev - a.rev);
+  const topShare = month1 > 0 && mix.length ? Math.round((mix[0].rev / month1) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Boxes} title="Product / Service Mix Forecast" blurb="A bottom-up, driver-based revenue model — define each product's units/month, unit price and growth, and project total revenue across the mix for 12 months." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Product lines", value: `${lines.length}`, color: "text-[var(--color-text)]" },
+        { label: "Month-1 revenue", value: formatCurrency(Math.round(month1)), color: "text-green-400" },
+        { label: "12-mo revenue", value: formatCurrency(totalRev), color: "text-green-400" },
+        { label: "Top-line concentration", value: mix.length ? `${topShare}%` : "—", color: topShare > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: mix.length ? mix[0].name : undefined },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Add a product / service line</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+          <input placeholder="Product" value={name} onChange={e => setName(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Units / month" value={units} onChange={e => setUnits(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Unit price (₹)" value={price} onChange={e => setPrice(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Unit growth %/mo" value={growth} onChange={e => setGrowth(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded font-semibold hover:opacity-90"><Plus size={12} /> Add product</button>
+        <div className="mt-3 space-y-2">
+          {lines.map(l => (
+            <div key={l.id} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div>
+                <p className="text-sm font-medium">{l.name}</p>
+                <p className="text-xs text-[var(--color-muted)]">{l.units} units × {formatCurrency(l.price)} = {formatCurrency(l.units * l.price)}/mo · {l.growth > 0 ? "+" : ""}{l.growth}%/mo</p>
+              </div>
+              <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {lines.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No product lines yet — add one to model revenue bottom-up</p>}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected total revenue across the mix (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={proj.map(p => ({ label: p.label, revenue: Math.round(p.revenue / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} interval={1} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Revenue"]} />
+            <Area type="monotone" dataKey="revenue" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5510" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}

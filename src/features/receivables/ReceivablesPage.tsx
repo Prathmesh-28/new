@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers, CalendarCheck, FileWarning, TicketPercent, Ban, Eraser, History } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
 
@@ -183,7 +183,7 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
   );
 }
 
-type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel";
+type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel" | "promise-to-pay" | "disputes" | "early-discount" | "credit-hold" | "write-off" | "pay-timeline";
 
 export default function ReceivablesPage() {
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
@@ -250,7 +250,7 @@ export default function ReceivablesPage() {
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers], ["promise-to-pay", "Promise-to-Pay", CalendarCheck], ["disputes", "Dispute Tracker", FileWarning], ["early-discount", "Early-Pay Discount", TicketPercent], ["credit-hold", "Credit-Hold List", Ban], ["write-off", "Write-Off Policy", Eraser], ["pay-timeline", "Payment Timeline", History]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -270,6 +270,12 @@ export default function ReceivablesPage() {
       {tab === "cash-timeline" && <CollectionForecast />}
       {tab === "overdue-heatmap" && <OverdueHeatmap />}
       {tab === "dunning-funnel" && <DunningFunnel />}
+      {tab === "promise-to-pay" && <PromiseToPay />}
+      {tab === "disputes" && <DisputeTracker />}
+      {tab === "early-discount" && <EarlyPaymentDiscount />}
+      {tab === "credit-hold" && <CreditHoldList />}
+      {tab === "write-off" && <WriteOffPolicy />}
+      {tab === "pay-timeline" && <PaymentTimeline />}
 
       {tab === "overview" && <>
       {/* Aging summary */}
@@ -1718,6 +1724,564 @@ function DunningFunnel() {
         })}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Each open invoice falls into a stage by days past due: not-due → reminder (1–15) → follow-up (16–30) → escalation (31–60) → final demand (60d+). Use it to decide who gets which message today.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #67 — PROMISE-TO-PAY CAPTURE (log debtor commitments, flag broken promises)
+// ════════════════════════════════════════════════════════════════════════════
+interface Promise { invoiceId: string; date: string; amount: string; note: string; loggedAt: string; }
+
+function PromiseToPay() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid"), [invoices]);
+  const [promises, setPromises] = useFeatureState<Record<string, Promise>>("rec-promise-to-pay", {});
+  const [invoiceId, setInvoiceId] = useState("");
+  const [date, setDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split("T")[0]; });
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const today = new Date().toISOString().split("T")[0];
+
+  const add = () => {
+    if (!invoiceId) { toast.error("Pick an invoice"); return; }
+    setPromises(prev => ({ ...prev, [invoiceId]: { invoiceId, date, amount, note, loggedAt: new Date().toISOString() } }));
+    toast.success("Promise-to-pay logged");
+    setInvoiceId(""); setAmount(""); setNote("");
+  };
+  const remove = (id: string) => setPromises(prev => { const n = { ...prev }; delete n[id]; return n; });
+
+  const rows = useMemo(() => Object.values(promises).map(p => {
+    const inv = invoices.find(i => i.id === p.invoiceId);
+    const paid = inv?.status === "paid";
+    const overdue = !paid && p.date < today;
+    const dueIn = differenceInDays(parseISO(p.date), new Date());
+    return { ...p, inv, paid, overdue, dueIn };
+  }).sort((a, b) => a.date.localeCompare(b.date)), [promises, invoices, today]);
+
+  const kept = rows.filter(r => r.paid).length;
+  const broken = rows.filter(r => r.overdue).length;
+  const promisedAmt = rows.filter(r => !r.paid).reduce((s, r) => s + (parseFloat(r.amount) || r.inv?.amount || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Promised (open)", value: formatCurrency(Math.round(promisedAmt)), color: "text-[var(--color-primary)]" },
+          { label: "Promises kept", value: String(kept), color: "text-green-400" },
+          { label: "Broken promises", value: String(broken), color: broken ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarCheck size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Log a promise-to-pay</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <select value={invoiceId} onChange={e => setInvoiceId(e.target.value)} className={`${INP} md:col-span-2`}>
+            <option value="">Select open invoice…</option>
+            {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
+          </select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (optional)" className={INP} />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (e.g. spoke to accounts)" className={`${INP} md:col-span-3`} />
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm rounded-lg px-3 py-2 hover:opacity-90">Log promise</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CalendarCheck size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No promises logged yet. Capture verbal commitments so broken ones surface automatically.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Tracked promises</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <div key={r.invoiceId} className="px-4 py-3 flex items-center gap-3">
+                <div className={`w-1.5 h-10 rounded-full shrink-0 ${r.paid ? "bg-green-500" : r.overdue ? "bg-red-500" : "bg-yellow-500"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{r.inv?.customer ?? "Unknown"} {r.inv?.invoiceNumber && <span className="text-xs text-[var(--color-muted)]">{r.inv.invoiceNumber}</span>}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">
+                    Promised {format(parseISO(r.date), "d MMM yyyy")}
+                    {r.paid ? " · kept (paid)" : r.overdue ? ` · broken (${Math.abs(r.dueIn)}d ago)` : ` · due in ${r.dueIn}d`}
+                    {r.note && ` · ${r.note}`}
+                  </p>
+                </div>
+                <p className="text-sm font-bold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(Math.round(parseFloat(r.amount) || r.inv?.amount || 0))}</p>
+                <button onClick={() => remove(r.invoiceId)} title="Remove" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A promise turns green once its invoice is marked paid, red once the promised date passes unpaid. Chase broken promises first — they predict default better than aging alone.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #68 — DISPUTE / DEDUCTION TRACKER (quarantine contested amounts, keep chasing rest)
+// ════════════════════════════════════════════════════════════════════════════
+const DISPUTE_REASONS = ["Pricing", "Quality / damage", "Short delivery", "Freight", "Duplicate", "Other"] as const;
+interface Dispute { invoiceId: string; amount: string; reason: string; status: "open" | "resolved"; loggedAt: string; }
+
+function DisputeTracker() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid"), [invoices]);
+  const [disputes, setDisputes] = useFeatureState<Record<string, Dispute>>("rec-disputes", {});
+  const [invoiceId, setInvoiceId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState<string>(DISPUTE_REASONS[0]);
+
+  const add = () => {
+    if (!invoiceId) { toast.error("Pick an invoice"); return; }
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) { toast.error("Enter a disputed amount"); return; }
+    setDisputes(prev => ({ ...prev, [invoiceId]: { invoiceId, amount, reason, status: "open", loggedAt: new Date().toISOString() } }));
+    toast.success("Dispute logged — undisputed balance keeps chasing");
+    setInvoiceId(""); setAmount("");
+  };
+  const toggle = (id: string) => setDisputes(prev => ({ ...prev, [id]: { ...prev[id], status: prev[id].status === "open" ? "resolved" : "open" } }));
+  const remove = (id: string) => setDisputes(prev => { const n = { ...prev }; delete n[id]; return n; });
+
+  const rows = useMemo(() => Object.values(disputes).map(d => {
+    const inv = invoices.find(i => i.id === d.invoiceId);
+    const disputed = Math.min(parseFloat(d.amount) || 0, inv?.amount ?? 0);
+    const chaseable = (inv?.amount ?? 0) - disputed;
+    return { ...d, inv, disputed, chaseable };
+  }).filter(r => r.inv).sort((a, b) => Number(a.status === "resolved") - Number(b.status === "resolved")), [disputes, invoices]);
+
+  const openDisputed = rows.filter(r => r.status === "open").reduce((s, r) => s + r.disputed, 0);
+  const quarantined = rows.filter(r => r.status === "open").length;
+  const stillChaseable = rows.filter(r => r.status === "open").reduce((s, r) => s + r.chaseable, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Disputed (quarantined)", value: formatCurrency(Math.round(openDisputed)), color: "text-orange-400" },
+          { label: "Open disputes", value: String(quarantined), color: quarantined ? "text-red-400" : "text-green-400" },
+          { label: "Undisputed — still chase", value: formatCurrency(Math.round(stillChaseable)), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <FileWarning size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Log a dispute / deduction</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <select value={invoiceId} onChange={e => setInvoiceId(e.target.value)} className={`${INP} md:col-span-2`}>
+            <option value="">Select open invoice…</option>
+            {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
+          </select>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Disputed amount" className={INP} />
+          <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>
+            {DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm rounded-lg px-3 py-2 hover:opacity-90 md:col-start-4">Log dispute</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileWarning size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No disputes logged. Quarantine the contested portion so the rest of the invoice keeps chasing.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Disputes &amp; deductions</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <div key={r.invoiceId} className={`px-4 py-3 flex items-center gap-3 ${r.status === "resolved" ? "opacity-50" : ""}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold truncate">{r.inv?.customer}</p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-[var(--color-accent)] text-[var(--color-muted)]">{r.reason}</span>
+                    {r.status === "resolved" && <span className="text-[10px] font-bold text-green-400 shrink-0">Resolved</span>}
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)]">{r.inv?.invoiceNumber ?? r.inv?.id} · disputed {formatCurrency(Math.round(r.disputed))} · {formatCurrency(Math.round(r.chaseable))} still chaseable</p>
+                </div>
+                <button onClick={() => toggle(r.invoiceId)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 px-2 py-1.5 rounded-md transition-colors">{r.status === "open" ? "Mark resolved" : "Reopen"}</button>
+                <button onClick={() => remove(r.invoiceId)} title="Remove" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Logging a dispute ring-fences only the contested rupees — the undisputed balance stays in your collection pipeline instead of the whole invoice stalling. Resolve to release the hold.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #69 — EARLY-PAYMENT DISCOUNT ENGINE (2/10-net-30 style offers + uptake/cost)
+// ════════════════════════════════════════════════════════════════════════════
+function EarlyPaymentDiscount() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [discountPct, setDiscountPct] = useState("2");
+  const [windowDays, setWindowDays] = useState("10");
+  const [netDays, setNetDays] = useState("30");
+
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid"), [invoices]);
+  const disc = (parseFloat(discountPct) || 0) / 100;
+  const wd = parseFloat(windowDays) || 0;
+  const nd = parseFloat(netDays) || 0;
+  // implied annualised cost of offering the discount
+  const apr = (disc > 0 && nd > wd) ? (disc / (1 - disc)) * (365 / (nd - wd)) * 100 : 0;
+
+  const offers = useMemo(() => open.map(i => {
+    const dso = differenceInDays(new Date(), parseISO(i.invoiceDate));
+    const eligible = dso <= wd; // still inside the discount window
+    const discountAmt = i.amount * disc;
+    return { ...i, dso, eligible, discountAmt, netIfTaken: i.amount - discountAmt };
+  }).sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.amount - a.amount), [open, wd, disc]);
+
+  const eligibleOffers = offers.filter(o => o.eligible);
+  const offered = eligibleOffers.reduce((s, o) => s + o.amount, 0);
+  const costIfAllTaken = eligibleOffers.reduce((s, o) => s + o.discountAmt, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <TicketPercent size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Early-Payment Discount Engine</h3>
+        </div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Discount (%)</label><input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} className={`${INP} w-24`} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">If paid within (days)</label><input type="number" value={windowDays} onChange={e => setWindowDays(e.target.value)} className={`${INP} w-32`} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Net terms (days)</label><input type="number" value={netDays} onChange={e => setNetDays(e.target.value)} className={`${INP} w-28`} /></div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: `${discountPct}/${windowDays} net ${netDays}`, value: `${apr.toFixed(0)}% APR`, color: apr > 24 ? "text-red-400" : "text-orange-400" },
+          { label: "Eligible invoices", value: String(eligibleOffers.length), color: "text-[var(--color-text)]" },
+          { label: "Face value offered", value: formatCurrency(Math.round(offered)), color: "text-[var(--color-primary)]" },
+          { label: "Cost if all taken", value: formatCurrency(Math.round(costIfAllTaken)), color: "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {open.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <TicketPercent size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No open invoices to offer an early-payment discount on.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Offers by invoice</h3>
+            <span className="text-xs text-[var(--color-muted)]">{eligibleOffers.length} still in window</span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">
+            {offers.map(o => (
+              <div key={o.id} className="px-4 py-3 flex items-center gap-3">
+                <div className={`w-1.5 h-9 rounded-full shrink-0 ${o.eligible ? "bg-green-500" : "bg-[var(--color-border)]"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{o.customer} {o.invoiceNumber && <span className="text-xs text-[var(--color-muted)]">{o.invoiceNumber}</span>}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{o.dso}d since invoice · {o.eligible ? `pay ${formatCurrency(Math.round(o.netIfTaken))} to save ${formatCurrency(Math.round(o.discountAmt))}` : "discount window passed"}</p>
+                </div>
+                <p className="text-sm font-bold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(o.amount)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A {discountPct}/{windowDays} net {netDays} offer costs you ≈{apr.toFixed(0)}% annualised — only worth it if it beats your cost of borrowing or factoring. Eligible = still within the discount window from invoice date.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #70 — CREDIT-HOLD CANDIDATE LIST (who to stop shipping to: overdue / over-limit)
+// ════════════════════════════════════════════════════════════════════════════
+function CreditHoldList() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [limits] = useFeatureState<Record<string, number>>("rec-credit-limits", {});
+  const [overdueDays, setOverdueDays] = useState("45");
+  const [cleared, setCleared] = useFeatureState<Record<string, true>>("rec-credit-hold-cleared", {});
+
+  const threshold = parseFloat(overdueDays) || 0;
+
+  const rows = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, { exposure: number; worst: number; count: number }> = {};
+    open.forEach(i => {
+      const d = differenceInDays(new Date(), parseISO(i.dueDate));
+      (map[i.customer] ||= { exposure: 0, worst: 0, count: 0 });
+      map[i.customer].exposure += i.amount;
+      map[i.customer].worst = Math.max(map[i.customer].worst, d);
+      map[i.customer].count++;
+    });
+    return Object.entries(map).map(([name, v]) => {
+      const limit = limits[name] ?? 0;
+      const overLimit = limit > 0 && v.exposure > limit;
+      const tooOverdue = v.worst >= threshold;
+      const reasons: string[] = [];
+      if (tooOverdue) reasons.push(`${v.worst}d overdue`);
+      if (overLimit) reasons.push(`over limit by ${formatCurrency(Math.round(v.exposure - limit))}`);
+      return { name, ...v, limit, overLimit, tooOverdue, reasons, hold: (tooOverdue || overLimit) && !cleared[name] };
+    }).filter(r => r.tooOverdue || r.overLimit).sort((a, b) => b.exposure - a.exposure);
+  }, [invoices, limits, threshold, cleared]);
+
+  const holds = rows.filter(r => r.hold);
+  const heldExposure = holds.reduce((s, r) => s + r.exposure, 0);
+
+  const toggleClear = (name: string) => setCleared(prev => {
+    const n = { ...prev };
+    if (n[name]) delete n[name]; else n[name] = true;
+    return n;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <Ban size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Credit-Hold Candidates</h3>
+        </div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Hold if worst invoice is overdue by (days)</label><input type="number" value={overdueDays} onChange={e => setOverdueDays(e.target.value)} className={`${INP} w-44`} /></div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "On hold", value: String(holds.length), color: holds.length ? "text-red-400" : "text-green-400" },
+          { label: "Exposure on hold", value: formatCurrency(Math.round(heldExposure)), color: "text-orange-400" },
+          { label: "Candidates total", value: String(rows.length), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Ban size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No customers breach your overdue or credit-limit thresholds. Set limits on the Credit Utilization tab to catch over-exposure too.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Stop shipping on credit to</h3></div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <div key={r.name} className="px-4 py-3 flex items-center gap-3">
+                <Ban size={14} className={`shrink-0 ${r.hold ? "text-red-400" : "text-[var(--color-muted)] opacity-40"}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold truncate">{r.name}</p>
+                    {!r.hold && <span className="text-[10px] font-bold text-green-400 shrink-0">Cleared</span>}
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)]">{r.count} open invoice{r.count !== 1 ? "s" : ""} · {r.reasons.join(" · ")}</p>
+                </div>
+                <p className="text-sm font-bold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(Math.round(r.exposure))}</p>
+                <button onClick={() => toggleClear(r.name)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-2 py-1.5 rounded-md transition-colors">{cleared[r.name] ? "Re-hold" : "Override hold"}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A customer lands here if their worst open invoice passes your overdue threshold or their open exposure exceeds the credit limit set on the Credit Utilization tab. Override to release a hold once they commit to pay.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #71 — WRITE-OFF / BAD-DEBT PROVISIONING POLICY (auto-flag uncollectible by age)
+// ════════════════════════════════════════════════════════════════════════════
+function WriteOffPolicy() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [policyDays, setPolicyDays] = useFeatureState<string>("rec-writeoff-policy-days", "180");
+  const [approved, setApproved] = useFeatureState<Record<string, true>>("rec-writeoff-approved", {});
+
+  const threshold = parseFloat(policyDays) || 0;
+
+  const candidates = useMemo(() => invoices
+    .filter(i => i.status !== "paid")
+    .map(i => ({ ...i, daysOverdue: differenceInDays(new Date(), parseISO(i.dueDate)) }))
+    .filter(i => i.daysOverdue >= threshold)
+    .sort((a, b) => b.daysOverdue - a.daysOverdue), [invoices, threshold]);
+
+  const candidateTotal = candidates.reduce((s, i) => s + i.amount, 0);
+  const approvedRows = candidates.filter(i => approved[i.id]);
+  const approvedTotal = approvedRows.reduce((s, i) => s + i.amount, 0);
+  const pendingTotal = candidateTotal - approvedTotal;
+
+  const toggle = (id: string) => setApproved(prev => {
+    const n = { ...prev };
+    if (n[id]) delete n[id]; else n[id] = true;
+    return n;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <Eraser size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Write-Off / Bad-Debt Policy</h3>
+        </div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Provision as doubtful after (days overdue)</label><input type="number" value={policyDays} onChange={e => setPolicyDays(e.target.value)} className={`${INP} w-44`} /></div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Doubtful candidates", value: String(candidates.length), color: candidates.length ? "text-orange-400" : "text-green-400" },
+          { label: "Total to provision", value: formatCurrency(Math.round(candidateTotal)), color: "text-red-400" },
+          { label: "Approved write-offs", value: formatCurrency(Math.round(approvedTotal)), color: "text-[var(--color-text)]" },
+          { label: "Pending approval", value: formatCurrency(Math.round(pendingTotal)), color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {candidates.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Eraser size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No invoices past your {threshold}-day doubtful-debt threshold. Lower the policy days to preview what would qualify.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Uncollectible candidates</h3>
+            <span className="text-xs text-[var(--color-muted)]">Tick to approve write-off</span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {candidates.map(i => (
+              <label key={i.id} className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--color-accent)] transition-colors">
+                <input type="checkbox" checked={!!approved[i.id]} onChange={() => toggle(i.id)} className="accent-[var(--color-primary)] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold truncate ${approved[i.id] ? "line-through opacity-60" : ""}`}>{i.customer} {i.invoiceNumber && <span className="text-xs text-[var(--color-muted)]">{i.invoiceNumber}</span>}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{i.daysOverdue}d overdue · due {format(parseISO(i.dueDate), "d MMM yyyy")}{i.description && ` · ${i.description}`}</p>
+                </div>
+                <p className="text-sm font-bold tabular-nums shrink-0 text-red-400">{formatCurrency(i.amount)}</p>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Invoices overdue beyond your policy threshold are flagged as doubtful debt. Approving records an intent-to-write-off locally (audit trail) — book the actual write-off and reverse any GST in your accounting software.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #72 — CUSTOMER PAYMENT BEHAVIOR TIMELINE (days-to-pay history per customer)
+// ════════════════════════════════════════════════════════════════════════════
+function PaymentTimeline() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+
+  const customers = useMemo(() => {
+    const names = Array.from(new Set(invoices.map(i => i.customer))).sort();
+    return names;
+  }, [invoices]);
+  const [selected, setSelected] = useState("");
+  const active = selected || customers[0] || "";
+
+  const data = useMemo(() => {
+    const list = invoices
+      .filter(i => i.customer === active)
+      .map(i => {
+        const daysFromDue = differenceInDays(new Date(), parseISO(i.dueDate));
+        const isPaid = i.status === "paid";
+        // for paid invoices we approximate settlement at today (no paidDate in model) → use overdue at due as the lateness proxy
+        const lateness = isPaid ? Math.max(0, daysFromDue) : Math.max(0, daysFromDue);
+        return { ...i, isPaid, lateness, daysFromDue };
+      })
+      .sort((a, b) => parseISO(b.invoiceDate).getTime() - parseISO(a.invoiceDate).getTime());
+    const paid = list.filter(i => i.isPaid);
+    const avgLate = paid.length ? Math.round(paid.reduce((s, i) => s + i.lateness, 0) / paid.length) : 0;
+    const onTime = paid.filter(i => i.lateness <= 0).length;
+    const maxLate = Math.max(1, ...list.map(i => i.lateness));
+    return { list, avgLate, onTime, paidCount: paid.length, maxLate };
+  }, [invoices, active]);
+
+  if (customers.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <History size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">Add invoices to chart each customer's days-to-pay history.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <History size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Customer Payment Timeline</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+          <select value={active} onChange={e => setSelected(e.target.value)} className={`${INP} w-56`}>
+            {customers.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Avg days late (settled)", value: `${data.avgLate}d`, color: data.avgLate > 15 ? "text-red-400" : data.avgLate > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Paid on time", value: `${data.onTime}/${data.paidCount}`, color: "text-[var(--color-text)]" },
+          { label: "Invoices on record", value: String(data.list.length), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold truncate">{active} — invoice history</h3></div>
+        <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">
+          {data.list.map(i => (
+            <div key={i.id} className="px-4 py-3 flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full shrink-0 ${i.isPaid ? (i.lateness > 0 ? "bg-yellow-500" : "bg-green-500") : i.daysFromDue > 0 ? "bg-red-500" : "bg-[var(--color-primary)]"}`} />
+              <div className="w-28 shrink-0">
+                <p className="text-xs font-medium truncate">{i.invoiceNumber ?? i.id}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{format(parseISO(i.invoiceDate), "d MMM yy")}</p>
+              </div>
+              <div className="flex-1 h-4 bg-[var(--color-bg)] rounded overflow-hidden">
+                <div className="h-full rounded transition-all" style={{ width: `${(i.lateness / data.maxLate) * 100}%`, minWidth: i.lateness > 0 ? "3px" : "0", background: i.lateness > 30 ? "#ef4444" : i.lateness > 0 ? "#eab308" : "#22c55e" }} />
+              </div>
+              <span className="text-[10px] tabular-nums shrink-0 w-24 text-right text-[var(--color-muted)]">
+                {i.isPaid ? (i.lateness > 0 ? `paid ${i.lateness}d late` : "paid on time") : i.daysFromDue > 0 ? `${i.daysFromDue}d overdue` : "not yet due"}
+              </span>
+              <span className="text-xs font-semibold tabular-nums shrink-0 w-20 text-right">{formatCurrency(i.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Each bar shows how late an invoice ran past its due date (green on-time, amber late, red 30d+). Use the pattern to set this customer's credit terms and reminder tone. Lateness is measured against the due date.</p>
     </div>
   );
 }
