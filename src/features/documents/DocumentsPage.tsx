@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp } from "lucide-react";
+import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp, BadgeCheck, Inbox, Wand2, CalendarDays, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -231,7 +231,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval";
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles";
 
 export default function DocumentsPage() {
   const [docTab, setDocTab]       = useState<DocTab>("vault");
@@ -333,7 +333,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck]] as const).map(([id, label, Icon]) => (
+        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -353,6 +353,11 @@ export default function DocumentsPage() {
       {docTab === "contract-dates" && <ContractKeyDates />}
       {docTab === "filing"         && <BillFilingTracker />}
       {docTab === "approval"       && <ApprovalFlow />}
+      {docTab === "gstin-check"    && <GstinValidator />}
+      {docTab === "doc-requests"   && <DocumentRequestTracker />}
+      {docTab === "naming"         && <NamingHelper />}
+      {docTab === "compliance-cal" && <ComplianceCalendar />}
+      {docTab === "bundles"        && <DocumentBundles />}
 
       {docTab === "vault" && <>
 
@@ -1757,6 +1762,500 @@ function ApprovalFlow() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Approvals here are tracked by name for an internal trail — for binding authorisation tie each decision to an authenticated user and your delegation-of-authority matrix.</p>
+    </div>
+  );
+}
+
+// ── GSTIN Validator / Register ───────────────────────────────────────────────────
+// Offline structural + checksum validation of a GSTIN (no registry call). We verify
+// the 15-char layout, derive the state and PAN, and keep a small register of vendor /
+// customer GSTINs that were checked, with a pass/fail mark.
+type GstinEntry = { id: string; label: string; gstin: string; valid: boolean; state: string; pan: string; checkedAt: string };
+
+// GST state codes → state name (first two GSTIN digits).
+const GST_STATE_CODES: Record<string, string> = {
+  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+  "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
+  "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar",
+  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
+};
+const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"; // GSTN checksum alphabet: 0-9 then A-Z (36 chars, index = char value)
+
+// GSTN check-digit: weighted (alternating factor 1/2) modulo-36 over the first 14 chars.
+function gstinCheckDigit(first14: string): string | null {
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const code = GST_CHARS.indexOf(first14.charAt(i));
+    if (code < 0) return null;
+    const factor = i % 2 === 0 ? 1 : 2;
+    const prod = code * factor;
+    sum += Math.floor(prod / 36) + (prod % 36);
+  }
+  const remainder = sum % 36;
+  const checkCode = (36 - remainder) % 36;
+  return GST_CHARS.charAt(checkCode);
+}
+
+function validateGstin(raw: string): { valid: boolean; state: string; pan: string } {
+  const g = raw.trim().toUpperCase();
+  // 2 digits state · 10-char PAN · 1 entity digit · 'Z' · 1 checksum.
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(g)) {
+    return { valid: false, state: "", pan: "" };
+  }
+  const expected = gstinCheckDigit(g.slice(0, 14));
+  const valid = expected !== null && expected === g.charAt(14);
+  return { valid, state: GST_STATE_CODES[g.slice(0, 2)] || "Unknown code", pan: g.slice(2, 12) };
+}
+
+function GstinValidator() {
+  const [register, setRegister] = useFeatureState<GstinEntry[]>("doc-gstin-register", []);
+  const [label, setLabel] = useState("");
+  const [gstin, setGstin] = useState("");
+  const live = gstin.trim() ? validateGstin(gstin) : null;
+
+  const save = () => {
+    const result = validateGstin(gstin);
+    if (!gstin.trim()) { toast.error("Enter a GSTIN"); return; }
+    setRegister(prev => [{
+      id: crypto.randomUUID(), label: label.trim() || gstin.trim().toUpperCase(),
+      gstin: gstin.trim().toUpperCase(), valid: result.valid, state: result.state,
+      pan: result.pan, checkedAt: new Date().toISOString(),
+    }, ...prev]);
+    setLabel(""); setGstin("");
+    toast.success(result.valid ? "GSTIN looks valid — added to register" : "Saved, but the GSTIN failed the checksum");
+  };
+
+  const validCount = register.filter(e => e.valid).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> GSTIN Validator / Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Check a GSTIN's structure and check-digit before you book a vendor or customer — it derives the state and embedded PAN, and keeps a register of everything you've verified. Catches typos and obviously fake numbers offline.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Party / vendor name" className={INP} />
+          <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase())} placeholder="GSTIN (15 chars) *" maxLength={15} className={`${INP} font-mono uppercase`} />
+          <button onClick={save} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Check &amp; save</button>
+        </div>
+        {live && (
+          <div className={`rounded-lg border px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-1 ${live.valid ? "bg-green-950/20 border-green-800/30 text-green-300" : "bg-red-950/20 border-red-800/30 text-red-300"}`}>
+            {live.valid ? <span className="flex items-center gap-1 font-semibold"><CheckCircle2 size={12} /> Structurally valid</span> : <span className="flex items-center gap-1 font-semibold"><XCircle size={12} /> Invalid format / checksum</span>}
+            {live.state && <span className="text-[var(--color-muted)]">State: <span className="text-[var(--color-text)]">{live.state}</span></span>}
+            {live.pan && <span className="text-[var(--color-muted)]">PAN: <span className="text-[var(--color-text)] font-mono">{live.pan}</span></span>}
+          </div>
+        )}
+      </div>
+
+      {register.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
+          <ShieldCheck size={16} className={validCount === register.length ? "text-green-400" : "text-yellow-400"} />
+          <p className="text-sm"><span className="font-bold tabular-nums">{validCount}</span> <span className="text-[var(--color-muted)]">of {register.length} checked GSTIN{register.length === 1 ? "" : "s"} passed validation</span></p>
+        </div>
+      )}
+
+      {register.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Party", "GSTIN", "State", "PAN", "Checked", "Result", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {register.map(e => (
+                <tr key={e.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{e.label}</td>
+                  <td className="px-3 py-2.5 text-xs font-mono">{e.gstin}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.state || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{e.pan || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs">{format(new Date(e.checkedAt), "d MMM")}</td>
+                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.valid ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{e.valid ? "Valid" : "Invalid"}</span></td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRegister(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">This is an offline structural + checksum check only — it cannot confirm the GSTIN is active or that the legal name matches. Verify status on the GST portal before claiming input credit.</p>
+    </div>
+  );
+}
+
+// ── Document Request Tracker (collect from clients / vendors) ─────────────────────
+// Raise a request for paperwork you need from a counterparty, track each item as
+// requested → received, and chase what's outstanding past its due date.
+type DocRequestItem = { id: string; label: string; received: boolean };
+type DocRequest = { id: string; party: string; channel: string; dueDate: string; createdAt: string; items: DocRequestItem[] };
+const REQUEST_CHANNELS = ["Email", "WhatsApp", "Portal", "In person", "Other"] as const;
+
+function DocumentRequestTracker() {
+  const [requests, setRequests] = useFeatureState<DocRequest[]>("doc-request-tracker", []);
+  const [party, setParty] = useState("");
+  const [channel, setChannel] = useState<string>(REQUEST_CHANNELS[0]);
+  const [dueDate, setDueDate] = useState("");
+  const [itemsText, setItemsText] = useState("");
+
+  const create = () => {
+    const labels = itemsText.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+    if (!party || labels.length === 0) { toast.error("Enter a party and at least one document"); return; }
+    setRequests(prev => [{
+      id: crypto.randomUUID(), party, channel, dueDate, createdAt: new Date().toISOString(),
+      items: labels.map(label => ({ id: crypto.randomUUID(), label, received: false })),
+    }, ...prev]);
+    setParty(""); setDueDate(""); setItemsText("");
+    toast.success("Request created");
+  };
+  const toggleItem = (rid: string, iid: string) =>
+    setRequests(prev => prev.map(r => r.id !== rid ? r : { ...r, items: r.items.map(it => it.id === iid ? { ...it, received: !it.received } : it) }));
+  const remove = (rid: string) => setRequests(prev => prev.filter(r => r.id !== rid));
+
+  const reqState = (r: DocRequest) => {
+    const got = r.items.filter(i => i.received).length;
+    if (got === r.items.length) return { label: "Complete", style: "bg-green-900/30 text-green-400 border-green-800/40", overdue: false };
+    const overdue = !!r.dueDate && differenceInCalendarDays(new Date(r.dueDate), new Date()) < 0;
+    return overdue
+      ? { label: "Overdue", style: "bg-red-900/30 text-red-400 border-red-800/40", overdue: true }
+      : { label: "Awaiting", style: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", overdue: false };
+  };
+  const openCount = requests.filter(r => r.items.some(i => !i.received)).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Inbox size={14} className="text-[var(--color-primary)]" /> Document Request Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Need papers from a client, vendor or your CA? List what you've asked for, set a due date, and tick items off as they arrive — so you always know exactly what's still outstanding and from whom.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Requested from *" className={INP} />
+          <select value={channel} onChange={e => setChannel(e.target.value)} className={INP}>
+            {REQUEST_CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due by</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          </div>
+        </div>
+        <textarea value={itemsText} onChange={e => setItemsText(e.target.value)} rows={3}
+          placeholder={"Documents needed, one per line or comma-separated\ne.g. GST certificate, last 3 invoices, cancelled cheque"}
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] resize-y mb-3" />
+        <button onClick={create} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Send size={13} /> Create request</button>
+      </div>
+
+      {requests.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
+          <Inbox size={16} className={openCount > 0 ? "text-yellow-400" : "text-green-400"} />
+          <p className="text-sm"><span className="font-bold tabular-nums">{openCount}</span> <span className="text-[var(--color-muted)]">open request{openCount === 1 ? "" : "s"} still awaiting documents</span></p>
+        </div>
+      )}
+
+      {requests.length === 0 ? (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <Inbox size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No document requests yet — raise one to start chasing.</p>
+        </div>
+      ) : requests.map(r => {
+        const s = reqState(r);
+        const got = r.items.filter(i => i.received).length;
+        return (
+          <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold">{r.party}</p>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{r.channel}</span>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${s.style}`}>{s.label}</span>
+                {r.dueDate && <span className={`text-[10px] ${s.overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>due {format(new Date(r.dueDate), "d MMM")}</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs tabular-nums text-[var(--color-muted)]">{got}/{r.items.length}</span>
+                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              {r.items.map(it => (
+                <button key={it.id} onClick={() => toggleItem(r.id, it.id)}
+                  className="w-full flex items-center gap-2.5 text-left px-2 py-1.5 rounded-lg hover:bg-white/4 transition-colors">
+                  {it.received
+                    ? <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+                    : <div className="w-[14px] h-[14px] rounded-full border border-[var(--color-border)] shrink-0" />}
+                  <span className={`text-xs ${it.received ? "line-through text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{it.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">A tracker for what you've asked for — it doesn't send the request itself. Use the WhatsApp or Alerts pages to actually nudge the counterparty for outstanding items.</p>
+    </div>
+  );
+}
+
+// ── Smart Document Naming Helper ─────────────────────────────────────────────────
+// Build a consistent, sortable filename from a few fields (vendor-date-type-amount)
+// using a chosen pattern, so the vault stays searchable instead of full of IMG_1234.
+const NAMING_TYPES = ["INV", "RCPT", "STMT", "CONTRACT", "GST", "TDS", "KYC", "OTHER"] as const;
+const NAMING_PATTERNS: { id: string; label: string; tokens: string[] }[] = [
+  { id: "date-first", label: "Date · Type · Party · Amount", tokens: ["date", "type", "party", "amount"] },
+  { id: "party-first", label: "Party · Type · Date", tokens: ["party", "type", "date"] },
+  { id: "type-first", label: "Type · Party · Date · Amount", tokens: ["type", "party", "date", "amount"] },
+];
+
+function slugifyToken(s: string): string {
+  return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function NamingHelper() {
+  const [patternId, setPatternId] = useFeatureState<string>("doc-naming-pattern", NAMING_PATTERNS[0].id);
+  const [party, setParty] = useState("");
+  const [docType, setDocType] = useState<string>(NAMING_TYPES[0]);
+  const [docDate, setDocDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [amount, setAmount] = useState("");
+  const pattern = NAMING_PATTERNS.find(p => p.id === patternId) || NAMING_PATTERNS[0];
+
+  const buildName = (): string => {
+    const parts = pattern.tokens.map(tok => {
+      if (tok === "date") return docDate ? docDate.replace(/-/g, "") : "";
+      if (tok === "type") return docType.toLowerCase();
+      if (tok === "party") return slugifyToken(party);
+      if (tok === "amount") { const n = parseFloat(amount); return Number.isFinite(n) && n > 0 ? `rs${Math.round(n)}` : ""; }
+      return "";
+    }).filter(Boolean);
+    return parts.join("_") || "untitled";
+  };
+  const fileName = `${buildName()}.pdf`;
+
+  const copyName = () => { navigator.clipboard?.writeText(fileName); toast.success("Filename copied"); };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wand2 size={14} className="text-[var(--color-primary)]" /> Smart Document Naming Helper</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Stop saving files as IMG_1234. Pick a naming pattern once and generate a clean, sortable filename for every document — consistent names mean your vault stays searchable and audit-ready.</p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {NAMING_PATTERNS.map(p => (
+            <button key={p.id} onClick={() => setPatternId(p.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${patternId === p.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party / vendor" className={INP} />
+          <select value={docType} onChange={e => setDocType(e.target.value)} className={INP}>
+            {NAMING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Document date</label>
+            <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)} className={INP} />
+          </div>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-[var(--color-muted)]">Generated filename</p>
+          <button onClick={copyName} className="text-[10px] flex items-center gap-1 text-[var(--color-primary)] hover:underline"><Copy size={11} /> Copy</button>
+        </div>
+        <code className="block text-sm font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 break-all">{fileName}</code>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Lower-cased, spaces and symbols replaced with hyphens, date as YYYYMMDD so files sort chronologically. Swap the <code>.pdf</code> extension to match your actual file.</p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A naming convention, not a file renamer — copy the suggested name when saving or uploading. Consistent names make full-text and tag search far more reliable later.</p>
+    </div>
+  );
+}
+
+// ── Compliance-Document Calendar ─────────────────────────────────────────────────
+// Track recurring statutory filings (GST returns, TDS, ROC, advance tax) by their
+// due date and whether the supporting documents are ready, so nothing is filed late.
+type ComplianceTask = { id: string; name: string; category: string; dueDate: string; docsReady: boolean; filed: boolean };
+const COMPLIANCE_CATS = ["GST", "TDS", "Income Tax", "ROC / MCA", "PF / ESI", "Other"] as const;
+
+function ComplianceCalendar() {
+  const [tasks, setTasks] = useFeatureState<ComplianceTask[]>("doc-compliance-tasks", []);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<string>(COMPLIANCE_CATS[0]);
+  const [dueDate, setDueDate] = useState("");
+
+  const add = () => {
+    if (!name || !dueDate) { toast.error("Enter a filing name and due date"); return; }
+    setTasks(prev => [...prev, { id: crypto.randomUUID(), name, category, dueDate, docsReady: false, filed: false }]);
+    setName(""); setDueDate("");
+    toast.success("Filing added to calendar");
+  };
+  const toggleDocs = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, docsReady: !t.docsReady } : t));
+  const toggleFiled = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, filed: !t.filed } : t));
+  const remove = (id: string) => setTasks(prev => prev.filter(t => t.id !== id));
+
+  const enriched = tasks
+    .map(t => ({ ...t, days: differenceInCalendarDays(new Date(t.dueDate), new Date()) }))
+    .sort((a, b) => Number(a.filed) - Number(b.filed) || a.days - b.days);
+  const overdue = enriched.filter(t => !t.filed && t.days < 0).length;
+  const dueSoon = enriched.filter(t => !t.filed && t.days >= 0 && t.days <= 7).length;
+
+  const tone = (t: { filed: boolean; days: number; docsReady: boolean }) =>
+    t.filed ? { txt: "text-green-400", badge: "bg-green-900/30 text-green-400 border-green-800/40", label: "Filed" }
+    : t.days < 0 ? { txt: "text-red-400", badge: "bg-red-900/30 text-red-400 border-red-800/40", label: "Overdue" }
+    : t.days <= 7 ? { txt: "text-yellow-400", badge: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", label: "Due soon" }
+    : { txt: "text-[var(--color-muted)]", badge: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]", label: "Upcoming" };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarDays size={14} className="text-[var(--color-primary)]" /> Compliance-Document Calendar</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Map your recurring filings — GSTR-1/3B, TDS, advance tax, ROC returns — to their due dates, mark when the supporting documents are ready, and tick each off once filed. A single view so a deadline never slips.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Filing (e.g. GSTR-3B) *" className={INP} />
+          <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
+            {COMPLIANCE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due date *</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          </div>
+          <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add filing</button></div>
+        </div>
+      </div>
+
+      {(overdue > 0 || dueSoon > 0) && (
+        <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+          <p className="text-sm">
+            {overdue > 0 && <span className="font-semibold text-red-400">{overdue} overdue</span>}
+            {overdue > 0 && dueSoon > 0 && <span> · </span>}
+            {dueSoon > 0 && <span className="font-semibold text-yellow-300">{dueSoon} due within 7 days</span>}
+            <span className="text-[var(--color-muted)]"> — late filings attract interest and late fees.</span>
+          </p>
+        </div>
+      )}
+
+      {enriched.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Filing", "Category", "Due", "Countdown", "Docs", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {enriched.map(t => {
+                const tn = tone(t);
+                return (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{t.name}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{t.category}</td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(t.dueDate), "d MMM yyyy")}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.filed ? "text-[var(--color-muted)]" : tn.txt}`}>{t.filed ? "—" : t.days < 0 ? `${Math.abs(t.days)}d ago` : `in ${t.days}d`}</td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => toggleDocs(t.id)} className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium flex items-center gap-1 ${t.docsReady ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                        {t.docsReady ? <CheckCircle2 size={10} /> : <Clock size={10} />} {t.docsReady ? "Ready" : "Pending"}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => toggleFiled(t.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${tn.badge}`}>{tn.label}</button>
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <CalendarDays size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No filings on the calendar yet.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Due dates are entered manually — statutory deadlines shift with extensions and notifications, so confirm each against the latest CBIC/MCA circular. Tap a status to mark it filed.</p>
+    </div>
+  );
+}
+
+// ── Multi-Document Bundles (linked records) ──────────────────────────────────────
+// Group related papers for one transaction — invoice + challan + payment proof —
+// into a single named bundle, with a per-item type tag and a completeness check.
+type BundleDoc = { id: string; name: string; type: string };
+type DocBundle = { id: string; title: string; reference: string; createdAt: string; docs: BundleDoc[] };
+const BUNDLE_DOC_TYPES = ["Invoice", "Challan", "Payment proof", "PO", "GRN", "Contract", "Other"] as const;
+
+function DocumentBundles() {
+  const [bundles, setBundles] = useFeatureState<DocBundle[]>("doc-bundles", []);
+  const [title, setTitle] = useState("");
+  const [reference, setReference] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState<string>(BUNDLE_DOC_TYPES[0]);
+
+  const createBundle = () => {
+    if (!title) { toast.error("Enter a bundle title"); return; }
+    const id = crypto.randomUUID();
+    setBundles(prev => [{ id, title, reference, createdAt: new Date().toISOString(), docs: [] }, ...prev]);
+    setTitle(""); setReference(""); setActiveId(id);
+    toast.success("Bundle created — now add documents to it");
+  };
+  const addDoc = (bid: string) => {
+    if (!docName) { toast.error("Enter a document name"); return; }
+    setBundles(prev => prev.map(b => b.id === bid ? { ...b, docs: [...b.docs, { id: crypto.randomUUID(), name: docName, type: docType }] } : b));
+    setDocName("");
+    toast.success("Document linked to bundle");
+  };
+  const removeDoc = (bid: string, did: string) =>
+    setBundles(prev => prev.map(b => b.id === bid ? { ...b, docs: b.docs.filter(d => d.id !== did) } : b));
+  const removeBundle = (bid: string) => { setBundles(prev => prev.filter(b => b.id !== bid)); if (activeId === bid) setActiveId(null); };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Multi-Document Bundles</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tie all the paper behind one transaction together — the invoice, delivery challan, PO and payment proof in a single linked record — so the full trail is one click away during an audit or a dispute.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Bundle title (e.g. Acme PO-204) *" className={INP} />
+          <input value={reference} onChange={e => setReference(e.target.value)} placeholder="Reference / txn no." className={INP} />
+          <button onClick={createBundle} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Create bundle</button>
+        </div>
+      </div>
+
+      {bundles.length === 0 ? (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <Layers size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No bundles yet — create one to group related documents.</p>
+        </div>
+      ) : bundles.map(b => {
+        const open = activeId === b.id;
+        return (
+          <div key={b.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setActiveId(open ? null : b.id)} className="flex items-center gap-2 text-left">
+                <Layers size={14} className="text-[var(--color-primary)] shrink-0" />
+                <span className="text-sm font-semibold">{b.title}</span>
+                {b.reference && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{b.reference}</span>}
+                <span className="text-[10px] text-[var(--color-muted)]">{b.docs.length} doc{b.docs.length === 1 ? "" : "s"}</span>
+              </button>
+              <button onClick={() => removeBundle(b.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+            </div>
+
+            {b.docs.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {b.docs.map(d => (
+                  <span key={d.id} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1 rounded-lg flex items-center gap-1.5">
+                    <FileText size={11} className="text-[var(--color-muted)]" />
+                    <span className="text-[var(--color-text)]">{d.name}</span>
+                    <span className="text-[var(--color-muted)]">· {d.type}</span>
+                    <button onClick={() => removeDoc(b.id, d.id)} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {open && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 pt-3 border-t border-[var(--color-border)]">
+                <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name" className={INP} />
+                <select value={docType} onChange={e => setDocType(e.target.value)} className={INP}>
+                  {BUNDLE_DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => addDoc(b.id)} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Link document</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">Bundles link documents by name for a transaction trail — for a tamper-evident pack, attach the actual files from the vault and export them together as the audit voucher.</p>
     </div>
   );
 }

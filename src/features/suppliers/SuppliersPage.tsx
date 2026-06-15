@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake } from "lucide-react";
+import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck } from "lucide-react";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 
@@ -19,7 +19,8 @@ interface SupplierOffer {
 }
 
 type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify"
-  | "terms-optimizer" | "price-trend" | "leadtime-variance" | "alt-supplier" | "concentration" | "grn-match" | "negotiation-prep";
+  | "terms-optimizer" | "price-trend" | "leadtime-variance" | "alt-supplier" | "concentration" | "grn-match" | "negotiation-prep"
+  | "pay-priority" | "gst-2b" | "quality-ppm" | "credit-util" | "landed-cost";
 const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "early-pay",         label: "Early-Pay",      Icon: Zap },
   { id: "scorecard",         label: "Scorecard",      Icon: Award },
@@ -33,6 +34,11 @@ const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "concentration",     label: "Concentration",  Icon: PieChart },
   { id: "grn-match",         label: "GRN 3-Way",      Icon: ClipboardCheck },
   { id: "negotiation-prep",  label: "Negotiation",    Icon: Handshake },
+  { id: "pay-priority",      label: "Pay Priority",   Icon: ListOrdered },
+  { id: "gst-2b",            label: "GST-2B Match",   Icon: FileCheck },
+  { id: "quality-ppm",       label: "Quality PPM",    Icon: Microscope },
+  { id: "credit-util",       label: "Credit Util",    Icon: CalendarClock },
+  { id: "landed-cost",       label: "Landed Cost",    Icon: Truck },
 ];
 
 export default function SuppliersPage() {
@@ -59,6 +65,11 @@ export default function SuppliersPage() {
       {tab === "concentration"     && <ConcentrationRisk />}
       {tab === "grn-match"         && <GrnThreeWayMatch />}
       {tab === "negotiation-prep"  && <NegotiationPrepSheet />}
+      {tab === "pay-priority"      && <PaymentPriorityPlanner />}
+      {tab === "gst-2b"            && <Gst2bMatchStatus />}
+      {tab === "quality-ppm"       && <QualityPpmTracker />}
+      {tab === "credit-util"       && <CreditPeriodUtilization />}
+      {tab === "landed-cost"       && <LandedCostCompare />}
     </div>
   );
 }
@@ -1273,6 +1284,549 @@ function NegotiationPrepSheet() {
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Anchor on benchmarked alternate quotes, lead with your volume and payment reliability, and never reveal your walk-away. The annual-saving figure is your real prize — keep it front of mind.</p>
+    </div>
+  );
+}
+
+// ── #76 Supplier Payment-Priority Planner ────────────────────────────────────────
+type PayRow = {
+  id: string;
+  supplier: string;
+  amount: number;
+  dueDate: string;
+  isMsme: boolean;
+  discountPct: number;   // early-pay discount % still on offer
+};
+function PaymentPriorityPlanner() {
+  const [rows, setRows] = useFeatureState<PayRow[]>("sup-pay-priority", []);
+  const [supplier, setSupplier] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [isMsme, setIsMsme] = useState(false);
+  const [discountPct, setDiscountPct] = useState("");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  const daysToDue = (r: PayRow) => Math.round((new Date(r.dueDate).getTime() - today.getTime()) / 86400000);
+  // Priority score: overdue & MSME breach weigh heaviest, then discount value, then near-due.
+  const scoreOf = (r: PayRow) => {
+    const dtd = daysToDue(r);
+    let s = 0;
+    if (dtd < 0) s += 60 + Math.min(40, -dtd);           // overdue ramps up
+    else if (dtd <= 7) s += 35 - dtd * 2;                // due this week
+    else s += Math.max(0, 20 - dtd / 5);
+    if (r.isMsme && dtd <= 5) s += 50;                   // 43B(h) clock
+    if (r.discountPct > 0 && dtd > 0) s += r.discountPct * 6; // capturable discount
+    return Math.round(s);
+  };
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      amount: Math.max(0, parseFloat(amount) || 0),
+      dueDate,
+      isMsme,
+      discountPct: Math.max(0, parseFloat(discountPct) || 0),
+    }]);
+    setSupplier(""); setAmount(""); setDiscountPct(""); setIsMsme(false);
+    toast.success("Payable added to plan");
+  };
+
+  const ranked = useMemo(() => [...rows].map(r => ({ ...r, score: scoreOf(r), dtd: daysToDue(r) })).sort((a, b) => b.score - a.score),
+    [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const overdue = ranked.filter(r => r.dtd < 0).reduce((s, r) => s + r.amount, 0);
+  const msmeUrgent = ranked.filter(r => r.isMsme && r.dtd <= 5).length;
+  const totalDue = ranked.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ListOrdered size={14} className="text-[var(--color-primary)]" /> Payment-Priority Planner</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Rank open payables by urgency so a tight cash week pays the right vendors first. Score weights overdue dues, the MSME 43B(h) clock, and capturable early-pay discounts.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount due (₹)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due date</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          </div>
+          <input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="Early-pay discount %" className={INP} />
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+            <input type="checkbox" checked={isMsme} onChange={e => setIsMsme(e.target.checked)} className="accent-[var(--color-primary)]" /> MSME (micro/small) vendor
+          </label>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add payable</button>
+        </div>
+      </div>
+
+      {ranked.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total due", value: formatCurrency(totalDue), color: "text-[var(--color-primary)]" },
+            { label: "Overdue amount", value: formatCurrency(overdue), color: overdue > 0 ? "text-red-400" : "text-green-400" },
+            { label: "MSME urgent (≤5d)", value: String(msmeUrgent), color: msmeUrgent > 0 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["#", "Supplier", "Amount", "Due in", "Flags", "Priority", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ranked.map((r, i) => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{i + 1}</td>
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.amount)}</td>
+                  <td className={`px-3 py-2.5 text-xs tabular-nums ${r.dtd < 0 ? "text-red-400 font-semibold" : r.dtd <= 5 ? "text-yellow-400" : ""}`}>{r.dtd < 0 ? `${-r.dtd}d overdue` : `${r.dtd}d`}</td>
+                  <td className="px-3 py-2.5 text-xs">
+                    <span className="flex gap-1 flex-wrap">
+                      {r.isMsme && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-blue-900/30 text-blue-400 border-blue-800/40">MSME</span>}
+                      {r.discountPct > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">{r.discountPct}% disc</span>}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums font-bold">{r.score}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Pay top-down when cash is short. Overdue and near-deadline MSME dues rank first to avoid 43B(h) disallowance; capturable discounts then float useful early-pays up the list.</p>
+    </div>
+  );
+}
+
+// ── #77 Supplier-wise GST-2B Match Status ────────────────────────────────────────
+type Gst2bRow = {
+  id: string;
+  supplier: string;
+  gstin: string;
+  bookItc: number;       // ITC as per your purchase books
+  gstr2bItc: number;     // ITC reflected in GSTR-2B
+};
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]$/;
+function Gst2bMatchStatus() {
+  const [rows, setRows] = useFeatureState<Gst2bRow[]>("sup-gst2b-match", []);
+  const [tol, setTol] = useFeatureState<number>("sup-gst2b-tolerance", 1); // ₹ rounding tolerance
+  const [supplier, setSupplier] = useState("");
+  const [gstin, setGstin] = useState("");
+  const [bookItc, setBookItc] = useState("");
+  const [gstr2bItc, setGstr2bItc] = useState("");
+
+  const statusOf = (r: Gst2bRow): { label: string; c: string } => {
+    const diff = r.bookItc - r.gstr2bItc;
+    if (Math.abs(diff) <= tol) return { label: "Matched", c: "bg-green-900/30 text-green-400 border-green-800/40" };
+    if (diff > tol) return { label: "Not in 2B", c: "bg-red-900/30 text-red-400 border-red-800/40" };   // book > 2B → vendor didn't file
+    return { label: "Excess in 2B", c: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" };       // 2B > book → unbooked invoice
+  };
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    const g = gstin.trim().toUpperCase();
+    if (g && !GSTIN_RE.test(g)) { toast.error("Invalid GSTIN format"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      gstin: g,
+      bookItc: Math.max(0, parseFloat(bookItc) || 0),
+      gstr2bItc: Math.max(0, parseFloat(gstr2bItc) || 0),
+    }]);
+    setSupplier(""); setGstin(""); setBookItc(""); setGstr2bItc("");
+    toast.success("Supplier ITC logged");
+  };
+
+  const atRisk = rows.filter(r => statusOf(r).label === "Not in 2B").reduce((s, r) => s + (r.bookItc - r.gstr2bItc), 0);
+  const matched = rows.filter(r => statusOf(r).label === "Matched").length;
+  const bookTotal = rows.reduce((s, r) => s + r.bookItc, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> Supplier-wise GST-2B Match Status</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reconcile ITC per your books against each supplier's GSTR-2B. Where books exceed 2B, the vendor hasn't filed — that ITC is blocked, so withhold payment until they upload.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN (optional)" className={INP} />
+          <input type="number" value={bookItc} onChange={e => setBookItc(e.target.value)} placeholder="ITC in books (₹)" className={INP} />
+          <input type="number" value={gstr2bItc} onChange={e => setGstr2bItc(e.target.value)} placeholder="ITC in GSTR-2B (₹)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add supplier</button>
+        </div>
+        <span className="text-xs text-[var(--color-muted)] flex items-center gap-2">Match tolerance (₹)
+          <input type="number" value={tol} onChange={e => setTol(Math.max(0, parseFloat(e.target.value) || 0))} className={`${INP} w-24`} />
+        </span>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total book ITC", value: formatCurrency(bookTotal), color: "text-[var(--color-primary)]" },
+            { label: "Matched suppliers", value: `${matched}/${rows.length}`, color: matched === rows.length ? "text-green-400" : "text-yellow-400" },
+            { label: "ITC at risk (not in 2B)", value: formatCurrency(atRisk), color: atRisk > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "GSTIN", "Books ITC", "2B ITC", "Diff", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const st = statusOf(r);
+                const diff = r.bookItc - r.gstr2bItc;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.gstin || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.bookItc)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.gstr2bItc)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${Math.abs(diff) > tol ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{diff > 0 ? "+" : ""}{formatCurrency(diff)}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${st.c}`}>{st.label}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Since the 2021 ITC rules, you can only claim credit that appears in GSTR-2B. "Not in 2B" means the supplier hasn't filed GSTR-1 — chase them or hold the tax portion. Confirm live figures on the GST portal.</p>
+    </div>
+  );
+}
+
+// ── #78 Quality-Rejection (PPM) Tracker ──────────────────────────────────────────
+type PpmRow = { id: string; supplier: string; received: number; rejected: number; period: string };
+function QualityPpmTracker() {
+  const [rows, setRows] = useFeatureState<PpmRow[]>("sup-quality-ppm", []);
+  const [targetPpm, setTargetPpm] = useFeatureState<number>("sup-quality-target-ppm", 5000);
+  const [supplier, setSupplier] = useState("");
+  const [received, setReceived] = useState("");
+  const [rejected, setRejected] = useState("");
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      received: Math.max(0, parseFloat(received) || 0),
+      rejected: Math.max(0, parseFloat(rejected) || 0),
+      period,
+    }]);
+    setSupplier(""); setReceived(""); setRejected("");
+    toast.success("Quality record logged");
+  };
+
+  // Aggregate per supplier: PPM = rejected / received × 1,000,000
+  const stats = useMemo(() => {
+    const map = new Map<string, { recv: number; rej: number; n: number }>();
+    for (const r of rows) {
+      const cur = map.get(r.supplier) || { recv: 0, rej: 0, n: 0 };
+      cur.recv += r.received; cur.rej += r.rejected; cur.n += 1;
+      map.set(r.supplier, cur);
+    }
+    return [...map.entries()].map(([supplier, v]) => ({
+      supplier,
+      recv: v.recv,
+      rej: v.rej,
+      lots: v.n,
+      ppm: v.recv > 0 ? Math.round((v.rej / v.recv) * 1_000_000) : 0,
+    })).sort((a, b) => b.ppm - a.ppm);
+  }, [rows]);
+
+  const failing = stats.filter(s => s.ppm > targetPpm).length;
+  const worst = stats.length ? stats[0] : null;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Microscope size={14} className="text-[var(--color-primary)]" /> Quality-Rejection (PPM) Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log received and rejected units per supplier to track defects per million (PPM). Set a target threshold to flag vendors whose quality is slipping below your acceptance bar.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={received} onChange={e => setReceived(e.target.value)} placeholder="Units received" className={INP} />
+          <input type="number" value={rejected} onChange={e => setRejected(e.target.value)} placeholder="Units rejected" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Period</label>
+            <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log lot</button>
+        </div>
+        <span className="text-xs text-[var(--color-muted)] flex items-center gap-2">Target PPM (max acceptable)
+          <input type="number" value={targetPpm} onChange={e => setTargetPpm(Math.max(0, parseFloat(e.target.value) || 0))} className={`${INP} w-28`} />
+        </span>
+      </div>
+
+      {stats.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Suppliers tracked", value: String(stats.length), color: "text-[var(--color-primary)]" },
+            { label: "Above target PPM", value: String(failing), color: failing > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Worst PPM", value: worst ? `${worst.ppm.toLocaleString("en-IN")}` : "—", color: worst && worst.ppm > targetPpm ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Lots", "Received", "Rejected", "Reject %", "PPM", "Status"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {stats.map(s => {
+                const fail = s.ppm > targetPpm;
+                const rejPct = s.recv > 0 ? (s.rej / s.recv) * 100 : 0;
+                return (
+                  <tr key={s.supplier} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{s.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{s.lots}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{s.recv.toLocaleString("en-IN")}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{s.rej.toLocaleString("en-IN")}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{rejPct.toFixed(2)}%</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${fail ? "text-red-400" : "text-green-400"}`}>{s.ppm.toLocaleString("en-IN")}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${fail ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{fail ? "Above target" : "Within target"}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">PPM = rejected ÷ received × 1,000,000. World-class manufacturing aims for under ~500 PPM; set a target that fits your sector. Persistent high-PPM vendors warrant a corrective-action request or a second source.</p>
+    </div>
+  );
+}
+
+// ── #79 Supplier Credit-Period Utilization ───────────────────────────────────────
+type CreditRow = { id: string; supplier: string; grantedDays: number; avgPayDays: number; monthlyPurchase: number };
+function CreditPeriodUtilization() {
+  const [rows, setRows] = useFeatureState<CreditRow[]>("sup-credit-util", []);
+  const [supplier, setSupplier] = useState("");
+  const [grantedDays, setGrantedDays] = useState("");
+  const [avgPayDays, setAvgPayDays] = useState("");
+  const [monthlyPurchase, setMonthlyPurchase] = useState("");
+
+  const add = () => {
+    if (!supplier.trim()) { toast.error("Enter supplier name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      grantedDays: Math.max(0, parseFloat(grantedDays) || 0),
+      avgPayDays: Math.max(0, parseFloat(avgPayDays) || 0),
+      monthlyPurchase: Math.max(0, parseFloat(monthlyPurchase) || 0),
+    }]);
+    setSupplier(""); setGrantedDays(""); setAvgPayDays(""); setMonthlyPurchase("");
+    toast.success("Supplier credit logged");
+  };
+
+  // Utilization = avg actual pay days / granted credit days. <100% = paying early (leaving free credit unused).
+  const utilOf = (r: CreditRow) => r.grantedDays > 0 ? Math.round((r.avgPayDays / r.grantedDays) * 100) : 0;
+  // Unused free credit days × daily purchase ≈ working capital you could still hold.
+  const unusedFloat = (r: CreditRow) => {
+    const unusedDays = Math.max(0, r.grantedDays - r.avgPayDays);
+    return (r.monthlyPurchase / 30) * unusedDays;
+  };
+
+  const ranked = useMemo(() => [...rows].sort((a, b) => unusedFloat(b) - unusedFloat(a)), [rows]);
+  const totalUnused = rows.reduce((s, r) => s + unusedFloat(r), 0);
+  const breaching = rows.filter(r => r.grantedDays > 0 && r.avgPayDays > r.grantedDays).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Supplier Credit-Period Utilization</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">See how much of each supplier's granted credit you actually use. Paying well inside the window leaves free working capital on the table; paying past it risks relationships and late fees.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input type="number" value={grantedDays} onChange={e => setGrantedDays(e.target.value)} placeholder="Granted credit (days)" className={INP} />
+          <input type="number" value={avgPayDays} onChange={e => setAvgPayDays(e.target.value)} placeholder="Avg actual pay (days)" className={INP} />
+          <input type="number" value={monthlyPurchase} onChange={e => setMonthlyPurchase(e.target.value)} placeholder="Monthly purchase (₹)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add supplier</button>
+        </div>
+      </div>
+
+      {ranked.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Suppliers", value: String(ranked.length), color: "text-[var(--color-primary)]" },
+            { label: "Unused free credit", value: formatCurrency(totalUnused), color: "text-green-400" },
+            { label: "Over-running terms", value: String(breaching), color: breaching > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[660px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Granted", "Avg pay", "Utilization", "Unused float", "Verdict", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ranked.map(r => {
+                const util = utilOf(r);
+                const over = r.grantedDays > 0 && r.avgPayDays > r.grantedDays;
+                const verdict = over ? { t: "Over terms", c: "text-red-400" } : util < 70 ? { t: "Paying early", c: "text-yellow-400" } : { t: "Well-used", c: "text-green-400" };
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.grantedDays}d</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.avgPayDays}d</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-16 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full ${over ? "bg-red-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${Math.min(100, util)}%` }} /></div>
+                        <span>{util}%</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{formatCurrency(unusedFloat(r))}</td>
+                    <td className={`px-3 py-2.5 text-xs font-semibold ${verdict.c}`}>{verdict.t}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Free supplier credit is the cheapest working capital you have — use the full granted window unless an early-pay discount beats your cost of capital. Don't run past terms with MSME vendors (43B(h)).</p>
+    </div>
+  );
+}
+
+// ── #80 Landed-Cost Compare across Suppliers ─────────────────────────────────────
+type LandedRow = {
+  id: string;
+  supplier: string;
+  item: string;
+  qty: number;
+  unitPrice: number;
+  freight: number;     // total freight for the lot
+  dutyPct: number;     // customs/duty % on goods value
+  insurance: number;   // total insurance for the lot
+};
+function LandedCostCompare() {
+  const [rows, setRows] = useFeatureState<LandedRow[]>("sup-landed-cost", []);
+  const [supplier, setSupplier] = useState("");
+  const [item, setItem] = useState("");
+  const [qty, setQty] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [freight, setFreight] = useState("");
+  const [dutyPct, setDutyPct] = useState("");
+  const [insurance, setInsurance] = useState("");
+
+  const add = () => {
+    if (!supplier.trim() || !item.trim()) { toast.error("Enter supplier and item"); return; }
+    const n = (v: string) => Math.max(0, parseFloat(v) || 0);
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      item: item.trim(),
+      qty: Math.max(1, n(qty)),
+      unitPrice: n(unitPrice),
+      freight: n(freight),
+      dutyPct: n(dutyPct),
+      insurance: n(insurance),
+    }]);
+    setSupplier(""); setUnitPrice(""); setFreight(""); setDutyPct(""); setInsurance("");
+    toast.success("Quote added");
+  };
+
+  // Landed unit cost = (goods + duty + freight + insurance) / qty
+  const goodsOf = (r: LandedRow) => r.qty * r.unitPrice;
+  const dutyOf = (r: LandedRow) => goodsOf(r) * (r.dutyPct / 100);
+  const landedTotalOf = (r: LandedRow) => goodsOf(r) + dutyOf(r) + r.freight + r.insurance;
+  const landedUnitOf = (r: LandedRow) => r.qty > 0 ? landedTotalOf(r) / r.qty : 0;
+
+  // Group by item; flag cheapest landed unit cost. Show premium vs naive lowest sticker price.
+  const groups = useMemo(() => {
+    const map = new Map<string, LandedRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.item)) map.set(r.item, []);
+      map.get(r.item)!.push(r);
+    }
+    return [...map.entries()].map(([item, rs]) => {
+      const minLanded = Math.min(...rs.map(landedUnitOf));
+      const minSticker = Math.min(...rs.map(r => r.unitPrice));
+      const stickerWinner = rs.find(r => r.unitPrice === minSticker);
+      const flipped = stickerWinner ? landedUnitOf(stickerWinner) !== minLanded : false;
+      return { item, rows: [...rs].sort((a, b) => landedUnitOf(a) - landedUnitOf(b)), minLanded, flipped };
+    });
+  }, [rows]);
+
+  const flips = groups.filter(g => g.flipped).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Landed-Cost Compare across Suppliers</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Compare suppliers on true delivered cost, not sticker price. Add freight, duty, and insurance to find the real cheapest — the lowest quote often loses once logistics are loaded in.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
+          <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="Quantity" className={INP} />
+          <input type="number" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Unit price (₹)" className={INP} />
+          <input type="number" value={freight} onChange={e => setFreight(e.target.value)} placeholder="Freight total (₹)" className={INP} />
+          <input type="number" value={dutyPct} onChange={e => setDutyPct(e.target.value)} placeholder="Duty %" className={INP} />
+          <input type="number" value={insurance} onChange={e => setInsurance(e.target.value)} placeholder="Insurance total (₹)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add quote</button>
+        </div>
+      </div>
+
+      {groups.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Items compared", value: String(groups.length), color: "text-[var(--color-primary)]" },
+            { label: "Quotes", value: String(rows.length), color: "text-[var(--color-muted)]" },
+            { label: "Sticker ≠ landed winner", value: String(flips), color: flips > 0 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        {groups.map(g => (
+          <div key={g.item} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-semibold">{g.item}</p>
+              {g.flipped && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Cheapest sticker isn't cheapest landed</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Unit ₹", "Freight", "Duty", "Insurance", "Landed/unit", "Flag", ""].map(h => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {g.rows.map(r => {
+                    const lu = landedUnitOf(r);
+                    const best = lu === g.minLanded;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-3 py-2 text-xs font-medium">{r.supplier}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{formatCurrency(r.unitPrice)}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{formatCurrency(r.freight)}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{r.dutyPct}%</td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{formatCurrency(r.insurance)}</td>
+                        <td className={`px-3 py-2 text-xs tabular-nums font-bold ${best ? "text-green-400" : ""}`}>{formatCurrency(lu)}</td>
+                        <td className="px-3 py-2 text-xs">{best && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Best landed</span>}</td>
+                        <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Landed unit cost = (goods + duty + freight + insurance) ÷ qty. A distant low-price supplier can lose to a nearby one once freight and duty load in — always decide on landed, not sticker, cost.</p>
     </div>
   );
 }

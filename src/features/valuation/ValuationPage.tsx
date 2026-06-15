@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { computeFinancialSnapshot, dcfValuation, dilution } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock } from "lucide-react";
+import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock, Activity, Scale, Receipt, TrendingDown, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
@@ -76,6 +76,11 @@ export default function ValuationPage() {
           ["note-converter", "Note Cap/Discount", Repeat],
           ["esop-grant", "ESOP Grant Value", Gift],
           ["vesting-schedule", "Founder Vesting", CalendarClock],
+          ["rule-of-40", "Rule of 40", Activity],
+          ["liq-pref-stack", "Liq-Pref Stack", Scale],
+          ["secondary-tax", "Secondary Tax", Receipt],
+          ["down-round", "Down-Round Impact", TrendingDown],
+          ["investor-moic", "Investor MOIC / IRR", TrendingUp],
         ] as const).map(([id, label, Icon]) => (
           <a key={id} href={`#${id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-accent)] transition-colors">
@@ -298,6 +303,31 @@ export default function ValuationPage() {
       {/* Founder vesting schedule */}
       <section id="vesting-schedule" className="scroll-mt-4">
         <VestingSchedule />
+      </section>
+
+      {/* Rule-of-40 score */}
+      <section id="rule-of-40" className="scroll-mt-4">
+        <RuleOf40 annualRevenue={annualRevenue} growthPct={growth} monthlyNet={snap.monthlyNet} monthlyRevenue={snap.monthlyRevenue} />
+      </section>
+
+      {/* Liquidation-preference exit stack */}
+      <section id="liq-pref-stack" className="scroll-mt-4">
+        <LiqPrefStack exitValue={range.mid} />
+      </section>
+
+      {/* Secondary-sale capital-gains tax */}
+      <section id="secondary-tax" className="scroll-mt-4">
+        <SecondarySaleTax equityValue={range.mid} />
+      </section>
+
+      {/* Down-round / anti-dilution impact */}
+      <section id="down-round" className="scroll-mt-4">
+        <DownRoundImpact lastPreMoney={range.mid} />
+      </section>
+
+      {/* Investor MOIC / IRR backsolve */}
+      <section id="investor-moic" className="scroll-mt-4">
+        <InvestorMoic preMoney={range.mid} raiseAmount={raiseAmount} />
       </section>
     </div>
   );
@@ -1270,6 +1300,400 @@ function VestingSchedule() {
         </table>
       </div>
       {elapsed < cliffMonths && <p className="text-[10px] text-yellow-400">Before the cliff nothing is vested — leaving now forfeits the entire grant.</p>}
+    </div>
+  );
+}
+
+// ── RULE OF 40 SCORE ────────────────────────────────────────────────────────────
+function RuleOf40({ annualRevenue, growthPct, monthlyNet, monthlyRevenue }: { annualRevenue: number; growthPct: number; monthlyNet: number; monthlyRevenue: number }) {
+  const liveMargin = monthlyRevenue > 0 ? Math.round((monthlyNet / monthlyRevenue) * 100) : 0;
+  const [growthInput, setGrowthInput] = useState(() => String(Math.round(growthPct)));
+  const [marginInput, setMarginInput] = useState(() => String(Math.max(-50, Math.min(60, liveMargin))));
+
+  const growth = parseFloat(growthInput) || 0;
+  const margin = parseFloat(marginInput) || 0;
+  const score = growth + margin;
+  const passes = score >= 40;
+
+  // Software firms trade richer when the rule holds; rough multiple guide
+  const impliedMultiple = annualRevenue > 0 ? Math.max(0.5, Math.min(14, 2 + score * 0.18)) : 0;
+  const impliedVal = annualRevenue * impliedMultiple;
+
+  const tone = passes ? "text-green-400" : score >= 25 ? "text-yellow-400" : "text-red-400";
+  const band = passes ? "bg-green-950/20 border-green-800/40" : score >= 25 ? "bg-yellow-950/20 border-yellow-800/40" : "bg-red-950/20 border-red-800/40";
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Rule of 40 Score</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">The investor shorthand for healthy scaling: revenue growth % plus profit margin % should clear 40. Pre-filled from your live growth and net margin.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Revenue growth (% YoY)</label>
+          <input type="number" value={growthInput} onChange={e => setGrowthInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Profit / EBITDA margin (%)</label>
+          <input type="number" value={marginInput} onChange={e => setMarginInput(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className={`rounded-lg border p-4 flex items-center justify-between ${band}`}>
+        <div>
+          <p className={`text-sm font-semibold ${tone}`}>Rule-of-40 score: {score.toFixed(0)}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">{growth.toFixed(0)}% growth + {margin.toFixed(0)}% margin · target ≥ 40</p>
+        </div>
+        <p className={`text-2xl font-bold tabular-nums ${tone}`}>{passes ? "PASS" : "BELOW"}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "Implied EV/Revenue", value: annualRevenue > 0 ? `${impliedMultiple.toFixed(1)}x` : "—", color: "text-[var(--color-primary)]" },
+          { label: "Implied valuation", value: annualRevenue > 0 ? formatCurrency(Math.round(impliedVal)) : "—", color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Below 40, investors expect you to trade growth for efficiency (or vice-versa). The implied multiple is an indicative guide, not a quote.</p>
+    </div>
+  );
+}
+
+// ── LIQUIDATION-PREFERENCE EXIT STACK ───────────────────────────────────────────
+function LiqPrefStack({ exitValue }: { exitValue: number }) {
+  const [exitInput, setExitInput] = useState(() => String(Math.round(exitValue || 100_000_000)));
+  const [invested, setInvested] = useState("30000000");      // preferred capital invested
+  const [investorPct, setInvestorPct] = useState(30);        // investor as-converted ownership %
+  const [prefMultiple, setPrefMultiple] = useState(1);       // 1x / 2x preference
+  const [participating, setParticipating] = useState(false); // participating vs non-participating
+
+  const exit = parseFloat(exitInput) || 0;
+  const inv = parseFloat(invested) || 0;
+  const pref = inv * prefMultiple;
+  const ownership = investorPct / 100;
+
+  // Non-participating: investor takes MAX(preference, as-converted share).
+  // Participating: investor takes preference PLUS pro-rata share of the remainder.
+  let investorProceeds: number;
+  if (participating) {
+    investorProceeds = Math.min(exit, pref + Math.max(0, exit - pref) * ownership);
+  } else {
+    const asConverted = exit * ownership;
+    investorProceeds = Math.min(exit, Math.max(pref, asConverted));
+  }
+  const founderProceeds = Math.max(0, exit - investorProceeds);
+  const investorReturnX = inv > 0 ? investorProceeds / inv : 0;
+  // Break-even: exit where as-converted equals the preference (non-participating only)
+  const breakeven = ownership > 0 ? pref / ownership : 0;
+  const tookPref = !participating && pref >= exit * ownership;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-purple-400" /> Liquidation-Preference Stack</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">At an exit, preferred investors are paid before common. See how a 1x/2x preference and participation rights split the proceeds between you and your investors.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Exit / sale value (₹)</label>
+          <input type="number" min={0} value={exitInput} onChange={e => setExitInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Preferred capital invested (₹)</label>
+          <input type="number" min={0} value={invested} onChange={e => setInvested(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Investor ownership (%)</label>
+          <input type="number" min={0} max={100} value={investorPct} onChange={e => setInvestorPct(Number(e.target.value))} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Preference multiple</span><strong>{prefMultiple}x</strong></div>
+          <input type="range" min={1} max={3} step={0.5} value={prefMultiple} onChange={e => setPrefMultiple(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div className="flex items-end">
+          <button onClick={() => setParticipating(p => !p)}
+            className={`w-full py-2 text-xs font-semibold rounded-lg border transition-all ${participating ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+            {participating ? "Participating (pref + share)" : "Non-participating (greater of)"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Preference amount", value: formatCurrency(Math.round(pref)), color: "text-[var(--color-muted)]" },
+          { label: "Investor proceeds", value: formatCurrency(Math.round(investorProceeds)), color: "text-[var(--color-primary)]" },
+          { label: "Founder / common", value: formatCurrency(Math.round(founderProceeds)), color: "text-green-400" },
+          { label: "Investor return", value: `${investorReturnX.toFixed(2)}x`, color: investorReturnX < 1 ? "text-red-400" : "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="relative h-4 bg-[var(--color-bg)] rounded-full overflow-hidden flex">
+        <div className="h-full bg-[var(--color-primary)]/70" style={{ width: `${exit > 0 ? (investorProceeds / exit) * 100 : 0}%` }} title="Investor" />
+        <div className="h-full bg-green-500/60" style={{ width: `${exit > 0 ? (founderProceeds / exit) * 100 : 0}%` }} title="Common" />
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        {participating
+          ? "Participating preferred double-dips: the preference comes off the top, then they share the rest pro-rata — heavily founder-unfriendly at low exits."
+          : tookPref
+            ? `Below an exit of ~${formatCurrency(Math.round(breakeven))} the investor takes the preference, not their equity share — push for 1x non-participating.`
+            : `At this exit the investor converts to common (their equity share beats the ${prefMultiple}x preference).`}
+      </p>
+    </div>
+  );
+}
+
+// ── SECONDARY-SALE CAPITAL-GAINS TAX ────────────────────────────────────────────
+function SecondarySaleTax({ equityValue }: { equityValue: number }) {
+  const [shares, setShares] = useState("10000");
+  const [costPerShare, setCostPerShare] = useState("10");
+  const [salePerShare, setSalePerShare] = useState(() => {
+    const ps = equityValue > 0 ? equityValue / 1_000_000 : 100;
+    return String(Math.max(10, Math.round(ps)));
+  });
+  const [holdingMonths, setHoldingMonths] = useState(30);
+  const [surchargePct, setSurchargePct] = useState(0); // 0 / 10 / 15 / 25 high-income surcharge
+
+  const n = parseFloat(shares) || 0;
+  const cost = parseFloat(costPerShare) || 0;
+  const sale = parseFloat(salePerShare) || 0;
+  const proceeds = n * sale;
+  const costBasis = n * cost;
+  const gain = Math.max(0, proceeds - costBasis);
+  // Unlisted shares: long-term if held > 24 months → 20% (post-2024 finance act simplified to 12.5% on unlisted LTCG)
+  const isLong = holdingMonths > 24;
+  const baseRate = isLong ? 12.5 : 30;             // LTCG 12.5% (unlisted, post Jul-2024) vs STCG at slab (assume 30%)
+  const cessAndSurcharge = (1 + surchargePct / 100) * 1.04; // 4% health & education cess
+  const effectiveRate = baseRate * cessAndSurcharge;
+  const tax = gain * (effectiveRate / 100);
+  const netProceeds = proceeds - tax;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Secondary-Sale Capital-Gains Tax</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Estimate the Indian capital-gains tax when an employee or early investor sells unlisted shares in a secondary. Long-term (held &gt; 24 months) is taxed far lighter.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Shares sold</label>
+          <input type="number" min={0} value={shares} onChange={e => setShares(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Cost / share (₹)</label>
+          <input type="number" min={0} value={costPerShare} onChange={e => setCostPerShare(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Sale price / share (₹)</label>
+          <input type="number" min={0} value={salePerShare} onChange={e => setSalePerShare(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Holding period</span><strong>{holdingMonths} mo · {isLong ? "long-term" : "short-term"}</strong></div>
+          <input type="range" min={1} max={60} step={1} value={holdingMonths} onChange={e => setHoldingMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">High-income surcharge (%)</label>
+          <select value={surchargePct} onChange={e => setSurchargePct(Number(e.target.value))} className={INP}>
+            {[0, 10, 15, 25].map(s => <option key={s} value={s}>{s}% surcharge</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Gross gain", value: formatCurrency(Math.round(gain)), color: "text-[var(--color-text)]" },
+          { label: `Effective rate (${isLong ? "LTCG" : "STCG"})`, value: `${effectiveRate.toFixed(1)}%`, color: "text-yellow-400" },
+          { label: "Tax payable", value: formatCurrency(Math.round(tax)), color: "text-red-400" },
+          { label: "Net in hand", value: formatCurrency(Math.round(netProceeds)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative only. Unlisted-share LTCG (held &gt; 24 months) is taxed at 12.5% plus cess/surcharge post Jul-2024; short-term gains are taxed at slab rate (assumed 30% here). Confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ── DOWN-ROUND / ANTI-DILUTION IMPACT ───────────────────────────────────────────
+function DownRoundImpact({ lastPreMoney }: { lastPreMoney: number }) {
+  const [lastPost, setLastPost] = useState(() => String(Math.round((lastPreMoney || 80_000_000) * 1.2)));
+  const [investorPctPrev, setInvestorPctPrev] = useState(25);     // prior-round investor ownership
+  const [newPre, setNewPre] = useState(() => String(Math.round((lastPreMoney || 80_000_000) * 0.6)));
+  const [newRaise, setNewRaise] = useState("15000000");
+  const [protection, setProtection] = useState<"none" | "weighted" | "ratchet">("weighted");
+
+  const prevPost = parseFloat(lastPost) || 0;
+  const pre = parseFloat(newPre) || 0;
+  const raise = parseFloat(newRaise) || 0;
+  const newPost = pre + raise;
+  const isDown = pre < prevPost;
+  const drop = prevPost > 0 ? (1 - pre / prevPost) * 100 : 0;
+  const newInvestorPct = newPost > 0 ? (raise / newPost) * 100 : 0;
+
+  // Old investor dilution under each anti-dilution regime (relative effect)
+  const prevOwn = investorPctPrev / 100;
+  // Naive dilution: old % shrinks by the new investor%
+  const naive = prevOwn * (1 - newInvestorPct / 100) * 100;
+  // Weighted-average softens the drop ~half-way back toward prior %; full-ratchet restores most of it
+  const protectedPct =
+    protection === "none" ? naive
+      : protection === "weighted" ? naive + (investorPctPrev - naive) * 0.5
+      : investorPctPrev * 0.95; // ratchet: near-fully reset
+  const extraToOldInvestor = Math.max(0, protectedPct - naive);
+  const founderShare = Math.max(0, 100 - protectedPct - newInvestorPct);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingDown size={14} className="text-red-400" /> Down-Round &amp; Anti-Dilution Impact</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">If the next round prices below the last, anti-dilution clauses re-issue shares to earlier investors — at the founders' expense. Compare full-ratchet vs broad weighted-average.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Last-round post-money (₹)</label>
+          <input type="number" min={0} value={lastPost} onChange={e => setLastPost(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Prior investor ownership (%)</label>
+          <input type="number" min={0} max={100} value={investorPctPrev} onChange={e => setInvestorPctPrev(Number(e.target.value))} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">New-round pre-money (₹)</label>
+          <input type="number" min={0} value={newPre} onChange={e => setNewPre(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">New round size (₹)</label>
+          <input type="number" min={0} value={newRaise} onChange={e => setNewRaise(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {([["none", "No protection"], ["weighted", "Weighted-average"], ["ratchet", "Full-ratchet"]] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setProtection(k)}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${protection === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      <div className={`rounded-lg border p-3 text-xs font-medium ${isDown ? "bg-red-950/20 border-red-800/40 text-red-400" : "bg-green-950/20 border-green-800/40 text-green-400"}`}>
+        {isDown ? `Down round — pricing ${drop.toFixed(0)}% below the last post-money. Anti-dilution kicks in.` : "Up round — anti-dilution protection does not trigger."}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "New investor stake", value: `${newInvestorPct.toFixed(1)}%`, color: "text-[var(--color-primary)]" },
+          { label: "Old investor (no protection)", value: `${naive.toFixed(1)}%`, color: "text-[var(--color-muted)]" },
+          { label: "Old investor (after clause)", value: `${protectedPct.toFixed(1)}%`, color: "text-yellow-400" },
+          { label: "Founder / common left", value: `${founderShare.toFixed(1)}%`, color: founderShare < 40 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">
+        {isDown
+          ? `Anti-dilution claws back ~${extraToOldInvestor.toFixed(1)} extra points to the old investor, taken from founders. Full-ratchet is punitive — broad weighted-average is the founder-friendly market norm.`
+          : "Negotiate broad weighted-average (not full-ratchet) up-front so a future down round doesn't wipe you out."}
+      </p>
+    </div>
+  );
+}
+
+// ── INVESTOR MOIC / IRR BACKSOLVE ───────────────────────────────────────────────
+function InvestorMoic({ preMoney, raiseAmount }: { preMoney: number; raiseAmount: number }) {
+  const [invest, setInvest] = useState(() => String(Math.round(raiseAmount || 10_000_000)));
+  const [postInput, setPostInput] = useState(() => String(Math.round((preMoney || 50_000_000) + (raiseAmount || 10_000_000))));
+  const [exitValue, setExitValue] = useState(() => String(Math.round(((preMoney || 50_000_000) + (raiseAmount || 10_000_000)) * 6)));
+  const [years, setYears] = useState(5);
+  const [futureDilution, setFutureDilution] = useState(30); // % stake lost to later rounds
+
+  const inv = parseFloat(invest) || 0;
+  const post = parseFloat(postInput) || 0;
+  const exit = parseFloat(exitValue) || 0;
+
+  const entryPct = post > 0 ? (inv / post) * 100 : 0;
+  const exitPct = entryPct * (1 - futureDilution / 100);
+  const exitProceeds = exit * (exitPct / 100);
+  const moic = inv > 0 ? exitProceeds / inv : 0;
+  const irr = inv > 0 && years > 0 && moic > 0 ? (Math.pow(moic, 1 / years) - 1) * 100 : 0;
+  const paybackYears = moic > 0 && years > 0 ? years / moic : 0; // simplistic value-doubling proxy
+
+  const moicTone = moic >= 3 ? "text-green-400" : moic >= 1 ? "text-yellow-400" : "text-red-400";
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Investor MOIC / IRR</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">What this round returns the investor — multiple-on-invested-capital and annualised IRR at exit, after future-round dilution erodes their stake. The lens your investor uses.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Amount invested (₹)</label>
+          <input type="number" min={0} value={invest} onChange={e => setInvest(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Post-money this round (₹)</label>
+          <input type="number" min={0} value={postInput} onChange={e => setPostInput(e.target.value)} className={INP} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Exit / sale value (₹)</label>
+          <input type="number" min={0} value={exitValue} onChange={e => setExitValue(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Years to exit</span><strong>{years}y</strong></div>
+          <input type="range" min={1} max={12} step={1} value={years} onChange={e => setYears(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Dilution from later rounds</span><strong>{futureDilution}%</strong></div>
+          <input type="range" min={0} max={70} step={5} value={futureDilution} onChange={e => setFutureDilution(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Entry stake", value: `${entryPct.toFixed(1)}%`, color: "text-[var(--color-text)]" },
+          { label: "Stake at exit", value: `${exitPct.toFixed(1)}%`, color: "text-[var(--color-muted)]" },
+          { label: "MOIC", value: `${moic.toFixed(2)}x`, color: moicTone },
+          { label: "Gross IRR", value: `${irr.toFixed(0)}%`, color: irr >= 25 ? "text-green-400" : "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Exit proceeds to the investor: <strong className="tabular-nums">{formatCurrency(Math.round(exitProceeds))}</strong> (~{paybackYears > 0 && isFinite(paybackYears) ? `${paybackYears.toFixed(1)}y` : "—"} to recover cost at this growth rate). VCs typically want a fund-returning 3x+ at ~25%+ IRR; show them how this entry price gets there.
+      </p>
     </div>
   );
 }

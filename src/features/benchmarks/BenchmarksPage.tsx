@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { percentiles, cmgr, dso, dio, dpo, gstSummary } from "@/lib/finance";
-import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins, Layers, Waves, Wallet, Landmark, SlidersHorizontal } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 
 const SECTORS = [
@@ -83,7 +83,8 @@ function getLabel(pct: number): { label: string; color: string } {
 
 type BmTab = "overview" | "ratios" | "cost-structure" | "growth-percentile" | "working-capital"
   | "profitability-percentile" | "expense-ratio" | "productivity" | "digital-maturity"
-  | "valuation-multiple" | "stock-turn" | "tax-burden";
+  | "valuation-multiple" | "stock-turn" | "tax-burden"
+  | "ebitda-margin" | "revenue-volatility" | "liquidity-buffer" | "debt-leverage" | "opex-efficiency";
 
 export default function BenchmarksPage() {
   const { store }    = useApp();
@@ -218,7 +219,7 @@ export default function BenchmarksPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Award], ["ratios", "Industry Ratios", Scale], ["cost-structure", "Cost Structure", PieChart], ["growth-percentile", "Growth Percentile", Gauge], ["working-capital", "Working-Capital", Recycle], ["profitability-percentile", "Profitability", Percent], ["expense-ratio", "Expense Ratios", Receipt], ["productivity", "Per-Employee", UsersRound], ["digital-maturity", "Digital Score", Activity], ["valuation-multiple", "Valuation Multiple", Building2], ["stock-turn", "Stock Turn", Boxes], ["tax-burden", "Tax Burden", Coins]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", Award], ["ratios", "Industry Ratios", Scale], ["cost-structure", "Cost Structure", PieChart], ["growth-percentile", "Growth Percentile", Gauge], ["working-capital", "Working-Capital", Recycle], ["profitability-percentile", "Profitability", Percent], ["expense-ratio", "Expense Ratios", Receipt], ["productivity", "Per-Employee", UsersRound], ["digital-maturity", "Digital Score", Activity], ["valuation-multiple", "Valuation Multiple", Building2], ["stock-turn", "Stock Turn", Boxes], ["tax-burden", "Tax Burden", Coins], ["ebitda-margin", "EBITDA Margin", Layers], ["revenue-volatility", "Revenue Stability", Waves], ["liquidity-buffer", "Liquidity Buffer", Wallet], ["debt-leverage", "Debt Leverage", Landmark], ["opex-efficiency", "Opex Efficiency", SlidersHorizontal]] as const).map(([id, label, Icon]) => (
           <button
             key={id}
             onClick={() => setBmTab(id)}
@@ -240,6 +241,11 @@ export default function BenchmarksPage() {
       {bmTab === "valuation-multiple" && <ValuationMultipleBenchmark sector={sector} />}
       {bmTab === "stock-turn"       && <StockTurnBenchmark sector={sector} />}
       {bmTab === "tax-burden"       && <TaxBurdenBenchmark sector={sector} />}
+      {bmTab === "ebitda-margin"    && <EbitdaMarginBenchmark sector={sector} />}
+      {bmTab === "revenue-volatility" && <RevenueVolatilityBenchmark sector={sector} />}
+      {bmTab === "liquidity-buffer" && <LiquidityBufferBenchmark sector={sector} />}
+      {bmTab === "debt-leverage"    && <DebtLeverageBenchmark sector={sector} />}
+      {bmTab === "opex-efficiency"  && <OpexEfficiencyBenchmark sector={sector} />}
 
       {bmTab === "overview" && <>
       {!hasData && (
@@ -1420,6 +1426,328 @@ function TaxBurdenBenchmark({ sector }: { sector: string }) {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Net GST uses your output rate after input credit on expense transactions; it is an estimate, not a filed return. Direct tax reflects cash tagged to the tax category. Sector bands are indicative guides for typical Indian SMBs, not live peer data. Confirm with your CA.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EBITDA-Margin Benchmark — operating profitability band vs sector (feature #18/#62)
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector reference EBITDA-margin bands (% of revenue; higher is better).
+const EBITDA_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 6,  mid: 14, high: 24 },
+  "Manufacturing (SMB)": { low: 5,  mid: 11, high: 19 },
+  "IT Services":         { low: 12, mid: 22, high: 34 },
+};
+
+function EbitdaMarginBenchmark({ sector }: { sector: string }) {
+  const band = EBITDA_BANDS[sector] ?? EBITDA_BANDS["default"];
+  const { revenue, cost, payroll, hasRev } = useTtm();
+  const ebitda = revenue - cost - payroll;
+  const margin = hasRev ? +((ebitda / revenue) * 100).toFixed(1) : null;
+  const pct = margin !== null ? bandPercentile(margin, band.low, band.mid, band.high, true) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  // Rupee EBITDA upside of reaching the sector median margin.
+  const upside = margin !== null && margin < band.mid ? Math.round(((band.mid - margin) / 100) * revenue) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> EBITDA-Margin Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your operating profitability — revenue minus direct costs and payroll, as a % of revenue — over the trailing 12 months, against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
+        {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue transactions to compute your EBITDA margin.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">EBITDA margin</p>
+          <p className={`text-2xl font-bold tabular-nums ${margin === null ? "text-[var(--color-muted)]" : margin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{margin !== null ? `${margin}%` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">EBITDA (TTM)</p>
+          <p className={`text-2xl font-bold tabular-nums ${ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(ebitda) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{band.mid}%</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Upside to median</p>
+          <p className={`text-2xl font-bold tabular-nums ${upside > 0 ? "text-[var(--color-primary)]" : "text-green-400"}`}>{upside > 0 ? `+${formatCurrency(upside)}` : "At/above"}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">EBITDA margin vs sector</h3>
+        <BandRow label="EBITDA margin" desc="Revenue minus direct costs and payroll, ÷ revenue." yours={margin} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter />
+        {margin !== null && margin < band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Operating margin is below the typical range — review pricing, direct-cost leakage and payroll efficiency.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A pre-interest, pre-tax, pre-depreciation operating-margin proxy: depreciation and one-offs aren't separated out. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Revenue-Volatility Benchmark — month-to-month stability vs sector (feature #44)
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector reference coefficient-of-variation bands (% — lower means steadier revenue).
+const VOLATILITY_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 45, mid: 26, high: 14 },
+  "Manufacturing (SMB)": { low: 52, mid: 30, high: 16 },
+  "IT Services":         { low: 34, mid: 18, high: 9  },
+};
+
+function RevenueVolatilityBenchmark({ sector }: { sector: string }) {
+  const band = VOLATILITY_BANDS[sector] ?? VOLATILITY_BANDS["default"];
+  const series = useMonthlyRevenue();
+  const nz = series.filter(m => m.revenue > 0);
+  const revs = nz.map(m => m.revenue);
+  const mean = revs.length ? revs.reduce((s, v) => s + v, 0) / revs.length : 0;
+  const variance = revs.length ? revs.reduce((s, v) => s + (v - mean) ** 2, 0) / revs.length : 0;
+  const std = Math.sqrt(variance);
+  // Coefficient of variation as a %; lower = steadier. Needs ≥3 positive months.
+  const cv = revs.length >= 3 && mean > 0 ? +((std / mean) * 100).toFixed(1) : null;
+  const pct = cv !== null ? bandPercentile(cv, band.low, band.mid, band.high, false) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+
+  const bars = nz.map(m => ({ month: m.month, revenue: m.revenue }));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Waves size={14} className="text-[var(--color-primary)]" /> Revenue-Stability Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">How steady your monthly revenue is — measured as the coefficient of variation over the trailing 12 months — against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Steadier revenue is easier to plan and finance.</p>
+        {cv === null && <p className="text-xs text-yellow-400 mt-2">Needs at least 3 months of revenue to measure stability.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Volatility (CV)</p>
+          <p className={`text-2xl font-bold tabular-nums ${cv === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{cv !== null ? `${cv}%` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Avg monthly revenue</p>
+          <p className="text-2xl font-bold tabular-nums">{mean > 0 ? formatCurrency(Math.round(mean)) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Std deviation</p>
+          <p className="text-2xl font-bold tabular-nums">{cv !== null ? formatCurrency(Math.round(std)) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector median CV</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{band.mid}%</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold mb-1">Monthly revenue spread</h3>
+        <p className="text-xs text-[var(--color-muted)]">The wider the swing around your average, the higher the volatility.</p>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={bars} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+            <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} axisLine={false} tickFormatter={(v: number) => v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : `${Math.round(v / 1e5)}L`} />
+            <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 4, fontSize: 10 }} formatter={(v: number) => [formatCurrency(v), "Revenue"]} />
+            <Bar dataKey="revenue" radius={[2, 2, 0, 0]}>
+              {bars.map((d, i) => <Cell key={i} fill={d.revenue >= mean ? "#1A6B55" : "#7D859055"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <BandRow label="Coefficient of variation" desc="Std deviation ÷ average revenue. Lower is steadier." yours={cv} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Coefficient of variation = std deviation ÷ mean of monthly revenue. Genuine seasonality can read as high volatility; pair this with the seasonality view before acting. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Liquidity-Buffer Benchmark — months of opex held in cash vs sector (feature #4)
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector reference bands for cash runway in months (higher = safer buffer).
+const BUFFER_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 1.5, mid: 3,   high: 6 },
+  "Manufacturing (SMB)": { low: 1,   mid: 2.5, high: 5 },
+  "IT Services":         { low: 2,   mid: 4,   high: 8 },
+};
+
+function LiquidityBufferBenchmark({ sector }: { sector: string }) {
+  const { store } = useApp();
+  const band = BUFFER_BANDS[sector] ?? BUFFER_BANDS["default"];
+  const balance = (store.bankAccounts ?? []).reduce((s, a) => s + a.balance, 0);
+  const burn = monthlyBurn(store.transactions ?? []);
+  // Months of operating expenses currently sitting in cash.
+  const monthsBuffer = burn > 0 ? +(balance / burn).toFixed(1) : null;
+  const pct = monthsBuffer !== null ? bandPercentile(monthsBuffer, band.low, band.mid, band.high, true) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  // Cash needed to reach the sector-median buffer.
+  const targetCash = burn > 0 ? Math.round(band.mid * burn) : 0;
+  const shortfall = monthsBuffer !== null && monthsBuffer < band.mid ? Math.max(0, targetCash - balance) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Liquidity-Buffer Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">How many months of operating spend you hold in cash right now, against typical <span className="text-[var(--color-text)]">{sector}</span> buffer bands. Computed live from linked balances and your monthly burn.</p>
+        {monthsBuffer === null && <p className="text-xs text-yellow-400 mt-2">Add expense transactions so we can compute your monthly burn and buffer.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Months of buffer</p>
+          <p className={`text-2xl font-bold tabular-nums ${monthsBuffer === null ? "text-[var(--color-muted)]" : monthsBuffer >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{monthsBuffer !== null ? `${monthsBuffer}` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Cash balance</p>
+          <p className="text-2xl font-bold tabular-nums">{formatCurrency(balance)}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Monthly burn</p>
+          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(Math.round(burn)) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">{shortfall > 0 ? "To reach median" : "Sector median"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${shortfall > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{shortfall > 0 ? `+${formatCurrency(shortfall)}` : `${band.mid} mo`}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Cash buffer vs sector</h3>
+        <BandRow label="Months of opex in cash" desc="Cash balance ÷ monthly burn. Higher is safer." yours={monthsBuffer} unit=" mo" low={band.low} mid={band.mid} high={band.high} higherIsBetter />
+        {monthsBuffer !== null && monthsBuffer < band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Buffer is below the typical floor — consider a working-capital line, faster collections or trimming non-essential spend.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Buffer = total linked cash ÷ average monthly burn (net cash outflow). It ignores undrawn credit lines and committed receivables. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Debt-Leverage Benchmark — outstanding debt as a multiple of revenue (feature #80)
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector reference debt/revenue bands (x of annual revenue; lower is safer).
+const LEVERAGE_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 0.7, mid: 0.4, high: 0.15 },
+  "Manufacturing (SMB)": { low: 0.9, mid: 0.55, high: 0.25 },
+  "IT Services":         { low: 0.4, mid: 0.2, high: 0.05 },
+};
+
+function DebtLeverageBenchmark({ sector }: { sector: string }) {
+  const { store } = useApp();
+  const band = LEVERAGE_BANDS[sector] ?? LEVERAGE_BANDS["default"];
+  const { revenue, hasRev } = useTtm();
+  const loans = store.activeLoans ?? [];
+  const totalDebt = loans.reduce((s, l) => s + l.outstanding, 0);
+  const annualEmi = loans.reduce((s, l) => s + l.monthlyEmi * 12, 0);
+  // Debt as a multiple of TTM revenue; lower is safer.
+  const ratio = hasRev ? +(totalDebt / revenue).toFixed(2) : null;
+  const dsRatio = hasRev ? +((annualEmi / revenue) * 100).toFixed(1) : null; // debt-service % of revenue
+  const pct = ratio !== null ? bandPercentile(ratio, band.low, band.mid, band.high, false) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Debt-Leverage Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your outstanding borrowings as a multiple of trailing-12-month revenue, against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Lower leverage means more borrowing headroom and lower default risk.</p>
+        {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue to compute your leverage.</p>}
+        {hasRev && totalDebt === 0 && <p className="text-xs text-green-400 mt-2">No active loans on record — you are unlevered.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Debt / revenue</p>
+          <p className={`text-2xl font-bold tabular-nums ${ratio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{ratio !== null ? `${ratio}x` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Outstanding debt</p>
+          <p className="text-2xl font-bold tabular-nums">{formatCurrency(totalDebt)}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">{loans.length} loan(s)</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Debt service / rev</p>
+          <p className={`text-2xl font-bold tabular-nums ${dsRatio === null ? "text-[var(--color-muted)]" : dsRatio <= 20 ? "text-green-400" : "text-yellow-400"}`}>{dsRatio !== null ? `${dsRatio}%` : "—"}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">annual EMI ÷ revenue</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{band.mid}x</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Leverage vs sector</h3>
+        <BandRow label="Debt / annual revenue" desc="Total outstanding borrowings ÷ TTM revenue. Lower is safer." yours={ratio} unit="x" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
+        {ratio !== null && ratio > band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Leverage is above the typical range — prioritise deleveraging or refinancing before taking on new debt.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Uses outstanding principal across active loans ÷ TTM revenue; it excludes trade payables and undrawn limits. Debt service is the annual EMI run-rate. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your lender or CA.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Opex-Efficiency Benchmark — operating spend (ex-payroll) as % of revenue (#54)
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector reference opex/revenue bands (% — lower is leaner).
+const OPEX_EFF_BANDS: Record<string, { low: number; mid: number; high: number }> = {
+  default:               { low: 78, mid: 60, high: 42 },
+  "Manufacturing (SMB)": { low: 84, mid: 68, high: 52 },
+  "IT Services":         { low: 58, mid: 40, high: 26 },
+};
+
+function OpexEfficiencyBenchmark({ sector }: { sector: string }) {
+  const band = OPEX_EFF_BANDS[sector] ?? OPEX_EFF_BANDS["default"];
+  const { revenue, cost, hasRev } = useTtm();
+  // Operating spend excludes payroll (counted separately elsewhere).
+  const opexRatio = hasRev ? +((cost / revenue) * 100).toFixed(1) : null;
+  const pct = opexRatio !== null ? bandPercentile(opexRatio, band.low, band.mid, band.high, false) : null;
+  const lbl = pct !== null ? bandLabel(pct) : null;
+  // Rupee saving from trimming opex to the sector-median ratio.
+  const saving = opexRatio !== null && opexRatio > band.mid ? Math.round(((opexRatio - band.mid) / 100) * revenue) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Opex-Efficiency Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your operating spend (excluding payroll) as a % of trailing-12-month revenue, against typical <span className="text-[var(--color-text)]">{sector}</span> bands. A lower ratio means each rupee of revenue costs less to run.</p>
+        {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue and expense transactions to compute your opex ratio.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Opex / revenue</p>
+          <p className={`text-2xl font-bold tabular-nums ${opexRatio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{opexRatio !== null ? `${opexRatio}%` : "—"}</p>
+          {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Operating spend (TTM)</p>
+          <p className="text-2xl font-bold tabular-nums">{hasRev ? formatCurrency(cost) : "—"}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-muted)]">{band.mid}%</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Saving to median</p>
+          <p className={`text-2xl font-bold tabular-nums ${saving > 0 ? "text-[var(--color-primary)]" : "text-green-400"}`}>{saving > 0 ? formatCurrency(saving) : "At/below"}</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Opex ratio vs sector</h3>
+        <BandRow label="Operating spend / revenue" desc="Non-payroll operating costs ÷ TTM revenue. Lower is leaner." yours={opexRatio} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
+        {opexRatio !== null && opexRatio > band.low && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Opex is above the typical range — review vendor spend, subscriptions and discretionary costs for savings.</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Operating spend excludes payroll (benchmarked separately) and is taken net of nothing — it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
