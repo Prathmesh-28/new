@@ -7,6 +7,7 @@ import {
   Sun, Route, Camera, CloudUpload, CheckCircle2, Plus, Trash2, Signal, Smartphone,
   Clock, ShoppingCart, Receipt as ReceiptIcon, Wallet, PackagePlus, PenLine, PackageCheck, Target,
   Eraser, Navigation, Eye, Activity, AlertTriangle, FileText,
+  BarChart3, Banknote, Percent, HeartPulse,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -59,7 +60,7 @@ type FieldTab =
   | "daysheet" | "lowdata" | "visits" | "summary" | "beat" | "receipt"
   | "attendance" | "order" | "outstanding" | "expense" | "stockreq"
   | "signature" | "pod" | "target" | "km" | "intel" | "meter"
-  | "issue" | "quote";
+  | "issue" | "quote" | "routesales" | "handover" | "discount" | "synchealth";
 
 const TABS = [
   ["overview", "Overview", Smartphone],
@@ -86,6 +87,10 @@ const TABS = [
   ["meter", "Asset / Meter Log", Activity],
   ["issue", "Field Issue Ticket", AlertTriangle],
   ["quote", "On-Site Quotation", FileText],
+  ["routesales", "Route-Wise Sales", BarChart3],
+  ["handover", "Cash Handover", Banknote],
+  ["discount", "Discount Approval", Percent],
+  ["synchealth", "Sync Health", HeartPulse],
 ] as const;
 
 export default function FieldPage() {
@@ -139,6 +144,10 @@ export default function FieldPage() {
       {tab === "meter" && <MeterLog />}
       {tab === "issue" && <FieldIssueTicket />}
       {tab === "quote" && <OnSiteQuotation />}
+      {tab === "routesales" && <RouteWiseSales />}
+      {tab === "handover" && <CashHandover />}
+      {tab === "discount" && <DiscountApproval />}
+      {tab === "synchealth" && <SyncHealth online={online} />}
     </div>
   );
 }
@@ -2004,6 +2013,315 @@ function OnSiteQuotation() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">A quotation is an offer, not a posted invoice — it queues as a visit record so the office can convert it to a GST invoice when accepted.</p>
+    </div>
+  );
+}
+
+// ── Route-wise sales (rolls up today's queue by route tag) ───────────────────────────
+function RouteWiseSales() {
+  const [queue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [routeTags, setRouteTags] = useFeatureState<Record<string, string>>("field-route-tags", {});
+  const todayStr = new Date().toDateString();
+
+  const moneyToday = useMemo(
+    () => queue.filter(q => new Date(q.at).toDateString() === todayStr && (q.kind === "sale" || q.kind === "daysheet" || q.kind === "collection")),
+    [queue, todayStr],
+  );
+
+  const rows = useMemo(() => {
+    const acc: Record<string, { route: string; sales: number; collections: number; count: number }> = {};
+    for (const q of moneyToday) {
+      const route = (routeTags[q.id] ?? "Unassigned").trim() || "Unassigned";
+      const r = acc[route] ?? { route, sales: 0, collections: 0, count: 0 };
+      if (q.kind === "collection") r.collections += q.amount; else r.sales += q.amount;
+      r.count += 1;
+      acc[route] = r;
+    }
+    return Object.values(acc).sort((a, b) => (b.sales + b.collections) - (a.sales + a.collections));
+  }, [moneyToday, routeTags]);
+
+  const grandSales = rows.reduce((s, r) => s + r.sales, 0);
+  const grandColl = rows.reduce((s, r) => s + r.collections, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Route-Wise Sales</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{format(new Date(), "EEEE, d MMMM")} · tag each captured entry to a beat/route to see where today's money came from. Works fully offline from the queue.</p>
+      </div>
+
+      {moneyToday.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No sales or collections captured today yet. Bill or collect in the field and assign a route here to compare beats.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Routes active", value: String(rows.length), color: "text-[var(--color-text)]" },
+              { label: "Sales today", value: formatCurrency(grandSales), color: "text-green-400" },
+              { label: "Collections today", value: formatCurrency(grandColl), color: "text-blue-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Route", "Entries", "Sales", "Collections", "Total"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.route} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs font-medium">{r.route}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.count}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums">{formatCurrency(r.sales)}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums">{formatCurrency(r.collections)}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.sales + r.collections)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className={`${CARD} p-4 space-y-2`}>
+            <p className="text-xs font-semibold">Assign routes to today's entries</p>
+            {moneyToday.map(q => (
+              <div key={q.id} className="flex items-center gap-2">
+                <span className="flex-1 text-xs truncate">{q.label} <span className="text-[var(--color-muted)] tabular-nums">· {formatCurrency(q.amount)}</span></span>
+                <input
+                  value={routeTags[q.id] ?? ""}
+                  onChange={e => setRouteTags(prev => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="Route / beat"
+                  className={`${INP} max-w-[160px] py-1.5`}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Daily cash handover (denomination count vs expected) ─────────────────────────────
+const NOTE_DENOMS = [500, 200, 100, 50, 20, 10] as const;
+function CashHandover() {
+  const [queue, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [handedTo, setHandedTo] = useState("");
+  const [counts, setCounts] = useState<Record<number, string>>({});
+
+  const todayStr = new Date().toDateString();
+  const expected = useMemo(
+    () => queue
+      .filter(q => new Date(q.at).toDateString() === todayStr && q.kind === "collection")
+      .reduce((s, q) => s + q.amount, 0),
+    [queue, todayStr],
+  );
+
+  const counted = NOTE_DENOMS.reduce((s, d) => s + d * (parseInt(counts[d] ?? "") || 0), 0);
+  const variance = counted - expected;
+
+  const handover = () => {
+    if (counted <= 0) { toast.error("Count at least one denomination"); return; }
+    if (!handedTo.trim()) { toast.error("Who is the cash handed to?"); return; }
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "daysheet",
+      label: `Cash handover to ${handedTo.trim()}`, amount: counted,
+      at: new Date().toISOString(), synced: false,
+      meta: `Expected ${formatCurrency(expected)} · variance ${formatCurrency(variance)}`,
+    }, ...prev]);
+    setCounts({}); setHandedTo("");
+    toast.success("Handover recorded to queue");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Daily Cash Handover</h3>
+        <p className="text-xs text-[var(--color-muted)]">Count the cash bag by denomination at end of beat and reconcile against collections captured today — settle the deposit honestly.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {NOTE_DENOMS.map(d => (
+            <div key={d}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">₹{d} notes</label>
+              <input type="number" min={0} value={counts[d] ?? ""} onChange={e => setCounts(prev => ({ ...prev, [d]: e.target.value }))} placeholder="0" className={INP} />
+            </div>
+          ))}
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Handed to</label>
+          <input value={handedTo} onChange={e => setHandedTo(e.target.value)} placeholder="Owner / cashier" className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Counted", value: formatCurrency(counted), color: "text-[var(--color-text)]" },
+          { label: "Expected (collections)", value: formatCurrency(expected), color: "text-[var(--color-text)]" },
+          { label: "Variance", value: formatCurrency(variance), color: variance === 0 ? "text-green-400" : variance > 0 ? "text-yellow-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={handover} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+        <CheckCircle2 size={14} /> Record handover
+      </button>
+      <p className="text-[10px] text-[var(--color-muted)]">Expected cash sums collections captured to the offline queue today; coins are ignored, so small variances are normal.</p>
+    </div>
+  );
+}
+
+// ── On-site discount approval (policy check + request) ───────────────────────────────
+function DiscountApproval() {
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [maxFieldPct, setMaxFieldPct] = useFeatureState<number>("field-discount-cap", 5);
+  const [customer, setCustomer] = useState("");
+  const [billAmt, setBillAmt] = useState("");
+  const [askPct, setAskPct] = useState("");
+
+  const bill = parseFloat(billAmt) || 0;
+  const pct = parseFloat(askPct) || 0;
+  const discValue = Math.round(bill * pct / 100);
+  const withinPolicy = pct > 0 && pct <= maxFieldPct;
+  const needsApproval = pct > maxFieldPct;
+
+  const submit = () => {
+    if (!customer.trim() || bill <= 0 || pct <= 0) { toast.error("Add customer, bill amount and a discount %"); return; }
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "visit",
+      label: `Discount ${pct}% · ${customer.trim()}`, amount: 0,
+      at: new Date().toISOString(), synced: false,
+      meta: `${formatCurrency(discValue)} off ${formatCurrency(bill)} · ${withinPolicy ? "auto-approved (within cap)" : "needs owner approval"}`,
+    }, ...prev]);
+    setCustomer(""); setBillAmt(""); setAskPct("");
+    toast.success(withinPolicy ? "Discount auto-approved within your cap" : "Discount request queued for owner approval");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> On-Site Discount Approval</h3>
+        <p className="text-xs text-[var(--color-muted)]">Field staff can grant up to the cap instantly; anything higher queues for the owner to approve — no leaking margin at the counter.</p>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Field cap (% staff can self-approve)</label>
+          <input type="number" min={0} max={100} value={maxFieldPct} onChange={e => setMaxFieldPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={`${INP} max-w-[120px]`} />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+          <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Stores" className={INP} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bill amount (₹)</label>
+            <input type="number" value={billAmt} onChange={e => setBillAmt(e.target.value)} placeholder="10000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount asked (%)</label>
+            <input type="number" value={askPct} onChange={e => setAskPct(e.target.value)} placeholder="7" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {pct > 0 && bill > 0 && (
+        <div className={`${CARD} p-4 flex items-center justify-between`}>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Discount value</p>
+            <p className="text-lg font-bold tabular-nums">{formatCurrency(discValue)}</p>
+          </div>
+          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border ${withinPolicy ? "border-green-800/40 text-green-400 bg-green-950/20" : "border-yellow-800/40 text-yellow-400 bg-yellow-950/20"}`}>
+            {withinPolicy ? "Within cap" : `Over cap by ${(pct - maxFieldPct).toFixed(1)}%`}
+          </span>
+        </div>
+      )}
+
+      <button onClick={submit} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+        <CheckCircle2 size={14} /> {needsApproval ? "Request approval" : "Apply discount"}
+      </button>
+      <p className="text-[10px] text-[var(--color-muted)]">Decisions queue as a visit record so the office sees who approved what; the cap is stored and synced across devices.</p>
+    </div>
+  );
+}
+
+// ── Sync health (queue age + reconnect-driven flush readiness) ───────────────────────
+function SyncHealth({ online }: { online: boolean }) {
+  const [queue, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const pending = queue.filter(q => !q.synced);
+
+  const oldestMs = useMemo(() => {
+    if (pending.length === 0) return 0;
+    const oldest = pending.reduce((min, q) => {
+      const t = new Date(q.at).getTime();
+      return t < min ? t : min;
+    }, Date.now());
+    return Date.now() - oldest;
+  }, [pending]);
+
+  const oldestMins = Math.round(oldestMs / 60000);
+  const stale = pending.length > 0 && oldestMins >= 60;
+  const status = pending.length === 0 ? "healthy" : online ? "ready" : "waiting";
+
+  const flush = () => {
+    if (!online) { toast.error("Offline — entries stay queued until the network returns"); return; }
+    if (pending.length === 0) { toast.error("Nothing pending"); return; }
+    setQueue(prev => prev.map(q => ({ ...q, synced: true })));
+    toast.success(`Flushed ${pending.length} entr${pending.length === 1 ? "y" : "ies"}`);
+  };
+
+  const tone = status === "healthy" ? "text-green-400" : status === "ready" ? "text-blue-400" : "text-yellow-400";
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-6 flex items-center gap-4`}>
+        <div className={`flex items-center justify-center w-14 h-14 rounded-full ${status === "healthy" ? "bg-green-950/40" : status === "ready" ? "bg-blue-950/40" : "bg-yellow-950/40"}`}>
+          <HeartPulse size={26} className={tone} />
+        </div>
+        <div>
+          <p className={`text-lg font-bold ${tone}`}>
+            {status === "healthy" ? "All synced" : status === "ready" ? "Ready to sync" : "Waiting for network"}
+          </p>
+          <p className="text-xs text-[var(--color-muted)]">
+            {status === "healthy"
+              ? "Nothing pending — the books match the field."
+              : status === "ready"
+                ? `${pending.length} entr${pending.length === 1 ? "y" : "ies"} can flush now.`
+                : `${pending.length} entr${pending.length === 1 ? "y" : "ies"} held safely until you reconnect.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Pending", value: String(pending.length), color: pending.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Oldest pending", value: pending.length === 0 ? "—" : oldestMins < 1 ? "<1 min" : `${oldestMins} min`, color: stale ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Network", value: online ? "Online" : "Offline", color: online ? "text-green-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {stale && (
+        <div className={`${CARD} p-4 flex items-start gap-2 border-yellow-800/40`}>
+          <AlertTriangle size={14} className="text-yellow-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-[var(--color-muted)]">Some entries are over an hour old. If you've had signal, flush them so the owner's day summary stays accurate.</p>
+        </div>
+      )}
+
+      <button onClick={flush} disabled={pending.length === 0 || !online}
+        className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/25 disabled:opacity-40">
+        <CloudUpload size={12} /> Flush pending ({pending.length})
+      </button>
+      <p className="text-[10px] text-[var(--color-muted)]">Health is derived live from the offline queue and navigator.onLine — the flush button marks staged entries committed; real sync runs automatically on reconnect.</p>
     </div>
   );
 }

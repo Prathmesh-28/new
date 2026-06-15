@@ -3,13 +3,13 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 
-type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log";
+type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
 type Company = {
@@ -118,6 +118,10 @@ export default function AdminPage() {
     { id: "import-jobs",  label: "Import Jobs",         icon: Upload },
     { id: "config-snapshot", label: "Config Snapshot",  icon: Settings2 },
     { id: "error-log",    label: "Error Log",          icon: Bug },
+    { id: "notify-templates", label: "Notification Templates", icon: Bell },
+    { id: "plan-usage",   label: "Plan Usage",         icon: CreditCard },
+    { id: "api-keys",     label: "API Keys",           icon: Webhook },
+    { id: "onboarding",   label: "Onboarding",         icon: ListChecks },
   ] as const satisfies { id: Tab; label: string; icon: React.ElementType }[];
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -345,6 +349,10 @@ export default function AdminPage() {
       {tab === "import-jobs" && <ImportJobsBoard />}
       {tab === "config-snapshot" && <ConfigSnapshot stats={stats} />}
       {tab === "error-log" && <ErrorLogViewer />}
+      {tab === "notify-templates" && <NotificationTemplates />}
+      {tab === "plan-usage" && <PlanUsage stats={stats} companies={companies} loadCompanies={loadCompanies} />}
+      {tab === "api-keys" && <ApiKeyManager />}
+      {tab === "onboarding" && <OnboardingChecklist stats={stats} />}
     </div>
   );
 }
@@ -1636,6 +1644,324 @@ function ErrorLogViewer() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── #197 Notification Template Manager ─────────────────────────────────────
+type NotifyTemplate = { id: string; name: string; channel: "email" | "whatsapp" | "in-app"; subject: string; body: string; enabled: boolean };
+const DEFAULT_TEMPLATES: NotifyTemplate[] = [
+  { id: "welcome", name: "Welcome email", channel: "email", subject: "Welcome to the platform", body: "Hi {{name}}, your workspace is ready.", enabled: true },
+  { id: "invoice-due", name: "Invoice due reminder", channel: "whatsapp", subject: "Payment reminder", body: "Invoice {{invoice}} of {{amount}} is due on {{date}}.", enabled: true },
+  { id: "reset", name: "Password reset", channel: "email", subject: "Reset your password", body: "Use this temporary password: {{password}}", enabled: true },
+];
+
+function NotificationTemplates() {
+  const [templates, setTemplates] = useFeatureState<NotifyTemplate[]>("adm-notify-templates", DEFAULT_TEMPLATES);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ subject: "", body: "" });
+
+  const channelBadge = (c: NotifyTemplate["channel"]) =>
+    c === "email" ? "bg-blue-900/30 text-blue-400 border-blue-800/40"
+      : c === "whatsapp" ? "bg-green-900/30 text-green-400 border-green-800/40"
+        : "bg-purple-900/30 text-purple-400 border-purple-800/40";
+
+  const startEdit = (t: NotifyTemplate) => { setEditing(t.id); setDraft({ subject: t.subject, body: t.body }); };
+  const save = (id: string) => {
+    setTemplates(templates.map(t => t.id === id ? { ...t, subject: draft.subject, body: draft.body } : t));
+    setEditing(null);
+    toast.success("Template updated");
+  };
+  const toggle = (id: string) => {
+    setTemplates(templates.map(t => t.id === id ? { ...t, enabled: !t.enabled } : t));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> Notification Templates</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Edit the system messages sent to every tenant. Use {"{{tokens}}"} for dynamic values.</p>
+      </div>
+      <div className="space-y-3">
+        {templates.map(t => (
+          <div key={t.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">{t.name}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${channelBadge(t.channel)}`}>{t.channel}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => toggle(t.id)} className={`text-xs font-semibold flex items-center gap-1 ${t.enabled ? "text-green-400" : "text-[var(--color-muted)]"}`}>
+                  <Power size={12} /> {t.enabled ? "Enabled" : "Disabled"}
+                </button>
+                {editing !== t.id && <button onClick={() => startEdit(t)} className="text-xs text-[var(--color-primary)] hover:underline">Edit</button>}
+              </div>
+            </div>
+            {editing === t.id ? (
+              <div className="mt-3 space-y-2">
+                <input value={draft.subject} onChange={e => setDraft(d => ({ ...d, subject: e.target.value }))} placeholder="Subject"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <textarea value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} rows={3} placeholder="Body"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] resize-y" />
+                <div className="flex gap-2">
+                  <button onClick={() => save(t.id)} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1"><Check size={12} /> Save</button>
+                  <button onClick={() => setEditing(null)} className="text-xs text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] flex items-center gap-1"><X size={12} /> Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <p className="text-xs font-medium text-[var(--color-muted)]">{t.subject}</p>
+                <p className="text-sm mt-1 whitespace-pre-wrap">{t.body}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── #198 Subscription / Plan Usage ─────────────────────────────────────────
+type PlanTier = { id: string; name: string; price: number; seatCap: number; companyCap: number };
+const PLAN_TIERS: PlanTier[] = [
+  { id: "starter", name: "Starter", price: 999, seatCap: 5, companyCap: 1 },
+  { id: "growth", name: "Growth", price: 2999, seatCap: 25, companyCap: 5 },
+  { id: "scale", name: "Scale", price: 7999, seatCap: 100, companyCap: 25 },
+];
+
+function PlanUsage({ stats, companies, loadCompanies }: { stats: Stats | null; companies: Company[]; loadCompanies: () => void }) {
+  const [planId, setPlanId] = useFeatureState<string>("adm-active-plan", "growth");
+  useEffect(() => { if (companies.length === 0) loadCompanies(); }, [companies.length, loadCompanies]);
+
+  const plan = PLAN_TIERS.find(p => p.id === planId) ?? PLAN_TIERS[1];
+  const usedSeats = stats?.users ?? 0;
+  const usedCompanies = stats?.companies ?? companies.length;
+  const txns = stats?.totalTransactions ?? 0;
+  const seatPct = Math.min(100, Math.round((usedSeats / plan.seatCap) * 100));
+  const companyPct = Math.min(100, Math.round((usedCompanies / plan.companyCap) * 100));
+  const mrr = formatCurrency(plan.price);
+
+  const Bar = ({ label, used, cap, pct }: { label: string; used: number; cap: number; pct: number }) => (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-[var(--color-muted)]">{label}</span>
+        <span className={`font-semibold tabular-nums ${pct >= 90 ? "text-red-400" : pct >= 70 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{used.toLocaleString("en-IN")} / {cap.toLocaleString("en-IN")}</span>
+      </div>
+      <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+        <div className={`h-full ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-yellow-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><CreditCard size={14} className="text-[var(--color-primary)]" /> Plan Usage</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Current subscription tier vs. live platform consumption.</p>
+        </div>
+        <select value={planId} onChange={e => { setPlanId(e.target.value); toast.success(`Switched to ${PLAN_TIERS.find(p => p.id === e.target.value)?.name}`); }}
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+          {PLAN_TIERS.map(p => <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.price)}/mo</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Active Plan", value: plan.name, sub: `${mrr}/mo` },
+          { label: "Seats Used", value: `${usedSeats}`, sub: `cap ${plan.seatCap}` },
+          { label: "Companies", value: `${usedCompanies}`, sub: `cap ${plan.companyCap}` },
+          { label: "Transactions", value: txns.toLocaleString("en-IN"), sub: "all tenants" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+        <p className="text-sm font-semibold">Consumption against limits</p>
+        <Bar label="Seats" used={usedSeats} cap={plan.seatCap} pct={seatPct} />
+        <Bar label="Companies" used={usedCompanies} cap={plan.companyCap} pct={companyPct} />
+        {(seatPct >= 90 || companyPct >= 90) && (
+          <p className="text-xs text-red-400">Nearing plan limits — consider upgrading to the next tier.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #199 API Key Manager ───────────────────────────────────────────────────
+type ApiKey = { id: string; label: string; prefix: string; scope: "read" | "read-write"; createdAt: string; lastUsed: string | null; revoked: boolean };
+
+function ApiKeyManager() {
+  const [keys, setKeys] = useFeatureState<ApiKey[]>("adm-api-keys", []);
+  const [label, setLabel] = useState("");
+  const [scope, setScope] = useState<"read" | "read-write">("read");
+  const [reveal, setReveal] = useState<{ label: string; secret: string } | null>(null);
+
+  const genSecret = () => "sk_live_" + Array.from({ length: 32 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join("");
+
+  const create = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim()) { toast.error("Give the key a label"); return; }
+    const secret = genSecret();
+    const key: ApiKey = { id: crypto.randomUUID(), label: label.trim(), prefix: secret.slice(0, 12), scope, createdAt: new Date().toISOString(), lastUsed: null, revoked: false };
+    setKeys([key, ...keys]);
+    setReveal({ label: key.label, secret });
+    setLabel("");
+    toast.success("API key created");
+  };
+  const revoke = (id: string) => {
+    if (!window.confirm("Revoke this key? Any integration using it will stop working immediately.")) return;
+    setKeys(keys.map(k => k.id === id ? { ...k, revoked: true } : k));
+    toast.success("Key revoked");
+  };
+  const remove = (id: string) => setKeys(keys.filter(k => k.id !== id));
+
+  const active = keys.filter(k => !k.revoked).length;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Webhook size={14} className="text-[var(--color-primary)]" /> API Keys</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{active} active {active === 1 ? "key" : "keys"} — issue and revoke programmatic access credentials.</p>
+      </div>
+
+      {reveal && (
+        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm">
+            Secret for <strong>{reveal.label}</strong>: <code className="font-mono bg-[var(--color-bg)] px-2 py-0.5 rounded">{reveal.secret}</code>
+            <span className="text-xs text-[var(--color-muted)] ml-2">Copy now — shown once.</span>
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => { navigator.clipboard.writeText(reveal.secret); toast.success("Copied"); }} className="text-xs flex items-center gap-1 text-[var(--color-primary)] hover:underline"><Copy size={12} /> Copy</button>
+            <button onClick={() => setReveal(null)} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Dismiss</button>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={create} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Label</label>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Tally sync" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Scope</label>
+          <select value={scope} onChange={e => setScope(e.target.value as "read" | "read-write")} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            <option value="read">Read only</option>
+            <option value="read-write">Read &amp; write</option>
+          </select>
+        </div>
+        <button type="submit" className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Generate key</button>
+      </form>
+
+      {keys.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <KeyRound size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No API keys yet. Generate one above.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Label", "Key", "Scope", "Created", "Status", ""].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {keys.map(k => (
+                <tr key={k.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{k.label}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{k.prefix}…</td>
+                  <td className="px-4 py-2.5"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-blue-900/30 text-blue-400 border-blue-800/40">{k.scope}</span></td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(new Date(k.createdAt), "d MMM yy")}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${k.revoked ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{k.revoked ? "revoked" : "active"}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {k.revoked
+                      ? <button onClick={() => remove(k.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400 flex items-center gap-1 ml-auto"><Trash2 size={12} /> Delete</button>
+                      : <button onClick={() => revoke(k.id)} className="text-xs text-red-400 hover:underline">Revoke</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #200 Tenant Onboarding Checklist ───────────────────────────────────────
+type ChecklistItem = { id: string; label: string; hint: string; done: boolean };
+const DEFAULT_ONBOARDING: ChecklistItem[] = [
+  { id: "owner", label: "Owner account invited", hint: "Primary admin can log in", done: false },
+  { id: "company", label: "Company profile completed", hint: "Name, GSTIN, address", done: false },
+  { id: "bank", label: "Bank account connected", hint: "At least one account synced", done: false },
+  { id: "team", label: "Team members added", hint: "Finance / CA / ops seats", done: false },
+  { id: "data", label: "Opening data imported", hint: "Transactions or invoices", done: false },
+  { id: "go-live", label: "Marked production-ready", hint: "Sign-off by admin", done: false },
+];
+
+function OnboardingChecklist({ stats }: { stats: Stats | null }) {
+  const { store } = useApp();
+  const [items, setItems] = useFeatureState<ChecklistItem[]>("adm-onboarding-checklist", DEFAULT_ONBOARDING);
+
+  // Auto-derive a few items from live store / stats so the checklist reflects reality.
+  const derived: Record<string, boolean> = {
+    owner: (stats?.users ?? 0) > 0,
+    bank: (store.bankAccounts ?? []).length > 0,
+    team: (stats?.users ?? 0) > 1,
+    data: (store.transactions ?? []).length > 0 || (store.invoices ?? []).length > 0,
+  };
+
+  const effective = items.map(i => ({ ...i, done: i.done || derived[i.id] === true }));
+  const completed = effective.filter(i => i.done).length;
+  const pct = Math.round((completed / effective.length) * 100);
+
+  const toggle = (id: string) => setItems(items.map(i => i.id === id ? { ...i, done: !i.done } : i));
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Tenant Onboarding</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Standard go-live checklist — some steps auto-tick from synced data.</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between text-xs mb-2">
+          <span className="font-semibold">{completed} of {effective.length} complete</span>
+          <span className="text-[var(--color-primary)] font-bold tabular-nums">{pct}%</span>
+        </div>
+        <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+          <div className="h-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {effective.map(i => {
+          const auto = derived[i.id] === true;
+          return (
+            <button key={i.id} onClick={() => !auto && toggle(i.id)} disabled={auto}
+              className={`w-full flex items-center gap-3 text-left bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 ${auto ? "opacity-90 cursor-default" : "hover:border-[var(--color-primary)]"}`}>
+              <span className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${i.done ? "bg-green-900/30 border-green-700/50 text-green-400" : "border-[var(--color-border)] text-transparent"}`}>
+                <Check size={12} />
+              </span>
+              <span className="flex-1">
+                <span className={`text-sm font-medium ${i.done ? "line-through text-[var(--color-muted)]" : ""}`}>{i.label}</span>
+                <span className="block text-xs text-[var(--color-muted)]">{i.hint}</span>
+              </span>
+              {auto && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-blue-900/30 text-blue-400 border-blue-800/40 shrink-0">auto</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

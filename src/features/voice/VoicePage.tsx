@@ -7,6 +7,7 @@ import {
   AlertTriangle, CheckCircle2, Play, Square, Trash2, Copy, Plus,
   Receipt, FileText, Search, Globe, Sun, Bell, Type, ArrowRightLeft,
   PhoneCall, MessageCircle, BookMarked, Calculator, PartyPopper, Send, X,
+  HelpCircle, SpellCheck2, CalendarClock, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -101,6 +102,7 @@ export default function VoicePage() {
     | "expense" | "invoice" | "txnsearch" | "uipreview" | "digest"
     | "reminder" | "words" | "translit"
     | "payreminder" | "whatsapp" | "glossary" | "calc" | "greeting"
+    | "askbalance" | "spellout" | "spokendate" | "quicklog"
   >("overview");
 
   return (
@@ -139,6 +141,10 @@ export default function VoicePage() {
             ["glossary", "Audio Glossary", BookMarked],
             ["calc", "Speak Total", Calculator],
             ["greeting", "Greeting Recorder", PartyPopper],
+            ["askbalance", "Ask Balance", HelpCircle],
+            ["spellout", "Spell It Out", SpellCheck2],
+            ["spokendate", "Spoken Date", CalendarClock],
+            ["quicklog", "Work Log", ClipboardList],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -171,6 +177,10 @@ export default function VoicePage() {
       {tab === "glossary" && <FinanceGlossary />}
       {tab === "calc" && <SpeakTheTotal />}
       {tab === "greeting" && <GreetingRecorder />}
+      {tab === "askbalance" && <AskBalanceAloud />}
+      {tab === "spellout" && <SpellItOut />}
+      {tab === "spokendate" && <SpokenDateEntry />}
+      {tab === "quicklog" && <VoiceWorkLog />}
     </div>
   );
 }
@@ -1712,6 +1722,292 @@ function GreetingRecorder() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Tool · Ask balance aloud (spoken Q&A over live store) ─────────────────────────
+type BalanceAnswer = { kind: "balance" | "in" | "out" | "count" | "party" | "unknown"; text: string };
+function answerQuestion(q: string, store: ReturnType<typeof useApp>["store"]): BalanceAnswer {
+  const t = q.trim().toLowerCase();
+  const txns = store.transactions ?? [];
+  const inflow = txns.filter(x => x.amount > 0).reduce((s, x) => s + x.amount, 0);
+  const outflow = txns.filter(x => x.amount < 0).reduce((s, x) => s + Math.abs(x.amount), 0);
+  if (!t) return { kind: "unknown", text: "Ask me about your balance, money in, money out, or how many transactions you have." };
+  // party lookup: "how much from/for <name>"
+  const partyMatch = t.match(/\b(?:from|for|with|owe[ds]?|to)\s+([a-z][a-z\s.&'-]{1,40})/);
+  if (partyMatch && /(owe|outstanding|pending|how much)/.test(t)) {
+    const name = partyMatch[1].trim();
+    const matched = txns.filter(x => (x.counterparty ?? "").toLowerCase().includes(name) || (x.description ?? "").toLowerCase().includes(name));
+    const net = matched.reduce((s, x) => s + x.amount, 0);
+    if (matched.length === 0) return { kind: "party", text: `I couldn't find any transactions matching "${name}".` };
+    return { kind: "party", text: `Across ${matched.length} transactions matching ${name}, the net is ${lakhCrore(net)} rupees.` };
+  }
+  if (/(money in|inflow|revenue|received|income|collect)/.test(t)) return { kind: "in", text: `Total money in is ${lakhCrore(inflow)} rupees.` };
+  if (/(money out|outflow|expense|spent|paid|spend)/.test(t)) return { kind: "out", text: `Total money out is ${lakhCrore(outflow)} rupees.` };
+  if (/(how many|count|number of)/.test(t)) return { kind: "count", text: `You have ${txns.length} recorded transactions.` };
+  if (/(balance|position|net|cash|left|profit|surplus|shortfall)/.test(t)) {
+    const net = inflow - outflow;
+    return { kind: "balance", text: `Your net position is ${net >= 0 ? "a surplus" : "a shortfall"} of ${lakhCrore(Math.abs(net))} rupees.` };
+  }
+  return { kind: "unknown", text: "I can answer questions about balance, money in, money out, transaction count, or a party. Try \"what is my balance\"." };
+}
+
+function AskBalanceAloud() {
+  const { store } = useApp();
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const [q, setQ] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const ans = useMemo(() => answerQuestion(q, store), [q, store]);
+
+  const ask = (autoSpeak: boolean) => {
+    if (autoSpeak) speak(ans.text, bcp47);
+  };
+
+  const toggleListen = () => {
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) { toast.error("Speech recognition not supported — type your question"); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new Ctor();
+    rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = false;
+    rec.onresult = (e) => {
+      let out = ""; for (let i = 0; i < e.results.length; i++) out += e.results[i][0].transcript;
+      setQ(out);
+      speak(answerQuestion(out, store).text, bcp47);
+    };
+    rec.onerror = (e) => { toast.error(`Mic error: ${e.error ?? "unknown"}`); setListening(false); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  useEffect(() => () => { recRef.current?.stop(); }, []);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={14} className="text-[var(--color-primary)]" /> Ask about your books</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Ask a question like <em className="text-[var(--color-text)]">&ldquo;what is my balance&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;how much money out&rdquo;</em>. We answer from your live transactions and read it back aloud.
+        </p>
+        {!SPEECH_IN && <FallbackNote>Microphone questions aren&apos;t available here — type your question and we&apos;ll answer below.</FallbackNote>}
+        <div className="flex gap-2">
+          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(SPEECH_OUT); }} placeholder="what is my balance" className={INP} />
+          <button onClick={toggleListen} disabled={!SPEECH_IN}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
+            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Ask</>}
+          </button>
+        </div>
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… ask your question.</p>}
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-[10px] text-[var(--color-muted)] mb-1">Answer</p>
+          <p className="text-sm">{ans.text}</p>
+          <button onClick={() => { if (!speak(ans.text, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
+            className="mt-2 flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg disabled:opacity-40"><Volume2 size={12} /> Read aloud</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tool · Spell it out (read codes char-by-char with NATO phonetics) ─────────────
+const NATO: Record<string, string> = {
+  a: "Alpha", b: "Bravo", c: "Charlie", d: "Delta", e: "Echo", f: "Foxtrot", g: "Golf",
+  h: "Hotel", i: "India", j: "Juliett", k: "Kilo", l: "Lima", m: "Mike", n: "November",
+  o: "Oscar", p: "Papa", q: "Quebec", r: "Romeo", s: "Sierra", t: "Tango", u: "Uniform",
+  v: "Victor", w: "Whiskey", x: "X-ray", y: "Yankee", z: "Zulu",
+};
+function phonetic(ch: string): string {
+  const c = ch.toLowerCase();
+  if (NATO[c]) return NATO[c];
+  if (/[0-9]/.test(c)) return c; // digits read as-is
+  return ch;
+}
+function SpellItOut() {
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const [raw, setRaw] = useState("");
+  const chars = useMemo(() => raw.replace(/\s+/g, "").split(""), [raw]);
+  const phoneticScript = chars.map(phonetic).join(", ");
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><SpellCheck2 size={14} className="text-[var(--color-primary)]" /> Spell it out</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Paste an IFSC, GSTIN, account number or reference and have it read back <strong className="text-[var(--color-text)]">character by character</strong> — letters with NATO phonetics — so it&apos;s unmistakable over a phone call.
+        </p>
+        <input value={raw} onChange={e => setRaw(e.target.value.toUpperCase())} placeholder="e.g. HDFC0001234 or 27AAAC…" className={`${INP} font-mono tracking-wider`} />
+        {chars.length > 0 && (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {chars.map((c, i) => (
+                <span key={i} className="inline-flex flex-col items-center bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 min-w-[2.5rem]">
+                  <span className="text-base font-bold font-mono">{c}</span>
+                  <span className="text-[9px] text-[var(--color-muted)]">{phonetic(c)}</span>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { if (!speak(phoneticScript, bcp47, 0.85)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
+                className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Read aloud</button>
+              <button onClick={() => { navigator.clipboard?.writeText(phoneticScript); toast.success("Phonetic spelling copied"); }}
+                className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy</button>
+            </div>
+          </>
+        )}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available here — the phonetic breakdown above can be read out or copied instead.</FallbackNote>}
+      </div>
+    </div>
+  );
+}
+
+// ── Tool · Spoken date entry (parse natural date phrases) ─────────────────────────
+function parseSpokenDate(text: string, today: Date): Date | null {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  if (/\btoday\b/.test(t)) return today;
+  if (/\byesterday\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate() - 1); return d; }
+  if (/\btomorrow\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate() + 1); return d; }
+  const daysAgo = t.match(/(\d+)\s*days?\s*ago/);
+  if (daysAgo) { const d = new Date(today); d.setDate(d.getDate() - parseInt(daysAgo[1], 10)); return d; }
+  // "3rd of march", "march 3", "3 march 2025"
+  const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  const monIdx = months.findIndex(m => t.includes(m) || t.includes(m.slice(0, 3)));
+  if (monIdx >= 0) {
+    const dayMatch = t.match(/(\d{1,2})/);
+    const yearMatch = t.match(/\b(20\d{2})\b/);
+    const day = dayMatch ? parseInt(dayMatch[1], 10) : 1;
+    const year = yearMatch ? parseInt(yearMatch[1], 10) : today.getFullYear();
+    if (day >= 1 && day <= 31) return new Date(year, monIdx, day);
+  }
+  // dd/mm or dd-mm[-yyyy]
+  const dmy = t.match(/\b(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?\b/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10), mon = parseInt(dmy[2], 10) - 1;
+    let year = dmy[3] ? parseInt(dmy[3], 10) : today.getFullYear();
+    if (year < 100) year += 2000;
+    if (day >= 1 && day <= 31 && mon >= 0 && mon <= 11) return new Date(year, mon, day);
+  }
+  return null;
+}
+function SpokenDateEntry() {
+  const today = useMemo(() => new Date(), []);
+  const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const parsed = useMemo(() => parseSpokenDate(text, today), [text, today]);
+
+  const toggleListen = () => {
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) { toast.error("Speech recognition not supported — type the date"); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new Ctor();
+    rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
+    rec.onresult = (e) => { let out = ""; for (let i = 0; i < e.results.length; i++) out += e.results[i][0].transcript; setText(out); };
+    rec.onerror = (e) => { toast.error(`Mic error: ${e.error ?? "unknown"}`); setListening(false); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  useEffect(() => () => { recRef.current?.stop(); }, []);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Spoken date entry</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Say or type a date the way you&apos;d speak it — <em className="text-[var(--color-text)]">&ldquo;yesterday&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;3 days ago&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;15 march&rdquo;</em> — and we resolve it to a calendar date you can reuse.
+        </p>
+        {!SPEECH_IN && <FallbackNote>Microphone input isn&apos;t available here — type the date phrase instead; parsing is identical.</FallbackNote>}
+        <div className="flex gap-2">
+          <input value={text} onChange={e => setText(e.target.value)} placeholder="yesterday / 3 days ago / 15 march" className={INP} />
+          <button onClick={toggleListen} disabled={!SPEECH_IN}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
+            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+          </button>
+        </div>
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… say a date.</p>}
+        {text.trim() && (
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">Resolved date</p>
+            {parsed ? (
+              <>
+                <p className="text-xl font-bold">{format(parsed, "EEEE, d MMMM yyyy")}</p>
+                <p className="text-xs text-[var(--color-primary)] mt-1">ISO: {format(parsed, "yyyy-MM-dd")}</p>
+                <button onClick={() => { navigator.clipboard?.writeText(format(parsed, "yyyy-MM-dd")); toast.success("Date copied"); }}
+                  className="mt-2 flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg"><Copy size={12} /> Copy ISO date</button>
+              </>
+            ) : (
+              <p className="text-xs text-[var(--color-muted)]">Couldn&apos;t understand that date. Try &ldquo;yesterday&rdquo;, &ldquo;5 days ago&rdquo;, &ldquo;12 june&rdquo; or &ldquo;15/03/2025&rdquo;.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tool · Voice work log (timestamped dictated activity entries) ─────────────────
+type WorkLogEntry = { id: string; at: string; text: string };
+function VoiceWorkLog() {
+  const [entries, setEntries] = useFeatureState<WorkLogEntry[]>("voice-work-log", []);
+  const [draft, setDraft] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+
+  const add = (text: string) => {
+    if (!text.trim()) return;
+    setEntries([{ id: crypto.randomUUID(), at: new Date().toISOString(), text: text.trim() }, ...entries]);
+    setDraft("");
+  };
+
+  const toggleListen = () => {
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) { toast.error("Speech recognition not supported — type your entry"); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new Ctor();
+    rec.lang = bcp47; rec.continuous = false; rec.interimResults = false;
+    rec.onresult = (e) => { let out = ""; for (let i = 0; i < e.results.length; i++) out += e.results[i][0].transcript; if (out.trim()) add(out); };
+    rec.onerror = (e) => { toast.error(`Mic error: ${e.error ?? "unknown"}`); setListening(false); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  useEffect(() => () => { recRef.current?.stop(); }, []);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Voice work log</h2>
+        <p className="text-xs text-[var(--color-muted)]">Dictate what you did and when — each entry is timestamped automatically. Handy for site visits, billable hours, or a daily diary. Entries are saved and synced.</p>
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available here — type each entry and press Add; timestamps are still recorded.</FallbackNote>}
+        <div className="flex gap-2">
+          <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(draft); }} placeholder="Visited Sharma's shop, collected payment…" className={INP} />
+          <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={toggleListen} disabled={!SPEECH_IN}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "border border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+          </button>
+        </div>
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… describe what you did.</p>}
+      </div>
+
+      {entries.length > 0 && (
+        <div className={`${CARD} p-4 space-y-2`}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-semibold">{entries.length} log entr{entries.length > 1 ? "ies" : "y"}</p>
+            <button onClick={() => setEntries([])} className="text-[11px] text-[var(--color-muted)] hover:text-red-400 flex items-center gap-1"><Trash2 size={11} /> Clear all</button>
+          </div>
+          {entries.map(en => (
+            <div key={en.id} className="flex items-start gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+              <span className="text-[10px] text-[var(--color-primary)] tabular-nums whitespace-nowrap mt-0.5">{format(new Date(en.at), "d MMM, HH:mm")}</span>
+              <span className="flex-1 text-sm">{en.text}</span>
+              <button onClick={() => setEntries(entries.filter(x => x.id !== en.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
