@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2 } from "lucide-react";
+import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2, Megaphone, PackageCheck, BadgeCheck, PartyPopper, Tag, Star, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
@@ -15,7 +15,7 @@ function waLink(text: string, phone?: string): string {
   return `${base}?text=${encodeURIComponent(text)}`;
 }
 
-type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals";
+type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr";
 
 // authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
 function apiError(err: unknown): string {
@@ -198,6 +198,13 @@ export default function WhatsAppPage() {
           ["wa-sales-capture", "Sales Capture", PlusCircle],
           ["wa-statement", "Statement", FileText],
           ["wa-approvals", "Approvals", CheckSquare],
+          ["wa-broadcast", "Broadcast", Megaphone],
+          ["wa-order-status", "Order Status", PackageCheck],
+          ["wa-payment-confirm", "Pay Receipt", BadgeCheck],
+          ["wa-festive", "Festive Offer", PartyPopper],
+          ["wa-price-list", "Price List", Tag],
+          ["wa-review", "Review Ask", Star],
+          ["wa-qr", "Chat Link / QR", QrCode],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -211,6 +218,13 @@ export default function WhatsAppPage() {
       {tab === "wa-sales-capture" && <WaSalesCapture />}
       {tab === "wa-statement" && <WaStatementOnDemand />}
       {tab === "wa-approvals" && <WaApprovalActions />}
+      {tab === "wa-broadcast" && <WaBroadcastCampaign />}
+      {tab === "wa-order-status" && <WaOrderStatus />}
+      {tab === "wa-payment-confirm" && <WaPaymentConfirm />}
+      {tab === "wa-festive" && <WaFestiveOffer />}
+      {tab === "wa-price-list" && <WaPriceList />}
+      {tab === "wa-review" && <WaReviewRequest />}
+      {tab === "wa-qr" && <WaChatLinkQr />}
 
       {tab === "overview" && (
       <>
@@ -947,6 +961,476 @@ function WaApprovalActions() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #182 WhatsApp Broadcast / Campaign Composer ─────────────────────────────
+// Personalised broadcast built from your customer list (derived from invoices).
+// Pick a segment, write a message with {name} merge, send each one-by-one on
+// WhatsApp (wa.me deep links — no bulk-send backend, stays WA-policy friendly).
+type Segment = "all" | "outstanding" | "paid";
+function WaBroadcastCampaign() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const invoices = store.invoices ?? [];
+  const [segment, setSegment] = useState<Segment>("all");
+  const [body, setBody] = useState("Hi {name}, we have a special update for you from " + (store.firm?.name ?? "us") + ". Reply *YES* to know more!");
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+
+  // Roll invoices up to one row per customer with their outstanding balance.
+  const customers = useMemo(() => {
+    const map = new Map<string, number>();
+    invoices.forEach(i => {
+      const out = i.status === "paid" ? 0 : i.amount;
+      map.set(i.customer, (map.get(i.customer) ?? 0) + out);
+    });
+    return Array.from(map.entries()).map(([name, outstanding]) => ({ name, outstanding })).sort((a, b) => b.outstanding - a.outstanding);
+  }, [invoices]);
+
+  const recipients = customers.filter(c =>
+    segment === "all" ? true : segment === "outstanding" ? c.outstanding > 0 : c.outstanding === 0,
+  );
+
+  const msgFor = (name: string) => body.replace(/\{name\}/g, name);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Megaphone size={15} className="text-green-400" />WhatsApp Broadcast / Campaign Composer</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Write one message with a <code className="text-[var(--color-primary)]">{"{name}"}</code> merge tag, pick a segment of your customer list, and fire each personalised message off on WhatsApp. Track who you have sent to.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Segment</label>
+            <select value={segment} onChange={e => setSegment(e.target.value as Segment)} className={WA_INP}>
+              <option value="all">All customers</option>
+              <option value="outstanding">With outstanding balance</option>
+              <option value="paid">Fully paid (good payers)</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Message ({"{name}"} = customer name)</label>
+            <textarea value={body} onChange={e => setBody(e.target.value)} rows={3} className={`${WA_INP} resize-none`} />
+          </div>
+        </div>
+        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No customers yet — invoices feed this list.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "In segment", value: String(recipients.length), color: "text-[var(--color-primary)]" },
+          { label: "Sent", value: String(recipients.filter(r => sent[r.name]).length), color: "text-green-400" },
+          { label: "Remaining", value: String(recipients.filter(r => !sent[r.name]).length), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className={WA_CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {recipients.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Outstanding", "Status", "Action"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {recipients.map(r => (
+                <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.outstanding > 0 ? fc(r.outstanding) : "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-xs font-medium ${sent[r.name] ? "text-green-400" : "text-[var(--color-muted)]"}`}>{sent[r.name] ? "Sent ✓" : "Pending"}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <a href={waLink(msgFor(r.name))} target="_blank" rel="noopener noreferrer"
+                      onClick={() => { setSent(s => ({ ...s, [r.name]: true })); toast.success("Opening WhatsApp…"); }}
+                      className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline"><Send size={12} />Send</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Messages send one at a time via wa.me — keep broadcasts relevant to stay within WhatsApp's policy.</p>
+    </div>
+  );
+}
+
+// ── #183 WhatsApp Order-Status Update Sender ────────────────────────────────
+const ORDER_STAGES = [
+  { id: "confirmed", label: "Order confirmed",  emoji: "✅", line: "is confirmed and being prepared" },
+  { id: "packed",    label: "Packed",            emoji: "📦", line: "has been packed and is ready" },
+  { id: "shipped",   label: "Out for delivery",  emoji: "🚚", line: "is out for delivery" },
+  { id: "delivered", label: "Delivered",         emoji: "🎉", line: "has been delivered — thank you" },
+] as const;
+function WaOrderStatus() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [orderRef, setOrderRef] = useState("");
+  const [stage, setStage] = useState<(typeof ORDER_STAGES)[number]["id"]>("confirmed");
+  const [eta, setEta] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const s = ORDER_STAGES.find(x => x.id === stage)!;
+  const message = `${s.emoji} Hi ${customer.trim() || "there"}, your order ${orderRef.trim() ? `*${orderRef.trim()}* ` : ""}${s.line}.${eta.trim() ? `\nExpected: ${eta.trim()}.` : ""}\n\nThank you for shopping with ${store.firm?.name ?? "us"}!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PackageCheck size={15} className="text-green-400" />WhatsApp Order-Status Update</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Keep buyers in the loop. Pick a stage, add an ETA, and send a clean status update on WhatsApp in one tap.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma ji" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Order ref</label>
+            <input value={orderRef} onChange={e => setOrderRef(e.target.value)} placeholder="ORD-204" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Stage</label>
+            <select value={stage} onChange={e => setStage(e.target.value as typeof stage)} className={WA_INP}>
+              {ORDER_STAGES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">ETA (optional)</label>
+            <input value={eta} onChange={e => setEta(e.target.value)} placeholder="Today 6 PM" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {ORDER_STAGES.map(o => (
+          <button key={o.id} onClick={() => setStage(o.id)}
+            className={`px-3 py-1.5 text-xs rounded font-medium transition-colors border ${stage === o.id ? "border-green-700 bg-green-950/30 text-green-400" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {o.emoji} {o.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Send update on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #184 WhatsApp Payment-Confirmation Sender ───────────────────────────────
+// Sends a branded "payment received" thank-you receipt; optionally clears the
+// invoice against a known open invoice for the auto-filled amount + number.
+function WaPaymentConfirm() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const invoices = store.invoices ?? [];
+  const open = invoices.filter(i => i.status !== "paid");
+  const [selected, setSelected] = useState("");
+  const [amount, setAmount] = useState("");
+  const [mode, setMode] = useState("UPI");
+  const [ref, setRef] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const inv = open.find(i => i.id === selected);
+  const amt = inv ? inv.amount : parseFloat(amount) || 0;
+  const customer = inv?.customer ?? "there";
+  const today = new Date().toISOString().slice(0, 10);
+
+  const message = `✅ *Payment received* — thank you, ${customer}!\n\n*Amount:* ${fc(amt)}\n*Mode:* ${mode}\n*Date:* ${today}\n${ref.trim() ? `*Ref:* ${ref.trim()}\n` : ""}${inv?.invoiceNumber ? `*Against invoice:* #${inv.invoiceNumber}\n` : ""}\nThis is your receipt from ${store.firm?.name ?? "us"}. We appreciate your business!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BadgeCheck size={15} className="text-green-400" />WhatsApp Payment-Confirmation</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">When a customer pays, send an instant branded receipt + thank-you on WhatsApp. Link it to an open invoice to auto-fill the amount.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Against invoice (optional)</label>
+            <select value={selected} onChange={e => { setSelected(e.target.value); setAmount(""); }} className={WA_INP}>
+              <option value="">Manual amount…</option>
+              {open.map(i => <option key={i.id} value={i.id}>{(i.invoiceNumber ? `#${i.invoiceNumber} · ` : "")}{i.customer} · {fc(i.amount)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={inv ? String(inv.amount) : amount} disabled={!!inv} onChange={e => setAmount(e.target.value)} placeholder="50000" className={`${WA_INP} disabled:opacity-60`} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Mode</label>
+            <select value={mode} onChange={e => setMode(e.target.value)} className={WA_INP}>
+              {["UPI", "Bank transfer", "Cash", "Cheque", "Card"].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reference / UTR (optional)</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="UTR 4567..." className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Receipt preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Send receipt on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #185 WhatsApp Festive Greeting + Offer Composer ─────────────────────────
+const FESTIVALS = [
+  { id: "diwali",     name: "Diwali",            greet: "Wishing you a bright and prosperous Diwali" },
+  { id: "holi",       name: "Holi",              greet: "A colourful and joyous Holi to you and family" },
+  { id: "eid",        name: "Eid",               greet: "Eid Mubarak to you and your loved ones" },
+  { id: "newyear",    name: "New Year",          greet: "Here's to a happy and prosperous New Year" },
+  { id: "pongal",     name: "Pongal / Sankranti", greet: "Warm wishes on Pongal & Makar Sankranti" },
+  { id: "ganesh",     name: "Ganesh Chaturthi",  greet: "Ganpati Bappa Morya! Blessings this Ganesh Chaturthi" },
+] as const;
+function WaFestiveOffer() {
+  const { store } = useApp();
+  const [fest, setFest] = useState<(typeof FESTIVALS)[number]["id"]>("diwali");
+  const [offer, setOffer] = useState("Flat 15% off");
+  const [code, setCode] = useState("FEST15");
+  const [validTill, setValidTill] = useState("");
+
+  const f = FESTIVALS.find(x => x.id === fest)!;
+  const message = `🪔 *${f.name} Special* 🪔\n\n${f.greet}! 🎉\n\nAs a thank-you, enjoy *${offer.trim() || "a special offer"}*${code.trim() ? ` with code *${code.trim().toUpperCase()}*` : ""}.${validTill.trim() ? `\nValid till ${validTill.trim()}.` : ""}\n\nWarm wishes,\n${store.firm?.name ?? "Team"}`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={15} className="text-green-400" />WhatsApp Festive Greeting + Offer</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Combine a warm festival greeting with a promo code in one message — then send it to customers (pair with Broadcast for the whole list).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Festival</label>
+            <select value={fest} onChange={e => setFest(e.target.value as typeof fest)} className={WA_INP}>
+              {FESTIVALS.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Offer</label>
+            <input value={offer} onChange={e => setOffer(e.target.value)} placeholder="Flat 15% off" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Promo code</label>
+            <input value={code} onChange={e => setCode(e.target.value)} placeholder="FEST15" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Valid till (optional)</label>
+            <input value={validTill} onChange={e => setValidTill(e.target.value)} placeholder="30 Oct" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <div className="flex flex-wrap gap-2">
+          <WaSendButton text={message} label="Send greeting on WhatsApp" />
+          <button onClick={() => { navigator.clipboard.writeText(message).catch(() => {}); toast.success("Copied"); }}
+            className="inline-flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text)] font-medium px-4 py-2 rounded-lg text-sm transition-colors"><Copy size={14} />Copy</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #186 WhatsApp Catalog / Price-List Sharer ───────────────────────────────
+interface PriceItem { id: string; name: string; price: number; unit: string; }
+function WaPriceList() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const [items, setItems] = useFeatureState<PriceItem[]>("wa-price-list", []);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [unit, setUnit] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const add = () => {
+    const p = parseFloat(price);
+    if (!name.trim() || !p || p <= 0) { toast.error("Enter an item and a positive price"); return; }
+    setItems(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), price: Math.round(p), unit: unit.trim() }]);
+    setName(""); setPrice(""); setUnit("");
+    toast.success("Item added");
+  };
+  const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+
+  const lines = items.map(i => `• ${i.name} — ${fc(i.price)}${i.unit ? ` / ${i.unit}` : ""}`).join("\n");
+  const message = `*Price List — ${store.firm?.name ?? "us"}*\n\n${lines || "No items yet."}\n\n${store.firm?.gstNumber ? `GSTIN: ${store.firm.gstNumber}\n` : ""}Prices subject to change. Reply with what you'd like to order!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Tag size={15} className="text-green-400" />WhatsApp Catalog / Price-List Sharer</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Build a saved price list once and share the whole catalogue on WhatsApp whenever a customer asks "what's your rate?". Items sync across devices.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Basmati rice" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Price (₹)</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="120" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Unit (optional)</label>
+            <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="kg" className={WA_INP} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={add} className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors">Add item</button>
+          </div>
+        </div>
+      </div>
+
+      {items.length > 0 && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[420px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Item", "Price", "Unit", ""].map((h, i) => (
+                    <th key={i} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(i => (
+                  <tr key={i.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{i.name}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{fc(i.price)}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="md:max-w-xs">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Price-list preview</p>
+            <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+            <WaSendButton text={message} phone={phone} label="Share price list on WhatsApp" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #187 WhatsApp Feedback / Review Request Sender ──────────────────────────
+function WaReviewRequest() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [reviewUrl, setReviewUrl] = useState("");
+  const [phone, setPhone] = useState("");
+  const stars = "⭐⭐⭐⭐⭐";
+
+  const message = `Hi ${customer.trim() || "there"}, thank you for choosing ${store.firm?.name ?? "us"}! 🙏\n\nWe'd love your honest feedback — it helps us serve you better.\n${stars}\n${reviewUrl.trim() ? `\nLeave a quick review here: ${reviewUrl.trim()}\n` : "\nReply with a rating from 1 to 5 and a line on how we did.\n"}\nThank you for your time!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Star size={15} className="text-green-400" />WhatsApp Feedback / Review Request</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">After a sale, ask for a rating or a Google review on WhatsApp. Drop in your review link, or collect a quick 1–5 reply.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Mehta ji" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Review link (optional)</label>
+            <input value={reviewUrl} onChange={e => setReviewUrl(e.target.value)} placeholder="https://g.page/r/…" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Request review on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #188 WhatsApp Click-to-Chat Link & QR Generator ─────────────────────────
+// Builds a wa.me link with a pre-filled greeting your customers can tap from a
+// poster, bill, or website. QR is rendered via a public QR image endpoint.
+function WaChatLinkQr() {
+  const { store } = useApp();
+  const [phone, setPhone] = useState("");
+  const [greeting, setGreeting] = useState(`Hi ${store.firm?.name ?? "there"}, I'd like to know more about your products.`);
+
+  const digits = phone.replace(/\D/g, "");
+  const valid = digits.length >= 10;
+  const link = valid ? waLink(greeting, digits) : "";
+  const qrSrc = valid ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(link)}` : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><QrCode size={15} className="text-green-400" />WhatsApp Click-to-Chat Link & QR</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Generate a tap-to-chat link (and printable QR) that opens your WhatsApp with a message already typed — perfect for invoices, posters, and shop signage.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your WhatsApp number (with country code)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-filled greeting</label>
+            <input value={greeting} onChange={e => setGreeting(e.target.value)} className={WA_INP} />
+          </div>
+        </div>
+        {!valid && <p className="text-xs text-[var(--color-muted)]">Enter a 10+ digit number (e.g. 9198XXXXXXXX) to generate the link.</p>}
+      </div>
+
+      {valid && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Your click-to-chat link</p>
+            <p className="text-xs break-all bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 font-mono text-[var(--color-primary)]">{link}</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); }}
+                className="inline-flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text)] font-medium px-4 py-2 rounded-lg text-sm transition-colors"><Copy size={14} />Copy link</button>
+              <a href={link} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 bg-green-700 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"><Send size={14} />Test open</a>
+            </div>
+          </div>
+          <div className={`${WA_CARD} flex flex-col items-center gap-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)] self-start">Printable QR</p>
+            <img src={qrSrc} alt="WhatsApp chat QR code" width={180} height={180} className="rounded-lg bg-white p-2" />
+            <a href={qrSrc} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-green-400 hover:underline"><QrCode size={12} />Open QR full size</a>
+          </div>
         </div>
       )}
     </div>

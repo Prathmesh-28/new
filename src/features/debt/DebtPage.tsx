@@ -9,9 +9,11 @@ import { formatAmount, formatCurrency } from "@/lib/utils";
 import {
   Scale, Landmark, ArrowRight, Zap, Calculator, ShieldAlert, GitCompareArrows, PauseCircle,
   Plus, CheckCircle2, AlertTriangle, TrendingDown,
+  CalendarRange, Target, Percent, DoorClosed, CircleDollarSign, ArrowDownUp, BadgeIndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { addMonths, format, parseISO } from "date-fns";
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type ActiveLoanLike = { id: string; lender: string; outstanding: number; rate: number; monthlyEmi: number };
 
@@ -28,7 +30,10 @@ export default function DebtPage() {
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const loans = store.activeLoans;
 
-  const [tab, setTab] = useState<"overview" | "amortise" | "dscr" | "refinance" | "moratorium">("overview");
+  const [tab, setTab] = useState<
+    | "overview" | "amortise" | "dscr" | "refinance" | "moratorium"
+    | "schedule" | "optimizer" | "wacd" | "foreclosure" | "balloon" | "stepemi" | "subsidy"
+  >("overview");
   const [selectedId, setSelectedId] = useState<string | null>(loans[0]?.id ?? null);
   const [prepay, setPrepay] = useState(100000);
   const [refiRate, setRefiRate] = useState(14);
@@ -74,6 +79,13 @@ export default function DebtPage() {
             ["dscr", "DSCR / Coverage", ShieldAlert],
             ["refinance", "Refinance Compare", GitCompareArrows],
             ["moratorium", "Moratorium Re-cast", PauseCircle],
+            ["schedule", "Repayment Ladder", CalendarRange],
+            ["optimizer", "Prepay Optimizer", Target],
+            ["wacd", "Cost of Debt", Percent],
+            ["foreclosure", "Foreclosure Calc", DoorClosed],
+            ["balloon", "Balloon / Bullet", CircleDollarSign],
+            ["stepemi", "Step-Up / Down EMI", ArrowDownUp],
+            ["subsidy", "Interest Subsidy", BadgeIndianRupee],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -87,6 +99,13 @@ export default function DebtPage() {
       {tab === "dscr" && <DscrCoverageTracker />}
       {tab === "refinance" && <RefinanceComparator />}
       {tab === "moratorium" && <MoratoriumRecaster loans={loans} />}
+      {tab === "schedule" && <RepaymentLadder loans={loans} />}
+      {tab === "optimizer" && <PrepayOptimizer loans={loans} />}
+      {tab === "wacd" && <CostOfDebtTracker loans={loans} />}
+      {tab === "foreclosure" && <ForeclosureCalculator loans={loans} />}
+      {tab === "balloon" && <BalloonPlanner />}
+      {tab === "stepemi" && <StepEmiPlanner loans={loans} />}
+      {tab === "subsidy" && <InterestSubsidyEstimator loans={loans} />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -852,6 +871,895 @@ function MoratoriumRecaster({ loans }: { loans: ActiveLoanLike[] }) {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Models a payment holiday with optional interest capitalisation, tenure extension and rate reset. Restructuring may affect your credit report and is at the lender's discretion. Confirm exact terms in the revised sanction letter.</p>
+    </div>
+  );
+}
+
+// shared empty-state for loan-driven tools
+function NoLoansHint({ what }: { what: string }) {
+  return (
+    <div className={`${CARD} border-dashed p-10 text-center`}>
+      <Landmark size={22} className="mx-auto text-[var(--color-muted)] mb-3" />
+      <p className="text-sm font-medium mb-1">No active loans</p>
+      <p className="text-xs text-[var(--color-muted)]">{what} appears here once you have one or more running loans.</p>
+    </div>
+  );
+}
+
+// ── #90 Debt Schedule / Repayment Ladder ─────────────────────────────────────────
+// Merges every active loan into one forward calendar: combined EMI per month plus
+// the running total outstanding, so you can see exactly when each loan rolls off
+// and how the monthly debt burden steps down over time.
+function RepaymentLadder({ loans }: { loans: ActiveLoanLike[] }) {
+  const [horizon, setHorizon] = useFeatureState<number>("debt-ladder-horizon", 24);
+  const fc = formatCurrency;
+
+  const data = useMemo(() => {
+    if (loans.length === 0) return [];
+    // Per-loan reducing-balance state.
+    const state = loans.map(l => ({
+      lender: l.lender, bal: l.outstanding, emiAmt: l.monthlyEmi, r: l.rate / 100 / 12,
+      term: remainingMonths(l),
+    }));
+    const start = new Date();
+    const rows: { month: string; idx: number; combinedEmi: number; interest: number; principal: number; outstanding: number; active: number }[] = [];
+    for (let m = 1; m <= horizon; m++) {
+      let combinedEmi = 0, interest = 0, principal = 0, outstanding = 0, active = 0;
+      for (const s of state) {
+        if (s.bal > 0.01) {
+          const int = s.bal * s.r;
+          const pay = Math.min(s.emiAmt, s.bal + int);
+          const princ = Math.min(pay - int, s.bal);
+          s.bal -= princ;
+          combinedEmi += pay; interest += int; principal += princ;
+          if (s.bal > 0.01) active += 1;
+        }
+        outstanding += Math.max(0, s.bal);
+      }
+      rows.push({
+        month: format(addMonths(start, m - 1), "MMM yy"),
+        idx: m, combinedEmi, interest, principal, outstanding, active,
+      });
+    }
+    return rows;
+  }, [loans, horizon]);
+
+  const chartData = useMemo(() => data.map(r => ({
+    month: r.month, EMI: Math.round(r.combinedEmi), Outstanding: Math.round(r.outstanding),
+  })), [data]);
+
+  // Detect the months where a loan finishes (active count drops).
+  const rolloffs = useMemo(() => {
+    const out: { month: string; freed: number }[] = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].active < data[i - 1].active || (data[i].combinedEmi < data[i - 1].combinedEmi - 1)) {
+        out.push({ month: data[i].month, freed: Math.round(data[i - 1].combinedEmi - data[i].combinedEmi) });
+      }
+    }
+    return out.filter(o => o.freed > 0);
+  }, [data]);
+
+  if (loans.length === 0) return <NoLoansHint what="A combined repayment timeline for all your loans" />;
+
+  const peakEmi = data.length ? Math.max(...data.map(r => r.combinedEmi)) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Debt Schedule / Repayment Ladder</h3>
+          <label className="text-xs text-[var(--color-muted)] flex items-center gap-2">Horizon
+            <select value={horizon} onChange={e => setHorizon(Number(e.target.value))} className={`${DINP} w-auto py-1`}>
+              {[12, 24, 36, 48, 60].map(h => <option key={h} value={h}>{h} mo</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Current combined EMI", value: fc(Math.round(data[0]?.combinedEmi ?? 0)) },
+            { label: "Peak monthly burden", value: fc(Math.round(peakEmi)) },
+            { label: "Loans rolling off in window", value: `${rolloffs.length}` },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className="text-base font-bold tabular-nums">{k.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-1">Combined EMI &amp; outstanding over time</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Each step down is a loan finishing — that freed cash is your future headroom.</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(chartData.length / 12))} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={60} />
+            <Tooltip formatter={(v: number, n: string) => [formatCurrency(v), n]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+            <Area type="stepAfter" dataKey="EMI" stroke="#f59e0b" fill="#f59e0b30" />
+            <Area type="monotone" dataKey="Outstanding" stroke="#3b82f6" fill="#3b82f620" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {rolloffs.length > 0 && (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+            <CheckCircle2 size={14} /> {rolloffs[0].month}: a loan closes and frees ~{fc(rolloffs[0].freed)}/mo of cash flow{rolloffs.length > 1 ? `, with ${rolloffs.length - 1} more step-down(s) ahead.` : "."}
+          </p>
+        </div>
+      )}
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Month-by-month ladder</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Month", "Combined EMI", "Interest", "Principal", "Outstanding", "Active loans"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.map(r => (
+                <tr key={r.idx} className="hover:bg-white/2">
+                  <td className="px-4 py-2 tabular-nums">{r.month}</td>
+                  <td className="px-4 py-2 tabular-nums font-medium">{fc(Math.round(r.combinedEmi))}</td>
+                  <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
+                  <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
+                  <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td className="px-4 py-2 tabular-nums text-[var(--color-muted)]">{r.active}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Built from each loan's current outstanding, rate and EMI under the reducing-balance method. Assumes EMIs continue unchanged and ignores any floating-rate resets.</p>
+    </div>
+  );
+}
+
+// ── #91 Interest-Cost Optimizer (avalanche vs snowball prepay order) ──────────────
+// Given a monthly surplus you can throw at debt, rank which loan to attack first.
+// Avalanche (highest rate first) minimises interest; snowball (smallest balance
+// first) clears loans fastest for psychological wins. We simulate both, applying
+// the surplus on top of all minimum EMIs, and report total interest + payoff time.
+function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
+  const [budgetStr, setBudgetStr] = useFeatureState<string>("debt-optimizer-budget", "25000");
+  const [strategy, setStrategy] = useState<"avalanche" | "snowball">("avalanche");
+  const fc = formatCurrency;
+  const surplus = Math.max(0, parseFloat(budgetStr) || 0);
+
+  const simulate = (order: "avalanche" | "snowball") => {
+    const ls = loans.map(l => ({ id: l.id, lender: l.lender, bal: l.outstanding, emiAmt: l.monthlyEmi, r: l.rate / 100 / 12, rate: l.rate }));
+    let totalInt = 0;
+    let months = 0;
+    const closeMonth: Record<string, number> = {};
+    for (let m = 1; m <= 600 && ls.some(l => l.bal > 0.01); m++) {
+      months = m;
+      let extra = surplus;
+      // Pay minimum EMIs first.
+      for (const l of ls) {
+        if (l.bal <= 0.01) continue;
+        const int = l.bal * l.r;
+        totalInt += int;
+        const princ = Math.min(l.emiAmt - int, l.bal);
+        l.bal -= Math.max(0, princ);
+        if (l.bal <= 0.01 && !closeMonth[l.id]) closeMonth[l.id] = m;
+      }
+      // Direct the surplus to the target loan(s).
+      const live = ls.filter(l => l.bal > 0.01);
+      const ranked = order === "avalanche"
+        ? [...live].sort((a, b) => b.rate - a.rate)
+        : [...live].sort((a, b) => a.bal - b.bal);
+      for (const t of ranked) {
+        if (extra <= 0) break;
+        const pay = Math.min(extra, t.bal);
+        t.bal -= pay;
+        extra -= pay;
+        if (t.bal <= 0.01 && !closeMonth[t.id]) closeMonth[t.id] = m;
+      }
+    }
+    return { totalInt, months, closeMonth };
+  };
+
+  const result = useMemo(() => {
+    if (loans.length === 0) return null;
+    const avalanche = simulate("avalanche");
+    const snowball = simulate("snowball");
+    // No-extra baseline for context.
+    const baselineInt = loans.reduce((s, l) => s + totalInterest(l.outstanding, l.rate, remainingMonths(l)), 0);
+    return { avalanche, snowball, baselineInt };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loans, surplus]);
+
+  const chosen = result ? (strategy === "avalanche" ? result.avalanche : result.snowball) : null;
+
+  // Recommended attack order for the chosen strategy.
+  const order = useMemo(() => {
+    const ls = loans.map(l => ({ id: l.id, lender: l.lender, bal: l.outstanding, rate: l.rate, closeAt: chosen?.closeMonth[l.id] }));
+    return strategy === "avalanche"
+      ? ls.sort((a, b) => b.rate - a.rate)
+      : ls.sort((a, b) => a.bal - b.bal);
+  }, [loans, strategy, chosen]);
+
+  if (loans.length === 0) return <NoLoansHint what="A prepayment priority plan across all loans" />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Interest-Cost Optimizer — which loan to prepay first</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Spare cash for debt each month (over &amp; above EMIs) (₹)</label>
+            <input type="number" value={budgetStr} onChange={e => setBudgetStr(e.target.value)} placeholder="25000" className={DINP} />
+          </div>
+          <div className="flex items-center gap-3 text-xs pb-1">
+            <span className="text-[var(--color-muted)]">Strategy:</span>
+            {([["avalanche", "Avalanche (save most interest)"], ["snowball", "Snowball (clear loans fastest)"]] as const).map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="strategy" checked={strategy === id} onChange={() => setStrategy(id)} className="accent-[var(--color-primary)]" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {result && chosen && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Interest with this plan", value: formatAmount(Math.round(chosen.totalInt)), color: "text-[var(--color-text)]" },
+              { label: "Interest saved vs EMI-only", value: formatAmount(Math.max(0, Math.round(result.baselineInt - chosen.totalInt))), color: "text-green-400" },
+              { label: "Debt-free in", value: `${chosen.months} mo`, color: "text-[var(--color-text)]" },
+              { label: "Avalanche vs Snowball", value: result.avalanche.totalInt <= result.snowball.totalInt ? `Avalanche saves ${formatAmount(Math.round(result.snowball.totalInt - result.avalanche.totalInt))}` : `Snowball saves ${formatAmount(Math.round(result.avalanche.totalInt - result.snowball.totalInt))}`, color: "text-yellow-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]">
+              <p className="text-sm font-semibold">Attack order — {strategy === "avalanche" ? "highest rate first" : "smallest balance first"}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["#", "Lender", "Balance", "Rate", "Cleared by"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {order.map((l, i) => (
+                    <tr key={l.id} className={`hover:bg-white/2 ${i === 0 ? "bg-[var(--color-primary)]/5" : ""}`}>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{i + 1}{i === 0 && <span className="ml-1.5 text-[9px] text-[var(--color-primary)] font-semibold">TARGET</span>}</td>
+                      <td className="px-4 py-2.5 font-medium">{l.lender}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(l.bal))}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{l.rate}%</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{l.closeAt ? `month ${l.closeAt}` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <TrendingDown size={14} /> Throw your {fc(surplus)}/mo at <strong>{order[0]?.lender}</strong> first. This {strategy} plan clears all debt in {chosen.months} months and saves {formatAmount(Math.max(0, Math.round(result.baselineInt - chosen.totalInt)))} in interest versus paying only EMIs.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Surplus is applied on top of every minimum EMI, then rolled to the next target as each loan closes (debt-avalanche / snowball method). Check each lender's prepayment penalty before redirecting cash.</p>
+    </div>
+  );
+}
+
+// ── #92 Weighted-Average Cost of Debt (WACD) ─────────────────────────────────────
+// The single blended rate you actually pay, weighted by each loan's outstanding,
+// with each loan's contribution to the blend and its share of the monthly interest
+// bill — so you can see which loan is dragging the average up.
+function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
+  const fc = formatCurrency;
+  const data = useMemo(() => {
+    const total = loans.reduce((s, l) => s + l.outstanding, 0);
+    const monthlyInt = loans.reduce((s, l) => s + (l.outstanding * (l.rate / 100)) / 12, 0);
+    const wacd = total > 0 ? loans.reduce((s, l) => s + l.rate * l.outstanding, 0) / total : 0;
+    const rows = loans.map(l => {
+      const weight = total > 0 ? l.outstanding / total : 0;
+      const monthlyLoanInt = (l.outstanding * (l.rate / 100)) / 12;
+      return {
+        id: l.id, lender: l.lender, outstanding: l.outstanding, rate: l.rate,
+        weightPct: weight * 100,
+        contribution: l.rate * weight, // bps-style contribution to WACD
+        monthlyInt: monthlyLoanInt,
+        intShare: monthlyInt > 0 ? (monthlyLoanInt / monthlyInt) * 100 : 0,
+        aboveAvg: l.rate > wacd,
+      };
+    }).sort((a, b) => b.rate - a.rate);
+    return { total, monthlyInt, wacd, rows };
+  }, [loans]);
+
+  const chartData = useMemo(() => data.rows.map(r => ({ lender: r.lender, Rate: Math.round(r.rate * 10) / 10 })), [data]);
+
+  if (loans.length === 0) return <NoLoansHint what="Your blended cost of debt" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Weighted Avg Cost of Debt", value: `${data.wacd.toFixed(2)}%`, color: "text-yellow-400", sub: "Blended across all loans" },
+          { label: "Total Debt", value: formatAmount(Math.round(data.total)), color: "text-[var(--color-text)]", sub: `${loans.length} loan(s)` },
+          { label: "Monthly Interest Bill", value: fc(Math.round(data.monthlyInt)), color: "text-red-400", sub: `${fc(Math.round(data.monthlyInt * 12))}/yr` },
+          { label: "Costliest Loan", value: data.rows[0] ? `${data.rows[0].rate}%` : "—", color: "text-red-400", sub: data.rows[0]?.lender ?? "" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={13} className="text-[var(--color-primary)]" /> Rate by loan vs blended {data.wacd.toFixed(2)}%</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Bars above the blend are pulling your cost of debt up — prime refinance / prepay candidates.</p>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData}>
+            <XAxis dataKey="lender" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={36} />
+            <Tooltip formatter={(v: number) => [`${v}%`, "Rate"]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+            <Bar dataKey="Rate" radius={[4, 4, 0, 0]}>
+              {chartData.map((d, i) => <Cell key={i} fill={d.Rate > data.wacd ? "#ef4444" : "#22c55e"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-sm font-semibold">Cost contribution by loan</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Lender", "Outstanding", "Rate", "Weight", "Adds to WACD", "Monthly Interest", "% of Interest"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {data.rows.map(r => (
+                <tr key={r.id} className={`hover:bg-white/2 ${r.aboveAvg ? "bg-red-950/10" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.aboveAvg ? "text-red-400" : "text-green-400"}`}>{r.rate}%</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.weightPct.toFixed(1)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.contribution.toFixed(2)}%</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(r.monthlyInt))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.intShare.toFixed(0)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">WACD = Σ(rate × outstanding) ÷ total outstanding. "Adds to WACD" is each loan's weighted contribution; the column sums to the blended rate. Replacing an above-average loan lowers your whole cost of debt.</p>
+    </div>
+  );
+}
+
+// ── #93 Foreclosure / Pre-closure Charges Calculator ─────────────────────────────
+// Decide whether closing a loan early actually pays. Shows interest you'd save by
+// foreclosing now vs the foreclosure penalty + any outstanding charges, and the
+// net benefit. Penalty is computed on outstanding principal at your input %.
+function ForeclosureCalculator({ loans }: { loans: ActiveLoanLike[] }) {
+  const [selId, setSelId] = useState<string | null>(loans[0]?.id ?? null);
+  const [penaltyPct, setPenaltyPct] = useFeatureState<string>("debt-foreclosure-penalty", "4");
+  const [gstOnPenalty, setGstOnPenalty] = useState(true);
+  const [otherCharges, setOtherCharges] = useState("0");
+  const fc = formatCurrency;
+
+  const selected = loans.find(l => l.id === selId) ?? loans[0] ?? null;
+
+  const result = useMemo(() => {
+    if (!selected) return null;
+    const rem = remainingMonths(selected);
+    const interestIfContinued = totalInterest(selected.outstanding, selected.rate, rem);
+    const penalty = selected.outstanding * ((parseFloat(penaltyPct) || 0) / 100);
+    const gst = gstOnPenalty ? penalty * 0.18 : 0;
+    const other = parseFloat(otherCharges) || 0;
+    const totalCost = penalty + gst + other;
+    const net = interestIfContinued - totalCost;
+    // Break-even penalty rate at which foreclosure exactly equals continuing.
+    const breakEvenPct = selected.outstanding > 0 ? (interestIfContinued / selected.outstanding) * 100 : 0;
+    return { rem, interestIfContinued, penalty, gst, other, totalCost, net, breakEvenPct };
+  }, [selected, penaltyPct, gstOnPenalty, otherCharges]);
+
+  if (loans.length === 0) return <NoLoansHint what="A foreclosure cost-benefit calculation" />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><DoorClosed size={14} className="text-[var(--color-primary)]" /> Foreclosure / Pre-closure Charges Calculator</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan to foreclose</label>
+            <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={DINP}>
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Foreclosure penalty (% of o/s)</label>
+            <input type="number" value={penaltyPct} onChange={e => setPenaltyPct(e.target.value)} placeholder="4" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Other charges (₹)</label>
+            <input type="number" value={otherCharges} onChange={e => setOtherCharges(e.target.value)} placeholder="0" className={DINP} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer text-xs">
+          <input type="checkbox" checked={gstOnPenalty} onChange={e => setGstOnPenalty(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Add 18% GST on the foreclosure penalty (standard on the charge component)
+        </label>
+      </div>
+
+      {result && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Interest saved (close now)", value: formatAmount(Math.round(result.interestIfContinued)), color: "text-green-400", sub: `${result.rem} months avoided` },
+              { label: "Foreclosure penalty", value: fc(Math.round(result.penalty)), color: "text-red-400", sub: `${penaltyPct}% of ${formatAmount(Math.round(selected!.outstanding))}` },
+              { label: "Total cost to close", value: fc(Math.round(result.totalCost)), color: "text-red-400", sub: result.gst > 0 ? `incl. ${fc(Math.round(result.gst))} GST` : "no GST" },
+              { label: "Net benefit", value: formatAmount(Math.round(result.net)), color: result.net > 0 ? "text-green-400" : "text-red-400", sub: result.net > 0 ? "Foreclosure pays off" : "Cheaper to continue" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`rounded-lg p-4 border ${result.net > 0 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+            <p className={`text-sm font-bold ${result.net > 0 ? "text-green-400" : "text-orange-400"} flex items-center gap-2`}>
+              {result.net > 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {result.net > 0
+                ? `Foreclosing ${selected!.lender} now saves a net ${formatAmount(Math.round(result.net))} after ${fc(Math.round(result.totalCost))} in charges.`
+                : `The ${fc(Math.round(result.totalCost))} charge exceeds the ${formatAmount(Math.round(result.interestIfContinued))} interest left — continuing is cheaper unless you redeploy the cash at a higher return.`}
+              {" "}Break-even penalty is {result.breakEvenPct.toFixed(2)}% of outstanding.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">RBI bars foreclosure charges on floating-rate term loans to individuals; fixed-rate, business and many MSME loans can still levy 2–5%. GST applies to the charge. Confirm the exact figure in your sanction terms.</p>
+    </div>
+  );
+}
+
+// ── #94 Balloon / Bullet Repayment Planner ───────────────────────────────────────
+// Plan a structure where you pay reduced (or interest-only) instalments during the
+// term and settle a large balloon/bullet at maturity — common for equipment and
+// bridge loans. Compares against a fully-amortising loan of the same size.
+function BalloonPlanner() {
+  const [principal, setPrincipal] = useState("");
+  const [ratePct, setRatePct] = useState("");
+  const [months, setMonths] = useState("");
+  const [mode, setMode] = useState<"interest_only" | "balloon_pct">("interest_only");
+  const [balloonPct, setBalloonPct] = useState("40");
+  const fc = formatCurrency;
+
+  const P = parseFloat(principal) || 0;
+  const annual = parseFloat(ratePct) || 0;
+  const N = Math.max(0, Math.round(parseFloat(months) || 0));
+
+  const result = useMemo(() => {
+    if (P <= 0 || N <= 0 || annual < 0) return null;
+    const r = annual / 100 / 12;
+    // Balloon amount: full principal (interest-only) or a chosen % of principal.
+    const balloon = mode === "interest_only" ? P : P * (Math.min(100, Math.max(0, parseFloat(balloonPct) || 0)) / 100);
+    const amortisedPortion = P - balloon; // principal repaid over the term via EMI
+    // Periodic payment = interest on full balance each month + EMI on the amortising slice.
+    // We approximate by amortising `amortisedPortion` while paying interest on the residual balloon.
+    let bal = P;
+    let interestTotal = 0;
+    const rows: { month: number; opening: number; payment: number; interest: number; principal: number; closing: number }[] = [];
+    const emiOnSlice = amortisedPortion > 0 ? emi(amortisedPortion, annual, N) : 0;
+    for (let m = 1; m <= N; m++) {
+      const int = bal * r;
+      // principal reduction this month comes only from the amortising slice schedule
+      const princ = Math.min(Math.max(0, emiOnSlice - amortisedPortion * r), bal - balloon);
+      const pay = int + princ;
+      interestTotal += int;
+      rows.push({ month: m, opening: bal, payment: pay, interest: int, principal: princ, closing: bal - princ });
+      bal -= princ;
+    }
+    // Final bullet at maturity settles the residual balance.
+    const bulletDue = bal;
+    const periodicPay = rows[0]?.payment ?? 0;
+    // Compare to fully-amortising loan.
+    const fullEmi = emi(P, annual, N);
+    const fullInterest = totalInterest(P, annual, N);
+    const balloonTotalInterest = interestTotal; // interest paid over term (bullet is principal)
+    return { balloon, bulletDue, periodicPay, fullEmi, fullInterest, balloonTotalInterest, rows };
+  }, [P, annual, N, mode, balloonPct]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CircleDollarSign size={14} className="text-[var(--color-primary)]" /> Balloon / Bullet Repayment Planner</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan amount (₹)</label>
+            <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="3000000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (% p.a.)</label>
+            <input type="number" value={ratePct} onChange={e => setRatePct(e.target.value)} placeholder="12" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+            <input type="number" value={months} onChange={e => setMonths(e.target.value)} placeholder="36" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Balloon as % of principal</label>
+            <input type="number" value={balloonPct} onChange={e => setBalloonPct(e.target.value)} disabled={mode === "interest_only"} placeholder="40" className={`${DINP} ${mode === "interest_only" ? "opacity-50" : ""}`} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-[var(--color-muted)]">Structure:</span>
+          {([["interest_only", "Interest-only (100% bullet at end)"], ["balloon_pct", "Partial amortisation + balloon"]] as const).map(([id, label]) => (
+            <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="balloonMode" checked={mode === id} onChange={() => setMode(id)} className="accent-[var(--color-primary)]" />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter loan amount, rate and tenure to design the balloon structure.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Monthly payment", value: fc(Math.round(result.periodicPay)), color: "text-[var(--color-text)]", sub: `vs ${fc(Math.round(result.fullEmi))} fully-amortising` },
+              { label: "Balloon due at maturity", value: formatAmount(Math.round(result.bulletDue)), color: "text-orange-400", sub: `month ${N}` },
+              { label: "Interest over term", value: formatAmount(Math.round(result.balloonTotalInterest)), color: "text-red-400", sub: "excludes the bullet (principal)" },
+              { label: "Extra interest vs amortising", value: formatAmount(Math.max(0, Math.round(result.balloonTotalInterest - result.fullInterest))), color: "text-red-400", sub: "price of lower instalments" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
+            <p className="text-sm font-bold text-orange-400 flex items-center gap-2">
+              <AlertTriangle size={14} /> You pay ~{fc(Math.round(result.periodicPay))}/mo but must arrange {formatAmount(Math.round(result.bulletDue))} to clear the balloon at month {N}. Line up a refinance, asset sale or cash reserve before maturity to avoid a default.
+            </p>
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]">
+              <p className="text-sm font-semibold">Schedule — first 12 months</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Month", "Opening", "Payment", "Interest", "Principal", "Closing"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {result.rows.slice(0, 12).map(r => (
+                    <tr key={r.month} className="hover:bg-white/2">
+                      <td className="px-4 py-2 tabular-nums">{r.month}</td>
+                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.opening))}</td>
+                      <td className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
+                      <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
+                      <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
+                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Interest accrues on the full residual balance each month; a chosen slice of principal amortises over the term and the rest falls due as a single bullet at maturity. Refinancing risk sits entirely on the balloon date.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #95 Step-Up / Step-Down EMI Planner ──────────────────────────────────────────
+// Graduated EMIs that rise (step-up — match a growing business) or fall (step-down)
+// at a chosen % each year. Solves the starting EMI so the loan still clears in the
+// tenure, then schedules the annual steps and totals the interest vs a flat EMI.
+function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
+  const [selId, setSelId] = useState<string | null>(loans[0]?.id ?? null);
+  const [manualP, setManualP] = useState("");
+  const [manualR, setManualR] = useState("");
+  const [manualN, setManualN] = useState("");
+  const [direction, setDirection] = useState<"up" | "down">("up");
+  const [stepPct, setStepPct] = useState("10");
+  const fc = formatCurrency;
+
+  const selected = loans.find(l => l.id === selId) ?? loans[0] ?? null;
+  const P = selected ? selected.outstanding : parseFloat(manualP) || 0;
+  const rate = selected ? selected.rate : parseFloat(manualR) || 0;
+  const N = selected ? remainingMonths(selected) : Math.max(0, Math.round(parseFloat(manualN) || 0));
+
+  const result = useMemo(() => {
+    if (P <= 0 || N <= 0) return null;
+    const r = rate / 100 / 12;
+    const step = (parseFloat(stepPct) || 0) / 100;
+    const sign = direction === "up" ? 1 : -1;
+    const years = Math.ceil(N / 12);
+    // factor for the EMI in year y relative to the base EMI E0.
+    const factor = (y: number) => Math.pow(1 + sign * step, y);
+    // Solve base EMI E0 so PV of all stepped payments == principal.
+    // PV = Σ over months of (E0 * factor(year) / (1+r)^m). Linear in E0 → solve directly.
+    let pvUnit = 0; // PV of payments if E0 = 1
+    for (let m = 1; m <= N; m++) {
+      const y = Math.floor((m - 1) / 12);
+      pvUnit += factor(y) / Math.pow(1 + r, m);
+    }
+    const baseEmi = pvUnit > 0 ? P / pvUnit : 0;
+    // Run the schedule.
+    let bal = P;
+    let interestTotal = 0;
+    const yearRows: { year: number; emi: number }[] = [];
+    for (let y = 0; y < years; y++) yearRows.push({ year: y + 1, emi: baseEmi * factor(y) });
+    for (let m = 1; m <= N && bal > 0.01; m++) {
+      const y = Math.floor((m - 1) / 12);
+      const pay = baseEmi * factor(y);
+      const int = bal * r;
+      const princ = Math.min(pay - int, bal);
+      interestTotal += int;
+      bal -= princ;
+    }
+    const flatEmi = emi(P, rate, N);
+    const flatInterest = totalInterest(P, rate, N);
+    return { baseEmi, finalEmi: baseEmi * factor(years - 1), interestTotal, flatEmi, flatInterest, yearRows, residual: bal };
+  }, [P, rate, N, direction, stepPct]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowDownUp size={14} className="text-[var(--color-primary)]" /> Step-Up / Step-Down EMI Planner</h3>
+        {loans.length > 0 ? (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan</label>
+            <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={`${DINP} max-w-sm`}>
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+            </select>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Principal (₹)</label>
+              <input type="number" value={manualP} onChange={e => setManualP(e.target.value)} placeholder="2000000" className={DINP} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (% p.a.)</label>
+              <input type="number" value={manualR} onChange={e => setManualR(e.target.value)} placeholder="13" className={DINP} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+              <input type="number" value={manualN} onChange={e => setManualN(e.target.value)} placeholder="60" className={DINP} />
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-4 text-xs flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-[var(--color-muted)]">Direction:</span>
+            {([["up", "Step-up (EMI rises yearly)"], ["down", "Step-down (EMI falls yearly)"]] as const).map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="stepDir" checked={direction === id} onChange={() => setDirection(id)} className="accent-[var(--color-primary)]" />
+                {label}
+              </label>
+            ))}
+          </div>
+          <label className="flex items-center gap-2">
+            <span className="text-[var(--color-muted)]">Annual step</span>
+            <input type="number" value={stepPct} onChange={e => setStepPct(e.target.value)} className={`${DINP} w-20 py-1`} />
+            <span className="text-[var(--color-muted)]">%</span>
+          </label>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the loan details to design the graduated EMI plan.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Starting EMI", value: fc(Math.round(result.baseEmi)), color: "text-[var(--color-text)]", sub: `vs ${fc(Math.round(result.flatEmi))} flat` },
+              { label: "Final-year EMI", value: fc(Math.round(result.finalEmi)), color: direction === "up" ? "text-red-400" : "text-green-400" },
+              { label: "Total interest", value: formatAmount(Math.round(result.interestTotal)), color: "text-red-400", sub: `flat: ${formatAmount(Math.round(result.flatInterest))}` },
+              { label: "vs flat EMI interest", value: `${result.interestTotal > result.flatInterest ? "+" : "−"}${formatAmount(Math.abs(Math.round(result.interestTotal - result.flatInterest)))}`, color: result.interestTotal > result.flatInterest ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                {k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]">
+              <p className="text-sm font-semibold">EMI by year ({direction === "up" ? "rising" : "falling"} {parseFloat(stepPct) || 0}% p.a.)</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Year", "Monthly EMI", "vs flat EMI"].map(h =>
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {result.yearRows.map(y => (
+                    <tr key={y.year} className="hover:bg-white/2">
+                      <td className="px-5 py-2.5 tabular-nums">Year {y.year}</td>
+                      <td className="px-5 py-2.5 tabular-nums font-medium">{fc(Math.round(y.emi))}</td>
+                      <td className={`px-5 py-2.5 tabular-nums ${y.emi > result.flatEmi ? "text-red-400" : "text-green-400"}`}>{y.emi >= result.flatEmi ? "+" : "−"}{fc(Math.abs(Math.round(y.emi - result.flatEmi)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className={`rounded-lg p-4 border ${direction === "up" ? "border-blue-800/40 bg-blue-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+            <p className={`text-sm font-bold ${direction === "up" ? "text-blue-400" : "text-green-400"} flex items-center gap-2`}>
+              <CheckCircle2 size={14} /> {direction === "up"
+                ? `Start at a lighter ${fc(Math.round(result.baseEmi))} and step up ${parseFloat(stepPct) || 0}% a year as revenue grows — useful for early-stage cash crunch, though total interest is ${formatAmount(Math.round(result.interestTotal))}.`
+                : `Front-load with ${fc(Math.round(result.baseEmi))} now and ease off ${parseFloat(stepPct) || 0}% a year — pays down principal faster and trims interest to ${formatAmount(Math.round(result.interestTotal))}.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">The starting EMI is solved so the present value of all stepped payments equals the principal, keeping the original tenure. Lenders offer step-up/step-down (graduated/flexi) EMIs selectively — confirm availability.</p>
+    </div>
+  );
+}
+
+// ── #96 Interest-Subsidy Estimator (CGTMSE / MUDRA / CLCSS / subvention) ──────────
+// Estimate the benefit of Indian MSME credit schemes: an interest-subvention that
+// rebates a % of interest, and/or a capital subsidy (e.g. CLCSS) on eligible plant
+// & machinery. Shows effective post-subsidy rate and total cash benefit.
+type SchemeKey = "subvention" | "clcss" | "mudra";
+function InterestSubsidyEstimator({ loans }: { loans: ActiveLoanLike[] }) {
+  const [selId, setSelId] = useState<string | null>(loans[0]?.id ?? null);
+  const [manualP, setManualP] = useState("");
+  const [manualR, setManualR] = useState("");
+  const [manualN, setManualN] = useState("");
+  const [scheme, setScheme] = useState<SchemeKey>("subvention");
+  const [subventionPct, setSubventionPct] = useFeatureState<string>("debt-subvention-pct", "2");
+  const [clcssPct, setClcssPct] = useState("15");
+  const [eligibleCapex, setEligibleCapex] = useState("");
+  const fc = formatCurrency;
+
+  const selected = loans.find(l => l.id === selId) ?? loans[0] ?? null;
+  const P = selected ? selected.outstanding : parseFloat(manualP) || 0;
+  const rate = selected ? selected.rate : parseFloat(manualR) || 0;
+  const N = selected ? remainingMonths(selected) : Math.max(0, Math.round(parseFloat(manualN) || 0));
+
+  const result = useMemo(() => {
+    if (P <= 0 || N <= 0) return null;
+    const grossInterest = totalInterest(P, rate, N);
+    const sub = (parseFloat(subventionPct) || 0);
+    // Interest subvention: rebate of `sub`% p.a. on outstanding ≈ scale gross interest by sub/rate.
+    const subventionBenefit = scheme !== "clcss" && rate > 0 ? grossInterest * Math.min(1, sub / rate) : 0;
+    const effRate = Math.max(0, rate - (scheme !== "clcss" ? sub : 0));
+    // CLCSS capital subsidy: % of eligible plant & machinery (capped at ₹1Cr eligible → ₹15L subsidy).
+    const capex = parseFloat(eligibleCapex) || 0;
+    const cappedCapex = Math.min(capex, 10000000);
+    const capitalSubsidy = scheme === "clcss" ? cappedCapex * ((parseFloat(clcssPct) || 0) / 100) : 0;
+    const totalBenefit = subventionBenefit + capitalSubsidy;
+    return { grossInterest, subventionBenefit, effRate, capitalSubsidy, totalBenefit };
+  }, [P, rate, N, scheme, subventionPct, clcssPct, eligibleCapex]);
+
+  const schemeMeta: Record<SchemeKey, { name: string; note: string }> = {
+    subvention: { name: "Interest Subvention (e.g. 2% MSME / Atmanirbhar)", note: "Government rebates a fixed % p.a. of interest on the eligible loan." },
+    clcss: { name: "CLCSS Capital Subsidy", note: "15% subsidy on eligible plant & machinery, capped at ₹15L (₹1Cr eligible)." },
+    mudra: { name: "MUDRA / Stand-Up India linked", note: "Concessional rate / subvention under priority-sector MSME schemes." },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BadgeIndianRupee size={14} className="text-[var(--color-primary)]" /> Interest-Subsidy / Subvention Estimator</h3>
+        {loans.length > 0 ? (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan</label>
+            <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={`${DINP} max-w-sm`}>
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+            </select>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Loan amount (₹)</label>
+              <input type="number" value={manualP} onChange={e => setManualP(e.target.value)} placeholder="1500000" className={DINP} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (% p.a.)</label>
+              <input type="number" value={manualR} onChange={e => setManualR(e.target.value)} placeholder="11" className={DINP} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+              <input type="number" value={manualN} onChange={e => setManualN(e.target.value)} placeholder="48" className={DINP} />
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Scheme</label>
+            <select value={scheme} onChange={e => setScheme(e.target.value as SchemeKey)} className={DINP}>
+              <option value="subvention">Interest Subvention (2%)</option>
+              <option value="clcss">CLCSS Capital Subsidy</option>
+              <option value="mudra">MUDRA / Stand-Up India</option>
+            </select>
+          </div>
+          {scheme === "clcss" ? (
+            <>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Eligible plant &amp; machinery (₹)</label>
+                <input type="number" value={eligibleCapex} onChange={e => setEligibleCapex(e.target.value)} placeholder="2000000" className={DINP} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Subsidy %</label>
+                <input type="number" value={clcssPct} onChange={e => setClcssPct(e.target.value)} placeholder="15" className={DINP} />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Subvention % p.a.</label>
+              <input type="number" value={subventionPct} onChange={e => setSubventionPct(e.target.value)} placeholder="2" className={DINP} />
+            </div>
+          )}
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">{schemeMeta[scheme].note}</p>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the loan details to estimate your scheme benefit.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Gross interest (no scheme)", value: formatAmount(Math.round(result.grossInterest)), color: "text-red-400" },
+              { label: scheme === "clcss" ? "Capital subsidy" : "Interest subvention benefit", value: formatAmount(Math.round(scheme === "clcss" ? result.capitalSubsidy : result.subventionBenefit)), color: "text-green-400" },
+              { label: "Effective rate after subvention", value: `${result.effRate.toFixed(2)}%`, color: "text-green-400", sub: scheme === "clcss" ? "rate unchanged" : `was ${rate}%` },
+              { label: "Total scheme benefit", value: formatAmount(Math.round(result.totalBenefit)), color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                {k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <CheckCircle2 size={14} /> {schemeMeta[scheme].name} could be worth ~{formatAmount(Math.round(result.totalBenefit))}{scheme !== "clcss" ? `, cutting your effective cost from ${rate}% to ${result.effRate.toFixed(2)}%.` : " as an upfront capital subsidy."} Eligibility depends on Udyam registration, sector and lender tie-up.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative only. Actual subvention rates, caps and eligibility (Udyam registration, manufacturing/service category, scheme validity) vary and change with notifications. Confirm with your lender / the scheme portal before relying on these figures.</p>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   Bell, Search, Filter, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight,
   Eye, ChevronRight, TrendingDown,
   Mail, FolderLock, FileText, Layers, Copy, Trash2,
+  Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -547,7 +548,7 @@ export default function InvestorPage() {
   const [commitAmount,  setCommitAmount]  = useState("");
   const [agreed,        setAgreed]        = useState(false);
   const [committing,    setCommitting]    = useState(false);
-  const [tab,           setTab]           = useState<"portfolio" | "dealflow" | "syndicates" | "update-composer" | "data-room" | "tearsheet" | "exit-waterfall">("portfolio");
+  const [tab,           setTab]           = useState<"portfolio" | "dealflow" | "syndicates" | "update-composer" | "data-room" | "tearsheet" | "exit-waterfall" | "mrr-movement" | "burn-efficiency" | "cohort-retention" | "fundraise-pipeline" | "board-agenda" | "runway-timing" | "esop-pool">("portfolio");
 
   if (!user || !["investor", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
 
@@ -591,6 +592,13 @@ export default function InvestorPage() {
     { id: "data-room"       as const, label: "Data Room",         badge: undefined },
     { id: "tearsheet"       as const, label: "KPI Tearsheet",     badge: undefined },
     { id: "exit-waterfall"  as const, label: "Exit Waterfall",    badge: undefined },
+    { id: "mrr-movement"      as const, label: "MRR Movement",       badge: undefined },
+    { id: "burn-efficiency"   as const, label: "Burn Efficiency",    badge: undefined },
+    { id: "cohort-retention"  as const, label: "Cohort Retention",   badge: undefined },
+    { id: "fundraise-pipeline" as const, label: "Raise Pipeline",    badge: undefined },
+    { id: "board-agenda"      as const, label: "Board Agenda",       badge: undefined },
+    { id: "runway-timing"     as const, label: "Next-Raise Timing",  badge: undefined },
+    { id: "esop-pool"         as const, label: "ESOP Pool",          badge: undefined },
   ];
 
   return (
@@ -630,6 +638,13 @@ export default function InvestorPage() {
       {tab === "data-room"       && <DataRoomBuilder user={user} />}
       {tab === "tearsheet"       && <KpiTearsheet />}
       {tab === "exit-waterfall"  && <ExitWaterfall />}
+      {tab === "mrr-movement"      && <MrrMovement />}
+      {tab === "burn-efficiency"   && <BurnEfficiency />}
+      {tab === "cohort-retention"  && <CohortRetention />}
+      {tab === "fundraise-pipeline" && <FundraisePipeline />}
+      {tab === "board-agenda"      && <BoardAgenda user={user} />}
+      {tab === "runway-timing"     && <RunwayTiming />}
+      {tab === "esop-pool"         && <EsopPool />}
 
       {/* Express interest modal */}
       {commitRaise && (
@@ -1098,6 +1113,718 @@ function ExitWaterfall() {
 
       <p className="text-[10px] text-[var(--color-muted)]">
         Simplified model: non-participating preferred, single liquidation preference per class, no participation cap or accrued dividends. For indicative planning only — confirm with your cap-table/legal advisor.
+      </p>
+    </div>
+  );
+}
+
+// ── Shared: month-by-month revenue/expense series from live transactions ────────
+
+type MonthAgg = { key: string; label: string; revenue: number; expense: number };
+
+function useMonthlySeries(months = 12): MonthAgg[] {
+  const { store } = useApp();
+  const txns = store.transactions ?? [];
+  return useMemo(() => {
+    const now = new Date();
+    const out: MonthAgg[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const monthTxns = txns.filter(t => t.date.startsWith(key));
+      const revenue = monthTxns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+      const expense = monthTxns.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount), 0);
+      out.push({ key, label: format(d, "MMM yy"), revenue, expense });
+    }
+    return out;
+  }, [txns, months]);
+}
+
+// ── #5 MRR Movement Pack ───────────────────────────────────────────────────────
+
+function MrrMovement() {
+  const series = useMonthlySeries(12);
+  const cur = series[series.length - 1];
+  const prev = series[series.length - 2];
+
+  const mrr = cur?.revenue ?? 0;
+  const prevMrr = prev?.revenue ?? 0;
+  const netNew = mrr - prevMrr;
+  // Decompose net movement into expansion (positive delta) vs contraction/churn (negative delta)
+  const expansion = netNew > 0 ? netNew : 0;
+  const churned = netNew < 0 ? Math.abs(netNew) : 0;
+  const arr = mrr * 12;
+  const growthPct = prevMrr > 0 ? (netNew / prevMrr) * 100 : 0;
+  // Net revenue retention vs the prior month, capped for display sanity
+  const nrr = prevMrr > 0 ? Math.round((mrr / prevMrr) * 100) : 100;
+  const maxRev = Math.max(1, ...series.map(s => s.revenue));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> MRR Movement Pack</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Recurring-revenue breakdown computed live from revenue transactions — new/expansion vs contraction, ARR and net retention against last month.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "MRR (this month)", value: formatCurrency(mrr), color: "text-green-400" },
+          { label: "ARR (run-rate)", value: formatCurrency(arr), color: "text-[var(--color-primary)]" },
+          { label: "Net New MRR", value: `${netNew >= 0 ? "+" : "−"}${formatCurrency(Math.abs(netNew))}`, color: netNew >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Net Retention", value: `${nrr}%`, color: nrr >= 100 ? "text-green-400" : "text-orange-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[
+          { label: "Expansion / New", value: formatCurrency(expansion), color: "text-green-400", icon: <ArrowUpRight size={12} className="text-green-400" /> },
+          { label: "Contraction / Churn", value: formatCurrency(churned), color: "text-red-400", icon: <ArrowDownRight size={12} className="text-red-400" /> },
+          { label: "MoM Growth", value: `${growthPct >= 0 ? "+" : ""}${growthPct.toFixed(1)}%`, color: growthPct >= 0 ? "text-green-400" : "text-red-400", icon: <TrendingUp size={12} className="text-[var(--color-primary)]" /> },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+            </div>
+            {s.icon}
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-3">Recurring revenue · last 12 months</p>
+        <div className="flex items-end gap-1.5 h-32">
+          {series.map(s => (
+            <div key={s.key} className="flex-1 flex flex-col items-center gap-1 group">
+              <div className="w-full bg-[var(--color-primary)]/80 rounded-t hover:bg-[var(--color-primary)] transition-colors"
+                style={{ height: `${Math.max(2, (s.revenue / maxRev) * 100)}%` }}
+                title={`${s.label}: ${formatCurrency(s.revenue)}`} />
+              <span className="text-[8px] text-[var(--color-muted)] whitespace-nowrap">{s.label.split(" ")[0]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)] text-center">
+        MRR = current-month revenue. Movement is the delta vs last month; with line-item subscription data this splits into true new/expansion/churn.
+      </p>
+    </div>
+  );
+}
+
+// ── #6 Burn Multiple & Capital Efficiency ──────────────────────────────────────
+
+function BurnEfficiency() {
+  const series = useMonthlySeries(6);
+  const cur = series[series.length - 1];
+  const prev = series[series.length - 2];
+
+  const mrr = cur?.revenue ?? 0;
+  const prevMrr = prev?.revenue ?? 0;
+  const burn = cur?.expense ?? 0;
+  const netNewArr = (mrr - prevMrr) * 12;
+  const netBurn = Math.max(0, burn - mrr);
+  // Burn multiple = net burn ÷ net new ARR (lower is better; <1 is elite)
+  const burnMultiple = netNewArr > 0 ? netBurn / (netNewArr / 12) : null;
+  // SaaS magic number ≈ net-new ARR ÷ prior-period spend
+  const magic = burn > 0 ? netNewArr / (burn * 12) : 0;
+  const grossMargin = mrr > 0 ? ((mrr - burn) / mrr) * 100 : 0;
+
+  const rating = (() => {
+    if (burnMultiple === null) return { label: "Profitable / no net burn", color: "text-green-400" };
+    if (burnMultiple < 1) return { label: "Elite (<1×)", color: "text-green-400" };
+    if (burnMultiple < 1.5) return { label: "Great (1–1.5×)", color: "text-green-400" };
+    if (burnMultiple < 2) return { label: "Good (1.5–2×)", color: "text-yellow-400" };
+    if (burnMultiple < 3) return { label: "Suspect (2–3×)", color: "text-orange-400" };
+    return { label: "Concerning (>3×)", color: "text-red-400" };
+  })();
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Burn Multiple & Efficiency</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How many rupees you burn to add a rupee of new ARR. Computed from the last two months of revenue and spend. Lower is better; under 1× is best-in-class.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-4 md:col-span-1">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Burn Multiple</p>
+          <p className={`text-3xl font-bold tabular-nums ${rating.color}`}>{burnMultiple === null ? "—" : `${burnMultiple.toFixed(2)}×`}</p>
+          <p className={`text-xs font-medium mt-1 ${rating.color}`}>{rating.label}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:col-span-2">
+          {[
+            { label: "Net Burn (mo)", value: formatCurrency(netBurn), color: "text-red-400" },
+            { label: "Net New ARR", value: `${netNewArr >= 0 ? "" : "−"}${formatCurrency(Math.abs(netNewArr))}`, color: netNewArr >= 0 ? "text-green-400" : "text-red-400" },
+            { label: "Magic Number", value: magic.toFixed(2), color: magic >= 0.75 ? "text-green-400" : magic >= 0.5 ? "text-yellow-400" : "text-red-400" },
+            { label: "Gross Margin", value: `${grossMargin.toFixed(0)}%`, color: grossMargin >= 0 ? "text-green-400" : "text-red-400" },
+          ].map(s => (
+            <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-xs font-semibold mb-2">Benchmark · Bessemer-style burn-multiple bands</p>
+        <div className="space-y-1.5 text-xs">
+          {[
+            { band: "Amazing", range: "< 1×", color: "bg-green-500" },
+            { band: "Great", range: "1× – 1.5×", color: "bg-green-400" },
+            { band: "Good", range: "1.5× – 2×", color: "bg-yellow-400" },
+            { band: "Suspect", range: "2× – 3×", color: "bg-orange-400" },
+            { band: "Bad", range: "> 3×", color: "bg-red-500" },
+          ].map(b => (
+            <div key={b.band} className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${b.color}`} />
+              <span className="w-20 text-[var(--color-text)]">{b.band}</span>
+              <span className="text-[var(--color-muted)] tabular-nums">{b.range}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)] text-center">
+        Burn multiple = net burn ÷ net-new MRR. Needs a positive month-over-month revenue delta to be meaningful.
+      </p>
+    </div>
+  );
+}
+
+// ── #21 Cohort Revenue Retention ───────────────────────────────────────────────
+
+function CohortRetention() {
+  const series = useMonthlySeries(12);
+
+  // Build a triangle: for each starting cohort month, index its revenue relative
+  // to that cohort's own first month (proxy for revenue retention over age).
+  const cohorts = useMemo(() => {
+    const months = series.filter(s => s.revenue > 0);
+    return months.map((start, i) => {
+      const base = start.revenue || 1;
+      const cells = months.slice(i).map(m => Math.round((m.revenue / base) * 100));
+      return { label: start.label, base: start.revenue, cells };
+    });
+  }, [series]);
+
+  const maxAge = cohorts.reduce((m, c) => Math.max(m, c.cells.length), 0);
+  const cellColor = (v: number) => {
+    if (v >= 110) return "bg-green-600/40 text-green-300";
+    if (v >= 100) return "bg-green-700/30 text-green-400";
+    if (v >= 85) return "bg-yellow-700/25 text-yellow-400";
+    if (v >= 60) return "bg-orange-800/25 text-orange-400";
+    return "bg-red-900/30 text-red-400";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Grid3x3 size={14} className="text-[var(--color-primary)]" /> Cohort Revenue Retention</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Each row is a starting month; each column is months since, indexed to 100 at the cohort's first month. Green {">"}100% means net expansion. Built from live revenue.</p>
+      </div>
+
+      {cohorts.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Grid3x3 size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No revenue transactions yet to build cohorts.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 overflow-x-auto">
+          <table className="text-xs min-w-[640px]">
+            <thead>
+              <tr>
+                <th className="text-left font-semibold text-[var(--color-muted)] px-2 py-1.5 whitespace-nowrap">Cohort</th>
+                <th className="text-right font-semibold text-[var(--color-muted)] px-2 py-1.5 whitespace-nowrap">Base</th>
+                {Array.from({ length: maxAge }).map((_, i) => (
+                  <th key={i} className="text-center font-semibold text-[var(--color-muted)] px-2 py-1.5 whitespace-nowrap">M{i}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cohorts.map(c => (
+                <tr key={c.label}>
+                  <td className="px-2 py-1 font-medium whitespace-nowrap">{c.label}</td>
+                  <td className="px-2 py-1 text-right tabular-nums text-[var(--color-muted)] whitespace-nowrap">{formatCurrency(c.base)}</td>
+                  {Array.from({ length: maxAge }).map((_, i) => {
+                    const v = c.cells[i];
+                    return (
+                      <td key={i} className="px-1 py-1 text-center">
+                        {v === undefined ? <span className="text-[var(--color-muted)]/30">·</span>
+                          : <span className={`inline-block w-full rounded px-1.5 py-1 tabular-nums font-medium ${cellColor(v)}`}>{v}%</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="text-[10px] text-[var(--color-muted)] text-center">
+        Proxy cohorts from monthly revenue totals. With per-customer signup data this becomes true logo/revenue retention by acquisition cohort.
+      </p>
+    </div>
+  );
+}
+
+// ── #13 Fundraising Pipeline CRM ────────────────────────────────────────────────
+
+type PipelineStage = "sourced" | "intro" | "pitched" | "diligence" | "term_sheet" | "closed" | "passed";
+type Investor = { id: string; name: string; firm: string; stage: PipelineStage; check: number; nextStep: string };
+
+const STAGE_ORDER: PipelineStage[] = ["sourced", "intro", "pitched", "diligence", "term_sheet", "closed", "passed"];
+const STAGE_LABEL: Record<PipelineStage, string> = {
+  sourced: "Sourced", intro: "Intro'd", pitched: "Pitched", diligence: "Diligence", term_sheet: "Term Sheet", closed: "Closed", passed: "Passed",
+};
+const STAGE_STYLE: Record<PipelineStage, string> = {
+  sourced: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  intro: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+  pitched: "bg-purple-900/30 text-purple-400 border-purple-800/40",
+  diligence: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+  term_sheet: "bg-[var(--color-primary)]/20 text-[var(--color-primary)] border-[var(--color-primary)]/40",
+  closed: "bg-green-900/30 text-green-400 border-green-800/40",
+  passed: "bg-red-900/30 text-red-400 border-red-800/40",
+};
+
+function FundraisePipeline() {
+  const [rows, setRows] = useFeatureState<Investor[]>("ir-fundraise-pipeline", [
+    { id: "fp-1", name: "Anita Desai", firm: "Sequoia SE Asia", stage: "diligence", check: 30000000, nextStep: "Send data-room access" },
+    { id: "fp-2", name: "Vikram Rao", firm: "Blume Ventures", stage: "pitched", check: 15000000, nextStep: "Follow up on deck" },
+    { id: "fp-3", name: "Meera Iyer", firm: "Angel — ex-CFO", stage: "term_sheet", check: 5000000, nextStep: "Review terms with counsel" },
+  ]);
+  const [name, setName] = useState("");
+  const [firm, setFirm] = useState("");
+  const [check, setCheck] = useState("");
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Enter an investor name"); return; }
+    setRows(prev => [{ id: crypto.randomUUID(), name: name.trim(), firm: firm.trim() || "—", stage: "sourced", check: parseFloat(check) || 0, nextStep: "" }, ...prev]);
+    setName(""); setFirm(""); setCheck("");
+    toast.success("Investor added to pipeline");
+  };
+  const advance = (id: string) => setRows(prev => prev.map(r => {
+    if (r.id !== id) return r;
+    const idx = STAGE_ORDER.indexOf(r.stage);
+    const next = STAGE_ORDER[Math.min(idx + 1, STAGE_ORDER.indexOf("closed"))];
+    return { ...r, stage: next };
+  }));
+  const setStage = (id: string, stage: PipelineStage) => setRows(prev => prev.map(r => r.id === id ? { ...r, stage } : r));
+  const setNext = (id: string, nextStep: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, nextStep } : r));
+  const remove = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
+
+  const committed = rows.filter(r => r.stage === "closed").reduce((s, r) => s + r.check, 0);
+  const inPlay = rows.filter(r => !["closed", "passed"].includes(r.stage)).reduce((s, r) => s + r.check, 0);
+  const active = rows.filter(r => !["passed"].includes(r.stage)).length;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Fundraising Pipeline</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Track every investor conversation from sourced to closed, with check size and next step. Saved across devices.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Closed / Committed", value: formatCurrency(committed), color: "text-green-400" },
+          { label: "In Play", value: formatCurrency(inPlay), color: "text-[var(--color-primary)]" },
+          { label: "Active Conversations", value: active.toString(), color: "text-[var(--color-text)]" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="md:col-span-1"><label className="text-xs text-[var(--color-muted)] block mb-1">Investor *</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className={inp} /></div>
+        <div className="md:col-span-1"><label className="text-xs text-[var(--color-muted)] block mb-1">Firm</label><input value={firm} onChange={e => setFirm(e.target.value)} placeholder="Firm / angel" className={inp} /></div>
+        <div className="md:col-span-1"><label className="text-xs text-[var(--color-muted)] block mb-1">Check size (₹)</label><input type="number" value={check} onChange={e => setCheck(e.target.value)} placeholder="0" className={inp} /></div>
+        <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add</button>
+      </div>
+
+      <div className="space-y-2">
+        {rows.map(r => (
+          <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{r.name}</p>
+                <p className="text-xs text-[var(--color-muted)]">{r.firm} · {formatCurrency(r.check)} target</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select value={r.stage} onChange={e => setStage(r.id, e.target.value as PipelineStage)}
+                  className={`text-[10px] font-medium border rounded-full px-2 py-1 outline-none ${STAGE_STYLE[r.stage]}`}>
+                  {STAGE_ORDER.map(s => <option key={s} value={s} className="bg-[var(--color-bg)] text-[var(--color-text)]">{STAGE_LABEL[s]}</option>)}
+                </select>
+                {r.stage !== "closed" && r.stage !== "passed" && (
+                  <button onClick={() => advance(r.id)} title="Advance stage" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><ChevronRight size={14} /></button>
+                )}
+                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+              </div>
+            </div>
+            <input value={r.nextStep} onChange={e => setNext(r.id, e.target.value)} placeholder="Next step…"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+            <Target size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+            <p className="text-sm text-[var(--color-muted)]">No investors in the pipeline yet — add your first above.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #15/#17/#18 Board Meeting Agenda + Minutes + Actions ────────────────────────
+
+type AgendaItem = { id: string; topic: string; minutes: number; owner: string; done: boolean };
+type ActionItem = { id: string; task: string; owner: string; due: string; done: boolean };
+
+function BoardAgenda({ user }: { user: { email: string } }) {
+  const [meetingDate, setMeetingDate] = useFeatureState<string>("ir-board-meeting-date", format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd"));
+  const [agenda, setAgenda] = useFeatureState<AgendaItem[]>("ir-board-agenda", [
+    { id: "ag-1", topic: "Review of previous minutes", minutes: 10, owner: "Chair", done: false },
+    { id: "ag-2", topic: "CEO update & KPIs", minutes: 20, owner: user.email.split("@")[0], done: false },
+    { id: "ag-3", topic: "Financials & runway", minutes: 15, owner: "CFO", done: false },
+    { id: "ag-4", topic: "Fundraise plan", minutes: 20, owner: "CEO", done: false },
+    { id: "ag-5", topic: "AOB & next meeting", minutes: 10, owner: "Chair", done: false },
+  ]);
+  const [minutes, setMinutes] = useFeatureState<string>("ir-board-minutes", "");
+  const [actions, setActions] = useFeatureState<ActionItem[]>("ir-board-actions", [
+    { id: "ac-1", task: "Circulate updated cap table", owner: "CFO", due: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"), done: false },
+  ]);
+
+  const [topic, setTopic] = useState("");
+  const [topicMin, setTopicMin] = useState("10");
+  const [task, setTask] = useState("");
+
+  const totalMin = agenda.reduce((s, a) => s + a.minutes, 0);
+
+  const addAgenda = () => {
+    if (!topic.trim()) { toast.error("Enter an agenda topic"); return; }
+    setAgenda(prev => [...prev, { id: crypto.randomUUID(), topic: topic.trim(), minutes: parseInt(topicMin) || 10, owner: "—", done: false }]);
+    setTopic(""); setTopicMin("10");
+  };
+  const toggleAgenda = (id: string) => setAgenda(prev => prev.map(a => a.id === id ? { ...a, done: !a.done } : a));
+  const removeAgenda = (id: string) => setAgenda(prev => prev.filter(a => a.id !== id));
+
+  const addAction = () => {
+    if (!task.trim()) { toast.error("Enter an action item"); return; }
+    setActions(prev => [...prev, { id: crypto.randomUUID(), task: task.trim(), owner: "—", due: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"), done: false }]);
+    setTask("");
+    toast.success("Action item logged");
+  };
+  const toggleAction = (id: string) => setActions(prev => prev.map(a => a.id === id ? { ...a, done: !a.done } : a));
+  const removeAction = (id: string) => setActions(prev => prev.filter(a => a.id !== id));
+
+  const openActions = actions.filter(a => !a.done).length;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Board Meeting — Agenda, Minutes & Actions</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Plan the agenda, capture minutes, and track decisions across meetings. Saved across devices.</p>
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Meeting date</label>
+          <input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      {/* Agenda */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center justify-between">
+          <span className="text-sm font-semibold">Agenda</span>
+          <span className="text-xs text-[var(--color-muted)] tabular-nums">{totalMin} min total · {format(new Date(meetingDate), "EEE d MMM yyyy")}</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {agenda.map(a => (
+            <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+              <input type="checkbox" checked={a.done} onChange={() => toggleAgenda(a.id)} className="accent-[var(--color-primary)]" />
+              <span className={`flex-1 text-sm ${a.done ? "line-through text-[var(--color-muted)]" : ""}`}>{a.topic}</span>
+              <span className="text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{a.owner}</span>
+              <span className="text-xs text-[var(--color-muted)] tabular-nums w-12 text-right">{a.minutes}m</span>
+              <button onClick={() => removeAgenda(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t border-[var(--color-border)] flex gap-2">
+          <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="New agenda topic…" className={`${inp} flex-1`} />
+          <input type="number" value={topicMin} onChange={e => setTopicMin(e.target.value)} className={`${inp} w-20 tabular-nums`} />
+          <button onClick={addAgenda} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-xs px-3 rounded-lg hover:opacity-90"><Plus size={12} /> Add</button>
+        </div>
+      </div>
+
+      {/* Minutes */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="text-sm font-semibold flex items-center gap-2 mb-2"><FileText size={13} className="text-[var(--color-primary)]" /> Minutes</label>
+        <textarea value={minutes} onChange={e => setMinutes(e.target.value)} rows={5}
+          placeholder="Resolved that… Discussion noted that…"
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] resize-y leading-relaxed" />
+      </div>
+
+      {/* Actions */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center justify-between">
+          <span className="text-sm font-semibold">Action Items</span>
+          <span className={`text-xs tabular-nums ${openActions > 0 ? "text-orange-400" : "text-green-400"}`}>{openActions} open</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {actions.map(a => (
+            <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+              <input type="checkbox" checked={a.done} onChange={() => toggleAction(a.id)} className="accent-[var(--color-primary)]" />
+              <span className={`flex-1 text-sm ${a.done ? "line-through text-[var(--color-muted)]" : ""}`}>{a.task}</span>
+              <span className="text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{a.owner}</span>
+              <span className="text-[10px] text-[var(--color-muted)] tabular-nums">{format(new Date(a.due), "d MMM")}</span>
+              <button onClick={() => removeAction(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t border-[var(--color-border)] flex gap-2">
+          <input value={task} onChange={e => setTask(e.target.value)} placeholder="New action item…" className={`${inp} flex-1`} />
+          <button onClick={addAction} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-xs px-3 rounded-lg hover:opacity-90"><Plus size={12} /> Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #7 Runway & Next-Raise Timing ──────────────────────────────────────────────
+
+function RunwayTiming() {
+  const { store } = useApp();
+  const txns = store.transactions ?? [];
+
+  const base = useMemo(() => {
+    const now = new Date();
+    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const monthTxns = txns.filter(t => t.date.startsWith(cur));
+    const mrr = monthTxns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const burn = monthTxns.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const cash = txns.reduce((s, t) => s + t.amount, 0);
+    return { mrr, burn, cash };
+  }, [txns]);
+
+  const [cash, setCash] = useState(String(Math.round(base.cash)));
+  const [burn, setBurn] = useState(String(Math.round(Math.max(0, base.burn - base.mrr))));
+  const [growth, setGrowth] = useState("0"); // monthly net-burn growth %
+  const [raiseLeadMonths, setRaiseLeadMonths] = useState("6");
+
+  const c = parseFloat(cash) || 0;
+  const b0 = parseFloat(burn) || 0;
+  const g = (parseFloat(growth) || 0) / 100;
+  const lead = parseFloat(raiseLeadMonths) || 0;
+
+  // Simulate cash drawdown with optional monthly burn growth
+  const sim = useMemo(() => {
+    if (b0 <= 0) return { runwayMonths: Infinity, zeroDate: null as Date | null };
+    let remaining = c;
+    let monthlyBurn = b0;
+    let m = 0;
+    const cap = 120;
+    while (remaining > 0 && m < cap) {
+      remaining -= monthlyBurn;
+      monthlyBurn = monthlyBurn * (1 + g);
+      m++;
+    }
+    const zeroDate = m < cap ? new Date(new Date().getFullYear(), new Date().getMonth() + m, new Date().getDate()) : null;
+    return { runwayMonths: m >= cap ? Infinity : m, zeroDate };
+  }, [c, b0, g]);
+
+  const startRaiseInMonths = sim.runwayMonths === Infinity ? null : Math.max(0, sim.runwayMonths - lead);
+  const startRaiseDate = startRaiseInMonths === null ? null : new Date(new Date().getFullYear(), new Date().getMonth() + startRaiseInMonths, new Date().getDate());
+  const urgent = startRaiseInMonths !== null && startRaiseInMonths <= 1;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums";
+  const runwayColor = sim.runwayMonths === Infinity ? "text-green-400" : sim.runwayMonths < 6 ? "text-red-400" : sim.runwayMonths < 12 ? "text-yellow-400" : "text-green-400";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Runway & Next-Raise Timing</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Pre-filled from live cash and net burn. Adjust the assumptions to see when cash runs out and when you should start raising, given your lead time.</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cash in bank (₹)</label><input type="number" value={cash} onChange={e => setCash(e.target.value)} className={inp} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Net monthly burn (₹)</label><input type="number" value={burn} onChange={e => setBurn(e.target.value)} className={inp} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Burn growth / mo (%)</label><input type="number" value={growth} onChange={e => setGrowth(e.target.value)} className={inp} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Raise lead time (mo)</label><input type="number" value={raiseLeadMonths} onChange={e => setRaiseLeadMonths(e.target.value)} className={inp} /></div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Runway</p>
+          <p className={`text-2xl font-bold tabular-nums ${runwayColor}`}>{sim.runwayMonths === Infinity ? "∞ (cash-flow +)" : `${sim.runwayMonths} mo`}</p>
+          {sim.zeroDate && <p className="text-[10px] text-[var(--color-muted)] mt-1">Cash zero ≈ {format(sim.zeroDate, "MMM yyyy")}</p>}
+        </div>
+        <div className={`rounded-lg p-4 border ${urgent ? "bg-red-950/20 border-red-800/40" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Start raising in</p>
+          <p className={`text-2xl font-bold tabular-nums ${urgent ? "text-red-400" : "text-[var(--color-primary)]"}`}>
+            {startRaiseInMonths === null ? "—" : startRaiseInMonths === 0 ? "Now" : `${startRaiseInMonths} mo`}
+          </p>
+          {startRaiseDate && <p className="text-[10px] text-[var(--color-muted)] mt-1">≈ {format(startRaiseDate, "MMM yyyy")}</p>}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Lead-time buffer</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-text)]">{lead} mo</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Typical seed→A close: 4–6 months</p>
+        </div>
+      </div>
+
+      {urgent && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-red-400">At this burn you should already be in-market. With a {lead}-month lead time, the window to start raising is now or has passed.</p>
+        </div>
+      )}
+
+      <p className="text-[10px] text-[var(--color-muted)] text-center">
+        Cash and net burn seeded from live transactions; growth compounds net burn each month. Start-raise date = runway minus lead time.
+      </p>
+    </div>
+  );
+}
+
+// ── #31 ESOP Pool Status & Grant Register ──────────────────────────────────────
+
+type EsopGrant = { id: string; grantee: string; options: number; vestMonths: number; cliffMonths: number; grantDate: string };
+
+function EsopPool() {
+  const [poolSize, setPoolSize] = useFeatureState<number>("ir-esop-pool-size", 1000000);
+  const [grants, setGrants] = useFeatureState<EsopGrant[]>("ir-esop-grants", [
+    { id: "es-1", grantee: "Head of Eng", options: 180000, vestMonths: 48, cliffMonths: 12, grantDate: "2024-04-01" },
+    { id: "es-2", grantee: "VP Sales", options: 120000, vestMonths: 48, cliffMonths: 12, grantDate: "2024-10-01" },
+    { id: "es-3", grantee: "Early team pool", options: 90000, vestMonths: 48, cliffMonths: 6, grantDate: "2023-07-01" },
+  ]);
+  const [poolInput, setPoolInput] = useState(String(poolSize));
+
+  const [grantee, setGrantee] = useState("");
+  const [options, setOptions] = useState("");
+
+  const granted = grants.reduce((s, g) => s + g.options, 0);
+  const available = Math.max(0, poolSize - granted);
+  const allocPct = poolSize > 0 ? Math.round((granted / poolSize) * 100) : 0;
+
+  // Vested-to-date per grant (linear monthly vest after cliff)
+  const vestedFor = (g: EsopGrant) => {
+    const monthsElapsed = differenceInCalendarDays(new Date(), new Date(g.grantDate)) / 30.44;
+    if (monthsElapsed < g.cliffMonths) return 0;
+    const frac = Math.min(1, monthsElapsed / g.vestMonths);
+    return Math.round(g.options * frac);
+  };
+  const totalVested = grants.reduce((s, g) => s + vestedFor(g), 0);
+
+  const commitPool = () => {
+    const v = parseFloat(poolInput);
+    if (!v || v < granted) { toast.error(`Pool must be at least ${granted.toLocaleString("en-IN")} (already granted)`); return; }
+    setPoolSize(Math.round(v));
+    toast.success("ESOP pool size updated");
+  };
+  const addGrant = () => {
+    const o = parseFloat(options);
+    if (!grantee.trim() || !o) { toast.error("Enter grantee and option count"); return; }
+    if (o > available) { toast.error("Not enough unallocated options in the pool"); return; }
+    setGrants(prev => [...prev, { id: crypto.randomUUID(), grantee: grantee.trim(), options: Math.round(o), vestMonths: 48, cliffMonths: 12, grantDate: format(new Date(), "yyyy-MM-dd") }]);
+    setGrantee(""); setOptions("");
+    toast.success("Grant added to register");
+  };
+  const removeGrant = (id: string) => setGrants(prev => prev.filter(g => g.id !== id));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> ESOP Pool Status</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Track pool size, grants, and vested-to-date against a linear 48-month / 12-month-cliff schedule. Saved across devices.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Pool Size", value: poolSize.toLocaleString("en-IN"), color: "text-[var(--color-text)]" },
+          { label: "Granted", value: granted.toLocaleString("en-IN"), color: "text-[var(--color-primary)]" },
+          { label: "Available", value: available.toLocaleString("en-IN"), color: available > 0 ? "text-green-400" : "text-red-400" },
+          { label: "Vested to date", value: totalVested.toLocaleString("en-IN"), color: "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="font-medium">Pool allocated</span>
+          <span className="tabular-nums font-bold text-[var(--color-primary)]">{allocPct}%</span>
+        </div>
+        <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${allocPct >= 100 ? "bg-red-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${Math.min(100, allocPct)}%` }} />
+        </div>
+        <div className="flex items-end gap-2 mt-3">
+          <div className="flex-1 max-w-[200px]">
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Pool size (options)</label>
+            <input type="number" value={poolInput} onChange={e => setPoolInput(e.target.value)} className={inp} />
+          </div>
+          <button onClick={commitPool} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] text-xs font-semibold px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Update pool</button>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Grantee", "Options", "Vested", "Cliff", "Vest", "Granted", ""].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {grants.map(g => {
+              const vested = vestedFor(g);
+              const pct = g.options > 0 ? Math.round((vested / g.options) * 100) : 0;
+              return (
+                <tr key={g.id}>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">{g.grantee}</td>
+                  <td className="px-3 py-2 tabular-nums whitespace-nowrap">{g.options.toLocaleString("en-IN")}</td>
+                  <td className="px-3 py-2 tabular-nums text-green-400 whitespace-nowrap">{vested.toLocaleString("en-IN")} <span className="text-[10px] text-[var(--color-muted)]">({pct}%)</span></td>
+                  <td className="px-3 py-2 tabular-nums text-[var(--color-muted)] whitespace-nowrap">{g.cliffMonths}mo</td>
+                  <td className="px-3 py-2 tabular-nums text-[var(--color-muted)] whitespace-nowrap">{g.vestMonths}mo</td>
+                  <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(g.grantDate), "MMM yyyy")}</td>
+                  <td className="px-3 py-2"><button onClick={() => removeGrant(g.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                </tr>
+              );
+            })}
+            {grants.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-[var(--color-muted)]">No grants yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Grantee</label><input value={grantee} onChange={e => setGrantee(e.target.value)} placeholder="Name / role" className={inp.replace("tabular-nums", "")} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Options</label><input type="number" value={options} onChange={e => setOptions(e.target.value)} placeholder="0" className={inp} /></div>
+        <button onClick={addGrant} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add grant</button>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)] text-center">
+        Vesting is linear over the vest period after the cliff (default 48mo / 12mo). For planning only — your grant agreements govern actual vesting.
       </p>
     </div>
   );

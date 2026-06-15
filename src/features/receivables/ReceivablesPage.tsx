@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
 
@@ -183,7 +183,7 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
   );
 }
 
-type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm";
+type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel";
 
 export default function ReceivablesPage() {
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
@@ -250,7 +250,7 @@ export default function ReceivablesPage() {
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -263,6 +263,13 @@ export default function ReceivablesPage() {
       {tab === "cash-app" && <CashApplication />}
       {tab === "concentration" && <ConcentrationRisk />}
       {tab === "ar-confirm" && <ARConfirmationMailer />}
+      {tab === "dso-trend" && <DSOTrend />}
+      {tab === "ar-turnover" && <ARTurnover />}
+      {tab === "ecl-matrix" && <ECLProvisioning />}
+      {tab === "credit-util" && <CreditUtilization />}
+      {tab === "cash-timeline" && <CollectionForecast />}
+      {tab === "overdue-heatmap" && <OverdueHeatmap />}
+      {tab === "dunning-funnel" && <DunningFunnel />}
 
       {tab === "overview" && <>
       {/* Aging summary */}
@@ -1085,6 +1092,632 @@ ${firmName}`;
         })}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Drafts a positive-confirmation letter (auditor-style) per customer with the open-invoice breakdown as on the chosen date. Opens your mail / WhatsApp client; nothing is sent automatically.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #60 — DSO TREND (Days Sales Outstanding trend over the last 6 months)
+// ════════════════════════════════════════════════════════════════════════════
+function DSOTrend() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+
+  const months = useMemo(() => {
+    const now = new Date();
+    const out: { key: string; label: string; dso: number; ar: number; billed: number }[] = [];
+    for (let m = 5; m >= 0; m--) {
+      const ref = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      const monthStart = new Date(ref.getFullYear(), ref.getMonth(), 1);
+      const monthEnd = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+      const daysInMonth = monthEnd.getDate();
+      // AR still open as at month-end: invoiced on/before month-end and not paid by then
+      const arOpen = invoices.filter(i => {
+        const inv = parseISO(i.invoiceDate);
+        if (inv > monthEnd) return false;
+        if (i.status !== "paid") return true;
+        // paid invoices: assume settled around the due date; open if due after month-end
+        return parseISO(i.dueDate) > monthEnd;
+      });
+      const ar = arOpen.reduce((s, i) => s + i.amount, 0);
+      // credit sales billed within the month
+      const billed = invoices
+        .filter(i => { const d = parseISO(i.invoiceDate); return d >= monthStart && d <= monthEnd; })
+        .reduce((s, i) => s + i.amount, 0);
+      const dso = billed > 0 ? Math.round((ar / billed) * daysInMonth) : 0;
+      out.push({ key: `${ref.getFullYear()}-${ref.getMonth()}`, label: format(ref, "MMM yy"), dso, ar, billed });
+    }
+    return out;
+  }, [invoices]);
+
+  const valid = months.filter(m => m.billed > 0);
+  const latest = valid.length ? valid[valid.length - 1].dso : 0;
+  const prior = valid.length > 1 ? valid[valid.length - 2].dso : latest;
+  const delta = latest - prior;
+  const avg = valid.length ? Math.round(valid.reduce((s, m) => s + m.dso, 0) / valid.length) : 0;
+  const maxDso = Math.max(1, ...months.map(m => m.dso));
+
+  if (invoices.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <TrendingUp size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">Add invoices to track your Days Sales Outstanding trend month over month.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Current DSO", value: `${latest} days`, color: "text-[var(--color-primary)]" },
+          { label: "vs last month", value: `${delta > 0 ? "+" : ""}${delta} days`, color: delta > 0 ? "text-red-400" : delta < 0 ? "text-green-400" : "text-[var(--color-muted)]" },
+          { label: "6-month average", value: `${avg} days`, color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Days Sales Outstanding — last 6 months</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Lower = cash converts faster</span>
+        </div>
+        <div className="flex items-end gap-2 h-40">
+          {months.map(m => (
+            <div key={m.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+              <span className="text-[10px] font-semibold tabular-nums text-[var(--color-text)]">{m.billed > 0 ? m.dso : "—"}</span>
+              <div className="w-full rounded-t transition-all" style={{ height: `${(m.dso / maxDso) * 100}%`, minHeight: m.dso > 0 ? "4px" : "0", background: m.dso > avg && avg > 0 ? "#f97316" : "#1A6B55" }} />
+              <span className="text-[10px] text-[var(--color-muted)]">{m.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">DSO ≈ (open AR at month-end ÷ that month's credit sales) × days in month. Paid invoices are assumed settled near their due date. Rising DSO means cash is taking longer to come in.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #61 — AR TURNOVER RATIO (how many times receivables convert per year)
+// ════════════════════════════════════════════════════════════════════════════
+function ARTurnover() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [windowDays, setWindowDays] = useState("365");
+
+  const stats = useMemo(() => {
+    const days = Math.max(1, parseFloat(windowDays) || 365);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    // credit sales billed within the window
+    const inWindow = invoices.filter(i => parseISO(i.invoiceDate) >= cutoff);
+    const netSales = inWindow.reduce((s, i) => s + i.amount, 0);
+    const openAR = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    // average AR proxy: mean of open AR and total billed-but-unsettled span
+    const billedTotal = inWindow.reduce((s, i) => s + i.amount, 0);
+    const avgAR = openAR > 0 ? (openAR + Math.min(openAR, billedTotal)) / 2 : openAR;
+    const turnover = avgAR > 0 ? netSales / avgAR : 0;
+    const annualised = days !== 365 && netSales > 0 ? turnover * (365 / days) : turnover;
+    const dso = annualised > 0 ? Math.round(365 / annualised) : 0;
+    return { days, netSales, openAR, avgAR, turnover, annualised, dso, count: inWindow.length };
+  }, [invoices, windowDays]);
+
+  if (invoices.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Repeat size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">Add invoices to compute your accounts-receivable turnover ratio.</p>
+      </div>
+    );
+  }
+
+  const grade = stats.annualised >= 8 ? { label: "Strong", color: "text-green-400" } : stats.annualised >= 4 ? { label: "Healthy", color: "text-[var(--color-primary)]" } : stats.annualised >= 2 ? { label: "Slow", color: "text-yellow-400" } : { label: "Weak", color: "text-red-400" };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <Repeat size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">AR Turnover Ratio</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Window (days of credit sales)</label>
+          <input type="number" value={windowDays} onChange={e => setWindowDays(e.target.value)} className={`${INP} w-40`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Turnover (annualised)", value: `${stats.annualised.toFixed(1)}×`, color: grade.color },
+          { label: "Implied DSO", value: `${stats.dso} days`, color: "text-[var(--color-text)]" },
+          { label: "Credit sales in window", value: formatCurrency(Math.round(stats.netSales)), color: "text-[var(--color-primary)]" },
+          { label: "Avg receivables", value: formatCurrency(Math.round(stats.avgAR)), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-surface)] flex items-start gap-2">
+        <Repeat size={15} className={`${grade.color} shrink-0 mt-0.5`} />
+        <div>
+          <p className={`text-sm font-bold ${grade.color}`}>{grade.label} turnover — {stats.annualised.toFixed(1)}× per year</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            You collect and re-lend your receivables roughly {stats.annualised.toFixed(1)} times a year ({stats.count} invoices in the window). Higher turnover frees cash; under 4× usually signals lax credit terms or slow collections.
+          </p>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Turnover = net credit sales ÷ average receivables; DSO = 365 ÷ turnover. Average AR is estimated from current open balance — a true average needs opening + closing balances from your ledger.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #62 — ECL PROVISIONING MATRIX (Ind-AS 109 expected-credit-loss by aging)
+// ════════════════════════════════════════════════════════════════════════════
+function ECLProvisioning() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  // default loss rates (%) per bucket — durable so the user's policy persists
+  const [rates, setRates] = useFeatureState<Record<string, string>>("rec-ecl-rates", { current: "0.5", "30d": "3", "60d": "12", "90d": "40" });
+
+  const buckets = ["current", "30d", "60d", "90d"] as const;
+
+  const data = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    return buckets.map(b => {
+      const items = open.filter(i => agingBucket(differenceInDays(new Date(), parseISO(i.dueDate))) === b);
+      const gross = items.reduce((s, i) => s + i.amount, 0);
+      const rate = Math.max(0, parseFloat(rates[b] ?? "0") || 0);
+      const ecl = gross * (rate / 100);
+      return { bucket: b, count: items.length, gross, rate, ecl };
+    });
+  }, [invoices, rates]);
+
+  const grossTotal = data.reduce((s, d) => s + d.gross, 0);
+  const eclTotal = data.reduce((s, d) => s + d.ecl, 0);
+  const netCarrying = grossTotal - eclTotal;
+  const blended = grossTotal > 0 ? (eclTotal / grossTotal) * 100 : 0;
+
+  if (grossTotal === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <ShieldAlert size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No open receivables to provision. ECL builds an expected-loss allowance across your aging buckets.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Gross receivables", value: formatCurrency(Math.round(grossTotal)), color: "text-[var(--color-text)]" },
+          { label: "Expected credit loss", value: formatCurrency(Math.round(eclTotal)), color: "text-red-400" },
+          { label: "Net carrying amount", value: formatCurrency(Math.round(netCarrying)), color: "text-green-400" },
+          { label: "Blended loss rate", value: `${blended.toFixed(1)}%`, color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+          <ShieldAlert size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">ECL Provisioning Matrix</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Edit loss % per bucket</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <th className="px-4 py-2.5 text-left font-medium">Aging bucket</th>
+                <th className="px-4 py-2.5 text-right font-medium">Invoices</th>
+                <th className="px-4 py-2.5 text-right font-medium">Gross</th>
+                <th className="px-4 py-2.5 text-right font-medium">Loss %</th>
+                <th className="px-4 py-2.5 text-right font-medium">Provision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map(d => (
+                <tr key={d.bucket} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5"><span className={BUCKET_COLOR[d.bucket]}>{BUCKET_LABELS[d.bucket]}</span></td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{d.count}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(Math.round(d.gross))}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <input type="number" value={rates[d.bucket] ?? ""} onChange={e => setRates(prev => ({ ...prev, [d.bucket]: e.target.value }))}
+                      className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(d.ecl))}</td>
+                </tr>
+              ))}
+              <tr className="bg-[var(--color-accent)] font-semibold">
+                <td className="px-4 py-2.5">Total</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{data.reduce((s, d) => s + d.count, 0)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(Math.round(grossTotal))}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{blended.toFixed(1)}%</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{formatCurrency(Math.round(eclTotal))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Simplified Ind-AS 109 / IFRS 9 provision-matrix approach: apply a historical loss rate to each aging band. Net carrying amount = gross − provision; book the provision as an allowance for doubtful debts.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #63 — CREDIT-LIMIT UTILIZATION (per-customer exposure vs set credit ceiling)
+// ════════════════════════════════════════════════════════════════════════════
+function CreditUtilization() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  // per-customer credit limit, durable
+  const [limits, setLimits] = useFeatureState<Record<string, number>>("rec-credit-limits", {});
+
+  const rows = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, number> = {};
+    open.forEach(i => { map[i.customer] = (map[i.customer] || 0) + i.amount; });
+    return Object.entries(map).map(([name, exposure]) => {
+      const limit = limits[name] ?? 0;
+      const util = limit > 0 ? (exposure / limit) * 100 : 0;
+      const headroom = limit - exposure;
+      const status = limit <= 0 ? "unset" : util >= 100 ? "over" : util >= 80 ? "near" : "ok";
+      return { name, exposure, limit, util, headroom, status };
+    }).sort((a, b) => b.util - a.util || b.exposure - a.exposure);
+  }, [invoices, limits]);
+
+  const overCount = rows.filter(r => r.status === "over").length;
+  const nearCount = rows.filter(r => r.status === "near").length;
+  const unsetCount = rows.filter(r => r.status === "unset").length;
+
+  const setLimit = (name: string, value: string) => {
+    const v = parseFloat(value);
+    setLimits(prev => ({ ...prev, [name]: isNaN(v) ? 0 : v }));
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Percent size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No open exposure to track. Set a credit ceiling per customer and watch utilization here.</p>
+      </div>
+    );
+  }
+
+  const STATUS: Record<string, { label: string; color: string; bar: string }> = {
+    ok:    { label: "Within limit", color: "text-green-400",  bar: "#22c55e" },
+    near:  { label: "Near limit",   color: "text-yellow-400", bar: "#eab308" },
+    over:  { label: "Over limit",   color: "text-red-400",    bar: "#ef4444" },
+    unset: { label: "No limit set",  color: "text-[var(--color-muted)]", bar: "#1A6B55" },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Customers tracked", value: String(rows.length), color: "text-[var(--color-text)]" },
+          { label: "Over limit", value: String(overCount), color: overCount ? "text-red-400" : "text-green-400" },
+          { label: "Near limit (80%+)", value: String(nearCount), color: nearCount ? "text-yellow-400" : "text-[var(--color-muted)]" },
+          { label: "No limit set", value: String(unsetCount), color: unsetCount ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+          <Percent size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Credit-Limit Utilization</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Set a ceiling to enable hold alerts</span>
+        </div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {rows.map(r => {
+            const s = STATUS[r.status];
+            return (
+              <div key={r.name} className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-semibold truncate">{r.name}</p>
+                    <span className={`text-[10px] font-bold shrink-0 ${s.color}`}>{s.label}{r.limit > 0 && ` · ${Math.round(r.util)}%`}</span>
+                  </div>
+                  <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, r.util)}%`, background: s.bar }} />
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-1">
+                    Exposure {formatCurrency(r.exposure)}
+                    {r.limit > 0 && ` of ${formatCurrency(r.limit)} · ${r.headroom >= 0 ? `${formatCurrency(r.headroom)} headroom` : `${formatCurrency(Math.abs(r.headroom))} over`}`}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  <label className="text-[10px] text-[var(--color-muted)] block mb-0.5 text-right">Limit (₹)</label>
+                  <input type="number" value={r.limit || ""} onChange={e => setLimit(r.name, e.target.value)} placeholder="—"
+                    className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Utilization = open exposure ÷ credit limit. Customers at 80%+ deserve a closer look before you ship more on credit; over-limit accounts should go on hold until they pay down.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #64 — COLLECTION FORECAST (invoice-to-cash timeline by expected pay date)
+// ════════════════════════════════════════════════════════════════════════════
+function CollectionForecast() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  // optional per-customer average days-late, learned from paid history, shifts the expected date
+  const customerLag = useMemo(() => {
+    const map: Record<string, number[]> = {};
+    invoices.filter(i => i.status === "paid").forEach(i => {
+      (map[i.customer] ||= []).push(Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))));
+    });
+    const lag: Record<string, number> = {};
+    Object.entries(map).forEach(([c, arr]) => { lag[c] = arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0; });
+    return lag;
+  }, [invoices]);
+
+  const weeks = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const now = new Date();
+    const out: { idx: number; label: string; amount: number; count: number }[] = [];
+    for (let w = 0; w < 8; w++) out.push({ idx: w, label: w === 0 ? "This week" : `Wk +${w}`, amount: 0, count: 0 });
+    let overdueAmt = 0, overdueCnt = 0;
+    open.forEach(i => {
+      const lag = customerLag[i.customer] ?? 0;
+      const expected = new Date(parseISO(i.dueDate));
+      expected.setDate(expected.getDate() + lag);
+      const diffDays = differenceInDays(expected, now);
+      if (diffDays < 0) { overdueAmt += i.amount; overdueCnt++; return; }
+      const wk = Math.min(7, Math.floor(diffDays / 7));
+      out[wk].amount += i.amount;
+      out[wk].count++;
+    });
+    return { out, overdueAmt, overdueCnt };
+  }, [invoices, customerLag]);
+
+  const expected8w = weeks.out.reduce((s, w) => s + w.amount, 0);
+  const maxAmt = Math.max(1, weeks.overdueAmt, ...weeks.out.map(w => w.amount));
+
+  if (invoices.filter(i => i.status !== "paid").length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <CalendarClock size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No open invoices to forecast. This projects when cash lands based on due dates and each customer's payment lag.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Expected next 8 weeks", value: formatCurrency(Math.round(expected8w)), color: "text-[var(--color-primary)]" },
+          { label: "Already overdue", value: formatCurrency(Math.round(weeks.overdueAmt)), color: weeks.overdueAmt > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Overdue invoices", value: `${weeks.overdueCnt}`, color: weeks.overdueCnt ? "text-orange-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarClock size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Collection Forecast — next 8 weeks</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Adjusted for each customer's pay lag</span>
+        </div>
+        {weeks.overdueAmt > 0 && (
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-xs text-red-400 w-16 shrink-0">Overdue</span>
+            <div className="flex-1 h-5 bg-[var(--color-bg)] rounded overflow-hidden">
+              <div className="h-full rounded bg-red-500/70" style={{ width: `${(weeks.overdueAmt / maxAmt) * 100}%` }} />
+            </div>
+            <span className="text-xs tabular-nums font-semibold w-24 text-right shrink-0">{formatCurrency(Math.round(weeks.overdueAmt))}</span>
+          </div>
+        )}
+        <div className="space-y-2">
+          {weeks.out.map(w => (
+            <div key={w.idx} className="flex items-center gap-3">
+              <span className="text-xs text-[var(--color-muted)] w-16 shrink-0">{w.label}</span>
+              <div className="flex-1 h-5 bg-[var(--color-bg)] rounded overflow-hidden">
+                <div className="h-full rounded transition-all" style={{ width: `${(w.amount / maxAmt) * 100}%`, background: "#1A6B55" }} />
+              </div>
+              <span className="text-xs tabular-nums font-semibold w-24 text-right shrink-0">{w.amount > 0 ? formatCurrency(Math.round(w.amount)) : "—"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Each open invoice is placed in the week of its expected pay date = due date + that customer's average days-late (from paid history). Overdue invoices are shown separately as cash you should already have.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #65 — OVERDUE HEATMAP (top customers × aging bucket, intensity by amount)
+// ════════════════════════════════════════════════════════════════════════════
+function OverdueHeatmap() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const buckets = ["current", "30d", "60d", "90d"] as const;
+
+  const { rows, maxCell, grand } = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, Record<string, number>> = {};
+    open.forEach(i => {
+      const b = agingBucket(differenceInDays(new Date(), parseISO(i.dueDate)));
+      (map[i.customer] ||= { current: 0, "30d": 0, "60d": 0, "90d": 0 });
+      map[i.customer][b] += i.amount;
+    });
+    const rows = Object.entries(map)
+      .map(([name, cells]) => ({ name, cells, total: buckets.reduce((s, b) => s + cells[b], 0) }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 12);
+    const maxCell = Math.max(1, ...rows.flatMap(r => buckets.map(b => r.cells[b])));
+    const grand = rows.reduce((s, r) => s + r.total, 0);
+    return { rows, maxCell, grand };
+  }, [invoices]);
+
+  if (rows.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Flame size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No open receivables to map. This heatmap shows where your overdue cash is concentrated.</p>
+      </div>
+    );
+  }
+
+  const cellBg = (b: string, amt: number): string => {
+    if (amt <= 0) return "transparent";
+    const intensity = 0.12 + (amt / maxCell) * 0.55;
+    const hue = b === "current" ? "34,197,94" : b === "30d" ? "234,179,8" : b === "60d" ? "249,115,22" : "239,68,68";
+    return `rgba(${hue},${intensity.toFixed(2)})`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+          <Flame size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Overdue Heatmap</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">Top {rows.length} by open balance · {formatCurrency(grand)}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <th className="px-4 py-2.5 text-left font-medium">Customer</th>
+                {buckets.map(b => <th key={b} className={`px-3 py-2.5 text-right font-medium ${BUCKET_COLOR[b]}`}>{b === "current" ? "Current" : b === "30d" ? "1–30d" : b === "60d" ? "31–60d" : "60d+"}</th>)}
+                <th className="px-4 py-2.5 text-right font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2 font-medium truncate max-w-[160px]">{r.name}</td>
+                  {buckets.map(b => (
+                    <td key={b} className="px-3 py-2 text-right tabular-nums" style={{ background: cellBg(b, r.cells[b]) }}>
+                      {r.cells[b] > 0 ? formatCurrency(Math.round(r.cells[b])) : <span className="text-[var(--color-muted)] opacity-40">·</span>}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{formatCurrency(Math.round(r.total))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Darker cells = larger amounts; colour shifts green → red as invoices age. Scan the right-hand columns to spot customers parking big balances in the 60d+ band — chase those first.</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// #66 — DUNNING FUNNEL (open AR distributed across reminder/escalation stages)
+// ════════════════════════════════════════════════════════════════════════════
+const DUNNING_STAGES: { key: string; label: string; desc: string; min: number; max: number; color: string }[] = [
+  { key: "not-due",    label: "Not yet due",            desc: "Monitor — no action",  min: -9999, max: 0,     color: "#1A6B55" },
+  { key: "reminder",   label: "Stage 1 · Reminder",     desc: "Gentle nudge 1–15d",   min: 1,     max: 15,    color: "#22c55e" },
+  { key: "followup",   label: "Stage 2 · Follow-up",    desc: "Firm chase 16–30d",    min: 16,    max: 30,    color: "#eab308" },
+  { key: "escalation", label: "Stage 3 · Escalation",   desc: "Demand 31–60d",        min: 31,    max: 60,    color: "#f97316" },
+  { key: "demand",     label: "Stage 4 · Final demand", desc: "Legal/recovery 60d+",  min: 61,    max: 99999, color: "#ef4444" },
+];
+
+function DunningFunnel() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+
+  const data = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid").map(i => ({ d: differenceInDays(new Date(), parseISO(i.dueDate)), amount: i.amount }));
+    return DUNNING_STAGES.map(s => {
+      const items = open.filter(i => i.d >= s.min && i.d <= s.max);
+      return { ...s, count: items.length, amount: items.reduce((sum, i) => sum + i.amount, 0) };
+    });
+  }, [invoices]);
+
+  const totalAmt = data.reduce((s, d) => s + d.amount, 0);
+  const totalCnt = data.reduce((s, d) => s + d.count, 0);
+  const actionable = data.filter(d => d.key !== "not-due").reduce((s, d) => s + d.amount, 0);
+
+  const handleChaseStage = (label: string, count: number) => {
+    if (count === 0) { toast.error("No invoices in this stage"); return; }
+    toast.success(`${count} invoice${count !== 1 ? "s" : ""} queued for "${label}" — open each customer to send the reminder`);
+  };
+
+  if (totalCnt === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Layers size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+        <p className="text-sm text-[var(--color-muted)]">No open invoices to route. The funnel groups AR into reminder stages by how far past due each invoice is.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Open AR in funnel", value: formatCurrency(Math.round(totalAmt)), color: "text-[var(--color-primary)]" },
+          { label: "Needs a reminder", value: formatCurrency(Math.round(actionable)), color: actionable > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Open invoices", value: `${totalCnt}`, color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2.5">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Dunning-Stage Funnel</h3>
+          <span className="text-xs text-[var(--color-muted)] ml-auto">By days past due</span>
+        </div>
+        {data.map(s => {
+          const pct = totalAmt > 0 ? (s.amount / totalAmt) * 100 : 0;
+          return (
+            <div key={s.key} className="flex items-center gap-3">
+              <div className="w-40 shrink-0">
+                <p className="text-xs font-semibold truncate" style={{ color: s.color }}>{s.label}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{s.desc}</p>
+              </div>
+              <div className="flex-1 h-6 bg-[var(--color-bg)] rounded overflow-hidden relative">
+                <div className="h-full rounded transition-all" style={{ width: `${Math.max(pct, s.amount > 0 ? 4 : 0)}%`, background: s.color, opacity: 0.8 }} />
+                <span className="absolute inset-0 flex items-center px-2 text-[10px] font-semibold tabular-nums">{s.count} inv · {formatCurrency(Math.round(s.amount))}</span>
+              </div>
+              {s.key !== "not-due" && (
+                <button onClick={() => handleChaseStage(s.label, s.count)} title="Queue reminders for this stage"
+                  className="shrink-0 flex items-center gap-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-blue-400 hover:border-blue-700/40 px-2 py-1.5 rounded-md transition-colors">
+                  <Send size={10} /> Chase
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Each open invoice falls into a stage by days past due: not-due → reminder (1–15) → follow-up (16–30) → escalation (31–60) → final demand (60d+). Use it to decide who gets which message today.</p>
     </div>
   );
 }

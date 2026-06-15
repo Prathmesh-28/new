@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt } from "lucide-react";
+import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -231,7 +231,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail";
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval";
 
 export default function DocumentsPage() {
   const [docTab, setDocTab]       = useState<DocTab>("vault");
@@ -333,7 +333,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History]] as const).map(([id, label, Icon]) => (
+        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -341,11 +341,18 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      {docTab === "ocr"          && <ReceiptOcrCapture />}
-      {docTab === "esign"        && <ESignWorkflow />}
-      {docTab === "expiry"       && <ExpiryRenewalVault />}
-      {docTab === "stmt-parser"  && <BankStatementParser />}
-      {docTab === "audit-trail"  && <AuditTrailLog />}
+      {docTab === "ocr"            && <ReceiptOcrCapture />}
+      {docTab === "esign"          && <ESignWorkflow />}
+      {docTab === "expiry"         && <ExpiryRenewalVault />}
+      {docTab === "stmt-parser"    && <BankStatementParser />}
+      {docTab === "audit-trail"    && <AuditTrailLog />}
+      {docTab === "checklist"      && <DocumentChecklist />}
+      {docTab === "templates"      && <TemplateLibrary />}
+      {docTab === "share"          && <ShareLinkTracker />}
+      {docTab === "kyc"            && <KycCollector />}
+      {docTab === "contract-dates" && <ContractKeyDates />}
+      {docTab === "filing"         && <BillFilingTracker />}
+      {docTab === "approval"       && <ApprovalFlow />}
 
       {docTab === "vault" && <>
 
@@ -1077,6 +1084,679 @@ function AuditTrailLog() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Entries are append-only by convention — for tamper-evident audit logs required by statutory audits, back this with a server-side immutable log and hash chaining.</p>
+    </div>
+  );
+}
+
+// ── Document Checklist by purpose (loan / GST-reg / tender) ───────────────────────
+// Curated paperwork lists per common Indian business purpose, with per-item
+// done-ticks persisted so a team can collect a complete pack without missing anything.
+const CHECKLIST_PACKS: { id: string; label: string; items: string[] }[] = [
+  { id: "loan", label: "Business loan / working capital", items: [
+    "PAN card (business + proprietor/directors)", "GST registration certificate", "Last 6–12 months bank statements",
+    "Last 2 years ITR with computation", "Audited financials / P&L + balance sheet", "Address proof (rent deed / utility bill)",
+    "KYC of promoters (Aadhaar + PAN)", "Business registration / Udyam (MSME) certificate", "Existing loan sanction letters (if any)",
+  ] },
+  { id: "gst-reg", label: "New GST registration", items: [
+    "PAN of business / proprietor", "Aadhaar of authorised signatory", "Photograph of proprietor / partners",
+    "Proof of place of business (electricity bill / rent agreement + NOC)", "Bank account proof (cancelled cheque / statement)",
+    "Partnership deed / Certificate of Incorporation", "Board resolution / authorisation letter", "Digital Signature (DSC) for company/LLP",
+  ] },
+  { id: "tender", label: "Government tender / bid", items: [
+    "GST registration certificate", "PAN card", "Udyam (MSME) certificate", "Last 3 years ITR",
+    "Audited balance sheet (3 years)", "EMD / bid security instrument", "Experience / work-completion certificates",
+    "Solvency certificate from bank", "Affidavit / non-blacklisting declaration", "Authorised-signatory power of attorney",
+  ] },
+  { id: "vendor", label: "Vendor / supplier onboarding", items: [
+    "GSTIN + PAN", "Cancelled cheque / bank details", "MSME / Udyam certificate", "Signed vendor agreement",
+    "Address proof", "Authorised contact + email", "Product / rate card",
+  ] },
+];
+
+function DocumentChecklist() {
+  const [packId, setPackId] = useState(CHECKLIST_PACKS[0].id);
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("doc-checklist-done", {});
+  const pack = CHECKLIST_PACKS.find(p => p.id === packId)!;
+  const key = (item: string) => `${packId}::${item}`;
+  const completed = pack.items.filter(i => done[key(i)]).length;
+  const pct = Math.round((completed / pack.items.length) * 100);
+
+  const toggle = (item: string) => setDone(prev => ({ ...prev, [key(item)]: !prev[key(item)] }));
+  const reset = () => setDone(prev => { const next = { ...prev }; pack.items.forEach(i => delete next[key(i)]); return next; });
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Document Checklist by purpose</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick what you're preparing for — a loan, GST registration, a tender or vendor onboarding — and tick off each required document as you gather it. Your progress is saved.</p>
+        <div className="flex flex-wrap gap-2">
+          {CHECKLIST_PACKS.map(p => (
+            <button key={p.id} onClick={() => setPackId(p.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${packId === p.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-[var(--color-muted)]">{completed} of {pack.items.length} collected</p>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs font-bold tabular-nums ${pct === 100 ? "text-green-400" : "text-[var(--color-text)]"}`}>{pct}%</span>
+            {completed > 0 && <button onClick={reset} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Reset</button>}
+          </div>
+        </div>
+        <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${pct === 100 ? "bg-green-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="space-y-1.5">
+          {pack.items.map(item => {
+            const checked = !!done[key(item)];
+            return (
+              <button key={item} onClick={() => toggle(item)}
+                className="w-full flex items-center gap-2.5 text-left px-3 py-2 rounded-lg hover:bg-white/4 transition-colors">
+                {checked
+                  ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                  : <div className="w-[15px] h-[15px] rounded-full border border-[var(--color-border)] shrink-0" />}
+                <span className={`text-sm ${checked ? "line-through text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>{item}</span>
+              </button>
+            );
+          })}
+        </div>
+        {pct === 100 && (
+          <div className="bg-green-950/20 border border-green-800/30 rounded-lg px-3 py-2 flex items-center gap-2 text-xs text-green-300">
+            <CheckCircle2 size={13} /> Pack complete — every document for {pack.label.toLowerCase()} is collected.
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative lists for common cases — lenders, GST officers and tendering authorities may ask for additional documents. Confirm the exact requirements before final submission.</p>
+    </div>
+  );
+}
+
+// ── Template Library (letters / NOCs / declarations) ─────────────────────────────
+// Fill-in-the-blank boilerplate for routine business letters. Placeholders in {{ }}
+// are replaced from the field inputs; the result can be copied to the clipboard.
+type LetterTemplate = { id: string; title: string; fields: { key: string; label: string }[]; body: string };
+const LETTER_TEMPLATES: LetterTemplate[] = [
+  { id: "noc-vendor", title: "No-Objection Certificate (vendor)", fields: [
+      { key: "company", label: "Your company" }, { key: "party", label: "Vendor / party name" }, { key: "purpose", label: "Purpose" }, { key: "place", label: "Place" },
+    ],
+    body: "TO WHOMSOEVER IT MAY CONCERN\n\nThis is to certify that {{company}} has no objection to {{party}} for the purpose of {{purpose}}. We confirm that all dues, if any, stand settled and there is no pending claim against the said party as on date.\n\nFor {{company}}\nAuthorised Signatory\nPlace: {{place}}\nDate: {{date}}" },
+  { id: "address-decl", title: "Address proof declaration", fields: [
+      { key: "name", label: "Declarant name" }, { key: "address", label: "Full address" }, { key: "use", label: "Used for" },
+    ],
+    body: "DECLARATION\n\nI, {{name}}, do hereby solemnly declare that my registered place of business is situated at:\n{{address}}\n\nThis declaration is made for the purpose of {{use}} and the information furnished above is true and correct to the best of my knowledge.\n\nSignature: ____________\nName: {{name}}\nDate: {{date}}" },
+  { id: "auth-letter", title: "Authorisation letter", fields: [
+      { key: "company", label: "Company" }, { key: "person", label: "Authorised person" }, { key: "task", label: "Authorised to" }, { key: "place", label: "Place" },
+    ],
+    body: "AUTHORISATION LETTER\n\n{{company}} hereby authorises {{person}} to {{task}} on our behalf. All acts done by the said authorised representative within this scope shall be binding on the company.\n\nFor {{company}}\nAuthorised Signatory\nPlace: {{place}}  Date: {{date}}" },
+  { id: "payment-reminder", title: "Payment reminder letter", fields: [
+      { key: "party", label: "Customer name" }, { key: "amount", label: "Amount due (₹)" }, { key: "invoice", label: "Invoice no." }, { key: "company", label: "Your company" },
+    ],
+    body: "Dear {{party}},\n\nThis is a gentle reminder that an amount of ₹{{amount}} against invoice {{invoice}} remains outstanding. We request you to arrange the payment at the earliest to keep your account in good standing.\n\nShould the payment already be in process, kindly ignore this notice.\n\nRegards,\n{{company}}\nDate: {{date}}" },
+];
+
+function TemplateLibrary() {
+  const [tplId, setTplId] = useState(LETTER_TEMPLATES[0].id);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const tpl = LETTER_TEMPLATES.find(t => t.id === tplId)!;
+
+  const today = format(new Date(), "d MMM yyyy");
+  const output = tpl.body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) =>
+    k === "date" ? today : (values[k]?.trim() || `[${k}]`));
+
+  const pickTpl = (id: string) => { setTplId(id); setValues({}); };
+  const copy = () => { navigator.clipboard?.writeText(output); toast.success("Letter copied to clipboard"); };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Files size={14} className="text-[var(--color-primary)]" /> Template Library</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Ready-made letters, NOCs, authorisations and declarations. Fill the blanks and copy a clean draft — no more hunting for last year's format.</p>
+        <div className="flex flex-wrap gap-2">
+          {LETTER_TEMPLATES.map(t => (
+            <button key={t.id} onClick={() => pickTpl(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${tplId === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {t.title}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+          <p className="text-xs font-semibold text-[var(--color-muted)]">Fill in</p>
+          {tpl.fields.map(f => (
+            <div key={f.key}>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">{f.label}</label>
+              <input value={values[f.key] || ""} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))} placeholder={f.label} className={INP} />
+            </div>
+          ))}
+          <p className="text-[10px] text-[var(--color-muted)]">Today's date is inserted automatically.</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Preview</p>
+            <button onClick={copy} className="text-[10px] flex items-center gap-1 text-[var(--color-primary)] hover:underline"><Copy size={11} /> Copy</button>
+          </div>
+          <pre className="text-xs whitespace-pre-wrap font-sans bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 leading-relaxed min-h-[200px]">{output}</pre>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Boilerplate only — these are not a substitute for legal advice. Have material documents reviewed by a professional and printed on letterhead / stamp paper where required.</p>
+    </div>
+  );
+}
+
+// ── Document Share-Link Tracker ──────────────────────────────────────────────────
+// A register of share links handed out for documents — who got it, when it expires,
+// and whether it's been revoked — so external access stays accountable.
+type ShareLink = {
+  id: string;
+  docName: string;
+  recipient: string;
+  access: "view" | "download";
+  createdAt: string;
+  expiresAt: string;
+  token: string;
+  revoked: boolean;
+};
+
+function ShareLinkTracker() {
+  const [links, setLinks] = useFeatureState<ShareLink[]>("doc-share-links", []);
+  const [docName, setDocName] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [access, setAccess] = useState<ShareLink["access"]>("view");
+  const [days, setDays] = useState("7");
+
+  const create = () => {
+    if (!docName || !recipient) { toast.error("Enter a document name and recipient"); return; }
+    const exp = new Date(); exp.setDate(exp.getDate() + (parseInt(days) || 7));
+    setLinks(prev => [{
+      id: crypto.randomUUID(), docName, recipient, access,
+      createdAt: new Date().toISOString(), expiresAt: exp.toISOString(),
+      token: Math.random().toString(36).slice(2, 10), revoked: false,
+    }, ...prev]);
+    setDocName(""); setRecipient("");
+    toast.success("Share link created");
+  };
+
+  const revoke = (id: string) => { setLinks(prev => prev.map(l => l.id === id ? { ...l, revoked: true } : l)); toast.success("Link revoked"); };
+  const copyLink = (l: ShareLink) => { navigator.clipboard?.writeText(`https://share.headroom.app/d/${l.token}`); toast.success("Link copied"); };
+
+  const linkState = (l: ShareLink) => {
+    if (l.revoked) return { label: "Revoked", style: "bg-red-900/30 text-red-400 border-red-800/40" };
+    if (differenceInCalendarDays(new Date(l.expiresAt), new Date()) < 0) return { label: "Expired", style: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" };
+    return { label: "Active", style: "bg-green-900/30 text-green-400 border-green-800/40" };
+  };
+  const active = links.filter(l => !l.revoked && differenceInCalendarDays(new Date(l.expiresAt), new Date()) >= 0).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Document Share-Link Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Generate trackable links when you share a document externally, set how long they last, and revoke access the moment it's no longer needed.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
+          <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Recipient / email *" className={INP} />
+          <select value={access} onChange={e => setAccess(e.target.value as ShareLink["access"])} className={INP}>
+            <option value="view">View only</option>
+            <option value="download">Allow download</option>
+          </select>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Expires in (days)</label>
+            <input type="number" value={days} onChange={e => setDays(e.target.value)} placeholder="7" className={INP} />
+          </div>
+        </div>
+        <button onClick={create} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Link2 size={13} /> Create link</button>
+      </div>
+
+      {links.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
+          <ShieldCheck size={16} className={active > 0 ? "text-green-400" : "text-[var(--color-muted)]"} />
+          <p className="text-sm"><span className="font-bold tabular-nums">{active}</span> <span className="text-[var(--color-muted)]">active link{active === 1 ? "" : "s"} out of {links.length} issued</span></p>
+        </div>
+      )}
+
+      {links.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[660px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Recipient", "Access", "Created", "Expires", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {links.map(l => {
+                const s = linkState(l);
+                return (
+                  <tr key={l.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{l.docName}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{l.recipient}</td>
+                    <td className="px-3 py-2.5 text-xs capitalize">{l.access === "download" ? "Download" : "View"}</td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(l.createdAt), "d MMM")}</td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(l.expiresAt), "d MMM yyyy")}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${s.style}`}>{s.label}</span></td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => copyLink(l)} className="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-0.5"><Copy size={10} /> Copy</button>
+                        {!l.revoked && <button onClick={() => revoke(l.id)} className="text-[10px] text-red-400 hover:underline">Revoke</button>}
+                        <button onClick={() => setLinks(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">This is a sharing register — the links shown are illustrative tokens. Wire to a server-side signed-URL service to enforce real expiry and revocation on the file itself.</p>
+    </div>
+  );
+}
+
+// ── KYC Document Collector ───────────────────────────────────────────────────────
+// Per-counterparty KYC checklist (PAN / Aadhaar / GST / bank proof…) with a received
+// tick and an optional reference, so onboarding a customer/vendor stays complete.
+type KycParty = { id: string; name: string; kind: "customer" | "vendor" | "employee"; createdAt: string; received: Record<string, boolean> };
+const KYC_DOCS = ["PAN card", "Aadhaar", "GST certificate", "Cancelled cheque / bank proof", "Address proof", "Photograph", "Signed agreement"] as const;
+
+function KycCollector() {
+  const [parties, setParties] = useFeatureState<KycParty[]>("doc-kyc-parties", []);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<KycParty["kind"]>("customer");
+
+  const add = () => {
+    if (!name) { toast.error("Enter a name"); return; }
+    setParties(prev => [{ id: crypto.randomUUID(), name, kind, createdAt: new Date().toISOString(), received: {} }, ...prev]);
+    setName("");
+    toast.success("Counterparty added");
+  };
+  const toggleDoc = (pid: string, docKey: string) =>
+    setParties(prev => prev.map(p => p.id === pid ? { ...p, received: { ...p.received, [docKey]: !p.received[docKey] } } : p));
+  const remove = (pid: string) => setParties(prev => prev.filter(p => p.id !== pid));
+
+  const progress = (p: KycParty) => KYC_DOCS.filter(d => p.received[d]).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> KYC Document Collector</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track which KYC documents you've received from each customer, vendor or new hire. Tick each off as it arrives so onboarding never stalls on a missing paper.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Counterparty name *" className={INP} />
+          <select value={kind} onChange={e => setKind(e.target.value as KycParty["kind"])} className={INP}>
+            <option value="customer">Customer</option>
+            <option value="vendor">Vendor</option>
+            <option value="employee">Employee</option>
+          </select>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add counterparty</button>
+        </div>
+      </div>
+
+      {parties.length === 0 ? (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <UserCheck size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No counterparties yet — add one to start collecting KYC.</p>
+        </div>
+      ) : parties.map(p => {
+        const got = progress(p);
+        const complete = got === KYC_DOCS.length;
+        return (
+          <div key={p.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">{p.name}</p>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] capitalize">{p.kind}</span>
+                {complete && <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">Complete</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs tabular-nums text-[var(--color-muted)]">{got}/{KYC_DOCS.length}</span>
+                <button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {KYC_DOCS.map(d => {
+                const has = !!p.received[d];
+                return (
+                  <button key={d} onClick={() => toggleDoc(p.id, d)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${has ? "bg-green-950/30 border-green-800/40 text-green-400" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                    {has ? <CheckCircle2 size={11} /> : <Plus size={11} />} {d}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">A collection tracker, not a verification service. Validate PAN/GSTIN against official registries and mask Aadhaar before storing, per DPDP data-minimisation norms.</p>
+    </div>
+  );
+}
+
+// ── Contract Key-Dates Extractor (manual entry → reminders) ──────────────────────
+// Capture the dates that matter in a contract — renewal, notice-to-terminate,
+// payment milestones — and see what's coming up, sorted by urgency.
+type KeyDate = { id: string; contract: string; kind: string; date: string; counterparty: string; note: string };
+const KEYDATE_KINDS = ["Renewal", "Notice deadline", "Payment milestone", "Expiry", "Review", "Other"] as const;
+
+function ContractKeyDates() {
+  const [dates, setDates] = useFeatureState<KeyDate[]>("doc-contract-keydates", []);
+  const [contract, setContract] = useState("");
+  const [kind, setKind] = useState<string>(KEYDATE_KINDS[0]);
+  const [date, setDate] = useState("");
+  const [counterparty, setCounterparty] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    if (!contract || !date) { toast.error("Enter a contract and date"); return; }
+    setDates(prev => [...prev, { id: crypto.randomUUID(), contract, kind, date, counterparty, note }]);
+    setContract(""); setDate(""); setCounterparty(""); setNote("");
+    toast.success("Key date added");
+  };
+
+  const enriched = dates
+    .map(d => ({ ...d, days: differenceInCalendarDays(new Date(d.date), new Date()) }))
+    .sort((a, b) => a.days - b.days);
+  const upcoming = enriched.filter(d => d.days >= 0 && d.days <= 30).length;
+  const overdue = enriched.filter(d => d.days < 0).length;
+
+  const tone = (days: number) =>
+    days < 0 ? { txt: "text-red-400", badge: "bg-red-900/30 text-red-400 border-red-800/40", label: "Passed" }
+    : days <= 30 ? { txt: "text-yellow-400", badge: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40", label: "Soon" }
+    : { txt: "text-green-400", badge: "bg-green-900/30 text-green-400 border-green-800/40", label: "Upcoming" };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Contract Key-Dates</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Record the dates buried in your contracts — renewal, notice-to-terminate, payment milestones — so a missed deadline never costs you an auto-renewal or a penalty.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={contract} onChange={e => setContract(e.target.value)} placeholder="Contract / agreement *" className={INP} />
+          <select value={kind} onChange={e => setKind(e.target.value)} className={INP}>
+            {KEYDATE_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <input value={counterparty} onChange={e => setCounterparty(e.target.value)} placeholder="Counterparty" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Date *</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+          <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add date</button></div>
+        </div>
+      </div>
+
+      {(overdue > 0 || upcoming > 0) && (
+        <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+          <p className="text-sm">
+            {overdue > 0 && <span className="font-semibold text-red-400">{overdue} passed</span>}
+            {overdue > 0 && upcoming > 0 && <span> · </span>}
+            {upcoming > 0 && <span className="font-semibold text-yellow-300">{upcoming} within 30 days</span>}
+            <span className="text-[var(--color-muted)]"> — act before they lapse.</span>
+          </p>
+        </div>
+      )}
+
+      {enriched.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Contract", "Event", "Counterparty", "Date", "Countdown", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {enriched.map(d => {
+                const t = tone(d.days);
+                return (
+                  <tr key={d.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{d.contract}{d.note ? <span className="block text-[10px] text-[var(--color-muted)]">{d.note}</span> : null}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.kind}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.counterparty || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(d.date), "d MMM yyyy")}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{d.days < 0 ? `${Math.abs(d.days)}d ago` : `in ${d.days}d`}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setDates(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Dates are entered manually from your reading of the contract — double-check the clause wording for notice periods, which are often counted in calendar vs business days.</p>
+    </div>
+  );
+}
+
+// ── Invoice / Bill Filing Tracker ────────────────────────────────────────────────
+// A simple "is this bill physically filed?" register: capture the bill, mark it
+// received → filed, and tag where the hard/soft copy lives. Closes the paper gap.
+type FilingItem = {
+  id: string;
+  vendor: string;
+  billNo: string;
+  amount: number;
+  billDate: string;
+  location: string;
+  status: "to-file" | "filed";
+  filedAt?: string;
+};
+
+function BillFilingTracker() {
+  const [items, setItems] = useFeatureState<FilingItem[]>("doc-filing-items", []);
+  const [vendor, setVendor] = useState("");
+  const [billNo, setBillNo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [location, setLocation] = useState("");
+  const [tab, setTab] = useState<"to-file" | "filed">("to-file");
+  const fc = formatCurrency;
+
+  const add = () => {
+    if (!vendor) { toast.error("Enter a vendor"); return; }
+    setItems(prev => [{
+      id: crypto.randomUUID(), vendor, billNo, amount: parseFloat(amount) || 0,
+      billDate, location, status: "to-file",
+    }, ...prev]);
+    setVendor(""); setBillNo(""); setAmount(""); setLocation("");
+    toast.success("Bill added to filing queue");
+  };
+  const markFiled = (id: string) => setItems(prev => prev.map(i => i.id === id ? { ...i, status: "filed", filedAt: new Date().toISOString() } : i));
+  const unfile = (id: string) => setItems(prev => prev.map(i => i.id === id ? { ...i, status: "to-file", filedAt: undefined } : i));
+
+  const toFile = items.filter(i => i.status === "to-file");
+  const filed = items.filter(i => i.status === "filed");
+  const shown = tab === "to-file" ? toFile : filed;
+  const pendingValue = toFile.reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Archive size={14} className="text-[var(--color-primary)]" /> Invoice / Bill Filing Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log every purchase bill the moment it arrives and mark it once it's filed — note whether the copy sits in a folder, a drive or the vault — so audit season has no missing vouchers.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
+          <input value={billNo} onChange={e => setBillNo(e.target.value)} placeholder="Bill / invoice no." className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Bill date</label>
+            <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={INP} />
+          </div>
+          <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Where filed (folder / drive)" className={INP} />
+          <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add bill</button></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "To be filed", value: String(toFile.length), color: toFile.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Pending value", value: fc(pendingValue), color: "text-orange-400" },
+          { label: "Filed", value: String(filed.length), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
+        {(["to-file", "filed"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`text-xs px-3 py-1.5 rounded font-medium capitalize transition-colors ${tab === t ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {t === "to-file" ? `To file (${toFile.length})` : `Filed (${filed.length})`}
+          </button>
+        ))}
+      </div>
+
+      {shown.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[660px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Bill no.", "Amount", "Bill date", "Location", "", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {shown.map(i => (
+                <tr key={i.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{i.vendor}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.billNo || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{i.amount > 0 ? fc(i.amount) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs">{format(new Date(i.billDate), "d MMM yyyy")}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.location || "—"}</td>
+                  <td className="px-3 py-2.5">
+                    {i.status === "to-file"
+                      ? <button onClick={() => markFiled(i.id)} className="text-[10px] text-green-400 hover:underline flex items-center gap-1"><CheckCircle2 size={11} /> Mark filed</button>
+                      : <span className="text-[10px] text-[var(--color-muted)] flex items-center gap-1"><Archive size={11} /> Filed {i.filedAt ? format(new Date(i.filedAt), "d MMM") : ""} <button onClick={() => unfile(i.id)} className="ml-1 hover:underline">undo</button></span>}
+                  </td>
+                  <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <Archive size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">{tab === "to-file" ? "Nothing waiting to be filed." : "No bills filed yet."}</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Keep the original tax invoice for every booked bill — ITC and assessments require the source document, not just the ledger entry. Retain for the statutory period.</p>
+    </div>
+  );
+}
+
+// ── Document Approval Flow ───────────────────────────────────────────────────────
+// Route a document to an approver with an amount and reason; track pending →
+// approved / rejected with a decision note. A lightweight maker-checker for SMBs.
+type ApprovalReq = {
+  id: string;
+  title: string;
+  approver: string;
+  amount: number;
+  reason: string;
+  raisedBy: string;
+  raisedAt: string;
+  status: "pending" | "approved" | "rejected";
+  decisionNote: string;
+  decidedAt?: string;
+};
+
+function ApprovalFlow() {
+  const [reqs, setReqs] = useFeatureState<ApprovalReq[]>("doc-approval-reqs", []);
+  const [title, setTitle] = useState("");
+  const [approver, setApprover] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [raisedBy, setRaisedBy] = useState("");
+  const fc = formatCurrency;
+
+  const raise = () => {
+    if (!title || !approver) { toast.error("Enter a document and approver"); return; }
+    setReqs(prev => [{
+      id: crypto.randomUUID(), title, approver, amount: parseFloat(amount) || 0, reason,
+      raisedBy, raisedAt: new Date().toISOString(), status: "pending", decisionNote: "",
+    }, ...prev]);
+    setTitle(""); setApprover(""); setAmount(""); setReason(""); setRaisedBy("");
+    toast.success("Sent for approval");
+  };
+  const decide = (id: string, status: "approved" | "rejected") =>
+    setReqs(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const decisionNote = window.prompt(status === "approved" ? "Approval note (optional)" : "Reason for rejection (optional)") || "";
+      return { ...r, status, decisionNote, decidedAt: new Date().toISOString() };
+    }));
+
+  const STATUS_STYLE: Record<ApprovalReq["status"], string> = {
+    pending: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    approved: "bg-green-900/30 text-green-400 border-green-800/40",
+    rejected: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+  const pending = reqs.filter(r => r.status === "pending").length;
+  const approvedValue = reqs.filter(r => r.status === "approved").reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Document Approval Flow</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Send a bill, contract or payment voucher to the right person for sign-off, with the amount and reason attached. A simple maker-checker trail of who approved what, and when.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Document / request *" className={INP} />
+          <input value={approver} onChange={e => setApprover(e.target.value)} placeholder="Approver *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
+          <input value={raisedBy} onChange={e => setRaisedBy(e.target.value)} placeholder="Raised by" className={INP} />
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason / context" className={INP} />
+          <div className="flex items-end"><button onClick={raise} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Send size={13} /> Send for approval</button></div>
+        </div>
+      </div>
+
+      {reqs.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Pending", value: String(pending), color: pending > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Approved value", value: fc(approvedValue), color: "text-green-400" },
+            { label: "Total requests", value: String(reqs.length), color: "text-[var(--color-text)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {reqs.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Approver", "Amount", "Raised", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {reqs.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.title}
+                    {r.reason ? <span className="block text-[10px] text-[var(--color-muted)]">{r.reason}</span> : null}
+                    {r.raisedBy ? <span className="block text-[10px] text-[var(--color-muted)]">by {r.raisedBy}</span> : null}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs">{r.approver}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{r.amount > 0 ? fc(r.amount) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs">{format(new Date(r.raisedAt), "d MMM")}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                    {r.status !== "pending" && r.decisionNote ? <span className="block text-[10px] text-[var(--color-muted)] mt-0.5 max-w-[160px] truncate">{r.decisionNote}</span> : null}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      {r.status === "pending" && <>
+                        <button onClick={() => decide(r.id, "approved")} className="text-[10px] text-green-400 hover:underline flex items-center gap-0.5"><ThumbsUp size={10} /> Approve</button>
+                        <button onClick={() => decide(r.id, "rejected")} className="text-[10px] text-red-400 hover:underline flex items-center gap-0.5"><XCircle size={10} /> Reject</button>
+                      </>}
+                      <button onClick={() => setReqs(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+          <ClipboardCheck size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No approval requests yet.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Approvals here are tracked by name for an internal trail — for binding authorisation tie each decision to an authenticated user and your delegation-of-authority matrix.</p>
     </div>
   );
 }

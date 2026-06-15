@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy, Tag, Users, PieChart, Target } from "lucide-react";
+import { Sliders, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Zap, Copy, Tag, Users, PieChart, Target, ShieldAlert, Scissors, Rocket, Factory, Clock, Megaphone, Building2 } from "lucide-react";
 import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
@@ -59,7 +59,7 @@ const TYPE_COLORS: Record<string, string> = {
   deal:    "text-purple-400",
 };
 
-type ScenarioTab = "planner" | "price-sim" | "headcount" | "dilution" | "breakeven";
+type ScenarioTab = "planner" | "price-sim" | "headcount" | "dilution" | "breakeven" | "revenue-shock" | "cost-cut" | "product-launch" | "supplier-hike" | "payment-terms" | "marketing-roi" | "capex";
 
 export default function ScenariosPage() {
   const { store } = useApp();
@@ -160,6 +160,13 @@ export default function ScenariosPage() {
           ["headcount", "Headcount / Hiring", Users],
           ["dilution", "Funding Dilution", PieChart],
           ["breakeven", "Break-even", Target],
+          ["revenue-shock", "Revenue Shock", ShieldAlert],
+          ["cost-cut", "Cost-Cut Plan", Scissors],
+          ["product-launch", "Product Launch", Rocket],
+          ["supplier-hike", "Supplier Price Rise", Factory],
+          ["payment-terms", "Payment Terms", Clock],
+          ["marketing-roi", "Marketing ROI", Megaphone],
+          ["capex", "Buy vs Lease", Building2],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setScenTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${scenTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -172,6 +179,13 @@ export default function ScenariosPage() {
       {scenTab === "headcount" && <HeadcountScenario />}
       {scenTab === "dilution" && <DilutionScenario />}
       {scenTab === "breakeven" && <BreakevenAnalyzer />}
+      {scenTab === "revenue-shock" && <RevenueShockStressTest />}
+      {scenTab === "cost-cut" && <CostCutSimulator />}
+      {scenTab === "product-launch" && <ProductLaunchModel />}
+      {scenTab === "supplier-hike" && <SupplierPriceRiseImpact />}
+      {scenTab === "payment-terms" && <PaymentTermsCashImpact />}
+      {scenTab === "marketing-roi" && <MarketingRoiScenario />}
+      {scenTab === "capex" && <CapexBuyVsLease />}
 
       {scenTab === "planner" && <>
       {/* Presets */}
@@ -799,6 +813,702 @@ function BreakevenAnalyzer() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Single-product CVP model. For multi-product break-even, run this per product line using its own price, variable cost and share of fixed costs.</p>
+    </div>
+  );
+}
+
+// Derive live monthly revenue / cost / cash from the ledger (same method the
+// HeadcountScenario uses) so the shock & cut tools start from real numbers.
+function useLiveMonthly() {
+  const { store } = useApp();
+  return useMemo(() => {
+    const txns = store.transactions ?? [];
+    const months = Math.max(txns.length / 30, 1);
+    const rev  = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) / months;
+    const cost = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) / months;
+    const cash = txns.reduce((s, t) => s + t.amount, 0);
+    return { cashOnHand: Math.max(0, Math.round(cash)), monthlyRevenue: Math.round(rev), monthlyCost: Math.round(cost) };
+  }, [store.transactions]);
+}
+
+// ── #94 REVENUE-SHOCK / RECESSION STRESS TEST ───────────────────────────────
+// Drops monthly revenue by a chosen %, models how much variable cost falls with
+// it, then reports the survival sequence: new burn, runway, and the cost cut
+// needed to stay above the safety line.
+function RevenueShockStressTest() {
+  const fc = formatCurrency;
+  const live = useLiveMonthly();
+
+  const [cashInput, setCash]   = useState("");
+  const [revInput, setRev]     = useState("");
+  const [costInput, setCost]   = useState("");
+  const [dropPct, setDrop]     = useState("30");   // revenue shock %
+  const [varPct, setVarPct]    = useState("40");   // share of cost that's variable (flexes with revenue)
+  const [safetyMo, setSafety]  = useState("6");    // months of runway considered safe
+
+  const cash = parseFloat(cashInput) || live.cashOnHand;
+  const rev  = parseFloat(revInput)  || live.monthlyRevenue;
+  const cost = parseFloat(costInput) || live.monthlyCost;
+  const drop = Math.min(Math.max(parseFloat(dropPct) || 0, 0), 100) / 100;
+  const varShare = Math.min(Math.max(parseFloat(varPct) || 0, 0), 100) / 100;
+  const safety = parseFloat(safetyMo) || 0;
+
+  const shockedRev  = rev * (1 - drop);
+  const variableCost = cost * varShare;
+  const fixedCost    = cost - variableCost;
+  // Variable cost shrinks in proportion to the revenue fall.
+  const shockedCost  = fixedCost + variableCost * (1 - drop);
+
+  const baseBurn  = cost - rev;
+  const shockBurn = shockedCost - shockedRev;
+  const runway = (burn: number) => burn <= 0 ? Infinity : cash / burn;
+  const baseRunway  = runway(baseBurn);
+  const shockRunway = runway(shockBurn);
+  const label = (m: number) => m === Infinity ? "∞ (cash-positive)" : `${m.toFixed(1)} mo`;
+
+  // Cost cut needed to bring shocked runway back to the safety line.
+  const maxAffordableCost = safety > 0 ? shockedRev + cash / safety : shockedRev;
+  const cutNeeded = Math.max(0, shockedCost - maxAffordableCost);
+  const survives  = shockRunway >= safety || shockBurn <= 0;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Revenue-Shock / Recession Stress Test</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cash on hand (₹)</label><input type="number" value={cashInput} onChange={e => setCash(e.target.value)} placeholder={`Auto: ${fc(live.cashOnHand)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label><input type="number" value={revInput} onChange={e => setRev(e.target.value)} placeholder={`Auto: ${fc(live.monthlyRevenue)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={costInput} onChange={e => setCost(e.target.value)} placeholder={`Auto: ${fc(live.monthlyCost)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Revenue drop %</label><input type="number" value={dropPct} onChange={e => setDrop(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Variable-cost share %</label><input type="number" value={varPct} onChange={e => setVarPct(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Safe runway (months)</label><input type="number" value={safetyMo} onChange={e => setSafety(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Variable cost (e.g. COGS, shipping) falls with revenue; fixed cost (rent, salaries) does not. A 30% drop with 40% variable share cuts cost by ~12%.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Revenue after shock", value: fc(Math.round(shockedRev)), color: "text-red-400" },
+          { label: "Burn after shock", value: shockBurn <= 0 ? "cash-positive" : `${fc(Math.round(shockBurn))}/mo`, color: shockBurn <= 0 ? "text-green-400" : "text-orange-400" },
+          { label: "Runway after shock", value: label(shockRunway), color: shockRunway === Infinity ? "text-green-400" : shockRunway < safety ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Cost cut to survive", value: cutNeeded <= 0 ? "none" : `${fc(Math.round(cutNeeded))}/mo`, color: cutNeeded <= 0 ? "text-green-400" : "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Normal", `After −${(drop * 100).toFixed(0)}%`].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Monthly revenue", b: fc(Math.round(rev)), a: fc(Math.round(shockedRev)) },
+              { label: "Monthly cost",    b: fc(Math.round(cost)), a: fc(Math.round(shockedCost)) },
+              { label: "Net burn / mo",   b: baseBurn <= 0 ? "cash-positive" : fc(Math.round(baseBurn)), a: shockBurn <= 0 ? "cash-positive" : fc(Math.round(shockBurn)) },
+              { label: "Runway",          b: label(baseRunway), a: label(shockRunway), bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${survives ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${survives ? "text-green-400" : "text-red-400"}`}>
+          {survives
+            ? `✓ A ${(drop * 100).toFixed(0)}% revenue drop still leaves ${label(shockRunway)} of runway — above your ${safety}-month safety line.`
+            : `⚠ A ${(drop * 100).toFixed(0)}% drop cuts runway to ${label(shockRunway)}. Cut ${fc(Math.round(cutNeeded))}/mo of cost (or raise cash) to hold the ${safety}-month line.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A first-order stress test: variable cost scales linearly with revenue and fixed cost stays put. Real downturns also stretch receivables — pair this with the Payment-Terms tool.</p>
+    </div>
+  );
+}
+
+// ── #95 COST-CUT SAVINGS SIMULATOR ──────────────────────────────────────────
+// Toggle a checklist of common SMB expense lines (each a % of current monthly
+// cost) and watch monthly savings, annual savings, and the runway extension add
+// up — ranked by how painful each cut is.
+function CostCutSimulator() {
+  const fc = formatCurrency;
+  const live = useLiveMonthly();
+
+  const [cashInput, setCash] = useState("");
+  const [costInput, setCost] = useState("");
+  const [revInput, setRev]   = useState("");
+
+  const cash = parseFloat(cashInput) || live.cashOnHand;
+  const cost = parseFloat(costInput) || live.monthlyCost;
+  const rev  = parseFloat(revInput)  || live.monthlyRevenue;
+
+  // Each lever = a % of current monthly cost it could remove, plus a pain rank.
+  const LEVERS = [
+    { id: "subs",      label: "Trim SaaS / subscriptions",   pct: 4,  pain: "low" },
+    { id: "travel",    label: "Cut travel & entertainment",  pct: 6,  pain: "low" },
+    { id: "marketing", label: "Pause discretionary marketing", pct: 12, pain: "medium" },
+    { id: "contract",  label: "Drop contractors / agencies", pct: 10, pain: "medium" },
+    { id: "rent",      label: "Renegotiate / sublet rent",   pct: 9,  pain: "high" },
+    { id: "payroll",   label: "Salary freeze / restructure", pct: 18, pain: "high" },
+  ];
+  const PAIN_COLOR: Record<string, string> = { low: "text-green-400", medium: "text-orange-400", high: "text-red-400" };
+
+  const [on, setOn] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setOn(s => ({ ...s, [id]: !s[id] }));
+
+  const monthlySaving = LEVERS.reduce((s, l) => s + (on[l.id] ? cost * (l.pct / 100) : 0), 0);
+  const newCost   = Math.max(0, cost - monthlySaving);
+  const baseBurn  = cost - rev;
+  const newBurn   = newCost - rev;
+  const runway = (burn: number) => burn <= 0 ? Infinity : cash / burn;
+  const baseRunway = runway(baseBurn);
+  const newRunway  = runway(newBurn);
+  const label = (m: number) => m === Infinity ? "∞" : `${m.toFixed(1)} mo`;
+  const runwayGain = (baseRunway === Infinity || newRunway === Infinity) ? null : newRunway - baseRunway;
+  const anyOn = monthlySaving > 0;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Cost-Cut Savings Simulator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cash on hand (₹)</label><input type="number" value={cashInput} onChange={e => setCash(e.target.value)} placeholder={`Auto: ${fc(live.cashOnHand)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={costInput} onChange={e => setCost(e.target.value)} placeholder={`Auto: ${fc(live.monthlyCost)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label><input type="number" value={revInput} onChange={e => setRev(e.target.value)} placeholder={`Auto: ${fc(live.monthlyRevenue)}`} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Tick the cuts you're willing to make — each is sized as a share of your current monthly cost. Cuts are ranked least to most painful.</p>
+      </div>
+
+      <div className={`${CARD} space-y-2`}>
+        {LEVERS.map(l => {
+          const saving = cost * (l.pct / 100);
+          const active = !!on[l.id];
+          return (
+            <button key={l.id} onClick={() => toggle(l.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${active ? "border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10" : "border-[var(--color-border)] hover:bg-white/2"}`}>
+              <span className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${active ? "bg-[var(--color-primary)] border-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>
+                {active && <CheckCircle2 size={12} className="text-[var(--color-bg)]" />}
+              </span>
+              <span className="text-sm font-medium flex-1">{l.label}</span>
+              <span className={`text-[10px] font-semibold uppercase ${PAIN_COLOR[l.pain]}`}>{l.pain}</span>
+              <span className="text-xs tabular-nums text-[var(--color-muted)] w-28 text-right">−{fc(Math.round(saving))}/mo</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Monthly savings", value: fc(Math.round(monthlySaving)), color: anyOn ? "text-green-400" : "text-[var(--color-muted)]" },
+          { label: "Annual savings", value: fc(Math.round(monthlySaving * 12)), color: anyOn ? "text-green-400" : "text-[var(--color-muted)]" },
+          { label: "New monthly cost", value: fc(Math.round(newCost)), color: "text-[var(--color-text)]" },
+          { label: "Runway after cuts", value: label(newRunway), color: newRunway === Infinity ? "text-green-400" : "text-[var(--color-text)]" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {anyOn && (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm font-bold text-green-400">
+            ✓ These cuts save {fc(Math.round(monthlySaving))}/mo ({fc(Math.round(monthlySaving * 12))}/yr){runwayGain !== null ? ` and extend runway by ~${runwayGain.toFixed(1)} months` : newBurn <= 0 ? " and turn you cash-positive" : ""}.
+          </p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative percentages — replace with your real line items for an exact plan. High-pain cuts (payroll, rent) carry morale and continuity costs not shown here.</p>
+    </div>
+  );
+}
+
+// ── #96 NEW-PRODUCT-LAUNCH MODEL ────────────────────────────────────────────
+// Models a launch's S-curve ramp over N months, the cannibalization of existing
+// sales, upfront launch cost, and the cumulative cash payback / break-even month.
+function ProductLaunchModel() {
+  const fc = formatCurrency;
+  const [upfront, setUpfront]   = useState("300000");  // one-time launch spend
+  const [peakRev, setPeak]      = useState("250000");  // steady-state monthly revenue at full ramp
+  const [marginPct, setMargin]  = useState("45");      // contribution margin %
+  const [rampMo, setRamp]       = useState("4");       // months to reach ~full ramp
+  const [cannibal, setCannibal] = useState("15");      // % of new revenue that steals existing margin
+  const [months, setMonths]     = useState("12");      // horizon
+
+  const F   = parseFloat(upfront) || 0;
+  const peak = parseFloat(peakRev) || 0;
+  const m   = (parseFloat(marginPct) || 0) / 100;
+  const ramp = Math.max(parseFloat(rampMo) || 1, 1);
+  const cann = (parseFloat(cannibal) || 0) / 100;
+  const H    = Math.min(Math.max(parseInt(months) || 1, 1), 36);
+
+  // S-curve ramp: fraction of peak reached by month t (logistic-ish, simple).
+  const rampFrac = (t: number) => 1 - Math.exp(-2.2 * t / ramp);
+
+  const rows = useMemo(() => {
+    const out: { month: number; revenue: number; netContribution: number; cumulative: number }[] = [];
+    let cum = -F;
+    for (let t = 1; t <= H; t++) {
+      const revenue = peak * rampFrac(t);
+      // Net contribution = new margin minus the margin lost to cannibalized sales.
+      const netContribution = revenue * m * (1 - cann);
+      cum += netContribution;
+      out.push({ month: t, revenue, netContribution, cumulative: cum });
+    }
+    return out;
+  }, [F, peak, m, ramp, cann, H]);
+
+  const paybackMonth = rows.find(r => r.cumulative >= 0)?.month ?? null;
+  const endCumulative = rows[rows.length - 1]?.cumulative ?? -F;
+  const totalContribution = endCumulative + F;
+  const profitable = endCumulative >= 0;
+  const chartData = rows.map(r => ({ month: `M${r.month}`, cum: Math.round(r.cumulative / 1000) }));
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Rocket size={14} className="text-[var(--color-primary)]" /> New-Product-Launch Model</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Upfront launch cost (₹)</label><input type="number" value={upfront} onChange={e => setUpfront(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Peak monthly revenue (₹)</label><input type="number" value={peakRev} onChange={e => setPeak(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Contribution margin %</label><input type="number" value={marginPct} onChange={e => setMargin(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Months to full ramp</label><input type="number" value={rampMo} onChange={e => setRamp(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cannibalization %</label><input type="number" value={cannibal} onChange={e => setCannibal(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Horizon (months)</label><input type="number" value={months} onChange={e => setMonths(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Revenue follows an S-curve to peak. Cannibalization discounts the margin that simply moved from an existing product.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Payback month", value: paybackMonth ? `Month ${paybackMonth}` : "not within horizon", color: paybackMonth ? "text-green-400" : "text-red-400" },
+          { label: `Cumulative cash (M${H})`, value: `${endCumulative >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(endCumulative)))}`, color: profitable ? "text-green-400" : "text-red-400" },
+          { label: "Total contribution", value: fc(Math.round(totalContribution)), color: "text-[var(--color-text)]" },
+          { label: "Peak monthly margin", value: `${fc(Math.round(peak * m * (1 - cann)))}/mo`, color: "text-[var(--color-text)]" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD}`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)] mb-3">Cumulative cash position (₹ thousands) · crosses zero at payback</p>
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="gradLaunch" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#1A6B55" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#1A6B55" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} width={36} />
+            <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}k`, "Cumulative"]} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={1} />
+            <Area type="monotone" dataKey="cum" stroke="#1A6B55" strokeWidth={2} fill="url(#gradLaunch)" name="cum" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${profitable ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${profitable ? "text-green-400" : "text-red-400"}`}>
+          {profitable
+            ? `✓ The launch recovers its ${fc(F)} upfront${paybackMonth ? ` by month ${paybackMonth}` : ""} and contributes ${fc(Math.round(endCumulative))} net cash over ${H} months.`
+            : `⚠ Over ${H} months the launch is still ${fc(Math.abs(Math.round(endCumulative)))} underwater — slow the ramp assumptions or cut launch cost before committing.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Contribution model: fixed overheads beyond the upfront spend are not re-charged here. Validate the ramp curve and cannibalization rate against a small pilot.</p>
+    </div>
+  );
+}
+
+// ── #97 SUPPLIER PRICE-RISE IMPACT ──────────────────────────────────────────
+// A key input cost rises X%; shows the hit to unit margin and annual profit, and
+// the selling-price increase needed to fully pass it through.
+function SupplierPriceRiseImpact() {
+  const fc = formatCurrency;
+  const [price, setPrice]     = useState("1000");   // selling price / unit
+  const [inputCost, setInput] = useState("400");    // affected input cost / unit
+  const [otherVar, setOther]  = useState("200");    // other variable cost / unit
+  const [risePct, setRise]    = useState("12");     // supplier increase %
+  const [units, setUnits]     = useState("1000");   // monthly units
+
+  const P  = parseFloat(price) || 0;
+  const IC = parseFloat(inputCost) || 0;
+  const OV = parseFloat(otherVar) || 0;
+  const rise = (parseFloat(risePct) || 0) / 100;
+  const Q  = parseFloat(units) || 0;
+
+  const newInput = IC * (1 + rise);
+  const oldUnitCost = IC + OV;
+  const newUnitCost = newInput + OV;
+  const oldMargin = P - oldUnitCost;
+  const newMargin = P - newUnitCost;
+  const marginHitPerUnit = oldMargin - newMargin; // = IC*rise
+  const oldMarginPct = P > 0 ? (oldMargin / P) * 100 : 0;
+  const newMarginPct = P > 0 ? (newMargin / P) * 100 : 0;
+  const annualProfitHit = marginHitPerUnit * Q * 12;
+
+  // Price increase to fully pass the cost through and restore old rupee margin.
+  const passThroughPrice = P + marginHitPerUnit;
+  const passThroughPct = P > 0 ? (marginHitPerUnit / P) * 100 : 0;
+  const stillProfitable = newMargin > 0;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Factory size={14} className="text-[var(--color-primary)]" /> Supplier Price-Rise Impact</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Selling price / unit (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Affected input cost / unit (₹)</label><input type="number" value={inputCost} onChange={e => setInput(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Other variable cost / unit (₹)</label><input type="number" value={otherVar} onChange={e => setOther(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier rise %</label><input type="number" value={risePct} onChange={e => setRise(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly units</label><input type="number" value={units} onChange={e => setUnits(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Only the affected input rises; other costs and price hold unless you pass it through.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "New input cost / unit", value: fc(Math.round(newInput)), color: "text-red-400" },
+          { label: "Margin hit / unit", value: `−${fc(Math.round(marginHitPerUnit))}`, color: "text-red-400" },
+          { label: "Annual profit hit", value: `−${fc(Math.round(annualProfitHit))}`, color: "text-red-400" },
+          { label: "Pass-through price", value: `${fc(Math.round(passThroughPrice))} (+${passThroughPct.toFixed(1)}%)`, color: "text-[var(--color-primary)]" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Before", "After rise"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Unit cost", b: fc(Math.round(oldUnitCost)), a: fc(Math.round(newUnitCost)) },
+              { label: "Unit margin", b: fc(Math.round(oldMargin)), a: fc(Math.round(newMargin)) },
+              { label: "Margin %", b: `${oldMarginPct.toFixed(1)}%`, a: `${newMarginPct.toFixed(1)}%` },
+              { label: "Monthly profit", b: fc(Math.round(oldMargin * Q)), a: fc(Math.round(newMargin * Q)), bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${stillProfitable ? "border-orange-800/40 bg-orange-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${stillProfitable ? "text-orange-400" : "text-red-400"}`}>
+          {stillProfitable
+            ? `A ${(rise * 100).toFixed(0)}% supplier hike costs ${fc(Math.round(annualProfitHit))}/yr in profit. Raise price ${passThroughPct.toFixed(1)}% (to ${fc(Math.round(passThroughPrice))}) to fully recover it, or absorb the ${newMarginPct.toFixed(1)}% margin.`
+            : `⚠ At a ${(rise * 100).toFixed(0)}% hike your unit margin turns negative — you must raise price, re-source, or drop this line.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Pass-through restores rupee margin per unit; it assumes demand holds at the higher price — stress that with the Price-Change Profit tool's elasticity.</p>
+    </div>
+  );
+}
+
+// ── #98 PAYMENT-TERMS CASH IMPACT ───────────────────────────────────────────
+// Shifts customer (DSO) and supplier (DPO) payment days and shows the one-time
+// cash freed/locked plus the interest saved on a working-capital line.
+function PaymentTermsCashImpact() {
+  const fc = formatCurrency;
+  const live = useLiveMonthly();
+
+  const [revInput, setRev]   = useState("");
+  const [costInput, setCost] = useState("");
+  const [dsoOld, setDsoOld]  = useState("60");
+  const [dsoNew, setDsoNew]  = useState("45");
+  const [dpoOld, setDpoOld]  = useState("30");
+  const [dpoNew, setDpoNew]  = useState("45");
+  const [wcRate, setRate]    = useState("14");   // working-capital interest %
+
+  const rev  = parseFloat(revInput)  || live.monthlyRevenue;
+  const cost = parseFloat(costInput) || live.monthlyCost;
+  const dailyRev  = rev * 12 / 365;
+  const dailyCost = cost * 12 / 365;
+  const rate = (parseFloat(wcRate) || 0) / 100;
+
+  const dDso = (parseFloat(dsoOld) || 0) - (parseFloat(dsoNew) || 0); // +ve = collect faster = cash in
+  const dDpo = (parseFloat(dpoNew) || 0) - (parseFloat(dpoOld) || 0); // +ve = pay slower = cash kept
+
+  const cashFromDso = dDso * dailyRev;
+  const cashFromDpo = dDpo * dailyCost;
+  const cashFreed   = cashFromDso + cashFromDpo;
+  const interestSaved = cashFreed * rate;
+  const positive = cashFreed >= 0;
+
+  const oldCcc = (parseFloat(dsoOld) || 0) - (parseFloat(dpoOld) || 0);
+  const newCcc = (parseFloat(dsoNew) || 0) - (parseFloat(dpoNew) || 0);
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Payment-Terms Cash Impact</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label><input type="number" value={revInput} onChange={e => setRev(e.target.value)} placeholder={`Auto: ${fc(live.monthlyRevenue)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={costInput} onChange={e => setCost(e.target.value)} placeholder={`Auto: ${fc(live.monthlyCost)}`} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">WC interest %</label><input type="number" value={wcRate} onChange={e => setRate(e.target.value)} className={INP} /></div>
+          <div />
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) — now</label><input type="number" value={dsoOld} onChange={e => setDsoOld(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) — new</label><input type="number" value={dsoNew} onChange={e => setDsoNew(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) — now</label><input type="number" value={dpoOld} onChange={e => setDpoOld(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) — new</label><input type="number" value={dpoNew} onChange={e => setDpoNew(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Collecting sooner (lower DSO) and paying later (higher DPO) both free one-time cash. Cash-conversion cycle = DSO − DPO.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Cash from faster DSO", value: `${cashFromDso >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(cashFromDso)))}`, color: cashFromDso >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Cash from slower DPO", value: `${cashFromDpo >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(cashFromDpo)))}`, color: cashFromDpo >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Total cash freed", value: `${positive ? "+" : "−"}${fc(Math.abs(Math.round(cashFreed)))}`, color: positive ? "text-green-400" : "text-red-400" },
+          { label: "Annual interest saved", value: fc(Math.round(interestSaved)), color: interestSaved >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} flex items-center justify-around text-center`}>
+        <div>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Cash-conversion cycle now</p>
+          <p className="text-2xl font-bold tabular-nums">{oldCcc.toFixed(0)} <span className="text-sm font-normal text-[var(--color-muted)]">days</span></p>
+        </div>
+        <TrendingDown size={20} className={newCcc <= oldCcc ? "text-green-400" : "text-red-400"} />
+        <div>
+          <p className="text-xs text-[var(--color-muted)] mb-1">After change</p>
+          <p className={`text-2xl font-bold tabular-nums ${newCcc <= oldCcc ? "text-green-400" : "text-red-400"}`}>{newCcc.toFixed(0)} <span className="text-sm font-normal text-[var(--color-muted)]">days</span></p>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${positive ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${positive ? "text-green-400" : "text-red-400"}`}>
+          {positive
+            ? `✓ These terms free ${fc(Math.round(cashFreed))} of one-time cash and save ${fc(Math.round(interestSaved))}/yr in working-capital interest — CCC drops ${(oldCcc - newCcc).toFixed(0)} days.`
+            : `⚠ These terms lock up ${fc(Math.abs(Math.round(cashFreed)))} more cash and lengthen your cash-conversion cycle. Re-check the DSO/DPO direction.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A one-time balance-sheet shift, not recurring profit. Faster DSO may need early-pay discounts; slower DPO can strain supplier goodwill.</p>
+    </div>
+  );
+}
+
+// ── #99 MARKETING-SPEND ROI SCENARIO ────────────────────────────────────────
+// Models spend → leads (via CPL) → customers (conversion) → revenue & margin,
+// then reports ROAS, CAC, payback and net profit including LTV.
+function MarketingRoiScenario() {
+  const fc = formatCurrency;
+  const [spend, setSpend]       = useState("100000");
+  const [cpl, setCpl]           = useState("400");     // cost per lead
+  const [convPct, setConv]      = useState("8");       // lead → customer %
+  const [aov, setAov]           = useState("6000");    // avg first-order value
+  const [marginPct, setMargin]  = useState("40");      // contribution margin %
+  const [repeat, setRepeat]     = useState("2");       // additional lifetime orders
+
+  const S = parseFloat(spend) || 0;
+  const CPL = parseFloat(cpl) || 0;
+  const conv = (parseFloat(convPct) || 0) / 100;
+  const aovV = parseFloat(aov) || 0;
+  const m = (parseFloat(marginPct) || 0) / 100;
+  const repeatOrders = parseFloat(repeat) || 0;
+
+  const leads = CPL > 0 ? S / CPL : 0;
+  const customers = leads * conv;
+  const firstRevenue = customers * aovV;
+  const ltvRevenue = customers * aovV * (1 + repeatOrders);
+  const firstMargin = firstRevenue * m;
+  const ltvMargin = ltvRevenue * m;
+  const cac = customers > 0 ? S / customers : 0;
+  const ltvPerCustomer = aovV * (1 + repeatOrders) * m;
+  const roasFirst = S > 0 ? firstRevenue / S : 0;
+  const netFirst = firstMargin - S;
+  const netLtv = ltvMargin - S;
+  const ltvCacRatio = cac > 0 ? ltvPerCustomer / cac : 0;
+  const profitableFirst = netFirst >= 0;
+  const profitableLtv = netLtv >= 0;
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Megaphone size={14} className="text-[var(--color-primary)]" /> Marketing-Spend ROI Scenario</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Marketing spend (₹)</label><input type="number" value={spend} onChange={e => setSpend(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cost per lead (₹)</label><input type="number" value={cpl} onChange={e => setCpl(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Lead → customer %</label><input type="number" value={convPct} onChange={e => setConv(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Avg order value (₹)</label><input type="number" value={aov} onChange={e => setAov(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Contribution margin %</label><input type="number" value={marginPct} onChange={e => setMargin(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Extra lifetime orders</label><input type="number" value={repeat} onChange={e => setRepeat(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Funnel: spend ÷ CPL = leads → × conversion = customers → × AOV = revenue. LTV adds repeat orders.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "New customers", value: Math.round(customers).toLocaleString("en-IN"), color: "text-[var(--color-text)]" },
+          { label: "CAC", value: fc(Math.round(cac)), color: "text-[var(--color-text)]" },
+          { label: "First-order ROAS", value: `${roasFirst.toFixed(2)}×`, color: roasFirst >= 1 ? "text-green-400" : "text-orange-400" },
+          { label: "LTV : CAC", value: `${ltvCacRatio.toFixed(1)}×`, color: ltvCacRatio >= 3 ? "text-green-400" : ltvCacRatio >= 1 ? "text-orange-400" : "text-red-400" },
+        ].map(card => (
+          <div key={card.label} className={CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "First order", "With LTV"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Revenue", b: fc(Math.round(firstRevenue)), a: fc(Math.round(ltvRevenue)) },
+              { label: "Contribution margin", b: fc(Math.round(firstMargin)), a: fc(Math.round(ltvMargin)) },
+              { label: "Less: marketing spend", b: `−${fc(Math.round(S))}`, a: `−${fc(Math.round(S))}` },
+              { label: "Net profit", b: `${netFirst >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netFirst)))}`, a: `${netLtv >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netLtv)))}`, bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${profitableLtv ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm font-bold ${profitableLtv ? "text-green-400" : "text-red-400"}`}>
+          {profitableFirst
+            ? `✓ This spend pays back on the first order (${roasFirst.toFixed(2)}× ROAS) and nets ${fc(Math.round(netLtv))} over the customer lifetime.`
+            : profitableLtv
+              ? `Loses ${fc(Math.abs(Math.round(netFirst)))} on first orders but turns ${fc(Math.round(netLtv))} profit once repeat orders land — viable only if retention holds (LTV:CAC ${ltvCacRatio.toFixed(1)}×).`
+              : `⚠ Even with lifetime value this spend loses ${fc(Math.abs(Math.round(netLtv)))} — lower CPL, lift conversion, or raise AOV before scaling.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">CPL and conversion are the most fragile inputs — small swings flip ROI. Test with a small budget before committing the full spend.</p>
+    </div>
+  );
+}
+
+// ── #100 CAPEX: BUY vs LEASE WAR-GAME ───────────────────────────────────────
+// Compares outright buy, equipment loan, and lease over the asset life on total
+// cash out, tax shield (depreciation / interest / lease rent), and net cost.
+function CapexBuyVsLease() {
+  const fc = formatCurrency;
+  const [assetCost, setAsset]  = useState("1000000");
+  const [lifeYears, setLife]   = useState("5");
+  const [salvagePct, setSalv]  = useState("15");    // residual value % at end
+  const [loanRate, setRate]    = useState("12");    // equipment loan %
+  const [leaseMo, setLease]    = useState("22000"); // monthly lease rent
+  const [taxPct, setTax]       = useState("25");    // corporate tax %
+  const [deprPct, setDepr]     = useState("15");    // WDV depreciation %
+
+  const A = parseFloat(assetCost) || 0;
+  const yrs = Math.max(parseFloat(lifeYears) || 1, 1);
+  const salvage = A * (parseFloat(salvagePct) || 0) / 100;
+  const r = (parseFloat(loanRate) || 0) / 100;
+  const leaseM = parseFloat(leaseMo) || 0;
+  const tax = (parseFloat(taxPct) || 0) / 100;
+  const depr = (parseFloat(deprPct) || 0) / 100;
+
+  // Depreciation tax shield (WDV method over the asset life).
+  let wdv = A, deprShield = 0;
+  for (let y = 0; y < yrs; y++) { const d = wdv * depr; deprShield += d * tax; wdv -= d; }
+
+  // BUY: pay full cost, recover salvage, keep depreciation tax shield.
+  const buyNet = A - salvage - deprShield;
+
+  // LOAN: simple-interest equipment loan over the life; interest is tax-deductible,
+  // and the buyer still owns the asset (depreciation shield + salvage).
+  const totalInterest = A * r * yrs;
+  const interestShield = totalInterest * tax;
+  const loanNet = A + totalInterest - interestShield - salvage - deprShield;
+
+  // LEASE: rent is fully deductible; no ownership, no salvage, no depreciation.
+  const totalLease = leaseM * 12 * yrs;
+  const leaseShield = totalLease * tax;
+  const leaseNet = totalLease - leaseShield;
+
+  const options = [
+    { key: "buy",   label: "Buy (cash)",   net: buyNet,   upfront: A,        color: "text-green-400" },
+    { key: "loan",  label: "Equipment loan", net: loanNet, upfront: 0,        color: "text-blue-400" },
+    { key: "lease", label: "Lease",        net: leaseNet, upfront: leaseM,   color: "text-purple-400" },
+  ];
+  const best = options.reduce((b, o) => o.net < b.net ? o : b, options[0]);
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      <div className={`${CARD} space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Capex: Buy vs Loan vs Lease</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Asset cost (₹)</label><input type="number" value={assetCost} onChange={e => setAsset(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Life (years)</label><input type="number" value={lifeYears} onChange={e => setLife(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Salvage value %</label><input type="number" value={salvagePct} onChange={e => setSalv(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Loan rate %</label><input type="number" value={loanRate} onChange={e => setRate(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Lease rent / mo (₹)</label><input type="number" value={leaseMo} onChange={e => setLease(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Tax rate %</label><input type="number" value={taxPct} onChange={e => setTax(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Depreciation % (WDV)</label><input type="number" value={deprPct} onChange={e => setDepr(e.target.value)} className={INP} /></div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Net cost = total cash out − tax shields − salvage. Buy/loan keep depreciation + residual; lease deducts full rent but owns nothing.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {options.map(o => (
+          <div key={o.key} className={`${CARD} ${o.key === best.key ? "border-[var(--color-primary)]/50 ring-1 ring-[var(--color-primary)]/30" : ""}`}>
+            <div className="flex items-center justify-between mb-1">
+              <p className={`text-sm font-semibold ${o.color}`}>{o.label}</p>
+              {o.key === best.key && <span className="text-[10px] font-bold text-[var(--color-primary)] uppercase">Lowest cost</span>}
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{fc(Math.round(o.net))}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">net cost over {yrs}y · upfront {fc(Math.round(o.upfront))}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-0 overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[480px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Component", "Buy", "Loan", "Lease"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+          <tbody>
+            {[
+              { label: "Gross cash out", buy: fc(Math.round(A)), loan: fc(Math.round(A + totalInterest)), lease: fc(Math.round(totalLease)) },
+              { label: "Tax shield", buy: `−${fc(Math.round(deprShield))}`, loan: `−${fc(Math.round(deprShield + interestShield))}`, lease: `−${fc(Math.round(leaseShield))}` },
+              { label: "Less: salvage", buy: `−${fc(Math.round(salvage))}`, loan: `−${fc(Math.round(salvage))}`, lease: "—" },
+              { label: "Net cost", buy: fc(Math.round(buyNet)), loan: fc(Math.round(loanNet)), lease: fc(Math.round(leaseNet)), bold: true },
+            ].map(r => (
+              <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.buy}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.loan}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.lease}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+        <p className="text-sm font-bold text-green-400">
+          ✓ Lowest net cost over {yrs} years: {best.label} at {fc(Math.round(best.net))}. Buy needs {fc(Math.round(A))} upfront; lease preserves cash but forfeits {fc(Math.round(salvage))} residual and the depreciation shield.
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Simplified: loan uses flat interest and the time-value of money is not discounted. Confirm depreciation rate and lease tax treatment with your CA before deciding.</p>
     </div>
   );
 }
