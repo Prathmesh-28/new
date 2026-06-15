@@ -9,6 +9,7 @@ import {
   ShieldCheck, Repeat, FileText, Percent, ListChecks, UserCheck,
   Split, Gauge, PiggyBank, CalendarClock,
   ClipboardCheck, Globe, CopyCheck, ArrowLeftRight, Award, FolderCheck, Activity,
+  ScrollText, Timer, BellRing, PieChart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -23,7 +24,8 @@ type Tab =
   | "positive-pay" | "mandates" | "guarantees" | "od-interest" | "statement-import"
   | "beneficiaries" | "transfer-planner" | "min-balance" | "savings-interest" | "payment-date"
   | "balance-confirmation" | "forex-tracker" | "duplicate-payment" | "netting"
-  | "interest-cert" | "doc-checklist" | "runway";
+  | "interest-cert" | "doc-checklist" | "runway"
+  | "deposit-slip" | "clearing-tracker" | "od-renewal" | "bank-spend";
 
 export default function BankingPage() {
   const { store } = useApp();
@@ -75,6 +77,10 @@ export default function BankingPage() {
             ["interest-cert", "Interest Certificates", Award],
             ["doc-checklist", "A/C Opening Docs", FolderCheck],
             ["runway", "Cash Runway", Activity],
+            ["deposit-slip", "Deposit Slip", ScrollText],
+            ["clearing-tracker", "Clearing Tracker", Timer],
+            ["od-renewal", "OD Renewal", BellRing],
+            ["bank-spend", "Spend by Bank", PieChart],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -182,6 +188,10 @@ export default function BankingPage() {
       {tab === "interest-cert" && <InterestCertificateTracker />}
       {tab === "doc-checklist" && <AccountOpeningChecklist />}
       {tab === "runway" && <CashRunwayMeter />}
+      {tab === "deposit-slip" && <CashDepositSlip />}
+      {tab === "clearing-tracker" && <ClearingTracker />}
+      {tab === "od-renewal" && <OdRenewalReminder />}
+      {tab === "bank-spend" && <SpendByBank />}
     </div>
   );
 }
@@ -2593,6 +2603,404 @@ function CashRunwayMeter() {
         </Callout>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Burn is an average over the window and treats one-off items the same as recurring ones; exclude exceptional inflows/outflows for a truer picture.</p>
+    </div>
+  );
+}
+
+// ── 28. Cash-deposit-slip generator (denomination breakup) ────────────────────────
+const DENOMS = [500, 200, 100, 50, 20, 10] as const;
+function CashDepositSlip() {
+  const { store } = useApp();
+  const accounts = store.bankAccounts;
+  const [acctId, setAcctId] = useState(accounts[0]?.id ?? "");
+  const [depositor, setDepositor] = useState("");
+  const [counts, setCounts] = useState<Record<number, string>>({});
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const acct = accounts.find(a => a.id === acctId);
+  const lines = DENOMS.map(d => ({ d, n: Math.max(0, Math.floor(Number(counts[d]) || 0)), value: d * Math.max(0, Math.floor(Number(counts[d]) || 0)) }));
+  const total = lines.reduce((s, l) => s + l.value, 0);
+  const totalNotes = lines.reduce((s, l) => s + l.n, 0);
+
+  const copySlip = () => {
+    const body = [
+      "CASH DEPOSIT SLIP",
+      `Date: ${date}`,
+      `Bank: ${acct?.name ?? "—"} (${acct?.provider ?? ""})`,
+      `Depositor: ${depositor || "—"}`,
+      "",
+      ...lines.filter(l => l.n > 0).map(l => `  ${l.n} x ₹${l.d} = ${formatCurrency(l.value)}`),
+      "",
+      `Total notes: ${totalNotes}`,
+      `Total amount: ${formatCurrency(total)}`,
+    ].join("\n");
+    navigator.clipboard?.writeText(body).then(() => toast.success("Deposit slip copied"), () => toast.error("Could not copy"));
+  };
+
+  if (accounts.length === 0) return <EmptyHint text="Link a bank account to generate a cash-deposit slip with a denomination breakup." />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Cash-Deposit-Slip Generator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Enter the number of notes per denomination — we tally the amount and produce a slip you can copy onto the bank&apos;s pay-in form (RBI no longer issues ₹2000 / ₹1 notes for fresh deposits).</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deposit into</label>
+            <select value={acctId} onChange={e => setAcctId(e.target.value)} className={INP}>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Depositor name</label>
+            <input value={depositor} onChange={e => setDepositor(e.target.value)} placeholder="Cashier / staff" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {DENOMS.map(d => (
+            <div key={d}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">₹{d} notes</label>
+              <input type="number" min={0} value={counts[d] ?? ""} onChange={e => setCounts({ ...counts, [d]: e.target.value })} placeholder="0" className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total notes", value: `${totalNotes}`, color: "text-blue-400" },
+          { label: "Total deposit", value: formatCurrency(total), color: "text-green-400" },
+          { label: "Denominations used", value: `${lines.filter(l => l.n > 0).length}`, color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {total > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <p className="text-sm font-semibold">Slip preview</p>
+            <button onClick={copySlip} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-1.5 text-xs font-medium"><CopyCheck size={12} /> Copy slip</button>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]"><tr>{["Denomination", "Notes", "Value"].map(h => <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {lines.filter(l => l.n > 0).map(l => (
+                <tr key={l.d}><td className="px-5 py-2.5">₹{l.d}</td><td className="px-5 py-2.5 tabular-nums">{l.n}</td><td className="px-5 py-2.5 tabular-nums font-semibold">{formatCurrency(l.value)}</td></tr>
+              ))}
+              <tr className="font-semibold"><td className="px-5 py-2.5">Total</td><td className="px-5 py-2.5 tabular-nums">{totalNotes}</td><td className="px-5 py-2.5 tabular-nums text-green-400">{formatCurrency(total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 29. Cheque-clearing TAT tracker (expected credit date by instrument) ──────────
+type ClearItem = { id: string; instrument: "local-cheque" | "outstation-cheque" | "neft-inward" | "atm-deposit"; ref: string; amount: number; depositDate: string };
+const CLEAR_TAT: Record<ClearItem["instrument"], { label: string; days: number; note: string }> = {
+  "local-cheque": { label: "Local cheque (CTS)", days: 1, note: "CTS T+1 working day" },
+  "outstation-cheque": { label: "Outstation cheque", days: 3, note: "Typically T+2/T+3" },
+  "neft-inward": { label: "NEFT inward", days: 0, note: "Same-day in batch" },
+  "atm-deposit": { label: "Cash @ CDM/ATM", days: 0, note: "Instant, sometimes next-day if after cutoff" },
+};
+function addWorkingDays(start: Date, days: number): Date {
+  const d = new Date(start);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return d;
+}
+function ClearingTracker() {
+  const [items, setItems] = useFeatureState<ClearItem[]>("bank-clearing-tat", []);
+  const [instrument, setInstrument] = useState<ClearItem["instrument"]>("local-cheque");
+  const [ref, setRef] = useState("");
+  const [amount, setAmount] = useState("");
+  const [depositDate, setDepositDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const today = new Date();
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!ref.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter a reference and a positive amount"); return; }
+    setItems([...items, { id: crypto.randomUUID(), instrument, ref: ref.trim(), amount: amt, depositDate }]);
+    setRef(""); setAmount("");
+    toast.success("Instrument tracked");
+  };
+
+  const rows = items.map(it => {
+    const tat = CLEAR_TAT[it.instrument];
+    const expected = addWorkingDays(parseISO(it.depositDate), tat.days);
+    const daysToGo = differenceInCalendarDays(expected, today);
+    return { ...it, tat, expected, daysToGo, cleared: daysToGo < 0 };
+  }).sort((a, b) => a.expected.getTime() - b.expected.getTime());
+
+  const uncleared = rows.filter(r => !r.cleared);
+  const inFloat = uncleared.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Cheque-Clearing Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Log deposits and see the expected credit date by instrument type (local CTS T+1, outstation ~T+3) so you know when funds are truly available.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Instrument</label>
+            <select value={instrument} onChange={e => setInstrument(e.target.value as ClearItem["instrument"])} className={INP}>
+              {Object.entries(CLEAR_TAT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reference</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="Chq 000123" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deposited on</label>
+            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Track</button>
+        </div>
+      </div>
+
+      {items.length > 0 ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Still clearing", value: `${uncleared.length}`, color: uncleared.length ? "text-yellow-400" : "text-green-400" },
+              { label: "Funds in float", value: formatCurrency(inFloat), color: "text-blue-400" },
+              { label: "Cleared", value: `${rows.length - uncleared.length}`, color: "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Instrument", "Ref", "Amount", "Deposited", "Expected credit", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 text-xs">{r.tat.label}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs">{r.ref}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.depositDate}</td>
+                      <td className="px-4 py-2.5 text-xs">{format(r.expected, "dd MMM yyyy")}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.cleared ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>
+                          {r.cleared ? "Cleared" : r.daysToGo === 0 ? "Clears today" : `${r.daysToGo}d to go`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setItems(items.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Expected credit dates are working-day estimates (Sat/Sun excluded) and ignore bank holidays; large or outstation instruments may be held longer at the bank&apos;s discretion.</p>
+        </>
+      ) : <EmptyHint text="No instruments tracked yet. Add a cheque or deposit to see expected credit dates and float." />}
+    </div>
+  );
+}
+
+// ── 30. Overdraft / CC limit renewal reminder ─────────────────────────────────────
+type OdLimit = { id: string; bank: string; type: "od" | "cc"; limit: number; renewalDate: string };
+function OdRenewalReminder() {
+  const [limits, setLimits] = useFeatureState<OdLimit[]>("bank-od-renewals", []);
+  const [bank, setBank] = useState("");
+  const [type, setType] = useState<"od" | "cc">("cc");
+  const [limit, setLimit] = useState("");
+  const [renewalDate, setRenewalDate] = useState("");
+  const [leadDays, setLeadDays] = useState(45);
+  const today = new Date();
+
+  const add = () => {
+    const lim = parseFloat(limit);
+    if (!bank.trim() || isNaN(lim) || lim <= 0 || !renewalDate) { toast.error("Enter bank, limit and renewal date"); return; }
+    setLimits([...limits, { id: crypto.randomUUID(), bank: bank.trim(), type, limit: lim, renewalDate }]);
+    setBank(""); setLimit(""); setRenewalDate("");
+    toast.success("Facility added");
+  };
+
+  const rows = limits.map(l => {
+    const days = differenceInCalendarDays(parseISO(l.renewalDate), today);
+    return { ...l, days, due: days <= leadDays, overdue: days < 0 };
+  }).sort((a, b) => a.days - b.days);
+  const dueSoon = rows.filter(r => r.due);
+  const totalLimit = limits.reduce((s, l) => s + l.limit, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BellRing size={14} className="text-[var(--color-primary)]" /> OD / CC Renewal Reminder</h3>
+        <p className="text-xs text-[var(--color-muted)]">Working-capital limits (cash credit / overdraft) need an annual review with fresh stock statements and financials. Track renewal dates so the facility never lapses mid-quarter.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
+            <input value={bank} onChange={e => setBank(e.target.value)} placeholder="HDFC CC" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as "od" | "cc")} className={INP}>
+              <option value="cc">Cash Credit</option>
+              <option value="od">Overdraft</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned limit (₹)</label>
+            <input type="number" value={limit} onChange={e => setLimit(e.target.value)} placeholder="5000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal due</label>
+            <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Remind me <strong className="text-[var(--color-text)]">{leadDays}</strong> days before renewal</label>
+          <input type="range" min={15} max={90} step={5} value={leadDays} onChange={e => setLeadDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {limits.length > 0 ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Facilities", value: `${limits.length}`, color: "text-blue-400" },
+              { label: "Total limit", value: formatCurrency(totalLimit), color: "text-[var(--color-text)]" },
+              { label: "Due within window", value: `${dueSoon.length}`, color: dueSoon.length ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Facility", "Type", "Limit", "Renewal", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.bank}</td>
+                      <td className="px-4 py-2.5 text-xs uppercase text-[var(--color-muted)]">{r.type}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.limit)}</td>
+                      <td className="px-4 py-2.5 text-xs">{r.renewalDate}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.overdue ? "bg-red-950/30 text-red-400 border-red-800/40" : r.due ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>
+                          {r.overdue ? `Overdue ${Math.abs(r.days)}d` : r.days === 0 ? "Due today" : `${r.days}d left`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setLimits(limits.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {dueSoon.length > 0 && (
+            <Callout tone="warn" icon={AlertTriangle}>
+              {dueSoon.length} facility(ies) renew within {leadDays} days. Start collating audited financials, stock &amp; debtor statements and the renewal application now — banks often take 3–6 weeks to re-sanction.
+            </Callout>
+          )}
+        </>
+      ) : <EmptyHint text="Add your OD / cash-credit facilities to get renewal reminders before they lapse." />}
+    </div>
+  );
+}
+
+// ── 31. Spend-by-bank breakdown (debits grouped per account) ──────────────────────
+function SpendByBank() {
+  const { store } = useApp();
+  const accounts = store.bankAccounts;
+
+  const byBank = useMemo(() => {
+    const nameOf = (id: string | undefined) => accounts.find(a => a.id === id)?.name ?? "Unassigned";
+    const map = new Map<string, { debit: number; credit: number; count: number }>();
+    for (const t of store.transactions) {
+      const key = nameOf(t.bankAccountId);
+      const cur = map.get(key) ?? { debit: 0, credit: 0, count: 0 };
+      if (t.amount < 0) cur.debit += Math.abs(t.amount); else cur.credit += t.amount;
+      cur.count += 1;
+      map.set(key, cur);
+    }
+    return [...map.entries()].map(([bank, v]) => ({ bank, ...v, net: v.credit - v.debit })).sort((a, b) => b.debit - a.debit);
+  }, [store.transactions, accounts]);
+
+  const totalDebit = byBank.reduce((s, b) => s + b.debit, 0);
+
+  if (store.transactions.length === 0) return <EmptyHint text="No transactions yet. Import statements to see how spend is distributed across your banks." />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Spend by Bank</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-1">See which account carries most of your outflow — useful for steering spend toward the bank that offers the best fee waivers or float.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total outflow", value: formatCurrency(totalDebit), color: "text-red-400" },
+          { label: "Accounts with activity", value: `${byBank.length}`, color: "text-blue-400" },
+          { label: "Busiest account", value: byBank[0]?.bank ?? "—", color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4 space-y-3`}>
+        <p className="text-sm font-semibold">Outflow distribution</p>
+        {byBank.map(b => {
+          const pct = totalDebit > 0 ? (b.debit / totalDebit) * 100 : 0;
+          return (
+            <div key={b.bank}>
+              <div className="flex justify-between text-xs mb-0.5"><span className="font-medium">{b.bank}</span><span className="tabular-nums text-red-400">{formatCurrency(Math.round(b.debit))} ({pct.toFixed(0)}%)</span></div>
+              <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${pct}%` }} /></div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]"><tr>{["Bank", "Txns", "Inflow", "Outflow", "Net"].map(h => <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {byBank.map(b => (
+                <tr key={b.bank} className="hover:bg-white/2">
+                  <td className="px-5 py-2.5 font-medium">{b.bank}</td>
+                  <td className="px-5 py-2.5 tabular-nums text-[var(--color-muted)]">{b.count}</td>
+                  <td className="px-5 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(b.credit))}</td>
+                  <td className="px-5 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(b.debit))}</td>
+                  <td className={`px-5 py-2.5 tabular-nums font-semibold ${b.net < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.round(b.net))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   FileText, Cookie, FileCheck, UserCheck, BarChart3, Layers,
   GraduationCap, Calculator, MapPin, Megaphone, Timer, Copy,
   ClipboardList, Workflow, Receipt, FileSearch, Globe, ShieldAlert, Download,
+  UserMinus, Siren, CalendarX2, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, addDays, parseISO } from "date-fns";
@@ -25,7 +26,8 @@ type TabId =
   | "policy-gen" | "cookie" | "dpa-check" | "grievance" | "consent-rate"
   | "classify" | "training" | "penalty" | "localization" | "marketing-consent"
   | "sar-timer" | "ropa" | "data-flow" | "consent-receipt" | "dpia"
-  | "x-border" | "vendor-risk";
+  | "x-border" | "vendor-risk"
+  | "withdraw" | "breach-triage" | "purge" | "lawful-basis";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -56,6 +58,10 @@ const TABS = [
   ["dpia", "DPIA Wizard", FileSearch],
   ["x-border", "Cross-Border Log", Globe],
   ["vendor-risk", "Vendor Risk", ShieldAlert],
+  ["withdraw", "Withdrawal Handler", UserMinus],
+  ["breach-triage", "Breach Triage", Siren],
+  ["purge", "Purge Scheduler", CalendarX2],
+  ["lawful-basis", "Lawful Basis", Scale],
 ] as const;
 
 export default function PrivacyPage() {
@@ -110,6 +116,10 @@ export default function PrivacyPage() {
       {tab === "dpia" && <DpiaWizard />}
       {tab === "x-border" && <CrossBorderLog />}
       {tab === "vendor-risk" && <VendorRiskScorecard />}
+      {tab === "withdraw" && <WithdrawalHandler />}
+      {tab === "breach-triage" && <BreachTriage />}
+      {tab === "purge" && <PurgeScheduler />}
+      {tab === "lawful-basis" && <LawfulBasisAdvisor />}
     </div>
   );
 }
@@ -2399,6 +2409,284 @@ function VendorRiskScorecard() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Consent-Withdrawal Handler ─────────────────────────────────────────────────────
+// Acts on the shared DPDP consent log: when a subject withdraws, you must stop the
+// purpose and propagate the withdrawal to downstream processors.
+interface WithdrawTask { id: string; entryId: string; recipient: string; done: boolean }
+function WithdrawalHandler() {
+  const [log, setLog] = useFeatureState<DpdpEntry[]>("priv-dpdp-log", []);
+  const [shares] = useFeatureState<ShareRow[]>("priv-shares", []);
+  const [tasks, setTasks] = useFeatureState<WithdrawTask[]>("priv-withdraw-tasks", []);
+
+  const live = log.filter(r => r.granted);
+
+  const handle = (entry: DpdpEntry) => {
+    setLog(log.map(r => r.id === entry.id ? { ...r, granted: false, withdrawnOn: today() } : r));
+    const newTasks: WithdrawTask[] = shares.map(s => ({ id: uid(), entryId: entry.id, recipient: s.recipient, done: false }));
+    setTasks([...newTasks, ...tasks]);
+    toast.success(`Consent withdrawn for ${entry.subject} — ${newTasks.length} processor notice(s) queued`);
+  };
+  const toggle = (id: string) => setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
+
+  const subjectOf = (entryId: string) => log.find(r => r.id === entryId)?.subject ?? "—";
+  const open = tasks.filter(t => !t.done);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><UserMinus size={14} className="text-[var(--color-primary)]" /> Consent-Withdrawal Handler</h2>
+        <p className="text-xs text-[var(--color-muted)]">When a data subject withdraws consent, DPDP requires you to stop the purpose and cease sharing. Withdrawing here flips the consent log and auto-generates a notify-task for every processor in your sharing registry so nothing slips through.</p>
+      </div>
+
+      {live.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No live consents to withdraw. Live grants come from your DPDP Consent Log.</p>
+      ) : (
+        <div className={`${CARD}`}>
+          <div className="divide-y divide-[var(--color-border)]">
+            {live.map(r => (
+              <div key={r.id} className="flex items-center gap-4 px-5 py-3.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{r.subject}</p>
+                  <p className="text-[11px] text-[var(--color-muted)] truncate">{r.purpose} · via {r.channel}</p>
+                </div>
+                <button onClick={() => handle(r)} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-yellow-400 border border-yellow-800/40 bg-yellow-950/20 rounded-lg px-3 py-1.5 hover:bg-yellow-950/40">
+                  <Ban size={12} /> Process withdrawal
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tasks.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <h3 className="text-xs font-semibold">Downstream propagation</h3>
+            <span className="text-[10px] text-[var(--color-muted)]">{open.length} pending notice(s)</span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {tasks.map(t => (
+              <button key={t.id} onClick={() => toggle(t.id)} className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/2">
+                {t.done
+                  ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                  : <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border)] shrink-0" />}
+                <span className={`text-xs flex-1 ${t.done ? "text-[var(--color-muted)] line-through" : ""}`}>Notify <span className="font-medium">{t.recipient}</span> to stop processing data for {subjectOf(t.entryId)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Tick each processor once you have confirmed they ceased processing. Keep the confirmation for your records.</p>
+    </div>
+  );
+}
+
+// ── Breach-Severity Triage ─────────────────────────────────────────────────────────
+// A guided severity assessor — feeds a recommendation on notification duties.
+function BreachTriage() {
+  const [records, setRecords] = useState("0");
+  const [sensitive, setSensitive] = useState(false);
+  const [financial, setFinancial] = useState(false);
+  const [contained, setContained] = useState(false);
+  const [identifiable, setIdentifiable] = useState(true);
+
+  const n = Math.max(0, Math.round(parseFloat(records) || 0));
+  const score = useMemo(() => {
+    let s = 0;
+    if (n >= 1000) s += 3; else if (n >= 100) s += 2; else if (n >= 1) s += 1;
+    if (sensitive) s += 2;
+    if (financial) s += 2;
+    if (identifiable) s += 1;
+    if (contained) s -= 2;
+    return Math.max(0, s);
+  }, [n, sensitive, financial, identifiable, contained]);
+
+  const level: BreachSeverity = score >= 5 ? "high" : score >= 3 ? "medium" : "low";
+  const meta: Record<BreachSeverity, { label: string; color: string; bg: string; advice: string }> = {
+    high: { label: "High severity", color: "text-red-400", bg: "border-red-800/40 bg-red-950/20", advice: "Notify the Data Protection Board and affected data subjects without delay. Document the timeline, scope and remediation. Log it in your Breach Log." },
+    medium: { label: "Medium severity", color: "text-yellow-400", bg: "border-yellow-800/40 bg-yellow-950/20", advice: "Notification to the Board is likely expected. Assess subject impact, prepare a notice, and record your reasoning either way in the Breach Log." },
+    low: { label: "Low severity", color: "text-green-400", bg: "border-green-800/40 bg-green-950/20", advice: "Likely contained / low-risk. Still log the incident and your assessment — the decision not to notify should itself be documented." },
+  };
+  const m = meta[level];
+
+  const factors: { key: string; label: string; on: boolean; set: (v: boolean) => void }[] = [
+    { key: "sensitive", label: "Sensitive data involved (PAN, Aadhaar, health, biometrics)", on: sensitive, set: setSensitive },
+    { key: "financial", label: "Financial data exposed (bank, card, salary)", on: financial, set: setFinancial },
+    { key: "identifiable", label: "Individuals are directly identifiable", on: identifiable, set: setIdentifiable },
+    { key: "contained", label: "Breach contained quickly / data encrypted at rest", on: contained, set: setContained },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Siren size={14} className="text-[var(--color-primary)]" /> Breach-Severity Triage</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A quick, structured assessment of a suspected data breach. Answer the factors below to get a severity rating and a notification recommendation. This is a triage aid, not legal advice — record the outcome in your Breach Log.</p>
+        <div className="max-w-xs mb-4">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Records affected (estimate)</label>
+          <input type="number" value={records} onChange={e => setRecords(e.target.value)} className={INP} />
+        </div>
+        <div className="space-y-1.5">
+          {factors.map(f => (
+            <button key={f.key} onClick={() => f.set(!f.on)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/2 border border-[var(--color-border)]">
+              {f.on
+                ? <CheckCircle2 size={15} className="text-[var(--color-primary)] shrink-0" />
+                : <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border)] shrink-0" />}
+              <span className="text-xs">{f.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-5 border ${m.bg}`}>
+        <div className="flex items-center justify-between mb-2">
+          <p className={`text-base font-bold ${m.color}`}>{m.label}</p>
+          <p className={`text-2xl font-bold tabular-nums ${m.color}`}>{score}<span className="text-xs text-[var(--color-muted)]">/8</span></p>
+        </div>
+        <p className="text-xs text-[var(--color-text)] leading-relaxed">{m.advice}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Retention-vs-Purge Scheduler ─────────────────────────────────────────────────────
+// Reads retention rules; lets you log when a category was last collected and computes
+// the purge-due date so nothing is hoarded past its clock.
+interface PurgeRow { id: string; category: string; lastDataDate: string; years: number; purgedOn: string | null }
+function PurgeScheduler() {
+  const [retention] = useFeatureState<RetentionRow[]>("priv-retention", DEFAULT_RETENTION);
+  const [rows, setRows] = useFeatureState<PurgeRow[]>("priv-purge", []);
+  const [category, setCategory] = useState("");
+  const [lastDataDate, setLastDataDate] = useState(today());
+
+  const policyYears = (cat: string) => retention.find(r => r.category === cat)?.years ?? 0;
+
+  const add = () => {
+    if (!category.trim()) { toast.error("Pick or enter a data category"); return; }
+    setRows([{ id: uid(), category: category.trim(), lastDataDate, years: policyYears(category.trim()), purgedOn: null }, ...rows]);
+    setCategory("");
+    toast.success("Purge clock scheduled");
+  };
+  const markPurged = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, purgedOn: today() } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const dueDate = (r: PurgeRow) => r.years <= 0 ? null : addDays(parseISO(r.lastDataDate), r.years * 365);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><CalendarX2 size={14} className="text-[var(--color-primary)]" /> Retention-vs-Purge Scheduler</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Turn your retention policy into actionable purge dates. Log when a data set was last touched; this applies the policy clock and flags batches whose retention has lapsed and which DPDP expects you to erase.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data category</label>
+            <input list="purge-cats" value={category} onChange={e => setCategory(e.target.value)} placeholder="From retention policy" className={INP} />
+            <datalist id="purge-cats">{retention.map(r => <option key={r.id} value={r.category} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last collected / touched</label>
+            <input type="date" value={lastDataDate} onChange={e => setLastDataDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Schedule</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No purge schedules yet. Categories and years are pulled from your Retention Policy.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Category", "Last touched", "Retain", "Purge due", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const due = dueDate(r);
+                  const days = due ? differenceInCalendarDays(due, new Date()) : null;
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3 font-medium">{r.category}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.lastDataDate}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{r.years <= 0 ? "Purpose-based" : `${r.years}y`}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{due ? due.toISOString().split("T")[0] : "—"}</td>
+                      <td className="px-4 py-3">
+                        {r.purgedOn
+                          ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Purged {r.purgedOn}</span>
+                          : days !== null && days < 0
+                            ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/40">{Math.abs(days)}d overdue — purge</span>
+                            : days !== null && days <= 30
+                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-950/30 text-yellow-400 border-yellow-800/40">Due in {days}d</span>
+                              : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">Within retention</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {!r.purgedOn && <button onClick={() => markPurged(r.id)} className="text-[10px] text-green-400 hover:underline mr-3">Mark purged</button>}
+                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A legal hold (litigation, audit) overrides scheduled purge — confirm none applies before erasing.</p>
+    </div>
+  );
+}
+
+// ── Lawful-Basis Advisor ─────────────────────────────────────────────────────────────
+// Decision aid: DPDP recognises consent and a set of "legitimate uses". Picks the basis.
+function LawfulBasisAdvisor() {
+  const { store } = useApp();
+  const firmName = store.firm?.name || "your firm";
+  const SCENARIOS = [
+    { id: "marketing", label: "Marketing / newsletters / promotions", basis: "Consent", note: "No legitimate-use exemption — you need specific, opt-in consent and an easy withdrawal path.", tone: "yellow" as const },
+    { id: "order", label: "Fulfilling an order / service the person asked for", basis: "Legitimate use (voluntary provision)", note: "Where the individual voluntarily gave data for this purpose and hasn't objected, you may process without separate consent.", tone: "green" as const },
+    { id: "employment", label: "Employment / payroll / HR records", basis: "Legitimate use (employment)", note: "Processing for employment purposes is a recognised legitimate use under DPDP.", tone: "green" as const },
+    { id: "legal", label: "Meeting a legal / tax / GST obligation", basis: "Legitimate use (compliance with law)", note: "Retention and processing mandated by statute (Income-tax, GST, Companies Act) is permitted.", tone: "green" as const },
+    { id: "third-party", label: "Buying / sharing a contact list with a partner", basis: "Consent (of each subject)", note: "High risk — each person must have consented to this sharing. Without it, do not proceed.", tone: "red" as const },
+    { id: "minor", label: "Collecting data from someone under 18", basis: "Verifiable parental consent", note: "DPDP mandates verifiable consent from a parent/guardian and bars behavioural tracking of children.", tone: "red" as const },
+  ];
+  const [pick, setPick] = useState<string>(SCENARIOS[0].id);
+  const sel = SCENARIOS.find(s => s.id === pick) ?? SCENARIOS[0];
+  const toneBg = { green: "border-green-800/40 bg-green-950/20", yellow: "border-yellow-800/40 bg-yellow-950/20", red: "border-red-800/40 bg-red-950/20" }[sel.tone];
+  const toneText = { green: "text-green-400", yellow: "text-yellow-400", red: "text-red-400" }[sel.tone];
+
+  const copy = () => {
+    const txt = `Lawful basis for ${firmName}: "${sel.label}" → ${sel.basis}. ${sel.note}`;
+    navigator.clipboard?.writeText(txt);
+    toast.success("Basis note copied — paste it into your RoPA");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Scale size={14} className="text-[var(--color-primary)]" /> Lawful-Basis Advisor</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">DPDP lets you process personal data on consent or on a defined set of legitimate uses. Pick what you are doing to see which basis applies — and where consent is non-negotiable. Useful when filling your RoPA register.</p>
+        <div className="max-w-md">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">What are you doing with personal data?</label>
+          <select value={pick} onChange={e => setPick(e.target.value)} className={INP}>
+            {SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-5 border ${toneBg}`}>
+        <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] mb-1">Recommended lawful basis</p>
+        <p className={`text-lg font-bold ${toneText} mb-2`}>{sel.basis}</p>
+        <p className="text-xs text-[var(--color-text)] leading-relaxed mb-3">{sel.note}</p>
+        <button onClick={copy} className="inline-flex items-center gap-1.5 text-[11px] font-medium border border-[var(--color-border)] rounded-lg px-3 py-1.5 hover:bg-white/2">
+          <Copy size={12} /> Copy basis note for RoPA
+        </button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A guide, not legal advice. When in doubt, default to obtaining clear consent.</p>
     </div>
   );
 }

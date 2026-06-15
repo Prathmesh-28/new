@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import EmptyState from "@/components/EmptyState";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -9,6 +10,7 @@ import {
   Percent, MapPin, PhoneCall, Clock, Layers, UserMinus, Smile, ListChecks,
   Repeat, Gift,
   PieChart, Gauge, Users, Calculator, FolderKanban, Tag, Timer,
+  Filter, Wallet, FileCheck2, CalendarRange,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -23,7 +25,8 @@ type TabId =
   | "discount-approval" | "territory" | "activity-log" | "quote-expiry"
   | "cross-sell" | "churn-risk" | "nps" | "playbook" | "renewals" | "referrals"
   | "source-roi" | "rep-scorecard" | "rfm" | "incentive-sim" | "account-plan"
-  | "rate-card" | "velocity";
+  | "rate-card" | "velocity"
+  | "conversion-funnel" | "revenue-per-customer" | "quote-acceptance" | "seasonality";
 
 export default function SalesPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -69,6 +72,10 @@ export default function SalesPage() {
             ["account-plan", "Account Plan", FolderKanban],
             ["rate-card", "Rate Card", Tag],
             ["velocity", "Pipeline Velocity", Timer],
+            ["conversion-funnel", "Conversion Funnel", Filter],
+            ["revenue-per-customer", "Revenue / Customer", Wallet],
+            ["quote-acceptance", "Quote Acceptance", FileCheck2],
+            ["seasonality", "Seasonal Pattern", CalendarRange],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -106,6 +113,10 @@ export default function SalesPage() {
       {tab === "account-plan" && <AccountPlanBuilder />}
       {tab === "rate-card" && <RateCardManager />}
       {tab === "velocity" && <PipelineVelocity />}
+      {tab === "conversion-funnel" && <ConversionFunnel />}
+      {tab === "revenue-per-customer" && <RevenuePerCustomer />}
+      {tab === "quote-acceptance" && <QuoteAcceptanceRate />}
+      {tab === "seasonality" && <SeasonalPattern />}
     </div>
   );
 }
@@ -2546,6 +2557,234 @@ function PipelineVelocity() {
         <p className="text-sm font-semibold mb-1">Projected revenue at this velocity</p>
         <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(m.monthly))}<span className="text-xs font-normal text-[var(--color-muted)]"> / 30 days</span></p>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">Velocity = (open deals × win rate × avg deal size) ÷ cycle days. Shorten the cycle or lift win rate to speed cash — both beat just adding more leads.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Deal-Stage Conversion Funnel ──────────────────────────────────────────────────
+function ConversionFunnel() {
+  const [deals] = useDeals();
+  const data = useMemo(() => {
+    // A deal that reached a later stage also "passed through" the earlier ones.
+    const reachIdx = (d: Deal) => d.stage === "lost" ? -1 : STAGES.indexOf(d.stage);
+    const flowStages: Stage[] = ["enquiry", "quoted", "negotiation", "won"];
+    const counts = flowStages.map(s => {
+      const idx = STAGES.indexOf(s);
+      const n = deals.filter(d => reachIdx(d) >= idx).length;
+      return { stage: s, n };
+    });
+    const top = counts[0]?.n ?? 0;
+    return counts.map((c, i) => {
+      const prev = i === 0 ? c.n : counts[i - 1].n;
+      return {
+        ...c,
+        ofTop: top ? c.n / top : 0,
+        stepDrop: prev ? 1 - c.n / prev : 0,
+      };
+    });
+  }, [deals]);
+
+  const lost = deals.filter(d => d.stage === "lost").length;
+
+  if (deals.length === 0) {
+    return <EmptyState icon={Filter} title="No deals to analyse"
+      description="Add deals in the Pipeline tab. This funnel shows how many enquiries survive each stage through to Won, and where the biggest drop-off is." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><Filter size={14} className="text-[var(--color-primary)]" /> Deal-stage conversion funnel</h3>
+        <div className="space-y-2">
+          {data.map(d => (
+            <div key={d.stage}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium">{STAGE_LABEL[d.stage]}</span>
+                <span className="tabular-nums text-[var(--color-muted)]">{d.n} deal{d.n === 1 ? "" : "s"} · {(d.ofTop * 100).toFixed(0)}% of enquiries</span>
+              </div>
+              <div className="h-5 bg-[var(--color-bg)] rounded overflow-hidden border border-[var(--color-border)]">
+                <div className="h-full bg-[var(--color-primary)] rounded-r" style={{ width: `${Math.max(d.ofTop * 100, d.n > 0 ? 2 : 0)}%` }} />
+              </div>
+              {d.stepDrop > 0 && (
+                <p className="text-[10px] text-yellow-400 mt-0.5">↓ {(d.stepDrop * 100).toFixed(0)}% drop from previous stage</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-1">Marked lost: {lost}</p>
+        <p className="text-[10px] text-[var(--color-muted)]">The biggest single drop is where to focus coaching or process fixes — e.g. a heavy quoted→negotiation drop usually means pricing or follow-up gaps, not lead quality.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Revenue per Customer ──────────────────────────────────────────────────────────
+function RevenuePerCustomer() {
+  const { store } = useApp();
+  const rows = useMemo(() => {
+    const map = new Map<string, { billed: number; collected: number; count: number }>();
+    store.invoices.forEach(i => {
+      if (!i.customer) return;
+      const r = map.get(i.customer) ?? { billed: 0, collected: 0, count: 0 };
+      r.billed += i.amount;
+      if (i.status === "paid") r.collected += i.amount;
+      r.count += 1;
+      map.set(i.customer, r);
+    });
+    return [...map.entries()]
+      .map(([customer, r]) => ({ customer, ...r, avg: r.count ? r.billed / r.count : 0 }))
+      .sort((a, b) => b.billed - a.billed);
+  }, [store.invoices]);
+
+  const totalBilled = rows.reduce((s, r) => s + r.billed, 0);
+
+  if (rows.length === 0) {
+    return <EmptyState icon={Wallet} title="No invoiced customers yet"
+      description="Once you raise invoices, this ranks customers by lifetime revenue, average invoice size and share of total — so you know which accounts actually carry the business." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <p className="text-xs text-[var(--color-muted)] mb-1">Total billed across {rows.length} customer{rows.length === 1 ? "" : "s"}</p>
+        <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalBilled))}</p>
+      </div>
+      <div className={`${CARD} overflow-hidden`}>
+        <table className="w-full text-xs">
+          <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">Customer</th>
+              <th className="px-4 py-2 text-right font-medium">Invoices</th>
+              <th className="px-4 py-2 text-right font-medium">Avg invoice</th>
+              <th className="px-4 py-2 text-right font-medium">Collected</th>
+              <th className="px-4 py-2 text-right font-medium">Total billed</th>
+              <th className="px-4 py-2 text-right font-medium">% of revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.customer} className="border-t border-[var(--color-border)]">
+                <td className="px-4 py-2 font-medium truncate max-w-[160px]">{r.customer}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{r.count}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Math.round(r.avg))}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatCurrency(Math.round(r.collected))}</td>
+                <td className="px-4 py-2 text-right tabular-nums font-semibold">{formatCurrency(Math.round(r.billed))}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{totalBilled ? (r.billed / totalBilled * 100).toFixed(1) : "0.0"}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] px-1">If a handful of customers make up most of the revenue, that's concentration risk — protect those relationships and work on broadening the base.</p>
+    </div>
+  );
+}
+
+// ── Quote Acceptance Rate ───────────────────────────────────────────────────────────
+function QuoteAcceptanceRate() {
+  const [deals] = useDeals();
+  const m = useMemo(() => {
+    // "Quoted" = any deal that reached at least the quoted stage (incl. negotiation/won/lost).
+    const quotedIdx = STAGES.indexOf("quoted");
+    const quoted = deals.filter(d => d.stage === "lost" || STAGES.indexOf(d.stage) >= quotedIdx);
+    const won = quoted.filter(d => d.stage === "won");
+    const open = quoted.filter(d => d.stage === "quoted" || d.stage === "negotiation");
+    const decided = quoted.filter(d => d.stage === "won" || d.stage === "lost");
+    const acceptance = decided.length ? won.length / decided.length : 0;
+    const wonValue = won.reduce((s, d) => s + d.value, 0);
+    const quotedValue = quoted.reduce((s, d) => s + d.value, 0);
+    return {
+      quotedCount: quoted.length, wonCount: won.length, openCount: open.length,
+      decidedCount: decided.length, acceptance, wonValue, quotedValue,
+      valueAcceptance: quotedValue ? wonValue / quotedValue : 0,
+    };
+  }, [deals]);
+
+  if (m.quotedCount === 0) {
+    return <EmptyState icon={FileCheck2} title="No quotes sent yet"
+      description="Move deals to the Quoted stage in the Pipeline. This shows what share of quoted deals you actually close — by count and by value — so you can spot leaky pricing or follow-up." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Quotes sent", value: `${m.quotedCount}`, color: "text-[var(--color-text)]" },
+          { label: "Accepted (won)", value: `${m.wonCount}`, color: "text-green-400" },
+          { label: "Still open", value: `${m.openCount}`, color: "text-yellow-400" },
+          { label: "Acceptance rate", value: `${(m.acceptance * 100).toFixed(0)}%`, color: m.acceptance >= 0.4 ? "text-green-400" : "text-yellow-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`${CARD} p-4 space-y-2`}>
+        <p className="text-sm font-semibold">Value-weighted acceptance</p>
+        <div className="h-5 bg-[var(--color-bg)] rounded overflow-hidden border border-[var(--color-border)]">
+          <div className="h-full bg-[var(--color-primary)]" style={{ width: `${m.valueAcceptance * 100}%` }} />
+        </div>
+        <p className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(m.wonValue))} won of {formatCurrency(Math.round(m.quotedValue))} quoted ({(m.valueAcceptance * 100).toFixed(0)}%)</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Acceptance rate uses only decided quotes ({m.decidedCount}). A low rate with big quote values often means you're pricing above the buyer's budget — try staged or smaller first orders.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Seasonal Sales Pattern ──────────────────────────────────────────────────────────
+const MONTH_LABEL = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+function SeasonalPattern() {
+  const { store } = useApp();
+  const m = useMemo(() => {
+    const totals = new Array(12).fill(0) as number[];
+    const counts = new Array(12).fill(0) as number[];
+    store.invoices.forEach(i => {
+      if (!i.invoiceDate) return;
+      const d = parseISO(i.invoiceDate);
+      const mo = d.getMonth();
+      if (mo < 0 || mo > 11 || isNaN(mo)) return;
+      totals[mo] += i.amount;
+      counts[mo] += 1;
+    });
+    const peak = Math.max(...totals, 0);
+    const active = totals.filter(t => t > 0).length;
+    const avg = active ? totals.reduce((s, t) => s + t, 0) / active : 0;
+    const peakMonth = totals.indexOf(peak);
+    return { totals, counts, peak, avg, peakMonth, hasData: active > 0 };
+  }, [store.invoices]);
+
+  if (!m.hasData) {
+    return <EmptyState icon={CalendarRange} title="No dated invoices yet"
+      description="Once invoices have dates, this maps revenue by calendar month so you can see your busy and lean seasons — and plan stock, staffing and cash around them." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Revenue by month</h3>
+        <div className="space-y-1.5">
+          {MONTH_LABEL.map((label, i) => {
+            const t = m.totals[i];
+            const aboveAvg = t > m.avg && m.avg > 0;
+            return (
+              <div key={label} className="flex items-center gap-2">
+                <span className="text-[10px] w-8 text-[var(--color-muted)]">{label}</span>
+                <div className="flex-1 h-4 bg-[var(--color-bg)] rounded overflow-hidden border border-[var(--color-border)]">
+                  <div className={`h-full ${i === m.peakMonth ? "bg-[var(--color-primary)]" : aboveAvg ? "bg-green-500/70" : "bg-[var(--color-muted)]/40"}`} style={{ width: `${m.peak ? (t / m.peak) * 100 : 0}%` }} />
+                </div>
+                <span className="text-[10px] w-24 text-right tabular-nums text-[var(--color-muted)]">{t > 0 ? formatCurrency(Math.round(t)) : "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-1">Peak month: {MONTH_LABEL[m.peakMonth]} ({formatCurrency(Math.round(m.peak))})</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Green bars are above your average active month. Build inventory and working-capital ahead of peaks, and run promotions to lift the lean months — seasonality is easier to fund than to fight.</p>
       </div>
     </div>
   );
