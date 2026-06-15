@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp, BadgeCheck, Inbox, Wand2, CalendarDays, Layers } from "lucide-react";
+import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp, BadgeCheck, Inbox, Wand2, CalendarDays, Layers, HardDrive, KeyRound, Stamp, PackageCheck } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -231,7 +232,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles";
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack";
 
 export default function DocumentsPage() {
   const [docTab, setDocTab]       = useState<DocTab>("vault");
@@ -333,7 +334,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers]] as const).map(([id, label, Icon]) => (
+        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -358,6 +359,10 @@ export default function DocumentsPage() {
       {docTab === "naming"         && <NamingHelper />}
       {docTab === "compliance-cal" && <ComplianceCalendar />}
       {docTab === "bundles"        && <DocumentBundles />}
+      {docTab === "storage"        && <StorageUsageSummary />}
+      {docTab === "access-matrix"  && <AccessPermissionMatrix />}
+      {docTab === "watermark"      && <WatermarkNoteGenerator />}
+      {docTab === "statutory-pack" && <StatutoryDocumentPack />}
 
       {docTab === "vault" && <>
 
@@ -2256,6 +2261,292 @@ function DocumentBundles() {
         );
       })}
       <p className="text-[10px] text-[var(--color-muted)]">Bundles link documents by name for a transaction trail — for a tamper-evident pack, attach the actual files from the vault and export them together as the audit voucher.</p>
+    </div>
+  );
+}
+
+// ── #175 Storage Usage Summary ───────────────────────────────────────────────────
+type StorageLine = {
+  id: string;
+  category: DocCategory;
+  count: number;
+  mb: number;
+};
+
+function StorageUsageSummary() {
+  const [lines, setLines] = useFeatureState<StorageLine[]>("doc-storage-lines", []);
+  const [category, setCategory] = useState<DocCategory>("gst");
+  const [count, setCount] = useState("");
+  const [mb, setMb] = useState("");
+
+  const add = () => {
+    const n = parseInt(count) || 0;
+    const size = parseFloat(mb) || 0;
+    if (n <= 0 || size <= 0) { toast.error("Enter a file count and size"); return; }
+    setLines(prev => {
+      const existing = prev.find(l => l.category === category);
+      if (existing) return prev.map(l => l.category === category ? { ...l, count: l.count + n, mb: l.mb + size } : l);
+      return [...prev, { id: crypto.randomUUID(), category, count: n, mb: size }];
+    });
+    setCount(""); setMb("");
+    toast.success("Added to storage summary");
+  };
+
+  const totalMb = lines.reduce((s, l) => s + l.mb, 0);
+  const totalFiles = lines.reduce((s, l) => s + l.count, 0);
+  const sorted = [...lines].sort((a, b) => b.mb - a.mb);
+  const fmtMb = (v: number) => v >= 1024 ? `${(v / 1024).toFixed(2)} GB` : `${v.toFixed(1)} MB`;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HardDrive size={14} className="text-[var(--color-primary)]" /> Storage Usage Summary</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log how much each document category occupies so you can see where your vault storage goes and prune the heaviest folders before they balloon.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <select value={category} onChange={e => setCategory(e.target.value as DocCategory)} className={INP}>
+            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+          <input type="number" value={count} onChange={e => setCount(e.target.value)} placeholder="File count *" className={INP} />
+          <input type="number" value={mb} onChange={e => setMb(e.target.value)} placeholder="Total size (MB) *" className={INP} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add usage</button>
+        </div>
+      </div>
+
+      {lines.length === 0 ? (
+        <EmptyState icon={HardDrive} title="No storage logged yet" description="Add a category with its file count and total size to build a storage breakdown for your document vault." />
+      ) : <>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Total storage</p>
+            <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{fmtMb(totalMb)}</p>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">Files tracked</p>
+            <p className="text-lg font-bold tabular-nums">{totalFiles}</p>
+          </div>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          {sorted.map(l => {
+            const cat = CATEGORIES.find(c => c.id === l.category)!;
+            const pct = totalMb > 0 ? (l.mb / totalMb) * 100 : 0;
+            return (
+              <div key={l.id}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className={`font-medium ${cat.color}`}>{cat.label} <span className="text-[var(--color-muted)]">· {l.count} file{l.count > 1 ? "s" : ""}</span></span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums">{fmtMb(l.mb)} ({pct.toFixed(0)}%)</span>
+                    <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">These are figures you record — for live usage, read counts and sizes off the vault file list. Sizes are summed per category to show relative footprint.</p>
+    </div>
+  );
+}
+
+// ── #176 Access Permission Matrix ────────────────────────────────────────────────
+type AccessRule = {
+  id: string;
+  role: string;
+  category: DocCategory;
+  level: "none" | "view" | "edit" | "manage";
+};
+const ACCESS_LEVELS: AccessRule["level"][] = ["none", "view", "edit", "manage"];
+const ACCESS_STYLE: Record<AccessRule["level"], string> = {
+  none: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  view: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+  edit: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+  manage: "bg-green-900/30 text-green-400 border-green-800/40",
+};
+
+function AccessPermissionMatrix() {
+  const [rules, setRules] = useFeatureState<AccessRule[]>("doc-access-rules", []);
+  const [role, setRole] = useState("");
+
+  const addRole = () => {
+    const r = role.trim();
+    if (!r) { toast.error("Enter a role or person name"); return; }
+    if (rules.some(x => x.role.toLowerCase() === r.toLowerCase())) { toast.error("That role already exists"); return; }
+    setRules(prev => [...prev, ...CATEGORIES.map(c => ({ id: crypto.randomUUID(), role: r, category: c.id, level: "view" as const }))]);
+    setRole("");
+    toast.success(`Added ${r}`);
+  };
+
+  const cycle = (id: string) => setRules(prev => prev.map(x => {
+    if (x.id !== id) return x;
+    const next = ACCESS_LEVELS[(ACCESS_LEVELS.indexOf(x.level) + 1) % ACCESS_LEVELS.length];
+    return { ...x, level: next };
+  }));
+
+  const roles = [...new Set(rules.map(r => r.role))];
+  const removeRole = (r: string) => setRules(prev => prev.filter(x => x.role !== r));
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><KeyRound size={14} className="text-[var(--color-primary)]" /> Access Permission Matrix</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Map who can see, edit or manage each document category. Add a role, then click any cell to cycle its access level — a quick reference for your vault sharing policy.</p>
+        <div className="flex gap-3">
+          <input value={role} onChange={e => setRole(e.target.value)} onKeyDown={e => e.key === "Enter" && addRole()} placeholder="Role / person (e.g. Accountant, CA) *" className={INP} />
+          <button onClick={addRole} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5 shrink-0"><Plus size={13} /> Add role</button>
+        </div>
+      </div>
+
+      {roles.length === 0 ? (
+        <EmptyState icon={KeyRound} title="No access rules yet" description="Add a role to generate a permission row across every document category, then click cells to set view, edit or manage access." />
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">Role</th>
+              {CATEGORIES.map(c => <th key={c.id} className="px-3 py-2.5 text-center text-xs font-semibold text-[var(--color-muted)]">{c.label}</th>)}
+              <th className="px-3 py-2.5" />
+            </tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {roles.map(r => (
+                <tr key={r} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r}</td>
+                  {CATEGORIES.map(c => {
+                    const cell = rules.find(x => x.role === r && x.category === c.id);
+                    if (!cell) return <td key={c.id} />;
+                    return (
+                      <td key={c.id} className="px-3 py-2.5 text-center">
+                        <button onClick={() => cycle(cell.id)} className={`text-[9px] px-2 py-0.5 rounded-full border font-medium capitalize ${ACCESS_STYLE[cell.level]}`}>{cell.level}</button>
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRole(r)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">This matrix documents your intended access policy — enforce it with the role permissions in Settings. Click a cell repeatedly to cycle none → view → edit → manage.</p>
+    </div>
+  );
+}
+
+// ── #177 Watermark Note Generator ────────────────────────────────────────────────
+const WATERMARK_PRESETS = ["CONFIDENTIAL", "DRAFT — DO NOT FILE", "COPY — NOT FOR CIRCULATION", "FOR INTERNAL USE ONLY", "ORIGINAL"] as const;
+
+function WatermarkNoteGenerator() {
+  const [preset, setPreset] = useState<string>(WATERMARK_PRESETS[0]);
+  const [recipient, setRecipient] = useState("");
+  const [docName, setDocName] = useState("");
+  const [includeDate, setIncludeDate] = useState(true);
+
+  const stamp = [
+    preset,
+    recipient.trim() ? `Shared with: ${recipient.trim()}` : "",
+    includeDate ? `Issued: ${format(new Date(), "d MMM yyyy")}` : "",
+  ].filter(Boolean).join("  ·  ");
+
+  const copy = () => {
+    if (!stamp) { toast.error("Nothing to copy"); return; }
+    navigator.clipboard.writeText(stamp).then(
+      () => toast.success("Watermark note copied"),
+      () => toast.error("Couldn't copy to clipboard"),
+    );
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Stamp size={14} className="text-[var(--color-primary)]" /> Watermark Note Generator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Build a standard watermark / header line to paste onto a document footer or PDF stamp before you share it — marking copies as confidential, draft or recipient-specific.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <select value={preset} onChange={e => setPreset(e.target.value)} className={INP}>
+            {WATERMARK_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name (optional)" className={INP} />
+          <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Recipient / party (optional)" className={INP} />
+          <label className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
+            <button type="button" onClick={() => setIncludeDate(v => !v)} className={`w-8 h-4 rounded-full transition-colors shrink-0 relative ${includeDate ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${includeDate ? "left-4" : "left-0.5"}`} />
+            </button>
+            Include issue date
+          </label>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {docName.trim() && <p className="text-xs text-[var(--color-muted)] mb-2">For: <span className="font-medium text-[var(--color-text)]">{docName.trim()}</span></p>}
+        <div className="border border-dashed border-[var(--color-primary)]/40 rounded-lg py-6 px-4 text-center bg-[var(--color-bg)]">
+          <p className="text-sm font-bold tracking-wide text-[var(--color-primary)] uppercase break-words">{stamp || "—"}</p>
+        </div>
+        <button onClick={copy} className="mt-4 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Copy size={13} /> Copy watermark note</button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">This generates the text only — apply it as a real watermark in your PDF editor. A visible stamp does not encrypt the file, so still control who you share originals with.</p>
+    </div>
+  );
+}
+
+// ── #178 Statutory Document Pack ─────────────────────────────────────────────────
+type PackKey = "gst-reg" | "annual-roc" | "loan-kyc" | "it-return";
+const STATUTORY_PACKS: { id: PackKey; label: string; docs: string[] }[] = [
+  { id: "gst-reg",    label: "GST Registration",        docs: ["PAN of business", "Aadhaar of proprietor/partners", "Proof of business address", "Bank statement / cancelled cheque", "Photograph of authorised signatory", "Constitution proof (partnership deed / COI)"] },
+  { id: "annual-roc", label: "Annual ROC Filing",       docs: ["Audited financial statements", "Board resolution", "AOC-4 form", "MGT-7 annual return", "Director KYC (DIR-3)", "Auditor appointment (ADT-1)"] },
+  { id: "loan-kyc",   label: "Business Loan KYC",        docs: ["PAN & Aadhaar", "GST returns (last 12 months)", "Bank statements (6 months)", "ITR (last 2 years)", "Business registration proof", "Address proof"] },
+  { id: "it-return",  label: "Income Tax Return",        docs: ["Form 16 / 16A", "Profit & loss statement", "Balance sheet", "Bank interest certificates", "TDS certificates", "Advance tax challans"] },
+];
+
+function StatutoryDocumentPack() {
+  const [packId, setPackId] = useState<PackKey>("gst-reg");
+  const [collected, setCollected] = useFeatureState<Record<string, boolean>>("doc-statutory-collected", {});
+
+  const pack = STATUTORY_PACKS.find(p => p.id === packId)!;
+  const keyFor = (d: string) => `${packId}::${d}`;
+  const toggle = (d: string) => setCollected(prev => ({ ...prev, [keyFor(d)]: !prev[keyFor(d)] }));
+  const done = pack.docs.filter(d => collected[keyFor(d)]).length;
+  const pct = Math.round((done / pack.docs.length) * 100);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PackageCheck size={14} className="text-[var(--color-primary)]" /> Statutory Document Pack</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a filing or application and get the standard document checklist for it — tick off what you've gathered so the pack is complete before you submit.</p>
+        <div className="flex flex-wrap gap-2">
+          {STATUTORY_PACKS.map(p => (
+            <button key={p.id} onClick={() => setPackId(p.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors ${packId === p.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold">{pack.label}</p>
+          <span className={`text-xs font-semibold tabular-nums ${pct === 100 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{done}/{pack.docs.length} collected</span>
+        </div>
+        <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden mb-4">
+          <div className={`h-full rounded-full ${pct === 100 ? "bg-green-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="space-y-2">
+          {pack.docs.map(d => {
+            const checked = !!collected[keyFor(d)];
+            return (
+              <button key={d} onClick={() => toggle(d)} className="w-full flex items-center gap-2.5 text-left px-3 py-2 rounded-lg hover:bg-white/2 transition-colors">
+                {checked
+                  ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                  : <XCircle size={15} className="text-[var(--color-muted)] shrink-0" />}
+                <span className={`text-sm ${checked ? "line-through text-[var(--color-muted)]" : ""}`}>{d}</span>
+              </button>
+            );
+          })}
+        </div>
+        {pct === 100 && <p className="mt-3 text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={12} /> Pack complete — ready to submit.</p>}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Checklists are standard guidance — exact requirements vary by state, entity type and the reviewing officer. Confirm against the official portal or your CA before filing.</p>
     </div>
   );
 }

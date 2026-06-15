@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2, Megaphone, PackageCheck, BadgeCheck, PartyPopper, Tag, Star, QrCode, ReceiptIndianRupee, Truck, CalendarClock, Gift, MessageSquareText } from "lucide-react";
+import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2, Megaphone, PackageCheck, BadgeCheck, PartyPopper, Tag, Star, QrCode, ReceiptIndianRupee, Truck, CalendarClock, Gift, MessageSquareText, Rocket, UserPlus, CalendarCheck, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
@@ -15,7 +15,7 @@ function waLink(text: string, phone?: string): string {
   return `${base}?text=${encodeURIComponent(text)}`;
 }
 
-type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr" | "wa-gst-invoice" | "wa-cod-confirm" | "wa-service-reminder" | "wa-loyalty" | "wa-quick-replies";
+type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr" | "wa-gst-invoice" | "wa-cod-confirm" | "wa-service-reminder" | "wa-loyalty" | "wa-quick-replies" | "wa-product-launch" | "wa-win-back" | "wa-appointment" | "wa-referral";
 
 // authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
 function apiError(err: unknown): string {
@@ -210,6 +210,10 @@ export default function WhatsAppPage() {
           ["wa-service-reminder", "Service Reminder", CalendarClock],
           ["wa-loyalty", "Loyalty Points", Gift],
           ["wa-quick-replies", "Quick Replies", MessageSquareText],
+          ["wa-product-launch", "Product Launch", Rocket],
+          ["wa-win-back", "Win-Back", UserPlus],
+          ["wa-appointment", "Appointment", CalendarCheck],
+          ["wa-referral", "Referral Ask", Share2],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -235,6 +239,10 @@ export default function WhatsAppPage() {
       {tab === "wa-service-reminder" && <WaServiceReminder />}
       {tab === "wa-loyalty" && <WaLoyaltyPoints />}
       {tab === "wa-quick-replies" && <WaQuickReplies />}
+      {tab === "wa-product-launch" && <WaProductLaunch />}
+      {tab === "wa-win-back" && <WaWinBack />}
+      {tab === "wa-appointment" && <WaAppointmentReminder />}
+      {tab === "wa-referral" && <WaReferralAsk />}
 
       {tab === "overview" && (
       <>
@@ -1874,6 +1882,259 @@ function WaQuickReplies() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── #194 WhatsApp New-Product Launch Announcement ───────────────────────────
+// Composes a launch message (product, price, launch-offer) to share with
+// customers — pair with Broadcast to reach the whole list.
+function WaProductLaunch() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const [product, setProduct] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [price, setPrice] = useState("");
+  const [launchOffer, setLaunchOffer] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const p = parseFloat(price) || 0;
+  const message = `🚀 *Now Launching: ${product.trim() || "our new product"}*\n${tagline.trim() ? `${tagline.trim()}\n` : ""}\n${p > 0 ? `*Price:* ${fc(p)}\n` : ""}${launchOffer.trim() ? `*Launch offer:* ${launchOffer.trim()}\n` : ""}\nReply *INTERESTED* and we'll share full details. — ${store.firm?.name ?? "us"}`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Rocket size={15} className="text-green-400" />WhatsApp New-Product Launch</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Announce a new product or service with a price and launch offer in one polished message — then share it (use Broadcast for the whole list).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Product / service</label>
+            <input value={product} onChange={e => setProduct(e.target.value)} placeholder="Cold-pressed oils" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Price (₹, optional)</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="299" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Launch offer (optional)</label>
+            <input value={launchOffer} onChange={e => setLaunchOffer(e.target.value)} placeholder="20% off first week" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tagline (optional)</label>
+            <input value={tagline} onChange={e => setTagline(e.target.value)} placeholder="Pure, chemical-free, farm-fresh." className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <div className="flex flex-wrap gap-2">
+          <WaSendButton text={message} phone={phone} label="Announce on WhatsApp" />
+          <button onClick={() => { navigator.clipboard.writeText(message).catch(() => {}); toast.success("Copied"); }}
+            className="inline-flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text)] font-medium px-4 py-2 rounded-lg text-sm transition-colors"><Copy size={14} />Copy</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #195 WhatsApp Customer Win-Back Sender ──────────────────────────────────
+// Finds customers with no invoice in the last N days (lapsed) and sends a
+// "we miss you" win-back nudge with an optional comeback offer.
+function WaWinBack() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [days, setDays] = useState("60");
+  const [offer, setOffer] = useState("10% off your next order");
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+
+  const threshold = Math.max(1, parseInt(days, 10) || 60);
+  const cutoff = Date.now() - threshold * 86_400_000;
+
+  // Roll invoices up to last-activity per customer; lapsed = newest invoice older than cutoff.
+  const lapsed = useMemo(() => {
+    const last = new Map<string, number>();
+    invoices.forEach(i => {
+      const t = new Date(i.invoiceDate).getTime();
+      if (!Number.isNaN(t)) last.set(i.customer, Math.max(last.get(i.customer) ?? 0, t));
+    });
+    return Array.from(last.entries())
+      .filter(([, t]) => t < cutoff)
+      .map(([name, t]) => ({ name, days: Math.round((Date.now() - t) / 86_400_000) }))
+      .sort((a, b) => b.days - a.days);
+  }, [invoices, cutoff]);
+
+  const msgFor = (name: string) =>
+    `Hi ${name}, we've missed you at ${store.firm?.name ?? "our shop"}! 👋\n\nIt's been a while — come back and enjoy *${offer.trim() || "a special welcome-back offer"}*.\n\nReply *YES* and we'll set it up for you. Hope to see you soon!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} className="text-green-400" />WhatsApp Customer Win-Back</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Spot customers who haven't bought in a while (from your invoice history) and send each a personalised "we miss you" message with a comeback offer.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lapsed after (days)</label>
+            <input type="number" value={days} onChange={e => setDays(e.target.value)} placeholder="60" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Comeback offer</label>
+            <input value={offer} onChange={e => setOffer(e.target.value)} placeholder="10% off your next order" className={WA_INP} />
+          </div>
+        </div>
+        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — invoice history feeds this list.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Lapsed customers", value: String(lapsed.length), color: "text-orange-400" },
+          { label: "Reached out", value: String(lapsed.filter(c => sent[c.name]).length), color: "text-green-400" },
+          { label: "Remaining", value: String(lapsed.filter(c => !sent[c.name]).length), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={WA_CARD}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {lapsed.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Customer", "Last seen", "Status", "Action"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lapsed.map(c => (
+                <tr key={c.name} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{c.days}d ago</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-xs font-medium ${sent[c.name] ? "text-green-400" : "text-[var(--color-muted)]"}`}>{sent[c.name] ? "Sent ✓" : "Pending"}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <a href={waLink(msgFor(c.name))} target="_blank" rel="noopener noreferrer"
+                      onClick={() => { setSent(s => ({ ...s, [c.name]: true })); toast.success("Opening WhatsApp…"); }}
+                      className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline"><Send size={12} />Win back</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : invoices.length > 0 && (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm font-bold text-green-400">✓ No lapsed customers in this window — everyone's active.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #196 WhatsApp Appointment / Visit Reminder ──────────────────────────────
+function WaAppointmentReminder() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const when = [date.trim(), time.trim()].filter(Boolean).join(" at ");
+  const message = `📅 Hi ${customer.trim() || "there"}, this is a reminder for your ${purpose.trim() || "appointment"}${when ? ` on *${when}*` : ""}.${location.trim() ? `\n*Where:* ${location.trim()}` : ""}\n\nReply *CONFIRM* to confirm or *RESCHEDULE* if the time doesn't work. See you then! — ${store.firm?.name ?? "us"}`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarCheck size={15} className="text-green-400" />WhatsApp Appointment / Visit Reminder</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Cut no-shows — send a clear reminder for a booking, site visit or service call with a one-tap confirm / reschedule prompt.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Mehta ji" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+            <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="site visit" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Time (optional)</label>
+            <input value={time} onChange={e => setTime(e.target.value)} placeholder="11:30 AM" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Location (optional)</label>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Shop, MG Road" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Send reminder on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #197 WhatsApp Referral-Ask Sender ───────────────────────────────────────
+function WaReferralAsk() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [reward, setReward] = useState("₹100 off for both of you");
+  const [link, setLink] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const message = `Hi ${customer.trim() || "there"}, glad you're enjoying ${store.firm?.name ?? "us"}! 🙌\n\nKnow someone who'd love us too? Refer a friend and ${reward.trim() ? `*${reward.trim()}*` : "you both get a reward"}.${link.trim() ? `\n\nShare this link: ${link.trim()}` : "\n\nJust reply with their name and number and we'll take it from there."}\n\nThank you for spreading the word!`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Share2 size={15} className="text-green-400" />WhatsApp Referral-Ask</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Turn happy customers into referrers — ask for a referral with a clear reward and an optional share link, in one tap on WhatsApp.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma ji" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Referral reward</label>
+            <input value={reward} onChange={e => setReward(e.target.value)} placeholder="₹100 off for both of you" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Referral link (optional)</label>
+            <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://…/refer" className={WA_INP} />
+          </div>
+          <div className="md:col-span-3 md:max-w-xs">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Ask for referral on WhatsApp" />
+      </div>
     </div>
   );
 }

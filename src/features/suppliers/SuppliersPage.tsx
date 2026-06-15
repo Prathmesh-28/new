@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck } from "lucide-react";
+import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck, CalendarDays, Scale, ShieldCheck, Boxes } from "lucide-react";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 
@@ -20,7 +20,8 @@ interface SupplierOffer {
 
 type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify"
   | "terms-optimizer" | "price-trend" | "leadtime-variance" | "alt-supplier" | "concentration" | "grn-match" | "negotiation-prep"
-  | "pay-priority" | "gst-2b" | "quality-ppm" | "credit-util" | "landed-cost";
+  | "pay-priority" | "gst-2b" | "quality-ppm" | "credit-util" | "landed-cost"
+  | "contract-calendar" | "terms-benchmark" | "risk-diversification" | "eoq-check";
 const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "early-pay",         label: "Early-Pay",      Icon: Zap },
   { id: "scorecard",         label: "Scorecard",      Icon: Award },
@@ -39,6 +40,10 @@ const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "quality-ppm",       label: "Quality PPM",    Icon: Microscope },
   { id: "credit-util",       label: "Credit Util",    Icon: CalendarClock },
   { id: "landed-cost",       label: "Landed Cost",    Icon: Truck },
+  { id: "contract-calendar",     label: "Contract Calendar",  Icon: CalendarDays },
+  { id: "terms-benchmark",       label: "Terms Benchmark",    Icon: Scale },
+  { id: "risk-diversification",  label: "Risk Spread",        Icon: ShieldCheck },
+  { id: "eoq-check",             label: "EOQ Check",          Icon: Boxes },
 ];
 
 export default function SuppliersPage() {
@@ -70,6 +75,10 @@ export default function SuppliersPage() {
       {tab === "quality-ppm"       && <QualityPpmTracker />}
       {tab === "credit-util"       && <CreditPeriodUtilization />}
       {tab === "landed-cost"       && <LandedCostCompare />}
+      {tab === "contract-calendar"    && <ContractExpiryCalendar />}
+      {tab === "terms-benchmark"      && <PaymentTermsBenchmark />}
+      {tab === "risk-diversification" && <RiskDiversification />}
+      {tab === "eoq-check"            && <EoqCheck />}
     </div>
   );
 }
@@ -1827,6 +1836,423 @@ function LandedCostCompare() {
         ))}
       </>}
       <p className="text-[10px] text-[var(--color-muted)]">Landed unit cost = (goods + duty + freight + insurance) ÷ qty. A distant low-price supplier can lose to a nearby one once freight and duty load in — always decide on landed, not sticker, cost.</p>
+    </div>
+  );
+}
+
+// ── Contract Expiry Calendar ─────────────────────────────────────────────────────
+type ContractRow = {
+  id: string;
+  supplier: string;
+  title: string;
+  annualValue: number;
+  noticeDays: number;   // notice period to renew/exit
+  expiry: string;
+};
+function ContractExpiryCalendar() {
+  const [rows, setRows] = useFeatureState<ContractRow[]>("sup-contract-calendar", []);
+  const [supplier, setSupplier] = useState("");
+  const [title, setTitle] = useState("");
+  const [annualValue, setAnnualValue] = useState("");
+  const [noticeDays, setNoticeDays] = useState("30");
+  const [expiry, setExpiry] = useState("");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  const daysToExpiry = (r: ContractRow) => Math.ceil((new Date(r.expiry).getTime() - today.getTime()) / 86400000);
+  const statusOf = (r: ContractRow): { label: string; c: string } => {
+    const d = daysToExpiry(r);
+    if (d < 0) return { label: "Expired", c: "bg-red-900/30 text-red-400 border-red-800/40" };
+    if (d <= r.noticeDays) return { label: `Notice window (${d}d)`, c: "bg-red-900/30 text-red-400 border-red-800/40" };
+    if (d <= 90) return { label: `Renew soon (${d}d)`, c: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" };
+    return { label: `${d}d left`, c: "bg-green-900/30 text-green-400 border-green-800/40" };
+  };
+
+  const add = () => {
+    if (!supplier.trim() || !title.trim()) { toast.error("Enter supplier and contract"); return; }
+    if (!expiry) { toast.error("Enter expiry date"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      title: title.trim(),
+      annualValue: Math.max(0, parseFloat(annualValue) || 0),
+      noticeDays: Math.max(0, parseFloat(noticeDays) || 0),
+      expiry,
+    }]);
+    setSupplier(""); setTitle(""); setAnnualValue(""); setExpiry("");
+    toast.success("Contract added");
+  };
+
+  const sorted = useMemo(() => [...rows].sort((a, b) => a.expiry.localeCompare(b.expiry)), [rows]);
+  const inNotice = rows.filter(r => { const d = daysToExpiry(r); return d >= 0 && d <= r.noticeDays; });
+  const valueAtRisk = inNotice.reduce((s, r) => s + r.annualValue, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarDays size={14} className="text-[var(--color-primary)]" /> Contract Expiry Calendar</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track supply agreements with their notice periods. Get flagged once you enter the notice window so you renew or exit on time instead of auto-rolling into worse terms.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Contract / SOW *" className={INP} />
+          <input type="number" value={annualValue} onChange={e => setAnnualValue(e.target.value)} placeholder="Annual value (₹)" className={INP} />
+          <input type="number" value={noticeDays} onChange={e => setNoticeDays(e.target.value)} placeholder="Notice period (days)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Expiry date</label>
+            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add contract</button>
+        </div>
+      </div>
+
+      {sorted.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Contracts", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "In notice window", value: String(inNotice.length), color: inNotice.length > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Value at risk", value: formatCurrency(valueAtRisk), color: valueAtRisk > 0 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Contract", "Annual value", "Notice", "Expiry", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {sorted.map(r => {
+                const st = statusOf(r);
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.title}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.annualValue > 0 ? formatCurrency(r.annualValue) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.noticeDays}d</td>
+                    <td className="px-3 py-2.5 text-xs">{r.expiry}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${st.c}`}>{st.label}</span></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Most supply contracts auto-renew unless you serve notice. Diarise the notice date, not the expiry date — miss it and you are locked in for another term at the incumbent rate.</p>
+    </div>
+  );
+}
+
+// ── Payment-Terms Benchmark ──────────────────────────────────────────────────────
+type BenchRow = {
+  id: string;
+  supplier: string;
+  category: string;
+  creditDays: number;   // terms this supplier gives you
+  annualSpend: number;
+};
+function PaymentTermsBenchmark() {
+  const [rows, setRows] = useFeatureState<BenchRow[]>("sup-terms-benchmark", []);
+  const [supplier, setSupplier] = useState("");
+  const [category, setCategory] = useState("");
+  const [creditDays, setCreditDays] = useState("");
+  const [annualSpend, setAnnualSpend] = useState("");
+
+  const add = () => {
+    if (!supplier.trim() || !category.trim()) { toast.error("Enter supplier and category"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      category: category.trim(),
+      creditDays: Math.max(0, parseFloat(creditDays) || 0),
+      annualSpend: Math.max(0, parseFloat(annualSpend) || 0),
+    }]);
+    setSupplier(""); setCreditDays(""); setAnnualSpend("");
+    toast.success("Supplier added");
+  };
+
+  // Benchmark each supplier's credit days against the average for its category
+  const catAvg = useMemo(() => {
+    const m = new Map<string, { sum: number; n: number }>();
+    for (const r of rows) {
+      const e = m.get(r.category) || { sum: 0, n: 0 };
+      e.sum += r.creditDays; e.n += 1; m.set(r.category, e);
+    }
+    return m;
+  }, [rows]);
+
+  const analysed = useMemo(() => rows.map(r => {
+    const e = catAvg.get(r.category)!;
+    const avg = e.n > 0 ? e.sum / e.n : 0;
+    const gap = Math.round(r.creditDays - avg);
+    return { ...r, avg: Math.round(avg), gap };
+  }).sort((a, b) => a.gap - b.gap), [rows, catAvg]);
+
+  const belowPeer = analysed.filter(r => r.gap < 0);
+  // Working-capital upside of pulling laggards up to category average (1 extra day ≈ spend/365 freed)
+  const wcUpside = belowPeer.reduce((s, r) => s + (Math.abs(r.gap) * r.annualSpend / 365), 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Payment-Terms Benchmark</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Compare the credit days each supplier grants against the average for its category. Spot the laggards giving you tighter terms than their peers and renegotiate them up.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Category *" className={INP} />
+          <input type="number" value={creditDays} onChange={e => setCreditDays(e.target.value)} placeholder="Credit days they give" className={INP} />
+          <input type="number" value={annualSpend} onChange={e => setAnnualSpend(e.target.value)} placeholder="Annual spend (₹)" className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add supplier</button>
+        </div>
+      </div>
+
+      {analysed.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Suppliers", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "Below peer avg", value: String(belowPeer.length), color: belowPeer.length > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Working-cap upside", value: formatCurrency(wcUpside), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Category", "Their terms", "Cat. avg", "Gap", "Verdict", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {analysed.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.category}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{r.creditDays}d</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.avg}d</td>
+                  <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${r.gap < 0 ? "text-yellow-400" : "text-green-400"}`}>{r.gap > 0 ? `+${r.gap}` : r.gap}d</td>
+                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.gap < 0 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{r.gap < 0 ? "Push for more" : "At/above peers"}</span></td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Each extra day of credit on a category frees roughly spend÷365 of working capital. Use a peer's better terms as leverage — "Supplier B in the same category gives me 60 days" is a clean ask.</p>
+    </div>
+  );
+}
+
+// ── Supplier Risk Diversification ────────────────────────────────────────────────
+type DivRow = {
+  id: string;
+  supplier: string;
+  region: string;
+  spend: number;
+  singleSource: boolean;  // is this the only supplier for a critical input?
+};
+function RiskDiversification() {
+  const [rows, setRows] = useFeatureState<DivRow[]>("sup-risk-diversification", []);
+  const [supplier, setSupplier] = useState("");
+  const [region, setRegion] = useState("");
+  const [spend, setSpend] = useState("");
+  const [singleSource, setSingleSource] = useState(false);
+
+  const add = () => {
+    if (!supplier.trim() || !region.trim()) { toast.error("Enter supplier and region"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      supplier: supplier.trim(),
+      region: region.trim(),
+      spend: Math.max(0, parseFloat(spend) || 0),
+      singleSource,
+    }]);
+    setSupplier(""); setRegion(""); setSpend(""); setSingleSource(false);
+    toast.success("Supplier added");
+  };
+
+  const total = rows.reduce((s, r) => s + r.spend, 0);
+  // Herfindahl index on region spend → 0 (spread) to 1 (one region)
+  const regionShare = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.region, (m.get(r.region) || 0) + r.spend);
+    return [...m.entries()].map(([region, sp]) => ({ region, sp, pct: total > 0 ? (sp / total) * 100 : 0 }))
+      .sort((a, b) => b.sp - a.sp);
+  }, [rows, total]);
+  const hhi = regionShare.reduce((s, r) => s + Math.pow(r.pct / 100, 2), 0);
+  const topRegionPct = regionShare.length > 0 ? regionShare[0].pct : 0;
+  const singleSourceCount = rows.filter(r => r.singleSource).length;
+  const concentrated = topRegionPct >= 50 || hhi >= 0.5;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Supplier Risk Diversification</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Map spend across regions and flag single-source dependencies. A region HHI and single-source count tell you where one disruption could halt supply.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
+          <input value={region} onChange={e => setRegion(e.target.value)} placeholder="Region / country *" className={INP} />
+          <input type="number" value={spend} onChange={e => setSpend(e.target.value)} placeholder="Annual spend (₹)" className={INP} />
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] px-1">
+            <input type="checkbox" checked={singleSource} onChange={e => setSingleSource(e.target.checked)} /> Single-source for a critical input
+          </label>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add supplier</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Top region share", value: `${topRegionPct.toFixed(0)}%`, color: topRegionPct >= 50 ? "text-red-400" : "text-green-400" },
+            { label: "Region HHI", value: hhi.toFixed(2), color: hhi >= 0.5 ? "text-red-400" : hhi >= 0.25 ? "text-yellow-400" : "text-green-400" },
+            { label: "Single-source", value: String(singleSourceCount), color: singleSourceCount > 0 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        {concentrated && <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3 text-xs text-red-300">Supply is concentrated. A single region or sole supplier disruption could stall production — qualify a second source for critical inputs.</div>}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+          <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Spend by region</p>
+          {regionShare.map(rs => (
+            <div key={rs.region}>
+              <div className="flex justify-between text-xs mb-0.5"><span>{rs.region}</span><span className="tabular-nums text-[var(--color-muted)]">{rs.pct.toFixed(0)}% · {formatCurrency(rs.sp)}</span></div>
+              <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${rs.pct}%` }} /></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Supplier", "Region", "Spend", "Risk", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.region}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.spend)}</td>
+                  <td className="px-3 py-2.5 text-xs">{r.singleSource ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Single-source</span> : <span className="text-[var(--color-muted)]">Multi-source</span>}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">HHI = Σ(region share²): below 0.25 is diversified, above 0.5 is concentrated. Single-source criticals deserve a qualified backup even at a small cost premium — resilience is cheaper than a stockout.</p>
+    </div>
+  );
+}
+
+// ── Economic Order Quantity (EOQ) Check ──────────────────────────────────────────
+type EoqRow = {
+  id: string;
+  item: string;
+  annualDemand: number;
+  orderCost: number;     // cost to place one order
+  unitCost: number;
+  holdingPct: number;    // annual holding cost as % of unit cost
+  moq: number;           // supplier minimum order qty
+};
+function EoqCheck() {
+  const [rows, setRows] = useFeatureState<EoqRow[]>("sup-eoq-check", []);
+  const [item, setItem] = useState("");
+  const [annualDemand, setAnnualDemand] = useState("");
+  const [orderCost, setOrderCost] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [holdingPct, setHoldingPct] = useState("20");
+  const [moq, setMoq] = useState("");
+
+  // EOQ = sqrt(2 D S / H), H = holdingPct% × unitCost
+  const eoqOf = (r: EoqRow) => {
+    const H = r.unitCost * (r.holdingPct / 100);
+    if (H <= 0) return 0;
+    return Math.round(Math.sqrt((2 * r.annualDemand * r.orderCost) / H));
+  };
+  // Order qty must respect MOQ
+  const orderQtyOf = (r: EoqRow) => Math.max(eoqOf(r), r.moq);
+  const ordersPerYearOf = (r: EoqRow) => { const q = orderQtyOf(r); return q > 0 ? +(r.annualDemand / q).toFixed(1) : 0; };
+  const annualCostOf = (r: EoqRow) => {
+    const q = orderQtyOf(r); if (q <= 0) return 0;
+    const H = r.unitCost * (r.holdingPct / 100);
+    return Math.round((r.annualDemand / q) * r.orderCost + (q / 2) * H);
+  };
+
+  const add = () => {
+    if (!item.trim()) { toast.error("Enter item name"); return; }
+    const num = (v: string) => Math.max(0, parseFloat(v) || 0);
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      item: item.trim(),
+      annualDemand: num(annualDemand),
+      orderCost: num(orderCost),
+      unitCost: num(unitCost),
+      holdingPct: Math.max(0, parseFloat(holdingPct) || 0),
+      moq: num(moq),
+    }]);
+    setItem(""); setAnnualDemand(""); setOrderCost(""); setUnitCost(""); setMoq("");
+    toast.success("Item added");
+  };
+
+  const moqBound = rows.filter(r => r.moq > eoqOf(r) && eoqOf(r) > 0).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Economic Order Quantity (EOQ) Check</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Find the order size that minimises ordering + holding cost: EOQ = √(2·demand·order cost ÷ holding cost). Flags where a supplier MOQ forces you above the optimal lot.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
+          <input type="number" value={annualDemand} onChange={e => setAnnualDemand(e.target.value)} placeholder="Annual demand (units)" className={INP} />
+          <input type="number" value={orderCost} onChange={e => setOrderCost(e.target.value)} placeholder="Cost per order (₹)" className={INP} />
+          <input type="number" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder="Unit cost (₹)" className={INP} />
+          <input type="number" value={holdingPct} onChange={e => setHoldingPct(e.target.value)} placeholder="Holding cost % p.a." className={INP} />
+          <input type="number" value={moq} onChange={e => setMoq(e.target.value)} placeholder="Supplier MOQ (units)" className={INP} />
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add item</button>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Items", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "MOQ above EOQ", value: String(moqBound), color: moqBound > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Total annual cost", value: formatCurrency(rows.reduce((s, r) => s + annualCostOf(r), 0)), color: "text-[var(--color-muted)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Item", "Demand", "EOQ", "MOQ", "Order qty", "Orders/yr", "Annual cost", "Flag", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const eoq = eoqOf(r);
+                const bound = r.moq > eoq && eoq > 0;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.item}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.annualDemand}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{eoq}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.moq || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-bold">{orderQtyOf(r)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{ordersPerYearOf(r)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(annualCostOf(r))}</td>
+                    <td className="px-3 py-2.5">{bound ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">MOQ-bound</span> : <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Optimal</span>}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">EOQ balances ordering cost against carrying cost. Where the supplier MOQ exceeds EOQ you carry excess stock — negotiate a lower MOQ, split lots, or factor the extra holding cost into the price comparison.</p>
     </div>
   );
 }
