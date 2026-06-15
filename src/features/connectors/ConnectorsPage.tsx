@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { generateId, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
-import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus, Server, FileCheck2, Calculator, ShieldCheck, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -318,7 +318,7 @@ export default function ConnectorsPage() {
       </div>
 
       {/* #166–#169 — Connector tools */}
-      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History]] as const).map(([id, label, Icon]) => (
+      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical]] as const).map(([id, label, Icon]) => (
         <a key={id} href={`#${id}`} className="sr-only">{label} <Icon size={10} /></a>
       ))}
       <BankUpiFeedConnector />
@@ -331,6 +331,11 @@ export default function ConnectorsPage() {
       <CredentialVault />
       <WebhookRegistry />
       <SyncHistoryTimeline />
+      <ErpAgentConfig />
+      <GstnPortalConnect />
+      <IntegrationCostEstimator />
+      <DataFlowAudit />
+      <EnvironmentToggle />
     </div>
   );
 }
@@ -1417,6 +1422,514 @@ function SyncHistoryTimeline() {
       </div>
 
       <DemoNote>Demo: sync runs here are simulated and logged locally. Production wires this to real connector run events.</DemoNote>
+    </section>
+  );
+}
+
+// ── Tally / Busy On-Prem ERP Agent ──────────────────────────────────────────────────
+// Configure the lightweight sync agent that pushes vouchers from an on-premise Tally /
+// Busy install. Generates a pairing token and tracks a simulated agent heartbeat.
+type ErpAgent = {
+  id: string;
+  software: "Tally Prime" | "Tally ERP 9" | "Busy" | "Marg";
+  company: string;
+  port: string;
+  token: string;
+  pushVouchers: boolean;
+  pushMasters: boolean;
+  paired: boolean;
+  lastBeat: string | null;
+};
+
+function ErpAgentConfig() {
+  const [agents, setAgents] = useFeatureState<ErpAgent[]>("conn-erp-agents", []);
+  const [software, setSoftware] = useState<ErpAgent["software"]>("Tally Prime");
+  const [company, setCompany] = useState("");
+  const [port, setPort] = useState("9000");
+  const [beating, setBeating] = useState<string | null>(null);
+
+  const create = () => {
+    if (!company.trim()) { toast.error("Enter the Tally / Busy company name"); return; }
+    const token = `hr_agent_${generateId().slice(0, 12)}`;
+    setAgents(prev => [{
+      id: generateId(),
+      software,
+      company: company.trim(),
+      port: port.trim() || "9000",
+      token,
+      pushVouchers: true,
+      pushMasters: false,
+      paired: false,
+      lastBeat: null,
+    }, ...prev]);
+    setCompany("");
+    toast.success("Agent profile created — paste the token into the on-prem sync agent to pair.");
+  };
+
+  const togglePush = (id: string, key: "pushVouchers" | "pushMasters") =>
+    setAgents(prev => prev.map(a => a.id === id ? { ...a, [key]: !a[key] } : a));
+
+  const pair = async (id: string) => {
+    setBeating(id);
+    await new Promise(r => setTimeout(r, 1100));
+    setAgents(prev => prev.map(a => a.id === id ? { ...a, paired: true, lastBeat: new Date().toISOString() } : a));
+    setBeating(null);
+    toast.success("Agent paired — heartbeat received (simulated).");
+  };
+
+  const heartbeat = async (id: string) => {
+    setBeating(id);
+    await new Promise(r => setTimeout(r, 800));
+    setAgents(prev => prev.map(a => a.id === id ? { ...a, lastBeat: new Date().toISOString() } : a));
+    setBeating(null);
+    toast.success("Heartbeat received — agent is online (simulated).");
+  };
+
+  const copyToken = (t: string) => { navigator.clipboard?.writeText(t); toast.success("Pairing token copied."); };
+  const remove = (id: string) => setAgents(prev => prev.filter(a => a.id !== id));
+
+  return (
+    <section id="conn-erp-agent" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Server size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Tally / Busy ERP Agent</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">On-prem sync agent · pairing token</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Configure the lightweight agent that runs alongside your on-premise Tally / Busy install and pushes vouchers to Headroom.
+        Create a profile, then paste its pairing token into the agent on your server.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Software</label>
+          <select value={software} onChange={e => setSoftware(e.target.value as ErpAgent["software"])} className={FC_INP}>
+            {(["Tally Prime", "Tally ERP 9", "Busy", "Marg"] as const).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Company name (as in ledger)</label>
+          <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Trading Co" className={FC_INP} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Local port</label>
+          <input value={port} onChange={e => setPort(e.target.value)} placeholder="9000" className={FC_INP} />
+        </div>
+      </div>
+      <button onClick={create} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg text-sm hover:opacity-90">
+        <Plus size={13} /> Create agent profile
+      </button>
+
+      <div className="space-y-2">
+        {agents.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No agent profiles yet.</p>
+        ) : agents.map(a => (
+          <div key={a.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold truncate">{a.company}</p>
+                  <span className={`flex items-center gap-1 text-[10px] ${a.paired ? "text-green-400" : "text-yellow-400"}`}>
+                    {a.paired ? <CheckCircle2 size={10} /> : <Clock size={10} />}{a.paired ? "Paired" : "Awaiting pairing"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)]">
+                  {a.software} · localhost:{a.port}{a.lastBeat ? ` · heartbeat ${new Date(a.lastBeat).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {a.paired ? (
+                  <button onClick={() => heartbeat(a.id)} disabled={beating === a.id}
+                    className="flex items-center gap-1 text-[10px] text-[var(--color-primary)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:bg-[var(--color-accent)]">
+                    <RefreshCw size={11} className={beating === a.id ? "animate-spin" : ""} /> Ping
+                  </button>
+                ) : (
+                  <button onClick={() => pair(a.id)} disabled={beating === a.id}
+                    className="flex items-center gap-1 text-[10px] text-green-400 border border-green-800/40 bg-green-950/20 px-2 py-1 rounded-lg hover:opacity-90">
+                    {beating === a.id ? <RefreshCw size={11} className="animate-spin" /> : <Link2 size={11} />} Pair
+                  </button>
+                )}
+                <button onClick={() => remove(a.id)} className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1.5">
+              <code className="text-[11px] font-mono text-[var(--color-muted)] truncate">{a.token}</code>
+              <button onClick={() => copyToken(a.token)} className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-primary)] shrink-0"><Copy size={12} /></button>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] cursor-pointer">
+                <input type="checkbox" checked={a.pushVouchers} onChange={() => togglePush(a.id, "pushVouchers")} /> Push vouchers
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] cursor-pointer">
+                <input type="checkbox" checked={a.pushMasters} onChange={() => togglePush(a.id, "pushMasters")} /> Push ledger masters
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: pairing tokens and heartbeats are generated locally — no agent actually connects to a Tally / Busy instance.</DemoNote>
+    </section>
+  );
+}
+
+// ── GSTN Portal Connect ─────────────────────────────────────────────────────────────
+// Simulated GST portal login (GSTIN + OTP) to enable returns / e-invoice pull. No real
+// GSTN / GSP call — OTP and session are faked client-side.
+type GstnSession = { gstin: string; legalName: string; connectedAt: string; scopes: string[] };
+const GSTN_SCOPES = ["GSTR-1 (outward)", "GSTR-2B (ITC)", "GSTR-3B summary", "e-Invoice IRN", "e-Way bills"] as const;
+
+function validGstin(g: string): boolean {
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(g.trim().toUpperCase());
+}
+
+function GstnPortalConnect() {
+  const [session, setSession] = useFeatureState<GstnSession | null>("conn-gstn-session", null);
+  const [gstin, setGstin] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["GSTR-1 (outward)", "GSTR-2B (ITC)"]);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+
+  const toggleScope = (s: string) =>
+    setScopes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+
+  const sendOtp = () => {
+    if (!validGstin(gstin)) { toast.error("Enter a valid 15-character GSTIN"); return; }
+    if (scopes.length === 0) { toast.error("Select at least one data scope"); return; }
+    setOtpSent(true);
+    toast.success("OTP sent to the registered mobile / email (simulated).");
+  };
+
+  const verify = () => {
+    if (otp.trim().length < 6) { toast.error("Enter the 6-digit OTP"); return; }
+    setSession({
+      gstin: gstin.trim().toUpperCase(),
+      legalName: legalName.trim() || "Registered Taxpayer",
+      connectedAt: new Date().toISOString(),
+      scopes,
+    });
+    setOtpSent(false); setOtp(""); setGstin(""); setLegalName("");
+    toast.success("GSTN portal connected — returns can now sync.");
+  };
+
+  const disconnect = () => {
+    if (!window.confirm("Disconnect the GSTN portal session?")) return;
+    setSession(null);
+    toast.success("GSTN session disconnected.");
+  };
+
+  return (
+    <section id="conn-gstn" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <FileCheck2 size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">GSTN Portal Connect</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">GSTIN + OTP · returns / e-invoice</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Authorise Headroom to pull your GST returns and e-invoice data via the GST portal. Verify with the OTP sent to your
+        registered contact, then choose which datasets to share.
+      </p>
+
+      {session ? (
+        <div className="bg-[var(--color-bg)] border border-green-800/30 rounded-lg p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2">
+                {session.legalName} <span className="flex items-center gap-1 text-[10px] text-green-400"><CheckCircle2 size={10} /> Connected</span>
+              </p>
+              <p className="text-[11px] text-[var(--color-muted)] font-mono">{session.gstin}</p>
+            </div>
+            <button onClick={disconnect} className="text-[11px] text-[var(--color-muted)] border border-[var(--color-border)] px-2.5 py-1 rounded-lg hover:text-red-400">Disconnect</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {session.scopes.map(s => (
+              <span key={s} className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-2 py-0.5 rounded">{s}</span>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Linked {new Date(session.connectedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-1">GSTIN *</label>
+              <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase())} maxLength={15} placeholder="27AAAAA0000A1Z5" className={`${FC_INP} font-mono`} />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-1">Legal name (optional)</label>
+              <input value={legalName} onChange={e => setLegalName(e.target.value)} placeholder="Acme Pvt Ltd" className={FC_INP} />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1.5">Data scopes</label>
+            <div className="flex flex-wrap gap-2">
+              {GSTN_SCOPES.map(s => {
+                const on = scopes.includes(s);
+                return (
+                  <button key={s} onClick={() => toggleScope(s)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${on ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {!otpSent ? (
+            <button onClick={sendOtp} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg text-sm hover:opacity-90">
+              <Send size={13} /> Send OTP
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1">Enter 6-digit OTP</label>
+                <input value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" className={`${FC_INP} font-mono max-w-[140px] tracking-widest`} />
+              </div>
+              <button onClick={verify} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg text-sm hover:opacity-90">
+                <CheckCircle2 size={13} /> Verify & connect
+              </button>
+              <button onClick={() => { setOtpSent(false); setOtp(""); }} className="text-xs text-[var(--color-muted)] px-3 py-2 hover:text-[var(--color-text)]">Cancel</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <DemoNote>Demo: no real GST portal / GSP authentication occurs. The GSTIN format is validated but the OTP and session are simulated locally.</DemoNote>
+    </section>
+  );
+}
+
+// ── Integration Cost Estimator ──────────────────────────────────────────────────────
+// Estimate monthly cost of running connectors based on per-source pricing and expected
+// transaction volume. Pure client-side calculator — pricing is illustrative.
+type CostSource = { id: string; name: string; perTxn: number; monthlyFee: number; defaultVolume: number };
+const COST_SOURCES: CostSource[] = [
+  { id: "aa", name: "Account Aggregator fetch", perTxn: 0.5, monthlyFee: 0, defaultVolume: 800 },
+  { id: "gw", name: "Payment gateway sync", perTxn: 0.2, monthlyFee: 99, defaultVolume: 1500 },
+  { id: "ecom", name: "Marketplace settlement import", perTxn: 0.1, monthlyFee: 199, defaultVolume: 600 },
+  { id: "gstn", name: "GSTN returns pull", perTxn: 0, monthlyFee: 149, defaultVolume: 0 },
+  { id: "erp", name: "Tally / Busy agent", perTxn: 0.05, monthlyFee: 249, defaultVolume: 2000 },
+];
+
+function IntegrationCostEstimator() {
+  const [enabled, setEnabled] = useFeatureState<Record<string, boolean>>("conn-cost-enabled", { aa: true, gw: true });
+  const [volumes, setVolumes] = useFeatureState<Record<string, number>>("conn-cost-volumes", {});
+
+  const rows = COST_SOURCES.map(s => {
+    const on = enabled[s.id] ?? false;
+    const vol = volumes[s.id] ?? s.defaultVolume;
+    const usage = vol * s.perTxn;
+    const total = on ? s.monthlyFee + usage : 0;
+    return { s, on, vol, usage, total };
+  });
+
+  const monthlyTotal = rows.reduce((a, r) => a + r.total, 0);
+  const annualTotal = monthlyTotal * 12;
+  const activeCount = rows.filter(r => r.on).length;
+
+  const toggle = (id: string) => setEnabled(prev => ({ ...prev, [id]: !(prev[id] ?? false) }));
+  const setVol = (id: string, v: number) => setVolumes(prev => ({ ...prev, [id]: Math.max(0, v) }));
+
+  return (
+    <section id="conn-cost" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Calculator size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Integration Cost Estimator</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{activeCount} sources · monthly run-rate</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Toggle the connectors you plan to run and set expected monthly volume. Headroom estimates the per-transaction and
+        platform-fee run-rate so you can budget before switching anything on.
+      </p>
+
+      <div className="space-y-2">
+        {rows.map(({ s, on, vol, usage, total }) => (
+          <div key={s.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                <input type="checkbox" checked={on} onChange={() => toggle(s.id)} />
+                <span className="text-sm font-semibold truncate">{s.name}</span>
+              </label>
+              <span className={`text-sm font-bold tabular-nums shrink-0 ${on ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{formatCurrency(total)}</span>
+            </div>
+            {on && (
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <div>
+                  <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Monthly txns</label>
+                  <input type="number" min={0} value={vol} onChange={e => setVol(s.id, Number(e.target.value))} className={`${FC_INP} max-w-[120px] py-1`} />
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)]">
+                  Platform <span className="tabular-nums text-[var(--color-text)]">{formatCurrency(s.monthlyFee)}</span>
+                  {s.perTxn > 0 && <> · usage <span className="tabular-nums text-[var(--color-text)]">{formatCurrency(usage)}</span> @ {formatCurrency(s.perTxn)}/txn</>}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+          <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Estimated monthly</p>
+          <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(monthlyTotal)}</p>
+        </div>
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+          <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Annualised</p>
+          <p className="text-lg font-bold tabular-nums text-[var(--color-text)]">{formatCurrency(annualTotal)}</p>
+        </div>
+      </div>
+
+      <DemoNote>Demo: pricing figures are illustrative placeholders for budgeting only — they are not Headroom's commercial rates.</DemoNote>
+    </section>
+  );
+}
+
+// ── Data-Flow & Scope Audit ─────────────────────────────────────────────────────────
+// Show exactly what data each connector reads/writes and the OAuth-style scopes it
+// requests, with a toggle to grant/revoke each scope. Reference + simulated grants.
+type FlowEntry = { connector: string; reads: string[]; writes: string[]; scopes: string[] };
+const DATA_FLOWS: FlowEntry[] = [
+  { connector: "Account Aggregator", reads: ["Bank statements", "Account balance"], writes: [], scopes: ["statements.read", "balance.read"] },
+  { connector: "Payment Gateway", reads: ["Settlements", "Refunds"], writes: ["Transaction tags"], scopes: ["settlements.read", "refunds.read", "tags.write"] },
+  { connector: "Tally / Busy Agent", reads: ["Vouchers", "Ledger masters"], writes: ["Reconciled flags"], scopes: ["vouchers.read", "masters.read", "recon.write"] },
+  { connector: "GSTN Portal", reads: ["GSTR-1", "GSTR-2B", "e-Invoices"], writes: [], scopes: ["returns.read", "einvoice.read"] },
+  { connector: "Marketplace", reads: ["Orders", "Settlement fees"], writes: [], scopes: ["orders.read", "payouts.read"] },
+];
+
+function DataFlowAudit() {
+  const [granted, setGranted] = useFeatureState<Record<string, boolean>>("conn-dataflow-grants", {});
+
+  const isGranted = (scope: string) => granted[scope] ?? true; // scopes granted by default
+  const toggle = (scope: string) => setGranted(prev => ({ ...prev, [scope]: !(prev[scope] ?? true) }));
+
+  const allScopes = DATA_FLOWS.flatMap(f => f.scopes);
+  const writeScopes = allScopes.filter(s => s.endsWith(".write"));
+  const revoked = allScopes.filter(s => !isGranted(s)).length;
+
+  return (
+    <section id="conn-dataflow" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Data-Flow & Scope Audit</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{writeScopes.length} write scopes · {revoked} revoked</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        See exactly what each connector reads from and writes back to your systems, plus the permission scopes it requests.
+        Revoke any scope you are not comfortable granting.
+      </p>
+
+      <div className="space-y-3">
+        {DATA_FLOWS.map(f => (
+          <div key={f.connector} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+            <p className="text-sm font-semibold">{f.connector}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <p className="text-[var(--color-muted)] mb-1 flex items-center gap-1"><ArrowDownUp size={10} className="rotate-180" /> Reads</p>
+                <div className="flex flex-wrap gap-1">
+                  {f.reads.length === 0 ? <span className="text-[var(--color-muted)]">—</span> : f.reads.map(r => (
+                    <span key={r} className="bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{r}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[var(--color-muted)] mb-1 flex items-center gap-1"><ArrowDownUp size={10} /> Writes back</p>
+                <div className="flex flex-wrap gap-1">
+                  {f.writes.length === 0 ? <span className="text-green-400">Read-only</span> : f.writes.map(w => (
+                    <span key={w} className="bg-orange-950/30 text-orange-400 px-1.5 py-0.5 rounded">{w}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[var(--color-border)]">
+              {f.scopes.map(scope => {
+                const on = isGranted(scope);
+                const isWrite = scope.endsWith(".write");
+                return (
+                  <button key={scope} onClick={() => toggle(scope)}
+                    className={`flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${on ? (isWrite ? "border-orange-800/40 text-orange-400" : "border-green-800/40 text-green-400") : "border-[var(--color-border)] text-[var(--color-muted)] line-through opacity-70"}`}>
+                    {on ? <CheckCircle2 size={9} /> : <XCircle size={9} />} {scope}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: scopes and data-flows are a reference map. Grant/revoke toggles are stored locally and do not change any live integration permissions.</DemoNote>
+    </section>
+  );
+}
+
+// ── Sandbox vs Production Environment Toggle ─────────────────────────────────────────
+// Per-connector environment switch (test sandbox vs live). Live mode requires an
+// explicit confirmation. All state is local — no environment is actually switched.
+type Environment = "sandbox" | "production";
+
+function EnvironmentToggle() {
+  const { store } = useApp();
+  const { connectors } = store;
+  const [envs, setEnvs] = useFeatureState<Record<string, Environment>>("conn-environments", {});
+
+  const targets = connectors.length > 0
+    ? connectors.map(c => ({ id: c.id, label: c.label }))
+    : [
+        { id: "aa_network", label: "Account Aggregator" },
+        { id: "razorpay", label: "Razorpay" },
+        { id: "stripe", label: "Stripe" },
+        { id: "tally", label: "Tally ERP" },
+      ];
+
+  const get = (id: string): Environment => envs[id] ?? "sandbox";
+
+  const setEnv = (id: string, label: string, env: Environment) => {
+    if (env === "production" && !window.confirm(`Switch ${label} to LIVE production? Real data and money movement may be affected.`)) return;
+    setEnvs(prev => ({ ...prev, [id]: env }));
+    toast(env === "production" ? `${label} set to Production (simulated).` : `${label} set to Sandbox.`);
+  };
+
+  const liveCount = targets.filter(t => get(t.id) === "production").length;
+
+  return (
+    <section id="conn-environment" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <FlaskConical size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Sandbox vs Production</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{liveCount} live · {targets.length - liveCount} sandbox</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Run each connector against a test sandbox before going live. Switching to production needs an explicit confirmation
+        so you never accidentally move real money or data.
+      </p>
+
+      <div className="space-y-2">
+        {targets.map(t => {
+          const env = get(t.id);
+          return (
+            <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{t.label}</p>
+                <p className={`text-[11px] flex items-center gap-1 ${env === "production" ? "text-orange-400" : "text-[var(--color-muted)]"}`}>
+                  {env === "production" ? <AlertCircle size={10} /> : <FlaskConical size={10} />}
+                  {env === "production" ? "Live production" : "Sandbox / test"}
+                </p>
+              </div>
+              <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden shrink-0">
+                {(["sandbox", "production"] as const).map(e => (
+                  <button key={e} onClick={() => setEnv(t.id, t.label, e)}
+                    className={`text-[11px] font-semibold px-3 py-1.5 transition-colors ${env === e ? (e === "production" ? "bg-orange-500 text-white" : "bg-[var(--color-primary)] text-[var(--color-bg)]") : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                    {e === "sandbox" ? "Sandbox" : "Live"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <DemoNote>Demo: the environment switch is stored locally for planning only — no connector actually changes between test and live endpoints.</DemoNote>
     </section>
   );
 }

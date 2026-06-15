@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { generateDemoData } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/utils";
-import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search } from "lucide-react";
+import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search, BarChart3, Braces, Coins, BadgeCheck, Table2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import TransactionImportModal from "@/components/TransactionImportModal";
@@ -22,7 +22,7 @@ export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
-  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive">("overview");
+  const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive" | "profiler" | "csv-json" | "number-clean" | "gstin-check" | "pivot">("overview");
 
   if (!canAccess("data")) return <Navigate to="/dashboard" replace />;
 
@@ -85,7 +85,7 @@ export default function DataPage() {
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive], ["profiler", "Column Profiler", BarChart3], ["csv-json", "CSV ↔ JSON", Braces], ["number-clean", "Number Cleanup", Coins], ["gstin-check", "GSTIN Validator", BadgeCheck], ["pivot", "Pivot Builder", Table2]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -103,6 +103,11 @@ export default function DataPage() {
       {tab === "templates-store" && <MappingTemplateStore />}
       {tab === "filings" && <FilingTemplates />}
       {tab === "archive" && <ArchivePurge editable={editable} />}
+      {tab === "profiler" && <ColumnProfiler />}
+      {tab === "csv-json" && <CsvJsonConverter />}
+      {tab === "number-clean" && <NumberCleanup />}
+      {tab === "gstin-check" && <GstinValidator />}
+      {tab === "pivot" && <PivotBuilder />}
 
       {tab === "overview" && <>
       {/* Current data snapshot */}
@@ -1231,6 +1236,504 @@ function ArchivePurge({ editable }: { editable: boolean }) {
           <button disabled={!editable || older.length === 0} onClick={purge} className={ghostBtn}><Trash2 size={13} /> Purge {older.length} old row{older.length === 1 ? "" : "s"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── #172 Column Statistics Profiler ────────────────────────────────────────────
+// Paste any CSV; for each column it reports fill rate, distinct values, and (for
+// numeric columns) count/sum/mean/min/max/median. Read-only, browser-only.
+interface ColProfile {
+  name: string; index: number; filled: number; total: number; distinct: number;
+  numeric: boolean; count: number; sum: number; mean: number; min: number; max: number; median: number;
+}
+function ColumnProfiler() {
+  const [raw, setRaw] = useState("");
+  const [hasHeader, setHasHeader] = useState(true);
+
+  const rows = useMemo(() => raw.split(/\r?\n/).filter(l => l.trim().length > 0).map(splitCsvLine), [raw]);
+  const headerRow = rows[0] ?? [];
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+
+  const profiles = useMemo<ColProfile[]>(() => {
+    if (dataRows.length === 0) return [];
+    const out: ColProfile[] = [];
+    for (let c = 0; c < colCount; c++) {
+      const cells = dataRows.map(r => (r[c] ?? "").trim());
+      const filledCells = cells.filter(v => v.length > 0);
+      const nums: number[] = [];
+      filledCells.forEach(v => {
+        const n = parseFloat(v.replace(/[₹,\s]/g, ""));
+        if (!isNaN(n) && /^-?[₹,\d.\s]+$/.test(v)) nums.push(n);
+      });
+      const numeric = filledCells.length > 0 && nums.length >= filledCells.length * 0.8;
+      const sorted = nums.slice().sort((a, b) => a - b);
+      const sum = nums.reduce((a, n) => a + n, 0);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length === 0 ? 0 : sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      out.push({
+        name: hasHeader && headerRow[c] ? headerRow[c] : `Col ${c + 1}`,
+        index: c, filled: filledCells.length, total: dataRows.length,
+        distinct: new Set(filledCells.map(v => v.toLowerCase())).size,
+        numeric, count: nums.length, sum,
+        mean: nums.length ? sum / nums.length : 0,
+        min: sorted.length ? sorted[0] : 0,
+        max: sorted.length ? sorted[sorted.length - 1] : 0,
+        median,
+      });
+    }
+    return out;
+  }, [dataRows, colCount, hasHeader, headerRow]);
+
+  const num = (n: number) => Number.isInteger(n) ? n.toLocaleString("en-IN") : n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <BarChart3 size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Column Statistics Profiler</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any sheet to instantly understand it — see how complete each column is, how many distinct values it holds, and full stats (sum, mean, median, range) for numeric columns. Nothing is uploaded.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"date,party,amount\n01/06/2026,Mehta Corp,250000\n03/06/2026,Landlord,120000"}
+          className={taCls} />
+        <label className="flex items-center gap-2 cursor-pointer text-xs mt-3">
+          <input type="checkbox" checked={hasHeader} onChange={e => setHasHeader(e.target.checked)} className="accent-[var(--color-primary)]" />
+          First row is a header
+        </label>
+      </div>
+
+      {profiles.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-semibold">{dataRows.length} rows · {profiles.length} columns</div>
+          <table className="w-full text-sm min-w-[680px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Column", "Fill rate", "Distinct", "Type", "Sum", "Mean", "Median", "Min", "Max"].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {profiles.map(p => {
+                const pct = p.total === 0 ? 0 : Math.round((p.filled / p.total) * 100);
+                return (
+                  <tr key={p.index} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${pct < 100 ? "text-orange-400" : "text-green-400"}`}>{pct}%</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.distinct}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.numeric ? "Numeric" : "Text"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.sum) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.mean) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.median) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.min) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.max) : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A column is treated as numeric when ≥80% of its filled cells parse as numbers (₹ and thousands separators are stripped).</p>
+    </div>
+  );
+}
+
+// ── #173 CSV ↔ JSON Converter ──────────────────────────────────────────────────
+// Two-way: paste CSV → download an array of objects as JSON; or paste a JSON
+// array of objects → download a flattened CSV. All in-browser via Blob.
+function CsvJsonConverter() {
+  const [mode, setMode] = useState<"csv2json" | "json2csv">("csv2json");
+  const [raw, setRaw] = useState("");
+  const [out, setOut] = useState("");
+  const [err, setErr] = useState("");
+
+  const convert = () => {
+    setErr(""); setOut("");
+    if (!raw.trim()) { setErr("Paste some data first."); return; }
+    try {
+      if (mode === "csv2json") {
+        const lines = raw.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length < 2) { setErr("Need a header row plus at least one data row."); return; }
+        const headers = splitCsvLine(lines[0]);
+        const records = lines.slice(1).map(line => {
+          const cells = splitCsvLine(line);
+          const obj: Record<string, string> = {};
+          headers.forEach((h, i) => { obj[h || `col${i + 1}`] = cells[i] ?? ""; });
+          return obj;
+        });
+        setOut(JSON.stringify(records, null, 2));
+      } else {
+        const parsed: unknown = JSON.parse(raw);
+        if (!Array.isArray(parsed)) { setErr("JSON must be an array of objects."); return; }
+        const objs = parsed.filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null && !Array.isArray(r));
+        if (objs.length === 0) { setErr("No objects found in the array."); return; }
+        const keys: string[] = [];
+        objs.forEach(o => Object.keys(o).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
+        const esc = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+        const body = objs.map(o => keys.map(k => {
+          const val = o[k];
+          return esc(val === undefined || val === null ? "" : typeof val === "object" ? JSON.stringify(val) : String(val));
+        }).join(",")).join("\n");
+        setOut(`${keys.map(esc).join(",")}\n${body}`);
+      }
+    } catch {
+      setErr(mode === "csv2json" ? "Could not parse the CSV." : "Invalid JSON — check the syntax.");
+    }
+  };
+
+  const download = () => {
+    if (!out) return;
+    if (mode === "csv2json") downloadBlob("converted.json", out, "application/json");
+    else downloadBlob("converted.csv", out, "text/csv");
+    toast.success("Downloaded converted file");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Braces size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">CSV ↔ JSON Converter</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Move data between spreadsheets and APIs. Convert a pasted CSV into a clean JSON array of objects, or a JSON array back into a flat CSV — everything happens in your browser.</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {(["csv2json", "json2csv"] as const).map(m => (
+            <button key={m} onClick={() => { setMode(m); setOut(""); setErr(""); }}
+              className={`px-3 py-1.5 text-xs rounded font-medium ${mode === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {m === "csv2json" ? "CSV → JSON" : "JSON → CSV"}
+            </button>
+          ))}
+        </div>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={mode === "csv2json" ? "date,party,amount\n01/06/2026,Mehta Corp,250000" : '[{"date":"01/06/2026","party":"Mehta Corp","amount":250000}]'}
+          className={taCls} />
+        {err && <p className="text-xs text-red-400 mt-2">{err}</p>}
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={convert} className={primaryBtn}><ArrowLeftRight size={13} /> Convert</button>
+          <button disabled={!out} onClick={download} className={ghostBtn}><Download size={13} /> Download {mode === "csv2json" ? "JSON" : "CSV"}</button>
+        </div>
+      </div>
+
+      {out && (
+        <div className={cardCls}>
+          <p className="text-sm font-semibold mb-2">Output</p>
+          <textarea readOnly value={out} spellCheck={false} className={taCls} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #174 Number & Currency Cleanup ─────────────────────────────────────────────
+// Paste a column of messy amounts (₹, commas, lakh/cr suffixes, brackets for
+// negatives, trailing CR/DR) and get clean numbers back, with a running total.
+function NumberCleanup() {
+  const [raw, setRaw] = useState("");
+
+  const parseAmount = (line: string): number | null => {
+    let s = line.trim();
+    if (!s) return null;
+    let sign = 1;
+    if (/^\(.*\)$/.test(s)) { sign = -1; s = s.slice(1, -1); }
+    if (/(^|\s)dr$/i.test(s) || /-$/.test(s)) sign = -1;
+    if (/(^|\s)cr$/i.test(s)) sign = 1;
+    s = s.replace(/(cr|dr)$/i, "").trim();
+    let mult = 1;
+    if (/(lakh|lac|l)$/i.test(s)) { mult = 100000; s = s.replace(/(lakh|lac|l)$/i, "").trim(); }
+    else if (/(cr|crore)$/i.test(s)) { mult = 10000000; s = s.replace(/(cr|crore)$/i, "").trim(); }
+    else if (/k$/i.test(s)) { mult = 1000; s = s.replace(/k$/i, "").trim(); }
+    const cleaned = s.replace(/[₹$,\s]/g, "");
+    if (cleaned === "" || cleaned === "-") return null;
+    const n = parseFloat(cleaned);
+    if (isNaN(n)) return null;
+    return sign * n * mult;
+  };
+
+  const result = useMemo(() => {
+    const lines = raw.split(/\r?\n/);
+    const rows = lines.map(l => ({ input: l, value: l.trim() ? parseAmount(l) : null }))
+      .filter(r => r.input.trim().length > 0);
+    const ok = rows.filter(r => r.value !== null);
+    const total = ok.reduce((a, r) => a + (r.value ?? 0), 0);
+    return { rows, parsed: ok.length, failed: rows.length - ok.length, total };
+  }, [raw]);
+
+  const downloadClean = () => {
+    if (result.parsed === 0) { toast.error("Nothing to export"); return; }
+    const body = result.rows.map(r => `${(r.input).replace(/[",\n]/g, " ").trim()},${r.value ?? ""}`).join("\n");
+    downloadBlob("cleaned-amounts.csv", `original,cleaned\n${body}`, "text/csv");
+    toast.success(`Exported ${result.parsed} cleaned amount(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Coins size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Number &amp; Currency Cleanup</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a column of messy amounts — "₹2,50,000", "1.5 lakh", "(12,000)", "45000 Cr" — and get clean signed numbers plus a running total. Handles ₹/$ symbols, separators, brackets, CR/DR and lakh/crore suffixes.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"₹2,50,000\n1.5 lakh\n(12,000)\n45000 Cr\n3.2 cr"}
+          className={taCls} />
+      </div>
+
+      {result.rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Parsed", value: String(result.parsed), color: "text-green-400" },
+              { label: "Unparseable", value: String(result.failed), color: result.failed ? "text-red-400" : "text-[var(--color-muted)]" },
+              { label: "Total", value: formatCurrency(result.total), color: "text-[var(--color-primary)]" },
+              { label: "Rows", value: String(result.rows.length), color: "text-[var(--color-muted)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[360px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Original", "Cleaned", "Status"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.rows.slice(0, 100).map((r, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2 font-mono text-xs">{r.input.trim()}</td>
+                    <td className={`px-4 py-2 tabular-nums ${r.value !== null && r.value < 0 ? "text-red-400" : ""}`}>{r.value !== null ? r.value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—"}</td>
+                    <td className="px-4 py-2">{r.value !== null ? <span className="text-green-400 text-xs">OK</span> : <span className="text-red-400 text-xs">Skipped</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {result.rows.length > 100 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 100 of {result.rows.length}.</p>}
+          </div>
+          <button onClick={downloadClean} className={primaryBtn}><Download size={13} /> Download cleaned CSV</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #175 GSTIN Bulk Validator ──────────────────────────────────────────────────
+// Paste a list of GSTINs (one per line); validates the 15-char format, the state
+// code, PAN segment and the final checksum digit. Exports a pass/fail report.
+const GST_STATES: Record<string, string> = {
+  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+  "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
+  "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar",
+  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
+};
+function gstinChecksum(gstin: string): boolean {
+  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const v = chars.indexOf(gstin[i]);
+    if (v < 0) return false;
+    const factor = i % 2 === 0 ? 1 : 2;
+    const prod = v * factor;
+    sum += Math.floor(prod / 36) + (prod % 36);
+  }
+  const checkVal = (36 - (sum % 36)) % 36;
+  return chars[checkVal] === gstin[14];
+}
+interface GstinResult { gstin: string; valid: boolean; state: string; reason: string; }
+function GstinValidator() {
+  const [raw, setRaw] = useState("");
+
+  const results = useMemo<GstinResult[]>(() => {
+    const lines = raw.split(/\r?\n/).map(l => l.trim().toUpperCase()).filter(l => l.length > 0);
+    const fmt = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+    return lines.map(g => {
+      const state = GST_STATES[g.slice(0, 2)] ?? "";
+      if (g.length !== 15) return { gstin: g, valid: false, state, reason: `Length ${g.length}, expected 15` };
+      if (!fmt.test(g)) return { gstin: g, valid: false, state, reason: "Bad format" };
+      if (!state) return { gstin: g, valid: false, state: "", reason: `Unknown state code ${g.slice(0, 2)}` };
+      if (!gstinChecksum(g)) return { gstin: g, valid: false, state, reason: "Checksum failed" };
+      return { gstin: g, valid: true, state, reason: "Valid" };
+    });
+  }, [raw]);
+
+  const validCount = results.filter(r => r.valid).length;
+
+  const downloadReport = () => {
+    if (results.length === 0) { toast.error("Nothing to export"); return; }
+    const body = results.map(r => [r.gstin, r.valid ? "VALID" : "INVALID", r.state, r.reason].join(",")).join("\n");
+    downloadBlob("gstin-validation.csv", `gstin,status,state,reason\n${body}`, "text/csv");
+    toast.success(`Exported ${results.length} result(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <BadgeCheck size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">GSTIN Bulk Validator</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a list of GSTINs (one per line) to validate before you file. We check the 15-character structure, the state code, the embedded PAN and the official checksum digit — offline, no portal call.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"27ABCDE1234F1Z5\n29AABCU9603R1ZM\n07AAAC...."}
+          className={taCls} />
+      </div>
+
+      {results.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Valid", value: String(validCount), color: "text-green-400" },
+              { label: "Invalid", value: String(results.length - validCount), color: results.length - validCount ? "text-red-400" : "text-[var(--color-muted)]" },
+              { label: "Checked", value: String(results.length), color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["GSTIN", "Status", "State", "Note"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.slice(0, 100).map((r, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2 font-mono text-xs">{r.gstin}</td>
+                    <td className="px-4 py-2">{r.valid ? <span className="text-green-400 text-xs">Valid</span> : <span className="text-red-400 text-xs">Invalid</span>}</td>
+                    <td className="px-4 py-2 text-[var(--color-muted)]">{r.state || "—"}</td>
+                    <td className="px-4 py-2 text-xs text-[var(--color-muted)]">{r.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {results.length > 100 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 100 of {results.length}.</p>}
+          </div>
+          <button onClick={downloadReport} className={primaryBtn}><Download size={13} /> Download report CSV</button>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Structural + checksum validation only — it does not confirm the GSTIN is active/registered on the GST portal.</p>
+    </div>
+  );
+}
+
+// ── #176 Pivot / Summary Builder ───────────────────────────────────────────────
+// Paste a CSV, choose a group-by column and a numeric value column, and get a
+// grouped summary (sum, count, average) plus a downloadable pivot CSV.
+function PivotBuilder() {
+  const [raw, setRaw] = useState("");
+  const [groupCol, setGroupCol] = useState(0);
+  const [valueCol, setValueCol] = useState(-1);
+
+  const rows = useMemo(() => raw.split(/\r?\n/).filter(l => l.trim().length > 0).map(splitCsvLine), [raw]);
+  const headerRow = rows[0] ?? [];
+  const dataRows = rows.slice(1);
+  const colCount = headerRow.length;
+
+  const pivot = useMemo(() => {
+    if (dataRows.length === 0 || valueCol < 0) return [];
+    const map = new Map<string, { sum: number; count: number }>();
+    dataRows.forEach(r => {
+      const key = (r[groupCol] ?? "").trim() || "(blank)";
+      const n = parseFloat((r[valueCol] ?? "").replace(/[₹,\s]/g, "")) || 0;
+      const cur = map.get(key) ?? { sum: 0, count: 0 };
+      cur.sum += n; cur.count += 1;
+      map.set(key, cur);
+    });
+    return Array.from(map.entries())
+      .map(([group, v]) => ({ group, sum: v.sum, count: v.count, avg: v.count ? v.sum / v.count : 0 }))
+      .sort((a, b) => Math.abs(b.sum) - Math.abs(a.sum));
+  }, [dataRows, groupCol, valueCol]);
+
+  const grandTotal = pivot.reduce((a, p) => a + p.sum, 0);
+
+  const downloadPivot = () => {
+    if (pivot.length === 0) { toast.error("Build a pivot first"); return; }
+    const gName = headerRow[groupCol] || `col${groupCol + 1}`;
+    const vName = headerRow[valueCol] || `col${valueCol + 1}`;
+    const esc = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const body = pivot.map(p => [esc(p.group), p.sum, p.count, p.avg.toFixed(2)].join(",")).join("\n");
+    downloadBlob("pivot-summary.csv", `${esc(gName)},sum_${esc(vName)},count,average\n${body}`, "text/csv");
+    toast.success(`Exported ${pivot.length} group(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={cardCls}>
+        <div className="flex items-center gap-2 mb-2">
+          <Table2 size={15} className="text-[var(--color-primary)]" />
+          <p className="text-sm font-semibold">Pivot / Summary Builder</p>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a CSV with a header row, pick a column to group by and a numeric column to total, and get an instant pivot — sum, count and average per group — ready to download. Great for spend-by-vendor or revenue-by-month.</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
+          placeholder={"date,party,category,amount\n01/06/2026,Mehta Corp,Sales,250000\n03/06/2026,Landlord,Rent,120000"}
+          className={taCls} />
+        {colCount > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Group by</label>
+              <select value={groupCol} onChange={e => setGroupCol(Number(e.target.value))} className={inpCls}>
+                {headerRow.map((h, i) => <option key={i} value={i}>{h || `Col ${i + 1}`}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Sum / average column (numeric)</label>
+              <select value={valueCol} onChange={e => setValueCol(Number(e.target.value))} className={inpCls}>
+                <option value={-1}>— select —</option>
+                {headerRow.map((h, i) => <option key={i} value={i}>{h || `Col ${i + 1}`}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {pivot.length > 0 && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-semibold">{pivot.length} group(s) · total {formatCurrency(grandTotal)}</div>
+            <table className="w-full text-sm min-w-[420px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Group", "Sum", "Count", "Average"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pivot.slice(0, 100).map((p, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5 font-medium">{p.group}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${p.sum < 0 ? "text-red-400" : ""}`}>{formatCurrency(p.sum)}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.count}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(p.avg)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {pivot.length > 100 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 100 of {pivot.length} groups.</p>}
+          </div>
+          <button onClick={downloadPivot} className={primaryBtn}><Download size={13} /> Download pivot CSV</button>
+        </>
+      )}
     </div>
   );
 }

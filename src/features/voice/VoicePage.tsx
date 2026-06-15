@@ -6,6 +6,7 @@ import {
   Mic, Languages, Volume2, BookOpen, Eye, Hash, AudioLines, Fingerprint, NotebookPen,
   AlertTriangle, CheckCircle2, Play, Square, Trash2, Copy, Plus,
   Receipt, FileText, Search, Globe, Sun, Bell, Type, ArrowRightLeft,
+  PhoneCall, MessageCircle, BookMarked, Calculator, PartyPopper, Send, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -99,6 +100,7 @@ export default function VoicePage() {
     | "access" | "numbers" | "audiostmt" | "voiceauth" | "scratchpad"
     | "expense" | "invoice" | "txnsearch" | "uipreview" | "digest"
     | "reminder" | "words" | "translit"
+    | "payreminder" | "whatsapp" | "glossary" | "calc" | "greeting"
   >("overview");
 
   return (
@@ -132,6 +134,11 @@ export default function VoicePage() {
             ["reminder", "Reminders", Bell],
             ["words", "Amount in Words", Type],
             ["translit", "Transliterate", ArrowRightLeft],
+            ["payreminder", "Payment Reminder", PhoneCall],
+            ["whatsapp", "Voice to WhatsApp", MessageCircle],
+            ["glossary", "Audio Glossary", BookMarked],
+            ["calc", "Speak Total", Calculator],
+            ["greeting", "Greeting Recorder", PartyPopper],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -159,6 +166,11 @@ export default function VoicePage() {
       {tab === "reminder" && <VoiceReminderSetter />}
       {tab === "words" && <AmountInWords />}
       {tab === "translit" && <TransliterationHelper />}
+      {tab === "payreminder" && <PaymentReminderDictation />}
+      {tab === "whatsapp" && <VoiceToWhatsApp />}
+      {tab === "glossary" && <FinanceGlossary />}
+      {tab === "calc" && <SpeakTheTotal />}
+      {tab === "greeting" && <GreetingRecorder />}
     </div>
   );
 }
@@ -1296,6 +1308,409 @@ function TransliterationHelper() {
             className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy Devanagari</button>
         )}
         <FallbackNote>Phonetic approximation only — vowel matras and conjuncts won&apos;t always be exact. Use it for rough notes, not for printing official documents.</FallbackNote>
+      </div>
+    </div>
+  );
+}
+
+// ── Tool 18 · Spoken payment-reminder dictation ───────────────────────────────────
+// Builds a polite, ready-to-read reminder for an overdue invoice and speaks it aloud.
+const REMINDER_TEMPLATES: { id: string; label: string; build: (firm: string, party: string, amt: string, days: number) => string }[] = [
+  { id: "gentle", label: "Gentle nudge", build: (firm, party, amt, days) => `Hello ${party}, this is a friendly reminder from ${firm}. An amount of ${amt} rupees has been pending for ${days} day${days === 1 ? "" : "s"}. Whenever convenient, please arrange the payment. Thank you.` },
+  { id: "firm", label: "Firm follow-up", build: (firm, party, amt, days) => `Dear ${party}, ${firm} here. Your payment of ${amt} rupees is now ${days} day${days === 1 ? "" : "s"} overdue. Kindly clear it at the earliest to avoid any late charges. Please confirm once done.` },
+  { id: "festive", label: "Warm & festive", build: (firm, party, amt, days) => `Namaste ${party}, greetings from ${firm}. We hope business is good. A small balance of ${amt} rupees is open for ${days} day${days === 1 ? "" : "s"}. Do settle it when you can, and thank you for your continued trust.` },
+];
+function PaymentReminderDictation() {
+  const { store } = useApp();
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const firm = store.firm?.name?.trim() || "our business";
+
+  const overdue = useMemo(() => {
+    const today = new Date();
+    return (store.invoices ?? [])
+      .filter(i => i.status === "overdue" || i.status === "pending")
+      .map(i => {
+        const due = new Date(i.dueDate);
+        const days = Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86_400_000));
+        return { id: i.id, party: i.customer || "customer", amount: i.amount, days };
+      })
+      .filter(i => i.days > 0)
+      .sort((a, b) => b.days - a.days);
+  }, [store.invoices]);
+
+  const [party, setParty] = useState("");
+  const [amount, setAmount] = useState("");
+  const [days, setDays] = useState("7");
+  const [template, setTemplate] = useState<string>("gentle");
+
+  const chosen = REMINDER_TEMPLATES.find(t => t.id === template) ?? REMINDER_TEMPLATES[0];
+  const amtNum = parseFloat(amount.replace(/,/g, "")) || 0;
+  const message = chosen.build(firm, party.trim() || "customer", lakhCrore(amtNum), parseInt(days, 10) || 0);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PhoneCall size={14} className="text-[var(--color-primary)]" /> Payment-reminder dictation</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Pick an overdue bill (or fill it in), choose a tone, and Headroom drafts a polite spoken reminder you can read aloud, copy, or repeat over a call. Nothing is sent automatically.
+        </p>
+
+        {overdue.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {overdue.slice(0, 6).map(o => (
+              <button key={o.id} onClick={() => { setParty(o.party); setAmount(String(o.amount)); setDays(String(o.days)); }}
+                className="text-[10px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40">
+                {o.party} · {formatCurrency(o.amount)} · {o.days}d
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Customer name" className={INP} />
+          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal" className={INP} />
+          <input value={days} onChange={e => setDays(e.target.value)} placeholder="Days overdue" inputMode="numeric" className={INP} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {REMINDER_TEMPLATES.map(t => (
+            <button key={t.id} onClick={() => setTemplate(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${template === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5 space-y-3`}>
+        <p className="text-xs text-[var(--color-muted)]">Reminder script</p>
+        <p className="text-sm leading-relaxed bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">&ldquo;{message}&rdquo;</p>
+        <div className="flex gap-2">
+          <button onClick={() => { if (!speak(message, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Read aloud</button>
+          <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> Stop</button>
+          <button onClick={() => { navigator.clipboard?.writeText(message); toast.success("Reminder copied"); }}
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy</button>
+        </div>
+        {!SPEECH_OUT && <FallbackNote>Read-aloud needs text-to-speech support; copy the script above and read or send it manually instead.</FallbackNote>}
+      </div>
+    </div>
+  );
+}
+
+// ── Tool 19 · Voice-to-WhatsApp message ───────────────────────────────────────────
+// Dictates a message, then hands off to WhatsApp's wa.me deep link (no API sends here).
+function VoiceToWhatsApp() {
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+
+  const toggleListen = () => {
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) { toast.error("Speech recognition not supported — type the message"); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new Ctor();
+    rec.lang = bcp47; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = (e) => {
+      let finalChunk = "";
+      for (let i = 0; i < e.results.length; i++) if (e.results[i].isFinal) finalChunk += e.results[i][0].transcript + " ";
+      if (finalChunk) setMessage(prev => (prev ? prev + " " : "") + finalChunk.trim());
+    };
+    rec.onerror = (e) => { toast.error(`Mic error: ${e.error ?? "unknown"}`); setListening(false); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  useEffect(() => () => { recRef.current?.stop(); }, []);
+
+  const digits = phone.replace(/[^\d]/g, "");
+  const openWhatsApp = () => {
+    if (!message.trim()) { toast.error("Dictate or type a message first"); return; }
+    const base = digits ? `https://wa.me/${digits}` : "https://wa.me/";
+    const url = `${base}?text=${encodeURIComponent(message.trim())}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    toast.success("Opening WhatsApp…");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MessageCircle size={14} className="text-[var(--color-primary)]" /> Voice to WhatsApp</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Speak a message in your language, then hand it straight to WhatsApp pre-filled. We open WhatsApp&apos;s share link — your unsent draft, your number — so you tap send yourself. No message is sent in the background.
+        </p>
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available — type the message; the WhatsApp hand-off works the same.</FallbackNote>}
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Recipient number (optional, with country code)</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="91XXXXXXXXXX" inputMode="tel" className={INP} />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Leave blank to pick the contact inside WhatsApp.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={toggleListen} disabled={!SPEECH_IN}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
+            {listening ? <><Square size={13} /> Stop dictation</> : <><Mic size={13} /> Dictate message</>}
+          </button>
+          <button onClick={() => setMessage("")} disabled={!message}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><X size={13} /> Clear</button>
+        </div>
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak in {lang}.</p>}
+        <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} placeholder="Your message appears here…" className={`${INP} resize-y leading-relaxed`} />
+        <button onClick={openWhatsApp} disabled={!message.trim()}
+          className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Send size={13} /> Open in WhatsApp</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tool 20 · Vernacular finance-term audio glossary ──────────────────────────────
+const GLOSSARY: { term: string; plain: string }[] = [
+  { term: "ITC (Input Tax Credit)", plain: "The GST you already paid on your purchases, which you can subtract from the GST you owe on your sales. Less tax out of pocket." },
+  { term: "TDS (Tax Deducted at Source)", plain: "Tax that a payer cuts before paying you, and deposits with the government on your behalf. You claim it back at filing." },
+  { term: "EBITDA", plain: "Your profit before counting interest, taxes, and the wear-and-tear of assets. A quick view of whether the core business earns money." },
+  { term: "Working capital", plain: "The cash and near-cash you have to run day-to-day after paying short-term dues. Positive means you can cover the next few weeks." },
+  { term: "Accounts receivable", plain: "Money your customers still owe you for goods or services already delivered. Your dues to collect." },
+  { term: "Accounts payable", plain: "Money you still owe your suppliers and vendors for what you have already bought. Your dues to pay." },
+  { term: "Gross margin", plain: "What is left from a sale after the direct cost of the goods. Higher margin means more room to cover expenses and profit." },
+  { term: "Cash flow", plain: "The actual money moving in and out of your business. Profit on paper means little if cash does not arrive on time." },
+  { term: "GSTR-2B", plain: "A monthly GST statement showing the input credit available to you, based on what your suppliers reported. Match it with your books." },
+  { term: "Reconciliation", plain: "Matching your own records against the bank or GST statement so every rupee is accounted for and nothing is missed." },
+];
+function FinanceGlossary() {
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const [q, setQ] = useState("");
+  const [openTerm, setOpenTerm] = useState<string | null>(null);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return GLOSSARY;
+    return GLOSSARY.filter(g => g.term.toLowerCase().includes(needle) || g.plain.toLowerCase().includes(needle));
+  }, [q]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BookMarked size={14} className="text-[var(--color-primary)]" /> Audio finance glossary</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Plain-language explanations of the jargon that trips up owners — tap any term to expand it, or hear it read aloud. The voice uses your preferred language locale ({bcp47}); the explanation text is in simple English for now.
+        </p>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search a term, e.g. ITC, EBITDA…" className={INP} />
+      </div>
+
+      <div className={`${CARD} p-4 space-y-2`}>
+        {filtered.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)]">No term matches &ldquo;{q}&rdquo;.</p>
+        ) : filtered.map(g => {
+          const open = openTerm === g.term;
+          return (
+            <div key={g.term} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
+              <button onClick={() => setOpenTerm(open ? null : g.term)}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left">
+                <span className="text-sm font-medium text-[var(--color-primary)]">{g.term}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span onClick={(e) => { e.stopPropagation(); if (!speak(`${g.term}. ${g.plain}`, bcp47)) toast.error("Text-to-speech not supported here"); }}
+                    role="button" tabIndex={0} aria-label="Hear this term"
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); speak(`${g.term}. ${g.plain}`, bcp47); } }}
+                    className="text-[var(--color-muted)] hover:text-[var(--color-primary)] cursor-pointer"><Volume2 size={13} /></span>
+                  <Plus size={13} className={`text-[var(--color-muted)] transition-transform ${open ? "rotate-45" : ""}`} />
+                </span>
+              </button>
+              {open && <p className="text-xs text-[var(--color-muted)] leading-relaxed px-3 pb-3">{g.plain}</p>}
+            </div>
+          );
+        })}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — every explanation is shown on screen so a screen reader can read it.</FallbackNote>}
+      </div>
+    </div>
+  );
+}
+
+// ── Tool 21 · Speak-the-total voice calculator ────────────────────────────────────
+// Dictate a running list of amounts ("200 plus 1500 and 300"); we total and speak it.
+function parseAmounts(text: string): number[] {
+  const matches = text.match(/\d[\d,]*(?:\.\d+)?/g) ?? [];
+  const out: number[] = [];
+  for (const m of matches) {
+    const v = parseFloat(m.replace(/,/g, ""));
+    if (!isNaN(v)) out.push(v);
+  }
+  return out;
+}
+function SpeakTheTotal() {
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const subtract = /\b(minus|less|subtract|deduct)\b/i.test(text);
+  const amounts = useMemo(() => parseAmounts(text), [text]);
+  const total = amounts.reduce((s, a, i) => (subtract && i > 0 ? s - a : s + a), 0);
+
+  const toggleListen = () => {
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) { toast.error("Speech recognition not supported — type the amounts"); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new Ctor();
+    rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
+    rec.onresult = (e) => { let out = ""; for (let i = 0; i < e.results.length; i++) out += e.results[i][0].transcript; setText(out); };
+    rec.onerror = (e) => { toast.error(`Mic error: ${e.error ?? "unknown"}`); setListening(false); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  useEffect(() => () => { recRef.current?.stop(); }, []);
+
+  const speakTotal = () => {
+    if (!amounts.length) { toast.error("Say or type some numbers first"); return; }
+    if (!speak(`The total is ${lakhCrore(total)} rupees.`, bcp47)) toast.error("Text-to-speech not supported here");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Speak the total</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Rattle off amounts — <em className="text-[var(--color-text)]">&ldquo;200 plus 1500 and 300&rdquo;</em> — and Headroom adds them up and reads the total back to you, so you can tally cash without looking. Say <em className="text-[var(--color-text)]">&ldquo;minus&rdquo;</em> anywhere to subtract the rest.
+        </p>
+        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here — type the numbers; the totalling works identically.</FallbackNote>}
+        <div className="flex gap-2">
+          <input value={text} onChange={e => setText(e.target.value)} placeholder="200 plus 1500 and 300" className={INP} />
+          <button onClick={toggleListen} disabled={!SPEECH_IN}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
+            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+          </button>
+        </div>
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+      </div>
+
+      {amounts.length > 0 && (
+        <div className={`${CARD} p-5 space-y-3`}>
+          <div className="flex flex-wrap gap-1.5">
+            {amounts.map((a, i) => (
+              <span key={`${i}-${a}`} className="text-xs px-2 py-1 rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 tabular-nums">
+                {subtract && i > 0 ? "− " : i > 0 ? "+ " : ""}{formatIndianGrouping(a)}
+              </span>
+            ))}
+          </div>
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">Total of {amounts.length} number{amounts.length > 1 ? "s" : ""}</p>
+            <p className="text-2xl font-bold tabular-nums">{formatCurrency(total)}</p>
+            <p className="text-xs text-[var(--color-primary)] mt-1">{lakhCrore(total)}</p>
+          </div>
+          <button onClick={speakTotal} disabled={!SPEECH_OUT}
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Volume2 size={13} /> Speak the total</button>
+          {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — the total is shown above instead.</FallbackNote>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tool 22 · Multilingual greeting recorder ──────────────────────────────────────
+// Records a short audio greeting via MediaRecorder; falls back to a typed/spoken script.
+type GreetingTemplate = { id: string; label: string; text: (firm: string) => string };
+const GREETING_TEMPLATES: GreetingTemplate[] = [
+  { id: "welcome", label: "Welcome", text: (f) => `Namaste, and welcome to ${f}. Thank you for choosing us — how may we help you today?` },
+  { id: "thanks", label: "Thank you", text: (f) => `Thank you for your business with ${f}. We truly appreciate your trust and look forward to serving you again.` },
+  { id: "diwali", label: "Diwali wishes", text: (f) => `Wishing you and your family a very happy Diwali from all of us at ${f}. May the year ahead bring prosperity and good health.` },
+  { id: "newyear", label: "New year", text: (f) => `A very happy new year from ${f}. Thank you for being with us — here is to a successful year ahead together.` },
+];
+function GreetingRecorder() {
+  const { store } = useApp();
+  const [lang] = useFeatureState<string>("voice-language", "Hindi");
+  const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
+  const firm = store.firm?.name?.trim() || "our business";
+
+  const [template, setTemplate] = useState<string>("welcome");
+  const chosen = GREETING_TEMPLATES.find(t => t.id === template) ?? GREETING_TEMPLATES[0];
+  const script = chosen.text(firm);
+
+  const CAN_RECORD = typeof window !== "undefined" && typeof navigator !== "undefined"
+    && !!navigator.mediaDevices && typeof window.MediaRecorder !== "undefined";
+
+  const [recording, setRecording] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopStream = () => { streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null; };
+
+  const startRecording = async () => {
+    if (!CAN_RECORD) { toast.error("Audio recording not supported in this browser"); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
+        setAudioUrl(URL.createObjectURL(blob));
+        stopStream();
+      };
+      recorderRef.current = rec;
+      rec.start();
+      setRecording(true);
+    } catch {
+      toast.error("Microphone permission denied or unavailable");
+      stopStream();
+    }
+  };
+  const stopRecording = () => { recorderRef.current?.stop(); setRecording(false); };
+
+  useEffect(() => () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    stopStream();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+  }, [audioUrl]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> Greeting recorder</h2>
+        <p className="text-xs text-[var(--color-muted)]">
+          Record a short voice greeting in your own language to send customers on WhatsApp or play at the counter. Pick a starter script, hear it read, then record your own take. Recording stays on your device — nothing uploads.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {GREETING_TEMPLATES.map(t => (
+            <button key={t.id} onClick={() => setTemplate(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${template === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm leading-relaxed bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 italic">&ldquo;{script}&rdquo;</p>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => { if (!speak(script, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Play size={13} /> Hear script</button>
+          {!recording ? (
+            <button onClick={startRecording} disabled={!CAN_RECORD}
+              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Mic size={13} /> Record my voice</button>
+          ) : (
+            <button onClick={stopRecording}
+              className="flex items-center gap-1.5 text-sm bg-red-500/20 text-red-400 border border-red-500/40 px-3 py-2 rounded-lg font-medium"><Square size={13} /> Stop recording</button>
+          )}
+        </div>
+        {recording && <p className="text-[11px] text-red-400 animate-pulse">Recording… read the script aloud, then press stop.</p>}
+        {!CAN_RECORD && <FallbackNote>Audio recording isn&apos;t supported here. You can still hear the script read aloud (if text-to-speech is available) and copy it to record on your phone&apos;s own recorder.</FallbackNote>}
+
+        {audioUrl && (
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+            <p className="text-[10px] text-[var(--color-muted)]">Your recording</p>
+            <audio src={audioUrl} controls className="w-full" />
+            <div className="flex gap-2">
+              <a href={audioUrl} download="greeting.webm"
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg"><Send size={12} /> Download</a>
+              <button onClick={() => { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }}
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 px-3 py-1.5 rounded-lg"><Trash2 size={12} /> Discard</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

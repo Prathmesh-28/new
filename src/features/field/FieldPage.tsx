@@ -6,7 +6,7 @@ import {
   Wifi, WifiOff, RefreshCw, Calculator, MapPin, Truck, Gauge, ClipboardList,
   Sun, Route, Camera, CloudUpload, CheckCircle2, Plus, Trash2, Signal, Smartphone,
   Clock, ShoppingCart, Receipt as ReceiptIcon, Wallet, PackagePlus, PenLine, PackageCheck, Target,
-  Eraser,
+  Eraser, Navigation, Eye, Activity, AlertTriangle, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -58,7 +58,8 @@ type FieldTab =
   | "overview" | "connectivity" | "queue" | "quickbill" | "collection"
   | "daysheet" | "lowdata" | "visits" | "summary" | "beat" | "receipt"
   | "attendance" | "order" | "outstanding" | "expense" | "stockreq"
-  | "signature" | "pod" | "target";
+  | "signature" | "pod" | "target" | "km" | "intel" | "meter"
+  | "issue" | "quote";
 
 const TABS = [
   ["overview", "Overview", Smartphone],
@@ -80,6 +81,11 @@ const TABS = [
   ["signature", "Signature Capture", PenLine],
   ["pod", "Proof of Delivery", PackageCheck],
   ["target", "Daily Target", Target],
+  ["km", "KM Expense Claim", Navigation],
+  ["intel", "Market Intel", Eye],
+  ["meter", "Asset / Meter Log", Activity],
+  ["issue", "Field Issue Ticket", AlertTriangle],
+  ["quote", "On-Site Quotation", FileText],
 ] as const;
 
 export default function FieldPage() {
@@ -128,6 +134,11 @@ export default function FieldPage() {
       {tab === "signature" && <SignatureCapture />}
       {tab === "pod" && <ProofOfDelivery />}
       {tab === "target" && <DailyTarget />}
+      {tab === "km" && <KmExpenseClaim />}
+      {tab === "intel" && <MarketIntel />}
+      {tab === "meter" && <MeterLog />}
+      {tab === "issue" && <FieldIssueTicket />}
+      {tab === "quote" && <OnSiteQuotation />}
     </div>
   );
 }
@@ -1490,6 +1501,509 @@ function DailyTarget() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Targets are stored and synced across your devices; progress recalculates as you capture sales, collections and visits in the field.</p>
+    </div>
+  );
+}
+
+// ── #19 Distance / KM expense claim (geo odometer) ───────────────────────────────────
+interface KmTrip { id: string; from: string; to: string; km: number; amount: number; at: string; gps: boolean }
+function KmExpenseClaim() {
+  const [trips, setTrips] = useFeatureState<KmTrip[]>("field-km-trips", []);
+  const [rate, setRate] = useFeatureState<number>("field-km-rate", 8);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [km, setKm] = useState("");
+  const [start, setStart] = useState<{ lat: number; lng: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const geoSupported = typeof navigator !== "undefined" && "geolocation" in navigator;
+
+  const todayStr = new Date().toDateString();
+  const todayKm = trips.filter(t => new Date(t.at).toDateString() === todayStr).reduce((s, t) => s + t.km, 0);
+  const todayAmt = trips.filter(t => new Date(t.at).toDateString() === todayStr).reduce((s, t) => s + t.amount, 0);
+
+  // Haversine distance in km between two coordinates.
+  const haversine = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lng - a.lng) * Math.PI / 180;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  };
+
+  const markStart = () => {
+    if (!geoSupported) { toast.error("This device doesn't expose location"); return; }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => { setStart({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setBusy(false); toast.success("Start point marked"); },
+      err => { setBusy(false); toast.error(`Location unavailable: ${err.message}`); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const markEndAndFill = () => {
+    if (!start) { toast.error("Mark the start point first"); return; }
+    if (!geoSupported) { toast.error("This device doesn't expose location"); return; }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const d = haversine(start, { lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setKm(d.toFixed(1));
+        setBusy(false);
+        toast.success(`Straight-line distance: ${d.toFixed(1)} km`);
+      },
+      err => { setBusy(false); toast.error(`Location unavailable: ${err.message}`); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const claim = () => {
+    const dist = parseFloat(km);
+    if (!from.trim() || !to.trim()) { toast.error("Add a from and to leg"); return; }
+    if (isNaN(dist) || dist <= 0) { toast.error("Enter the distance in km"); return; }
+    const amount = Math.round(dist * rate);
+    const usedGps = start != null;
+    setTrips(prev => [{ id: crypto.randomUUID(), from: from.trim(), to: to.trim(), km: Math.round(dist * 10) / 10, amount, at: new Date().toISOString(), gps: usedGps }, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "receipt", label: `KM claim · ${from.trim()} → ${to.trim()}`, amount, at: new Date().toISOString(), synced: false, meta: `${dist.toFixed(1)} km × ${formatCurrency(rate)}${usedGps ? " · GPS" : ""}` }, ...prev]);
+    setFrom(""); setTo(""); setKm(""); setStart(null);
+    toast.success("KM expense claimed to queue");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Navigation size={14} className="text-[var(--color-primary)]" /> KM Expense Claim</h3>
+          <span className="text-[10px] text-[var(--color-muted)]">Today: <span className="text-[var(--color-text)] font-semibold tabular-nums">{todayKm.toFixed(1)} km · {formatCurrency(todayAmt)}</span></span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Claim travel reimbursement by distance. Mark start &amp; end with GPS to auto-fill the kilometres, or type them manually — the claim queues for reimbursement.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">From</label>
+            <input value={from} onChange={e => setFrom(e.target.value)} placeholder="Shop / depot" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">To</label>
+            <input value={to} onChange={e => setTo(e.target.value)} placeholder="Customer / market" className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Distance (km)</label>
+            <input type="number" value={km} onChange={e => setKm(e.target.value)} placeholder="12.5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (₹/km)</label>
+            <input type="number" value={rate} onChange={e => setRate(parseFloat(e.target.value) || 0)} className={INP} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={markStart} disabled={!geoSupported || busy}
+            className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <MapPin size={12} /> {start ? "Re-mark start" : "Mark start"}
+          </button>
+          <button onClick={markEndAndFill} disabled={!geoSupported || busy || !start}
+            className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <Navigation size={12} /> {busy ? "Locating…" : "End → auto-fill km"}
+          </button>
+          {start && <span className="text-[10px] text-green-400 tabular-nums">start {start.lat.toFixed(3)}, {start.lng.toFixed(3)}</span>}
+          {!geoSupported && <span className="text-[10px] text-[var(--color-muted)]">GPS not available — enter km manually</span>}
+        </div>
+        <div className={`${CARD} p-3 flex items-center justify-between`}>
+          <span className="text-xs text-[var(--color-muted)]">Claim amount</span>
+          <span className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round((parseFloat(km) || 0) * rate))}</span>
+        </div>
+        <button onClick={claim} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <CheckCircle2 size={14} /> Claim KM expense
+        </button>
+      </div>
+
+      {trips.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {trips.slice(0, 12).map(t => (
+            <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="flex-1 min-w-0">
+                <span className="text-xs font-medium truncate block">{t.from} → {t.to}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{t.km} km{t.gps ? " · GPS" : ""} · {format(new Date(t.at), "d MMM")}</span>
+              </span>
+              <span className="tabular-nums text-sm font-semibold">{formatCurrency(t.amount)}</span>
+              <button onClick={() => setTrips(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">GPS gives a straight-line (as-the-crow-flies) distance via the Geolocation API; road distance is usually a little more, so treat the auto-fill as a floor and adjust the km if needed.</p>
+    </div>
+  );
+}
+
+// ── #20 Competitor / market intel capture ────────────────────────────────────────────
+interface Intel { id: string; competitor: string; product: string; price: number; ourPrice: number; note: string; at: string }
+function MarketIntel() {
+  const [items, setItems] = useFeatureState<Intel[]>("field-intel", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [competitor, setCompetitor] = useState("");
+  const [product, setProduct] = useState("");
+  const [price, setPrice] = useState("");
+  const [ourPrice, setOurPrice] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    const p = parseFloat(price);
+    if (!competitor.trim() || !product.trim()) { toast.error("Add the competitor and product"); return; }
+    if (isNaN(p) || p <= 0) { toast.error("Add their price"); return; }
+    const our = parseFloat(ourPrice) || 0;
+    setItems(prev => [{ id: crypto.randomUUID(), competitor: competitor.trim(), product: product.trim(), price: Math.round(p), ourPrice: Math.round(our), note: note.trim(), at: new Date().toISOString() }, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Intel · ${competitor.trim()} / ${product.trim()}`, amount: 0, at: new Date().toISOString(), synced: false, meta: `Their ${formatCurrency(Math.round(p))}${our > 0 ? ` vs ours ${formatCurrency(Math.round(our))}` : ""}` }, ...prev]);
+    setCompetitor(""); setProduct(""); setPrice(""); setOurPrice(""); setNote("");
+    toast.success("Market intel captured");
+  };
+
+  const gap = (it: Intel) => it.ourPrice > 0 ? it.ourPrice - it.price : null;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Eye size={14} className="text-[var(--color-primary)]" /> Market Intel Capture</h3>
+        <p className="text-xs text-[var(--color-muted)]">Log what rivals are charging on the beat. Note their price against yours so the owner can react to undercutting — works fully offline.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <input value={competitor} onChange={e => setCompetitor(e.target.value)} placeholder="Competitor / brand *" className={INP} />
+          <input value={product} onChange={e => setProduct(e.target.value)} placeholder="Product *" className={INP} />
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Their price (₹)</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="55" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Our price (₹, optional)</label>
+            <input type="number" value={ourPrice} onChange={e => setOurPrice(e.target.value)} placeholder="60" className={INP} />
+          </div>
+        </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (scheme, stock, shelf space)" className={INP} />
+        <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <Plus size={14} /> Capture intel
+        </button>
+      </div>
+
+      {items.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["When", "Competitor", "Product", "Their ₹", "Gap vs us", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {items.map(it => {
+                const g = gap(it);
+                return (
+                  <tr key={it.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(it.at), "d MMM")}</td>
+                    <td className="px-4 py-2.5 text-xs font-medium">{it.competitor}</td>
+                    <td className="px-4 py-2.5 text-xs">{it.product}{it.note && <span className="block text-[10px] text-[var(--color-muted)]">{it.note}</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs font-semibold">{formatCurrency(it.price)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">
+                      {g == null ? <span className="text-[var(--color-muted)]">—</span>
+                        : g > 0 ? <span className="text-red-400">+{formatCurrency(g)} dearer</span>
+                        : g < 0 ? <span className="text-green-400">{formatCurrency(-g)} cheaper</span>
+                        : <span className="text-[var(--color-muted)]">level</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #21 Asset / meter reading log ────────────────────────────────────────────────────
+interface MeterReading { id: string; asset: string; value: number; unit: string; at: string; delta: number | null }
+const METER_UNITS = ["units", "litres", "kWh", "km", "hrs", "kg"] as const;
+function MeterLog() {
+  const [readings, setReadings] = useFeatureState<MeterReading[]>("field-meter", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [asset, setAsset] = useState("");
+  const [value, setValue] = useState("");
+  const [unit, setUnit] = useState<string>(METER_UNITS[0]);
+
+  const add = () => {
+    const v = parseFloat(value);
+    if (!asset.trim()) { toast.error("Name the asset / meter"); return; }
+    if (isNaN(v)) { toast.error("Enter the reading"); return; }
+    // Delta vs the most recent reading for the same asset (case-insensitive).
+    const prevForAsset = readings.find(r => r.asset.toLowerCase() === asset.trim().toLowerCase());
+    const delta = prevForAsset ? Math.round((v - prevForAsset.value) * 100) / 100 : null;
+    setReadings(prev => [{ id: crypto.randomUUID(), asset: asset.trim(), value: v, unit, at: new Date().toISOString(), delta }, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Reading · ${asset.trim()}`, amount: 0, at: new Date().toISOString(), synced: false, meta: `${v} ${unit}${delta != null ? ` (Δ ${delta >= 0 ? "+" : ""}${delta})` : ""}` }, ...prev]);
+    setAsset(""); setValue("");
+    toast.success("Reading logged");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Asset / Meter Reading Log</h3>
+        <p className="text-xs text-[var(--color-muted)]">Record electricity, generator, vehicle-odometer or vending-machine readings on site. Each entry shows the change since the last reading of the same asset.</p>
+        <input value={asset} onChange={e => setAsset(e.target.value)} placeholder="Asset / meter (e.g. Genset DG-1)" className={INP} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reading</label>
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="10450" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Unit</label>
+            <select value={unit} onChange={e => setUnit(e.target.value)} className={INP}>
+              {METER_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <Plus size={14} /> Log reading
+        </button>
+      </div>
+
+      {readings.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No readings yet. Log a meter twice and the consumption delta appears automatically.</p>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {readings.slice(0, 15).map(r => (
+            <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="flex-1 min-w-0">
+                <span className="text-xs font-medium truncate block">{r.asset}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(r.at), "d MMM, h:mm a")}</span>
+              </span>
+              {r.delta != null && (
+                <span className={`text-[10px] font-semibold tabular-nums ${r.delta > 0 ? "text-yellow-400" : r.delta < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>
+                  {r.delta >= 0 ? "+" : ""}{r.delta} {r.unit}
+                </span>
+              )}
+              <span className="tabular-nums text-sm font-semibold whitespace-nowrap">{r.value} {r.unit}</span>
+              <button onClick={() => setReadings(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #22 Field issue ticket (photo + geo + priority) ──────────────────────────────────
+interface IssueTicket { id: string; title: string; priority: "low" | "medium" | "high"; note: string; at: string; gps: string | null; image: string | null; resolved: boolean }
+function FieldIssueTicket() {
+  const [tickets, setTickets] = useFeatureState<IssueTicket[]>("field-issues", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
+  const [note, setNote] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [coords, setCoords] = useState<string | null>(null);
+  const geoSupported = typeof navigator !== "undefined" && "geolocation" in navigator;
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo — stored by reference to keep data light"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const stamp = () => {
+    if (!geoSupported) { toast.error("This device doesn't expose location"); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => { setCoords(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`); toast.success("Location stamped"); },
+      err => toast.error(`Location unavailable: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const raise = () => {
+    if (!title.trim()) { toast.error("Add a short issue title"); return; }
+    const t: IssueTicket = { id: crypto.randomUUID(), title: title.trim(), priority, note: note.trim(), at: new Date().toISOString(), gps: coords, image, resolved: false };
+    setTickets(prev => [t, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Issue · ${t.title}`, amount: 0, at: t.at, synced: false, meta: `${priority} priority${coords ? ` · GPS ${coords}` : ""}` }, ...prev]);
+    setTitle(""); setNote(""); setImage(null); setCoords(null); setPriority("medium");
+    toast.success("Issue ticket raised");
+  };
+
+  const open = tickets.filter(t => !t.resolved).length;
+  const dot = (p: IssueTicket["priority"]) => p === "high" ? "bg-red-400" : p === "medium" ? "bg-yellow-400" : "bg-green-400";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><AlertTriangle size={14} className="text-[var(--color-primary)]" /> Field Issue Ticket</h3>
+          <span className="text-[10px] text-[var(--color-muted)]">{open} open</span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Raise an on-site problem — damaged stock, dispute, signage, machine fault — with a photo and location. Queues for the back office to action on reconnect.</p>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Issue title *" className={INP} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Priority</label>
+            <select value={priority} onChange={e => setPriority(e.target.value as "low" | "medium" | "high")} className={INP}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <label className="flex items-end">
+            <span className="flex items-center justify-center gap-2 w-full border border-dashed border-[var(--color-border)] rounded-lg py-2 cursor-pointer hover:border-[var(--color-primary)]/40 text-xs text-[var(--color-muted)]">
+              <Camera size={14} /> {image ? "Re-capture" : "Add photo"}
+              <input type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
+            </span>
+          </label>
+        </div>
+        {image && <img src={image} alt="issue" className="w-20 h-20 object-cover rounded-lg border border-[var(--color-border)]" />}
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Details (optional)" className={INP} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={stamp} disabled={!geoSupported}
+            className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <MapPin size={12} /> {coords ? "Re-stamp location" : "Add GPS stamp"}
+          </button>
+          {coords && <span className="text-[10px] text-green-400 tabular-nums">{coords}</span>}
+          {!geoSupported && <span className="text-[10px] text-[var(--color-muted)]">GPS not available</span>}
+        </div>
+        <button onClick={raise} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <CheckCircle2 size={14} /> Raise ticket
+        </button>
+      </div>
+
+      {tickets.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {tickets.slice(0, 15).map(t => (
+            <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${dot(t.priority)}`} />
+              <span className="flex-1 min-w-0">
+                <span className={`text-xs font-medium truncate block ${t.resolved ? "line-through text-[var(--color-muted)]" : ""}`}>{t.title}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{t.priority} · {t.gps ? `GPS ${t.gps}` : "no GPS"} · {format(new Date(t.at), "d MMM, h:mm a")}</span>
+              </span>
+              <button onClick={() => setTickets(prev => prev.map(x => x.id === t.id ? { ...x, resolved: !x.resolved } : x))}
+                className={`text-[10px] px-2 py-1 rounded border whitespace-nowrap ${t.resolved ? "border-[var(--color-border)] text-[var(--color-muted)]" : "border-green-800/40 text-green-400 bg-green-950/20"}`}>
+                {t.resolved ? "Reopen" : "Resolve"}
+              </button>
+              <button onClick={() => setTickets(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #23 On-site quotation builder ────────────────────────────────────────────────────
+interface QuoteLine { id: string; name: string; qty: number; price: number }
+function OnSiteQuotation() {
+  const { store } = useApp();
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [gstPct, setGstPct] = useFeatureState<number>("field-quote-gst", 18);
+  const [discPct, setDiscPct] = useFeatureState<number>("field-quote-disc", 0);
+  const [customer, setCustomer] = useState("");
+  const [lines, setLines] = useState<QuoteLine[]>([]);
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState("1");
+  const [price, setPrice] = useState("");
+
+  const sub = lines.reduce((s, l) => s + l.qty * l.price, 0);
+  const discAmt = Math.round(sub * (discPct / 100));
+  const taxable = sub - discAmt;
+  const gstAmt = Math.round(taxable * (gstPct / 100));
+  const grand = taxable + gstAmt;
+
+  const add = () => {
+    const p = parseFloat(price);
+    if (!name.trim() || isNaN(p)) { toast.error("Add an item name and rate"); return; }
+    setLines(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), qty: Math.max(1, parseInt(qty) || 1), price: p }]);
+    setName(""); setQty("1"); setPrice("");
+  };
+
+  const saveQuote = () => {
+    if (!customer.trim()) { toast.error("Add the customer"); return; }
+    if (lines.length === 0) { toast.error("Add at least one line"); return; }
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "visit",
+      label: `Quotation · ${customer.trim()}`, amount: grand,
+      at: new Date().toISOString(), synced: false,
+      meta: `${lines.length} item${lines.length === 1 ? "" : "s"} · ${formatCurrency(grand)} incl. ${gstPct}% GST`,
+    }, ...prev]);
+    setLines([]); setCustomer("");
+    toast.success("Quotation saved to queue");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> On-Site Quotation</h3>
+        <p className="text-xs text-[var(--color-muted)]">Build a priced quote at the customer's premises — add lines, apply a discount and GST, and queue it. Sales tax shows for {store.firm?.name ?? "your firm"}.</p>
+        <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / shop *" className={INP} />
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-6">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Service / product" className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Qty</label>
+            <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate ₹</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="500" className={INP} />
+          </div>
+          <button onClick={add} className="col-span-2 flex items-center justify-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-2 py-2 text-sm font-medium">
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </div>
+
+      {lines.length > 0 && (
+        <>
+          <div className={`${CARD} overflow-hidden`}>
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {lines.map(l => (
+                  <tr key={l.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{l.name}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{l.qty} × {formatCurrency(l.price)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-right font-semibold">{formatCurrency(l.qty * l.price)}</td>
+                    <td className="px-4 py-2.5 text-right w-10">
+                      <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className={`${CARD} p-4 space-y-2`}>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Discount (%)</label>
+                <input type="number" value={discPct} onChange={e => setDiscPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={INP} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">GST (%)</label>
+                <input type="number" value={gstPct} onChange={e => setGstPct(Math.max(0, parseFloat(e.target.value) || 0))} className={INP} />
+              </div>
+            </div>
+            <div className="pt-1 space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Subtotal</span><span className="tabular-nums">{formatCurrency(sub)}</span></div>
+              {discAmt > 0 && <div className="flex justify-between"><span className="text-[var(--color-muted)]">Discount ({discPct}%)</span><span className="tabular-nums text-green-400">− {formatCurrency(discAmt)}</span></div>}
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">GST ({gstPct}%)</span><span className="tabular-nums">{formatCurrency(gstAmt)}</span></div>
+              <div className="flex justify-between border-t border-[var(--color-border)] pt-2 mt-1"><span className="font-semibold">Grand total</span><span className="tabular-nums text-lg font-bold text-[var(--color-primary)]">{formatCurrency(grand)}</span></div>
+            </div>
+          </div>
+
+          <button onClick={saveQuote} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <CheckCircle2 size={14} /> Save quotation to queue
+          </button>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A quotation is an offer, not a posted invoice — it queues as a visit record so the office can convert it to a GST invoice when accepted.</p>
     </div>
   );
 }

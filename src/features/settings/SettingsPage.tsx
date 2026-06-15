@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -690,6 +690,401 @@ function ThemeDensityCard() {
   );
 }
 
+/* ── #180 E-Invoice & E-Way-Bill Defaults ──────────────────────────────────
+   IRP / e-way-bill thresholds and toggles applied when generating GST
+   compliance documents from invoices. */
+type EInvoiceCfg = {
+  eInvoiceEnabled: boolean;
+  ewayEnabled: boolean;
+  ewayThreshold: number;
+  defaultTransportMode: "road" | "rail" | "air" | "ship";
+  autoGenerateOnSave: boolean;
+};
+const EWAY_TRANSPORT = [
+  { id: "road", label: "Road" },
+  { id: "rail", label: "Rail" },
+  { id: "air", label: "Air" },
+  { id: "ship", label: "Ship" },
+] as const;
+
+function EInvoiceDefaultsCard() {
+  const [cfg, setCfg] = useFeatureState<EInvoiceCfg>("set-einvoice-defaults", {
+    eInvoiceEnabled: false, ewayEnabled: false, ewayThreshold: 50000, defaultTransportMode: "road", autoGenerateOnSave: false,
+  });
+  const set = <K extends keyof EInvoiceCfg>(k: K, v: EInvoiceCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Receipt size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">E-Invoice &amp; E-Way Bill Defaults</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">IRP and e-way-bill behaviour applied when generating GST documents from invoices.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div onClick={() => set("eInvoiceEnabled", !cfg.eInvoiceEnabled)}
+            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${cfg.eInvoiceEnabled ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.eInvoiceEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+          </div>
+          <span className="text-sm">Generate IRN / e-invoice for B2B sales</span>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div onClick={() => set("ewayEnabled", !cfg.ewayEnabled)}
+            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${cfg.ewayEnabled ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.ewayEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+          </div>
+          <span className="text-sm">Prepare e-way bill for goods movement</span>
+        </label>
+      </div>
+
+      {cfg.ewayEnabled && (
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">E-way bill threshold (₹)</label>
+            <input type="number" min="0" value={cfg.ewayThreshold}
+              onChange={e => set("ewayThreshold", Math.max(0, Number(e.target.value) || 0))}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Default transport mode</label>
+            <select value={cfg.defaultTransportMode} onChange={e => set("defaultTransportMode", e.target.value as EInvoiceCfg["defaultTransportMode"])}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+              {EWAY_TRANSPORT.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      <label className="mt-4 flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={cfg.autoGenerateOnSave} onChange={e => set("autoGenerateOnSave", e.target.checked)}
+          className="accent-[var(--color-primary)] w-4 h-4" />
+        Auto-generate documents when an invoice is saved
+      </label>
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        {cfg.ewayEnabled
+          ? <>E-way bills will be prepared for consignments over <strong className="text-[var(--color-text)]">{formatCurrency(cfg.ewayThreshold)}</strong> moving by {EWAY_TRANSPORT.find(m => m.id === cfg.defaultTransportMode)?.label.toLowerCase()}.</>
+          : <>E-way bills are off — only enable if you move goods worth over ₹50,000 inter-state. Saved automatically.</>}
+      </div>
+    </div>
+  );
+}
+
+/* ── #181 Bank Account Defaults ────────────────────────────────────────────
+   The primary settlement account printed on invoices and used as the default
+   "pay from" account for outgoing payments. */
+type BankAccount = { id: string; label: string; bankName: string; accountLast4: string; ifsc: string };
+
+function BankAccountDefaultsCard() {
+  const [accounts, setAccounts] = useFeatureState<BankAccount[]>("set-bank-accounts", []);
+  const [primaryId, setPrimaryId] = useFeatureState<string | null>("set-bank-primary", null);
+  const [label, setLabel] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNo, setAccountNo] = useState("");
+  const [ifsc, setIfsc] = useState("");
+
+  const addAccount = () => {
+    if (!bankName.trim() || !accountNo.trim()) { toast.error("Enter at least the bank name and account number"); return; }
+    const digits = accountNo.replace(/\D/g, "");
+    const last4 = digits.length >= 4 ? digits.slice(digits.length - 4) : digits;
+    const acc: BankAccount = {
+      id: crypto.randomUUID(),
+      label: label.trim() || bankName.trim(),
+      bankName: bankName.trim(),
+      accountLast4: last4,
+      ifsc: ifsc.trim().toUpperCase(),
+    };
+    setAccounts(list => [...list, acc]);
+    setPrimaryId(cur => cur ?? acc.id);
+    setLabel(""); setBankName(""); setAccountNo(""); setIfsc("");
+    toast.success(`${acc.label} added`);
+  };
+  const removeAccount = (id: string) => {
+    setAccounts(list => list.filter(a => a.id !== id));
+    setPrimaryId(cur => (cur === id ? null : cur));
+  };
+  const makePrimary = (id: string) => {
+    setPrimaryId(id);
+    const a = accounts.find(x => x.id === id);
+    if (a) toast.success(`${a.label} is now your primary account`);
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Landmark size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Bank Account Defaults</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Your settlement accounts — the primary one is printed on invoices and pre-selected for payouts.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div className="md:col-span-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Nickname (optional)</label>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Current A/C"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="md:col-span-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Bank name</label>
+          <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="HDFC Bank"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="md:col-span-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Account number</label>
+          <input value={accountNo} onChange={e => setAccountNo(e.target.value)} placeholder="••••5678" inputMode="numeric"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono" />
+        </div>
+        <div className="md:col-span-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
+          <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} placeholder="HDFC0001234" maxLength={11}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-wide" />
+        </div>
+      </div>
+      <button onClick={addAccount}
+        className="mt-3 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+        <Plus size={13} /> Add account
+      </button>
+
+      <div className="mt-5 space-y-2">
+        {accounts.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+            No accounts yet — add your business current account so it appears on invoices and payouts.
+          </p>
+        ) : accounts.map(a => {
+          const isPrimary = a.id === primaryId;
+          return (
+            <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  {a.label}
+                  {isPrimary && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)]">Primary</span>}
+                </p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5 font-mono truncate">
+                  {a.bankName} · ••••{a.accountLast4}{a.ifsc ? ` · ${a.ifsc}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isPrimary && (
+                  <button onClick={() => makePrimary(a.id)}
+                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors">
+                    Set primary
+                  </button>
+                )}
+                <button onClick={() => removeAccount(a.id)} title="Remove account"
+                  className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── #182 Email & SMS Sender Identity ──────────────────────────────────────
+   The "from" name, reply-to address and SMS sender header used on outgoing
+   invoices, reminders and statements. */
+type SenderCfg = { fromName: string; replyTo: string; smsSenderId: string; ccSelf: boolean };
+
+function SenderIdentityCard() {
+  const { store } = useApp();
+  const [cfg, setCfg] = useFeatureState<SenderCfg>("set-sender-identity", {
+    fromName: store.firm.name ?? "", replyTo: "", smsSenderId: "", ccSelf: true,
+  });
+  const set = <K extends keyof SenderCfg>(k: K, v: SenderCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const smsClean = cfg.smsSenderId.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Send size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Email &amp; SMS Sender Identity</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">How your name appears on outgoing invoices, reminders and statements.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Sender (from) name</label>
+          <input value={cfg.fromName} onChange={e => set("fromName", e.target.value)} placeholder="Raj Traders"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Reply-to email</label>
+          <input type="email" value={cfg.replyTo} onChange={e => set("replyTo", e.target.value)} placeholder="billing@yourbusiness.com"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">SMS sender ID (DLT header)</label>
+          <input value={cfg.smsSenderId} onChange={e => set("smsSenderId", e.target.value)} placeholder="RAJTRD" maxLength={6}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-widest uppercase" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">6 letters, as registered on the TRAI DLT portal.</p>
+        </div>
+        <div className="flex items-end">
+          <label className="flex items-center gap-2 text-sm cursor-pointer pb-2">
+            <input type="checkbox" checked={cfg.ccSelf} onChange={e => set("ccSelf", e.target.checked)}
+              className="accent-[var(--color-primary)] w-4 h-4" />
+            Send me a copy of every outgoing message
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        Emails will show as <strong className="text-[var(--color-text)]">{cfg.fromName || "your business name"}</strong>
+        {cfg.replyTo ? <> (reply-to <strong className="text-[var(--color-text)]">{cfg.replyTo}</strong>)</> : null}
+        {smsClean ? <>; SMS sender <strong className="text-[var(--color-text)] font-mono">{smsClean}</strong></> : null}. Saved automatically.
+      </div>
+    </div>
+  );
+}
+
+/* ── #183 Data Retention ───────────────────────────────────────────────────
+   How long historical records are kept before auto-archival, with a floor
+   that respects statutory bookkeeping minimums. */
+type RetentionCfg = { keepYears: number; archiveAttachments: boolean; warnBeforePurge: boolean };
+const RETENTION_YEARS = [3, 5, 8, 10] as const;
+
+function DataRetentionCard() {
+  const [cfg, setCfg] = useFeatureState<RetentionCfg>("set-data-retention", { keepYears: 8, archiveAttachments: true, warnBeforePurge: true });
+  const set = <K extends keyof RetentionCfg>(k: K, v: RetentionCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - cfg.keepYears);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <Archive size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Data Retention</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">How long records are kept before they're moved to cold archive.</p>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <label className="text-xs text-[var(--color-muted)] block mb-2">Keep records for</label>
+        <div className="flex flex-wrap gap-2">
+          {RETENTION_YEARS.map(y => (
+            <button key={y} onClick={() => set("keepYears", y)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${cfg.keepYears === y ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]"}`}>
+              {y} years
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">India's Companies Act requires books be kept at least 8 years — shorter windows only archive non-statutory data.</p>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={cfg.archiveAttachments} onChange={e => set("archiveAttachments", e.target.checked)}
+            className="accent-[var(--color-primary)] w-4 h-4" />
+          Include attachments &amp; uploaded documents in archive
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={cfg.warnBeforePurge} onChange={e => set("warnBeforePurge", e.target.checked)}
+            className="accent-[var(--color-primary)] w-4 h-4" />
+          Warn me before anything is permanently removed
+        </label>
+      </div>
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        Records dated before <strong className="text-[var(--color-text)]">{format(cutoff, "dd MMM yyyy")}</strong> become eligible for archival. Saved automatically.
+      </div>
+    </div>
+  );
+}
+
+/* ── #184 Dashboard Default & Export Format ────────────────────────────────
+   Which view loads first and the file format used by default for exports
+   across reports and statements. */
+type WorkspaceCfg = {
+  landingView: "overview" | "cashflow" | "receivables" | "alerts";
+  defaultRange: "30d" | "90d" | "fy" | "all";
+  exportFormat: "pdf" | "xlsx" | "csv";
+};
+const LANDING_VIEWS = [
+  { id: "overview", label: "Overview" },
+  { id: "cashflow", label: "Cash flow" },
+  { id: "receivables", label: "Receivables" },
+  { id: "alerts", label: "Alerts" },
+] as const;
+const DATE_RANGES = [
+  { id: "30d", label: "Last 30 days" },
+  { id: "90d", label: "Last 90 days" },
+  { id: "fy", label: "This financial year" },
+  { id: "all", label: "All time" },
+] as const;
+const EXPORT_FORMATS = [
+  { id: "pdf", label: "PDF" },
+  { id: "xlsx", label: "Excel (.xlsx)" },
+  { id: "csv", label: "CSV" },
+] as const;
+
+function WorkspaceDefaultsCard() {
+  const [cfg, setCfg] = useFeatureState<WorkspaceCfg>("set-workspace-defaults", {
+    landingView: "overview", defaultRange: "30d", exportFormat: "pdf",
+  });
+  const set = <K extends keyof WorkspaceCfg>(k: K, v: WorkspaceCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0">
+          <LayoutDashboard size={16} className="text-[var(--color-primary)]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Dashboard Default &amp; Export Format</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Which view loads first, the default date range, and the format used for exports.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Default landing view</label>
+          <select value={cfg.landingView} onChange={e => set("landingView", e.target.value as WorkspaceCfg["landingView"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {LANDING_VIEWS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Default date range</label>
+          <select value={cfg.defaultRange} onChange={e => set("defaultRange", e.target.value as WorkspaceCfg["defaultRange"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {DATE_RANGES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Export format</label>
+          <select value={cfg.exportFormat} onChange={e => set("exportFormat", e.target.value as WorkspaceCfg["exportFormat"])}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {EXPORT_FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
+        You'll land on <strong className="text-[var(--color-text)]">{LANDING_VIEWS.find(v => v.id === cfg.landingView)?.label}</strong> showing{" "}
+        <strong className="text-[var(--color-text)]">{DATE_RANGES.find(r => r.id === cfg.defaultRange)?.label.toLowerCase()}</strong>; exports default to{" "}
+        <strong className="text-[var(--color-text)]">{EXPORT_FORMATS.find(f => f.id === cfg.exportFormat)?.label}</strong>. Saved automatically.
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -903,6 +1298,21 @@ export default function SettingsPage() {
 
       {/* #179 Theme & density */}
       <ThemeDensityCard />
+
+      {/* #180 E-invoice & e-way-bill defaults */}
+      <EInvoiceDefaultsCard />
+
+      {/* #181 Bank account defaults */}
+      <BankAccountDefaultsCard />
+
+      {/* #182 Email & SMS sender identity */}
+      <SenderIdentityCard />
+
+      {/* #183 Data retention */}
+      <DataRetentionCard />
+
+      {/* #184 Dashboard default & export format */}
+      <WorkspaceDefaultsCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

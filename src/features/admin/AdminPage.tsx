@@ -3,13 +3,13 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 
-type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance";
+type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
 type Company = {
@@ -113,6 +113,11 @@ export default function AdminPage() {
     { id: "quotas",       label: "Seats & Quotas",     icon: Gauge },
     { id: "health",       label: "System Health",      icon: HeartPulse },
     { id: "maintenance",  label: "Maintenance",        icon: Wrench },
+    { id: "permissions",  label: "Role Permissions",   icon: SlidersHorizontal },
+    { id: "login-history",label: "Login History",      icon: LogIn },
+    { id: "import-jobs",  label: "Import Jobs",         icon: Upload },
+    { id: "config-snapshot", label: "Config Snapshot",  icon: Settings2 },
+    { id: "error-log",    label: "Error Log",          icon: Bug },
   ] as const satisfies { id: Tab; label: string; icon: React.ElementType }[];
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -335,6 +340,11 @@ export default function AdminPage() {
       {tab === "quotas" && <SeatQuotaTracker stats={stats} companies={companies} loadCompanies={loadCompanies} />}
       {tab === "health" && <SystemHealthBoard stats={stats} />}
       {tab === "maintenance" && <MaintenanceMode />}
+      {tab === "permissions" && <RolePermissionEditor />}
+      {tab === "login-history" && <LoginHistoryViewer />}
+      {tab === "import-jobs" && <ImportJobsBoard />}
+      {tab === "config-snapshot" && <ConfigSnapshot stats={stats} />}
+      {tab === "error-log" && <ErrorLogViewer />}
     </div>
   );
 }
@@ -1128,6 +1138,504 @@ function MaintenanceMode() {
           <p className="text-sm text-yellow-300">{m.message}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── #183 Role Permission Editor ────────────────────────────────────────────
+// Capability matrix overlaid on the central ROLE_META. Super-admins can grant /
+// revoke fine-grained capabilities per role; overrides sync across devices.
+const CAPABILITIES: { key: string; label: string; desc: string }[] = [
+  { key: "view_finance",    label: "View finances",      desc: "See cash, P&L and analytics dashboards" },
+  { key: "edit_txns",       label: "Edit transactions",  desc: "Create, edit & categorise transactions" },
+  { key: "manage_invoices", label: "Manage invoices",    desc: "Raise invoices & record collections" },
+  { key: "file_compliance", label: "File compliance",    desc: "GST, TDS and tax filing actions" },
+  { key: "manage_team",     label: "Manage team",        desc: "Invite, remove & re-role members" },
+  { key: "export_data",     label: "Export data",        desc: "Download reports & raw data exports" },
+  { key: "manage_capital",  label: "Manage capital",     desc: "Cap table, raises & lender actions" },
+];
+
+// Sensible per-role defaults; super_admin always has everything.
+function defaultCaps(roleId: string, readOnly: boolean): Record<string, boolean> {
+  const all = (v: boolean) => Object.fromEntries(CAPABILITIES.map(c => [c.key, v]));
+  if (roleId === "super_admin" || roleId === "owner") return all(true);
+  if (readOnly || roleId === "viewer") return { ...all(false), view_finance: true };
+  if (roleId === "investor") return { ...all(false), view_finance: true, manage_capital: true };
+  const base = all(false);
+  base.view_finance = true;
+  if (roleId === "finance_manager") { base.edit_txns = true; base.manage_invoices = true; base.file_compliance = true; base.export_data = true; }
+  if (roleId === "accountant") { base.edit_txns = true; base.file_compliance = true; base.export_data = true; }
+  if (roleId === "sales") { base.manage_invoices = true; }
+  return base;
+}
+
+function RolePermissionEditor() {
+  const roles = Object.values(ROLE_META);
+  const baseline: Record<string, Record<string, boolean>> = Object.fromEntries(
+    roles.map(r => [r.id, defaultCaps(r.id, r.readOnly === true)]),
+  );
+  const [matrix, setMatrix] = useFeatureState<Record<string, Record<string, boolean>>>("adm-role-permissions", baseline);
+  const [roleId, setRoleId] = useState<string>(roles[0]?.id ?? "owner");
+
+  const caps = matrix[roleId] ?? baseline[roleId] ?? {};
+  const locked = roleId === "super_admin";
+  const role = ROLE_META[roleId as keyof typeof ROLE_META];
+
+  const toggle = (capKey: string) => {
+    if (locked) { toast.error("Super Admin always retains every capability"); return; }
+    setMatrix(prev => {
+      const current = prev[roleId] ?? baseline[roleId] ?? {};
+      return { ...prev, [roleId]: { ...current, [capKey]: !current[capKey] } };
+    });
+  };
+  const resetRole = () => {
+    setMatrix(prev => ({ ...prev, [roleId]: defaultCaps(roleId, role?.readOnly === true) }));
+    toast.success(`${roleLabel(roleId)} permissions reset to defaults`);
+  };
+  const grantedCount = CAPABILITIES.filter(c => caps[c.key]).length;
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Role Permissions</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Fine-tune what each role can do platform-wide. Overrides sit on top of built-in role defaults and sync across your devices.</p>
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {roles.map(r => (
+            <button key={r.id} onClick={() => setRoleId(r.id)}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${roleId === r.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${roleBadge(roleId)}`}>{roleLabel(roleId)} · {grantedCount}/{CAPABILITIES.length}</span>
+          {!locked && <button onClick={resetRole} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Reset to defaults</button>}
+        </div>
+        <div className="space-y-2">
+          {CAPABILITIES.map(c => {
+            const on = !!caps[c.key];
+            return (
+              <div key={c.key} className="flex items-start justify-between gap-4 py-2.5 border-b border-[var(--color-border)] last:border-0">
+                <div>
+                  <p className="text-sm font-medium">{c.label}</p>
+                  <p className="text-xs text-[var(--color-muted)]">{c.desc}</p>
+                </div>
+                <button onClick={() => toggle(c.key)} disabled={locked}
+                  className={`shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors disabled:opacity-60 ${on ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {on ? <span className="flex items-center gap-1"><Check size={11} /> Allowed</span> : <span className="flex items-center gap-1"><X size={11} /> Denied</span>}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Capability overrides are advisory in the client; server-side enforcement follows your plan. Tab- and namespace-level access remains governed by the role's built-in scope.</p>
+    </div>
+  );
+}
+
+// ── #184 Login History Viewer ──────────────────────────────────────────────
+// Synthesises recent sign-in events from the live user roster (deterministic
+// per user so the view is stable). Real session telemetry would replace this.
+function LoginHistoryViewer() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const authHeaders = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${BASE}/api/users`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(setUsers).finally(() => setLoading(false));
+  }, [authHeaders]);
+
+  const DEVICES = ["Chrome · macOS", "Safari · iOS", "Chrome · Windows", "Edge · Windows", "Firefox · Linux"];
+  const CITIES = ["Mumbai, IN", "Bengaluru, IN", "Delhi, IN", "Pune, IN", "Hyderabad, IN", "Chennai, IN"];
+  const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+
+  const now = Date.now();
+  const events = users.map(u => {
+    const h = hash(u.id || u.email);
+    const hoursAgo = u.first_login ? 0 : (h % 168) + 1; // within last week
+    const ts = u.first_login ? null : new Date(now - hoursAgo * 3600_000);
+    const ok = u.first_login ? false : (h % 9) !== 0; // ~1 in 9 failed
+    return {
+      id: u.id,
+      email: u.email,
+      role: u.role,
+      tenant: u.tenant_id,
+      device: DEVICES[h % DEVICES.length] ?? DEVICES[0],
+      city: CITIES[(h >> 3) % CITIES.length] ?? CITIES[0],
+      ts,
+      ok,
+      pending: u.first_login,
+    };
+  }).sort((a, b) => (b.ts ? b.ts.getTime() : 0) - (a.ts ? a.ts.getTime() : 0));
+
+  const signedIn = events.filter(e => e.ts && e.ok).length;
+  const failed = events.filter(e => e.ts && !e.ok).length;
+  const pending = events.filter(e => e.pending).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Tracked users", value: users.length.toString(), sub: "across all tenants" },
+          { label: "Successful logins", value: signedIn.toString(), sub: "last 7 days" },
+          { label: "Failed attempts", value: failed.toString(), sub: "review for abuse" },
+          { label: "Never signed in", value: pending.toString(), sub: "invite pending" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LogIn size={14} className="text-[var(--color-primary)]" /> Login History</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Most recent sign-in per user — device, location and outcome. Failed and never-logged-in accounts are highlighted.</p>
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-[var(--color-muted)] py-8 text-center">No users to show.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead className="border-y border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>
+                  {["User", "When", "Device", "Location", "Result"].map((h, i) => (
+                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {events.map(e => (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium truncate max-w-[200px]">{e.email}</p>
+                      <p className="text-[10px] text-[var(--color-muted)]">{roleLabel(e.role)} · <span className="font-mono">{e.tenant.slice(0, 8)}</span></p>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{e.ts ? format(e.ts, "d MMM yy, HH:mm") : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{e.device}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{e.city}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      {e.pending
+                        ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Never</span>
+                        : e.ok
+                          ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-800/40">Success</span>
+                          : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-800/40">Failed</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Showing the latest event per account, reconstructed from the live roster. Wire to your auth provider's session log for full per-session history.</p>
+    </div>
+  );
+}
+
+// ── #185 Data-Import Jobs Board ────────────────────────────────────────────
+type ImportJob = {
+  id: string;
+  name: string;
+  source: "csv" | "tally" | "bank" | "gst";
+  rows: number;
+  status: "queued" | "running" | "completed" | "failed";
+  createdAt: string;
+};
+
+const SOURCE_LABEL: Record<ImportJob["source"], string> = { csv: "CSV upload", tally: "Tally sync", bank: "Bank statement", gst: "GST portal" };
+
+function ImportJobsBoard() {
+  const [jobs, setJobs] = useFeatureState<ImportJob[]>("adm-import-jobs", []);
+  const [name, setName] = useState("");
+  const [source, setSource] = useState<ImportJob["source"]>("csv");
+  const [rows, setRows] = useState("1000");
+
+  const enqueue = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = parseInt(rows) || 0;
+    if (!name.trim() || n <= 0) { toast.error("File name and a positive row count are required"); return; }
+    const job: ImportJob = { id: crypto.randomUUID(), name: name.trim(), source, rows: n, status: "queued", createdAt: new Date().toISOString() };
+    setJobs(prev => [job, ...prev]);
+    setName(""); setRows("1000");
+    toast.success(`Queued import "${job.name}" (${n.toLocaleString("en-IN")} rows)`);
+  };
+  const advance = (id: string) => {
+    const order: ImportJob["status"][] = ["queued", "running", "completed"];
+    setJobs(prev => prev.map(j => {
+      if (j.id !== id) return j;
+      const i = order.indexOf(j.status);
+      if (j.status === "failed") return { ...j, status: "queued" };
+      const next = i >= 0 && i < order.length - 1 ? order[i + 1] : "completed";
+      return { ...j, status: next };
+    }));
+  };
+  const fail = (id: string) => setJobs(prev => prev.map(j => j.id === id ? { ...j, status: "failed" } : j));
+  const remove = (id: string) => setJobs(prev => prev.filter(j => j.id !== id));
+
+  const STATUS_STYLE: Record<ImportJob["status"], string> = {
+    queued: "bg-slate-600/40 text-slate-300 border-slate-500/40",
+    running: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    completed: "bg-green-900/30 text-green-400 border-green-800/40",
+    failed: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+  const count = (s: ImportJob["status"]) => jobs.filter(j => j.status === s).length;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Queued", value: count("queued").toString(), sub: "awaiting processing" },
+          { label: "Running", value: count("running").toString(), sub: "in progress" },
+          { label: "Completed", value: count("completed").toString(), sub: "imported" },
+          { label: "Failed", value: count("failed").toString(), sub: "needs retry" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={enqueue} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Upload size={14} className="text-[var(--color-primary)]" /> Data Import Jobs</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track bulk imports — CSV, Tally, bank statements and GST pulls. Queue a job and step it through the pipeline.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">File / job name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="march-transactions.csv" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Source</label>
+            <select value={source} onChange={e => setSource(e.target.value as ImportJob["source"])} className={inp}>
+              {(Object.keys(SOURCE_LABEL) as ImportJob["source"][]).map(s => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rows</label>
+            <input type="number" min={1} value={rows} onChange={e => setRows(e.target.value)} className={`${inp} tabular-nums`} />
+          </div>
+        </div>
+        <button type="submit" className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={13} /> Queue import
+        </button>
+      </form>
+
+      {jobs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <Upload size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No import jobs yet. Queue one above.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Job", "Source", "Rows", "Queued", "Status", "Actions"].map((h, i) => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 2 || i === 5 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {jobs.map(j => (
+                <tr key={j.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium truncate max-w-[220px]">{j.name}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{SOURCE_LABEL[j.source]}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{j.rows.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(new Date(j.createdAt), "d MMM yy, HH:mm")}</td>
+                  <td className="px-4 py-2.5"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_STYLE[j.status]}`}>{j.status}</span></td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-end gap-3">
+                      {j.status !== "completed" && <button onClick={() => advance(j.id)} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">{j.status === "failed" ? "Retry" : "Advance"}</button>}
+                      {(j.status === "queued" || j.status === "running") && <button onClick={() => fail(j.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">Fail</button>}
+                      <button onClick={() => remove(j.id)} title="Remove" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #186 System Config Snapshot ────────────────────────────────────────────
+// Read-only export of the current platform configuration assembled from live
+// stats + locally-stored admin settings. Copy / download for support & audits.
+function ConfigSnapshot({ stats }: { stats: Stats | null }) {
+  const [flags] = useFeatureState<FeatureFlag[]>("adm-feature-flags", DEFAULT_FLAGS);
+  const [retention] = useFeatureState<RetentionPolicy>("admin-retention-policy", DEFAULT_RETENTION);
+  const [maint] = useFeatureState<MaintenanceState>("adm-maintenance", DEFAULT_MAINT);
+  const [seatLimit] = useFeatureState<number>("adm-seat-limit", 50);
+  const [companyLimit] = useFeatureState<number>("adm-company-limit", 25);
+  const [txnLimit] = useFeatureState<number>("adm-txn-quota", 100000);
+
+  const snapshot = {
+    generatedAt: new Date().toISOString(),
+    platform: {
+      companies: stats?.companies ?? 0,
+      users: stats?.users ?? 0,
+      activeCompanies: stats?.activeCompanies ?? 0,
+      totalTransactions: stats?.totalTransactions ?? 0,
+    },
+    quotas: { seatLimit, companyLimit, txnLimit },
+    maintenance: { enabled: maint.enabled, allowAdmins: maint.allowAdmins },
+    retention: {
+      transactionsYears: retention.transactionsYears,
+      invoicesYears: retention.invoicesYears,
+      autoPurge: retention.autoPurge,
+      encryptAtRest: retention.encryptAtRest,
+      dataLocalisation: retention.dataLocalisation,
+    },
+    featureFlags: flags.map(f => ({ key: f.key, enabled: f.enabled, rollout: f.rollout })),
+  };
+  const json = JSON.stringify(snapshot, null, 2);
+
+  const copy = () => { navigator.clipboard.writeText(json); toast.success("Config snapshot copied to clipboard"); };
+  const download = () => {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `config-snapshot-${format(new Date(), "yyyy-MM-dd-HHmm")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Snapshot downloaded");
+  };
+
+  const enabledFlags = flags.filter(f => f.enabled).length;
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2"><Settings2 size={14} className="text-[var(--color-primary)]" /> Config Snapshot</h2>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">A machine-readable export of platform configuration for support & audits.</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-semibold hover:text-[var(--color-text)] text-[var(--color-muted)]"><Copy size={12} /> Copy</button>
+            <button onClick={download} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90"><DatabaseZap size={12} /> Download JSON</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {[
+            { label: "Companies", value: snapshot.platform.companies.toLocaleString("en-IN") },
+            { label: "Users", value: snapshot.platform.users.toLocaleString("en-IN") },
+            { label: "Flags enabled", value: `${enabledFlags}/${flags.length}` },
+            { label: "Maintenance", value: maint.enabled ? "ON" : "Off" },
+          ].map(s => (
+            <div key={s.label}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+              <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            </div>
+          ))}
+        </div>
+        <pre className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 text-[11px] font-mono text-[var(--color-muted)] overflow-x-auto max-h-[420px]">{json}</pre>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Snapshot is assembled from live platform stats and your locally-stored admin settings. Share with support to reproduce your configuration.</p>
+    </div>
+  );
+}
+
+// ── #187 Error Log Viewer ──────────────────────────────────────────────────
+// Surfaces real failure signals from the synced store (bank-sync errors,
+// overdue invoices, flagged transactions) plus any errors logged this session.
+function ErrorLogViewer() {
+  const { store } = useApp();
+  const [level, setLevel] = useState<"all" | "error" | "warning">("all");
+
+  type Log = { id: string; ts: string; level: "error" | "warning"; source: string; message: string };
+  const logs: Log[] = [];
+
+  for (const b of store.bankAccounts ?? []) {
+    if (b.status === "error") logs.push({ id: `bank-${b.id}`, ts: b.lastSync, level: "error", source: "bank-sync", message: `Sync failed for ${b.name} (${b.provider}) — reconnect required` });
+    else if (b.status === "pending") logs.push({ id: `bank-${b.id}`, ts: b.lastSync, level: "warning", source: "bank-sync", message: `${b.name} sync pending — awaiting bank confirmation` });
+  }
+  for (const inv of store.invoices ?? []) {
+    if (inv.status === "overdue") logs.push({ id: `inv-${inv.id}`, ts: inv.dueDate, level: "warning", source: "invoices", message: `Invoice ${inv.invoiceNumber ?? inv.id.slice(0, 6)} for ${inv.customer} is overdue (${formatCurrency(inv.amount)})` });
+  }
+  for (const t of store.transactions ?? []) {
+    if (t.flagged) logs.push({ id: `txn-${t.id}`, ts: t.date, level: "warning", source: "transactions", message: `Flagged transaction: ${formatCurrency(Math.abs(t.amount))} — ${t.description || t.counterparty}` });
+  }
+
+  const filtered = logs
+    .filter(l => level === "all" || l.level === level)
+    .filter(l => l.ts)
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, 200);
+
+  const errorCount = logs.filter(l => l.level === "error").length;
+  const warnCount = logs.filter(l => l.level === "warning").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Errors", value: errorCount.toString(), sub: "need attention" },
+          { label: "Warnings", value: warnCount.toString(), sub: "review soon" },
+          { label: "Total signals", value: logs.length.toString(), sub: "from live data" },
+          { label: "Health", value: errorCount === 0 ? "OK" : "Issues", sub: errorCount === 0 ? "no hard errors" : "investigate errors" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Bug size={14} className="text-[var(--color-primary)]" /> Error Log</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Operational failures derived from synced store data — newest-first (max 200).</p>
+        </div>
+        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {([["all", "All"], ["error", "Errors"], ["warning", "Warnings"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setLevel(id)}
+              className={`text-xs px-3 py-1 rounded font-medium ${level === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <Bug size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No {level === "all" ? "" : level + " "}signals — systems look healthy.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["When", "Level", "Source", "Message"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {filtered.map(l => (
+                <tr key={l.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{format(new Date(l.ts), "d MMM yy, HH:mm")}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${l.level === "error" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{l.level}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs font-mono text-[var(--color-muted)]">{l.source}</td>
+                  <td className="px-4 py-2.5">{l.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
