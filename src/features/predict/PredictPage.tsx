@@ -5,6 +5,8 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Boxes, Sparkles, SlidersHorizontal, Dices, GitCompareArrows, AlertTriangle,
   TrendingUp, Users, Target, Activity, Gauge, ShieldAlert, CheckCircle2, Info,
+  Rocket, Flame, Heart, Clock, LayoutGrid, Wallet, Waypoints, CalendarRange,
+  PieChart, Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO, differenceInCalendarDays, startOfMonth, subMonths } from "date-fns";
@@ -20,7 +22,9 @@ const TOOLTIP_STYLE = { background: "var(--color-surface)", border: "1px solid v
 
 type TabId =
   | "overview" | "twin" | "whatif" | "montecarlo" | "scenarios" | "earlywarning"
-  | "trend" | "churn" | "breakeven" | "sensitivity" | "goal";
+  | "trend" | "churn" | "breakeven" | "sensitivity" | "goal"
+  | "runrate" | "expensecreep" | "ltv" | "paydelay" | "cohort" | "workcap"
+  | "confband" | "seasonality" | "concentration" | "recurring";
 
 const TABS = [
   ["overview", "Overview", Sparkles],
@@ -34,6 +38,16 @@ const TABS = [
   ["breakeven", "Break-Even", Target],
   ["sensitivity", "Sensitivity", Activity],
   ["goal", "Goal Probability", Gauge],
+  ["runrate", "Run-Rate", Rocket],
+  ["expensecreep", "Expense Creep", Flame],
+  ["ltv", "Customer LTV", Heart],
+  ["paydelay", "Pay-Delay", Clock],
+  ["cohort", "Cohort Retention", LayoutGrid],
+  ["workcap", "Working Capital", Wallet],
+  ["confband", "Revenue Band", Waypoints],
+  ["seasonality", "Seasonality", CalendarRange],
+  ["concentration", "Concentration", PieChart],
+  ["recurring", "Recurring Spend", Repeat],
 ] as const;
 
 // ── derived metrics from live store ──────────────────────────────────────────────
@@ -169,6 +183,16 @@ export default function PredictPage() {
       {tab === "breakeven" && <BreakEvenSimulator />}
       {tab === "sensitivity" && <SensitivityTornado />}
       {tab === "goal" && <GoalProbability />}
+      {tab === "runrate" && <RunRateProjector />}
+      {tab === "expensecreep" && <ExpenseCreepDetector />}
+      {tab === "ltv" && <CustomerLtv />}
+      {tab === "paydelay" && <PaymentDelayPredictor />}
+      {tab === "cohort" && <CohortRetention />}
+      {tab === "workcap" && <WorkingCapitalForecast />}
+      {tab === "confband" && <RevenueConfidenceBand />}
+      {tab === "seasonality" && <SeasonalityForecast />}
+      {tab === "concentration" && <ConcentrationRisk />}
+      {tab === "recurring" && <RecurringSpendForecast />}
     </div>
   );
 }
@@ -244,6 +268,16 @@ const TOOL_BLURB: Record<Exclude<TabId, "overview">, string> = {
   breakeven: "Units and revenue needed to cover fixed costs.",
   sensitivity: "Tornado view of which driver moves profit the most.",
   goal: "Probability you hit a cash target by a chosen date.",
+  runrate: "Annualise your recent run-rate into projected ARR with a growth dial.",
+  expensecreep: "Per-category spend growth — catch costs quietly drifting up.",
+  ltv: "Estimated lifetime value per customer from spend and tenure.",
+  paydelay: "How many days late each customer typically pays, from history.",
+  cohort: "Retention of each month's new customers, projected forward.",
+  workcap: "Working-capital tied up in receivables and the cash it frees.",
+  confband: "Revenue forecast as a P10/P50/P90 band, not a single line.",
+  seasonality: "Strip the trend and reveal which months over/under-perform.",
+  concentration: "Cash hit if your largest customers walk away.",
+  recurring: "Projected annual cost of recurring vendor charges.",
 };
 
 // ── 1. Digital Twin snapshot ──────────────────────────────────────────────────────
@@ -949,6 +983,655 @@ function GoalProbability() {
             <p className={`text-sm font-bold ${result.prob >= 50 ? "text-green-400" : "text-orange-400"}`}>
               Under a {stressDrop}% revenue drop, the model puts a {result.prob.toFixed(0)}% chance on reaching {formatCurrency(parseFloat(target) || 0)} within {months} months.
             </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── small shared KPI grid ─────────────────────────────────────────────────────────
+function KpiGrid({ items }: { items: { label: string; value: string; color?: string; sub?: string }[] }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {items.map(k => (
+        <div key={k.label} className={`${CARD} p-4`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+          <p className={`text-lg font-bold tabular-nums ${k.color ?? "text-[var(--color-text)]"}`}>{k.value}</p>
+          {k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ Icon, title, body }: { Icon: typeof Boxes; title: string; body: string }) {
+  return (
+    <div className={`${CARD} border-dashed p-10 text-center`}>
+      <Icon size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
+      <p className="text-sm font-medium mb-1">{title}</p>
+      <p className="text-xs text-[var(--color-muted)]">{body}</p>
+    </div>
+  );
+}
+
+// ── 11. Revenue run-rate projector ──────────────────────────────────────────────
+function RunRateProjector() {
+  const m = useTwinMetrics();
+  const [windowMonths, setWindowMonths] = useState(3); // months of recent history to base the run-rate on
+  const [growth, setGrowth] = useState(0);             // assumed monthly growth %
+
+  const out = useMemo(() => {
+    const recent = m.revSeries.slice(-windowMonths);
+    const active = recent.filter(r => r.revenue > 0);
+    const denom = Math.max(1, active.length);
+    const baseMonthly = active.reduce((s, r) => s + r.revenue, 0) / denom;
+    // Compound the assumed monthly growth across 12 months.
+    let cumulative = 0;
+    const series: { month: string; Projected: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const v = baseMonthly * (1 + growth / 100) ** i;
+      cumulative += v;
+      series.push({ month: `M${i + 1}`, Projected: Math.round(v) });
+    }
+    const arr = baseMonthly * 12;             // flat annualised run-rate
+    return { baseMonthly, arr, projectedYear: cumulative, series };
+  }, [m, windowMonths, growth]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Annualises your recent monthly revenue into a run-rate (ARR), then compounds an assumed monthly growth across the next 12 months. A planning estimate — actual revenue rarely grows on a smooth curve." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <Slider label="Base on last" value={windowMonths} min={1} max={12} step={1} suffix=" mo" onChange={setWindowMonths} />
+        <Slider label="Assumed monthly growth" value={growth} min={-10} max={20} step={1} suffix="%" onChange={setGrowth} />
+      </div>
+      <KpiGrid items={[
+        { label: "Current monthly run-rate", value: formatCurrency(Math.round(out.baseMonthly)), color: "text-[var(--color-text)]" },
+        { label: "Flat annual run-rate (ARR)", value: formatCurrency(Math.round(out.arr)), color: "text-green-400" },
+        { label: "Projected next 12 mo", value: formatCurrency(Math.round(out.projectedYear)), color: out.projectedYear >= out.arr ? "text-green-400" : "text-yellow-400" },
+        { label: "Implied annual growth", value: `${(((out.projectedYear / (out.arr || 1)) - 1) * 100).toFixed(0)}%`, color: "text-[var(--color-text)]" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Projected monthly revenue (12 mo)</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={out.series}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
+            <Bar dataKey="Projected" name="Projected" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 12. Expense-creep detector ──────────────────────────────────────────────────
+function ExpenseCreepDetector() {
+  const { store } = useApp();
+  const rows = useMemo(() => {
+    const txns = store.transactions ?? [];
+    const now = new Date();
+    const recentKeys = Array.from({ length: 3 }, (_, i) => format(startOfMonth(subMonths(now, i)), "yyyy-MM"));
+    const priorKeys = Array.from({ length: 3 }, (_, i) => format(startOfMonth(subMonths(now, i + 3)), "yyyy-MM"));
+    const byCat = new Map<string, { recent: number; prior: number }>();
+    for (const t of txns) {
+      if (t.amount >= 0 || !t.date) continue;
+      const key = t.date.slice(0, 7);
+      const cat = t.category || "other";
+      const slot = byCat.get(cat) ?? { recent: 0, prior: 0 };
+      if (recentKeys.includes(key)) slot.recent += Math.abs(t.amount);
+      else if (priorKeys.includes(key)) slot.prior += Math.abs(t.amount);
+      byCat.set(cat, slot);
+    }
+    return [...byCat.entries()].map(([cat, v]) => {
+      const recentAvg = v.recent / 3;
+      const priorAvg = v.prior / 3;
+      const changePct = priorAvg > 0 ? ((recentAvg - priorAvg) / priorAvg) * 100 : (recentAvg > 0 ? 100 : 0);
+      return { cat, recentAvg, priorAvg, changePct };
+    }).filter(r => r.recentAvg > 0 || r.priorAvg > 0).sort((a, b) => b.changePct - a.changePct);
+  }, [store]);
+
+  const creeping = rows.filter(r => r.changePct > 15);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Compares each spend category's average over the last 3 months against the 3 months before. A persistent rise (>15%) is flagged as 'creep' worth a look — seasonal swings can trip it, so read the trend not the single number." />
+      {rows.length === 0 ? (
+        <EmptyState Icon={Flame} title="No expense history yet" body="Record some expense transactions and category-level creep will appear here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Categories tracked", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+            { label: "Creeping (>15%)", value: `${creeping.length}`, color: creeping.length > 0 ? "text-orange-400" : "text-green-400" },
+            { label: "Recent monthly spend", value: formatCurrency(Math.round(rows.reduce((s, r) => s + r.recentAvg, 0))), color: "text-red-400" },
+            { label: "Prior monthly spend", value: formatCurrency(Math.round(rows.reduce((s, r) => s + r.priorAvg, 0))), color: "text-[var(--color-muted)]" },
+          ]} />
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Category", "Prior avg / mo", "Recent avg / mo", "Change", "Status"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.cat} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium capitalize">{r.cat}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.priorAvg))}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.recentAvg))}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.changePct > 0 ? "text-red-400" : "text-green-400"}`}>{r.changePct > 0 ? "+" : ""}{r.changePct.toFixed(0)}%</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${r.changePct > 15 ? "text-orange-400 bg-orange-950/30 border-orange-800/40" : r.changePct < -15 ? "text-green-400 bg-green-950/30 border-green-800/40" : "text-[var(--color-muted)] bg-[var(--color-bg)] border-[var(--color-border)]"}`}>
+                          {r.changePct > 15 ? "Creeping" : r.changePct < -15 ? "Falling" : "Stable"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 13. Customer-LTV predictor ──────────────────────────────────────────────────
+function CustomerLtv() {
+  const { store } = useApp();
+  const [lifespan, setLifespan] = useState(36); // expected relationship length, months
+  const [margin, setMargin] = useState(30);     // gross margin %
+
+  const rows = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const byCust = new Map<string, { total: number; first: string; last: string; count: number }>();
+    for (const i of invoices) {
+      const slot = byCust.get(i.customer) ?? { total: 0, first: i.invoiceDate, last: i.invoiceDate, count: 0 };
+      slot.total += i.amount;
+      slot.count += 1;
+      if (i.invoiceDate < slot.first) slot.first = i.invoiceDate;
+      if (i.invoiceDate > slot.last) slot.last = i.invoiceDate;
+      byCust.set(i.customer, slot);
+    }
+    return [...byCust.entries()].map(([customer, v]) => {
+      const tenureMonths = Math.max(1, differenceInCalendarDays(parseISO(v.last), parseISO(v.first)) / 30);
+      const monthlyRev = v.total / tenureMonths;
+      const predictedLtv = monthlyRev * lifespan * (margin / 100);
+      return { customer, total: v.total, count: v.count, monthlyRev, predictedLtv };
+    }).sort((a, b) => b.predictedLtv - a.predictedLtv);
+  }, [store, lifespan, margin]);
+
+  const totalLtv = rows.reduce((s, r) => s + r.predictedLtv, 0);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Estimates each customer's lifetime value: average monthly billing × expected relationship length × gross margin. Customers with little history get noisy estimates — treat the ranking, not the rupee figure, as the signal." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <Slider label="Expected relationship" value={lifespan} min={6} max={120} step={6} suffix=" mo" onChange={setLifespan} />
+        <Slider label="Gross margin" value={margin} min={5} max={80} step={5} suffix="%" onChange={setMargin} />
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState Icon={Heart} title="No customer invoices yet" body="Add invoices and predicted lifetime value will rank your customers here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Customers", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+            { label: "Total predicted LTV", value: formatCurrency(Math.round(totalLtv)), color: "text-green-400" },
+            { label: "Avg LTV / customer", value: formatCurrency(Math.round(totalLtv / rows.length)), color: "text-[var(--color-text)]" },
+            { label: "Top customer LTV", value: formatCurrency(Math.round(rows[0].predictedLtv)), color: "text-green-400" },
+          ]} />
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Customer", "Invoices", "Billed to date", "Avg / mo", "Predicted LTV"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.customer} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.total))}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.monthlyRev))}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.predictedLtv))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 14. Payment-delay predictor (per customer) ──────────────────────────────────
+function PaymentDelayPredictor() {
+  const { store } = useApp();
+  const rows = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const today = new Date();
+    const byCust = new Map<string, { delays: number[]; openOverdue: number; openAmt: number }>();
+    for (const i of invoices) {
+      const slot = byCust.get(i.customer) ?? { delays: [], openOverdue: 0, openAmt: 0 };
+      if (i.status === "paid") {
+        // Proxy: paid invoices "settled" by their due date plus typical drift; we
+        // approximate observed lateness as days from due date to today's snapshot
+        // is unknowable, so use invoice→due span as the expected term and assume
+        // overdue history drives the estimate. Use due-vs-invoice as the term.
+        const term = differenceInCalendarDays(parseISO(i.dueDate), parseISO(i.invoiceDate));
+        slot.delays.push(Math.max(0, term)); // expected days-to-pay
+      } else if (i.status === "overdue") {
+        const lateBy = differenceInCalendarDays(today, parseISO(i.dueDate));
+        if (lateBy > 0) slot.delays.push(differenceInCalendarDays(parseISO(i.dueDate), parseISO(i.invoiceDate)) + lateBy);
+        slot.openOverdue += 1;
+        slot.openAmt += i.amount;
+      } else {
+        slot.openAmt += i.amount;
+      }
+      byCust.set(i.customer, slot);
+    }
+    return [...byCust.entries()].map(([customer, v]) => {
+      const avgDays = v.delays.length ? v.delays.reduce((s, d) => s + d, 0) / v.delays.length : 0;
+      const level = avgDays >= 60 ? "Slow" : avgDays >= 30 ? "Moderate" : "Prompt";
+      return { customer, avgDays, samples: v.delays.length, openOverdue: v.openOverdue, openAmt: v.openAmt, level };
+    }).filter(r => r.samples > 0 || r.openAmt > 0).sort((a, b) => b.avgDays - a.avgDays);
+  }, [store]);
+
+  const LEVEL: Record<string, string> = {
+    Slow: "text-red-400 bg-red-950/30 border-red-800/40",
+    Moderate: "text-yellow-400 bg-yellow-950/30 border-yellow-800/40",
+    Prompt: "text-green-400 bg-green-950/30 border-green-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Estimates each customer's typical days-to-pay from their invoice terms and overdue history. With few paid invoices this leans on the credit term you set, so it sharpens as more invoices settle." />
+      {rows.length === 0 ? (
+        <EmptyState Icon={Clock} title="No invoices to learn from" body="As invoices are raised and settle, per-customer payment behaviour appears here." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Predicted days-to-pay", "Sample size", "Open overdue", "Open amount", "Habit"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.customer} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{r.avgDays.toFixed(0)} days</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.samples}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.openOverdue || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.openAmt > 0 ? formatCurrency(Math.round(r.openAmt)) : "—"}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${LEVEL[r.level]}`}>{r.level}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 15. Cohort-retention projection ──────────────────────────────────────────────
+function CohortRetention() {
+  const { store } = useApp();
+  const data = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    // First-invoice month = acquisition cohort. Active in a month if any invoice that month.
+    const firstSeen = new Map<string, string>();
+    const activity = new Map<string, Set<string>>(); // customer -> set of active YYYY-MM
+    for (const i of invoices) {
+      if (!i.invoiceDate) continue;
+      const month = i.invoiceDate.slice(0, 7);
+      const prev = firstSeen.get(i.customer);
+      if (!prev || month < prev) firstSeen.set(i.customer, month);
+      const set = activity.get(i.customer) ?? new Set<string>();
+      set.add(month);
+      activity.set(i.customer, set);
+    }
+    // Build cohorts over last 6 cohort months, 6 retention offsets.
+    const now = new Date();
+    const cohortMonths = Array.from({ length: 6 }, (_, i) => format(startOfMonth(subMonths(now, 5 - i)), "yyyy-MM"));
+    const cohorts = cohortMonths.map(cm => {
+      const members = [...firstSeen.entries()].filter(([, fm]) => fm === cm).map(([c]) => c);
+      const offsets = Array.from({ length: 6 }, (_, k) => {
+        const target = format(startOfMonth(subMonths(parseISO(cm + "-01"), -k)), "yyyy-MM");
+        const retained = members.filter(c => activity.get(c)?.has(target)).length;
+        return members.length ? Math.round((retained / members.length) * 100) : null;
+      });
+      return { cm: format(parseISO(cm + "-01"), "MMM yy"), size: members.length, offsets };
+    }).filter(c => c.size > 0);
+    return { cohorts };
+  }, [store]);
+
+  const cellColor = (v: number | null) => {
+    if (v === null) return "transparent";
+    if (v >= 80) return "#22c55e";
+    if (v >= 50) return "#84cc16";
+    if (v >= 25) return "#eab308";
+    return "#ef4444";
+  };
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Groups customers by the month of their first invoice, then tracks the % still billing in each following month. A heuristic retention curve — sparse invoicing makes early cohorts look lumpy." />
+      {data.cohorts.length === 0 ? (
+        <EmptyState Icon={LayoutGrid} title="Not enough cohort history" body="Once customers have a few months of invoices, their retention curves appear here." />
+      ) : (
+        <div className={`${CARD} p-5 overflow-x-auto`}>
+          <table className="text-xs border-separate border-spacing-1 min-w-[520px]">
+            <thead>
+              <tr>
+                <th className="text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase px-2">Cohort</th>
+                <th className="text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase px-2">New</th>
+                {["M0", "M1", "M2", "M3", "M4", "M5"].map(h => <th key={h} className="text-[10px] font-semibold text-[var(--color-muted)] px-2">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {data.cohorts.map(c => (
+                <tr key={c.cm}>
+                  <td className="font-medium px-2 whitespace-nowrap">{c.cm}</td>
+                  <td className="tabular-nums px-2">{c.size}</td>
+                  {c.offsets.map((v, i) => (
+                    <td key={i} className="px-2">
+                      <div className="h-8 w-12 rounded flex items-center justify-center font-semibold tabular-nums"
+                        style={{ background: v === null ? "transparent" : `${cellColor(v)}30`, color: v === null ? "var(--color-muted)" : cellColor(v) }}>
+                        {v === null ? "—" : `${v}%`}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 16. Working-capital-need forecast ────────────────────────────────────────────
+function WorkingCapitalForecast() {
+  const m = useTwinMetrics();
+  const { store } = useApp();
+  const [dso, setDso] = useState(45);  // days sales outstanding target
+  const [dpo, setDpo] = useState(30);  // days payable outstanding
+
+  const out = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const openAr = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    const dailyRev = m.monthlyRevenue / 30;
+    const dailyExp = m.monthlyExpense / 30;
+    // Working capital tied in receivables vs released by payables float.
+    const arNeed = dailyRev * dso;
+    const apFloat = dailyExp * dpo;
+    const netWorkingCapital = arNeed - apFloat;
+    // Cash that could be freed by collecting current AR faster than the target DSO.
+    const freeable = Math.max(0, openAr - arNeed);
+    return { openAr, arNeed, apFloat, netWorkingCapital, freeable };
+  }, [store, m, dso, dpo]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Models working-capital need from your revenue and expense run-rate against the collection (DSO) and payment (DPO) days you set. Tightening DSO or extending DPO frees trapped cash — these are directional estimates." />
+      <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
+        <Slider label="Days sales outstanding (DSO)" value={dso} min={0} max={120} step={5} suffix=" d" onChange={setDso} />
+        <Slider label="Days payable outstanding (DPO)" value={dpo} min={0} max={120} step={5} suffix=" d" onChange={setDpo} />
+      </div>
+      <KpiGrid items={[
+        { label: "Receivables tied up", value: formatCurrency(Math.round(out.arNeed)), color: "text-yellow-400", sub: `at ${dso}d DSO` },
+        { label: "Payables float", value: formatCurrency(Math.round(out.apFloat)), color: "text-green-400", sub: `at ${dpo}d DPO` },
+        { label: "Net working capital", value: formatCurrency(Math.round(out.netWorkingCapital)), color: out.netWorkingCapital > 0 ? "text-red-400" : "text-green-400", sub: out.netWorkingCapital > 0 ? "cash absorbed" : "cash released" },
+        { label: "Cash freeable from AR", value: formatCurrency(Math.round(out.freeable)), color: "text-green-400", sub: "if collected to target" },
+      ]} />
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-1">Open receivables vs target</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">You currently hold {formatCurrency(Math.round(out.openAr))} in open invoices; at a {dso}-day DSO you'd only need {formatCurrency(Math.round(out.arNeed))} on the books.</p>
+        <div className="h-3 w-full rounded-full overflow-hidden bg-[var(--color-bg)]">
+          <div className="h-full bg-[var(--color-primary)]" style={{ width: `${clamp(out.openAr > 0 ? (out.arNeed / out.openAr) * 100 : 100, 0, 100)}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 17. Revenue confidence band (P10/P50/P90) ────────────────────────────────────
+function RevenueConfidenceBand() {
+  const m = useTwinMetrics();
+  const [months, setMonths] = useState(6);
+
+  const data = useMemo(() => {
+    const hist = m.revSeries.map(d => d.revenue);
+    const n = hist.length;
+    const xs = hist.map((_, i) => i);
+    const meanX = xs.reduce((s, v) => s + v, 0) / n;
+    const meanY = hist.reduce((s, v) => s + v, 0) / n;
+    const cov = xs.reduce((s, x, i) => s + (x - meanX) * (hist[i] - meanY), 0);
+    const varX = xs.reduce((s, x) => s + (x - meanX) ** 2, 0) || 1;
+    const slope = cov / varX;
+    const intercept = meanY - slope * meanX;
+    // Band widens with horizon, anchored to revenue volatility (z≈1.28 ⇒ ~P10/P90).
+    const sd = (m.revVolatility || 0.2) * (meanY || 1);
+    type Row = { month: string; Actual: number | null; p50: number | null; p10: number | null; p90: number | null };
+    const rows: Row[] = m.revSeries.map(d => ({ month: d.month, Actual: d.revenue, p50: null, p10: null, p90: null }));
+    for (let k = 0; k < months; k++) {
+      const idx = n + k;
+      const mid = Math.max(0, intercept + slope * idx);
+      const widen = sd * Math.sqrt(k + 1) * 1.28;
+      rows.push({ month: `+${k + 1}`, Actual: null, p50: Math.round(mid), p10: Math.round(Math.max(0, mid - widen)), p90: Math.round(mid + widen) });
+    }
+    return { rows };
+  }, [m, months]);
+
+  const future = data.rows.filter(r => r.p50 != null);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Projects revenue as a P10/P50/P90 band rather than a single line: the trend gives the midpoint, your historical volatility sets the spread, and the band widens the further out you look. A range, not a promise." />
+      <div className={`${CARD} p-5`}>
+        <Slider label="Project ahead" value={months} min={1} max={12} step={1} suffix=" mo" onChange={setMonths} />
+      </div>
+      {future.length > 0 && (
+        <KpiGrid items={[
+          { label: "Next month P10", value: formatCurrency(future[0].p10 ?? 0), color: "text-red-400" },
+          { label: "Next month P50", value: formatCurrency(future[0].p50 ?? 0), color: "text-[var(--color-text)]" },
+          { label: "Next month P90", value: formatCurrency(future[0].p90 ?? 0), color: "text-green-400" },
+          { label: "Band width", value: `±${Math.round(((future[0].p90 ?? 0) - (future[0].p10 ?? 0)) / 2 / 1000)}k`, color: "text-yellow-400" },
+        ]} />
+      )}
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Revenue forecast band</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={data.rows}>
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} />
+            <Tooltip formatter={(v: number, n: string) => [formatCurrency(v), n]} contentStyle={TOOLTIP_STYLE} />
+            <Area type="monotone" dataKey="p90" name="P90" stroke="#22c55e" fill="#22c55e20" connectNulls />
+            <Area type="monotone" dataKey="p10" name="P10" stroke="#ef4444" fill="#ef444420" connectNulls />
+            <Line type="monotone" dataKey="p50" name="P50" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="Actual" stroke="var(--color-text)" strokeWidth={2} dot={false} connectNulls />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 18. Seasonality-adjusted forecast ────────────────────────────────────────────
+function SeasonalityForecast() {
+  const m = useTwinMetrics();
+  const data = useMemo(() => {
+    const hist = m.revSeries;
+    const mean = hist.reduce((s, d) => s + d.revenue, 0) / Math.max(1, hist.length);
+    const rows = hist.map(d => ({
+      month: d.month,
+      revenue: d.revenue,
+      index: mean > 0 ? Math.round((d.revenue / mean) * 100) : 100,
+    }));
+    const peak = rows.reduce((a, b) => (b.index > a.index ? b : a), rows[0] ?? { month: "—", index: 0, revenue: 0 });
+    const trough = rows.reduce((a, b) => (b.index < a.index ? b : a), rows[0] ?? { month: "—", index: 0, revenue: 0 });
+    return { rows, mean, peak, trough };
+  }, [m]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Divides each month's revenue by your 12-month average to expose a seasonal index (100 = an average month). Useful to plan stock and staffing around peaks and troughs — only as reliable as a single year of history allows." />
+      {data.rows.every(r => r.revenue === 0) ? (
+        <EmptyState Icon={CalendarRange} title="No revenue history yet" body="Add transactions and the seasonal pattern across months will surface here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Average month", value: formatCurrency(Math.round(data.mean)), color: "text-[var(--color-text)]" },
+            { label: "Peak month", value: `${data.peak.month} (${data.peak.index})`, color: "text-green-400" },
+            { label: "Trough month", value: `${data.trough.month} (${data.trough.index})`, color: "text-red-400" },
+            { label: "Seasonal spread", value: `${data.peak.index - data.trough.index} pts`, color: "text-yellow-400" },
+          ]} />
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-1">Seasonal index by month</p>
+            <p className="text-xs text-[var(--color-muted)] mb-3">Bars above the 100 line are stronger-than-average months; below are weaker.</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={data.rows}>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip formatter={(v: number) => [`${v}`, "Index"]} contentStyle={TOOLTIP_STYLE} />
+                <ReferenceLine y={100} stroke="var(--color-muted)" strokeDasharray="3 3" />
+                <Bar dataKey="index" name="Index">
+                  {data.rows.map((d, i) => <Cell key={i} fill={d.index >= 100 ? "#22c55e" : "#ef4444"} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 19. Revenue concentration risk ───────────────────────────────────────────────
+function ConcentrationRisk() {
+  const { store } = useApp();
+  const data = useMemo(() => {
+    const invoices = store.invoices ?? [];
+    const byCust = new Map<string, number>();
+    for (const i of invoices) byCust.set(i.customer, (byCust.get(i.customer) ?? 0) + i.amount);
+    const total = [...byCust.values()].reduce((s, v) => s + v, 0);
+    const sorted = [...byCust.entries()].map(([customer, amount]) => ({ customer, amount, pct: total > 0 ? (amount / total) * 100 : 0 })).sort((a, b) => b.amount - a.amount);
+    // Herfindahl-Hirschman Index of revenue concentration (0–10000).
+    const hhi = sorted.reduce((s, r) => s + r.pct ** 2, 0);
+    const top1 = sorted[0]?.pct ?? 0;
+    const top3 = sorted.slice(0, 3).reduce((s, r) => s + r.pct, 0);
+    return { sorted, total, hhi, top1, top3 };
+  }, [store]);
+
+  const riskLevel = data.top1 > 50 ? "High" : data.top1 > 30 ? "Moderate" : "Diversified";
+  const riskColor = data.top1 > 50 ? "text-red-400" : data.top1 > 30 ? "text-yellow-400" : "text-green-400";
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Measures how dependent your revenue is on a few customers, using each one's share and the Herfindahl index. A high top-customer share is a hidden risk: losing them dents cash hard. Concentration shown on invoiced value." />
+      {data.sorted.length === 0 ? (
+        <EmptyState Icon={PieChart} title="No customers invoiced yet" body="Add invoices and your revenue-concentration risk will be computed here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Top customer share", value: `${data.top1.toFixed(0)}%`, color: riskColor, sub: formatCurrency(Math.round(data.sorted[0].amount)) },
+            { label: "Top 3 share", value: `${data.top3.toFixed(0)}%`, color: data.top3 > 75 ? "text-red-400" : "text-[var(--color-text)]" },
+            { label: "Concentration (HHI)", value: `${Math.round(data.hhi)}`, color: data.hhi > 2500 ? "text-red-400" : data.hhi > 1500 ? "text-yellow-400" : "text-green-400" },
+            { label: "Risk verdict", value: riskLevel, color: riskColor },
+          ]} />
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3">Revenue share — top 8 customers</p>
+            <ResponsiveContainer width="100%" height={Math.max(140, Math.min(8, data.sorted.length) * 34)}>
+              <BarChart data={data.sorted.slice(0, 8)} layout="vertical">
+                <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${Math.round(Number(v))}%`} domain={[0, 100]} />
+                <YAxis type="category" dataKey="customer" tick={{ fontSize: 10, fill: "var(--color-text)" }} axisLine={false} tickLine={false} width={90} />
+                <Tooltip formatter={(v: number) => [`${Number(v).toFixed(1)}%`, "Share"]} contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="pct" name="Share">
+                  {data.sorted.slice(0, 8).map((d, i) => <Cell key={i} fill={d.pct > 40 ? "#ef4444" : d.pct > 20 ? "#eab308" : "var(--color-primary)"} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 20. Recurring-spend (subscription sprawl) forecast ───────────────────────────
+function RecurringSpendForecast() {
+  const { store } = useApp();
+  const data = useMemo(() => {
+    const txns = store.transactions ?? [];
+    // Recurring expenses: flagged isRecurring, or repeated counterparties with regular spend.
+    const byCp = new Map<string, { amounts: number[]; recurringFlag: boolean }>();
+    for (const t of txns) {
+      if (t.amount >= 0) continue;
+      const cp = t.counterparty || t.description || "Unknown";
+      const slot = byCp.get(cp) ?? { amounts: [], recurringFlag: false };
+      slot.amounts.push(Math.abs(t.amount));
+      if (t.isRecurring) slot.recurringFlag = true;
+      byCp.set(cp, slot);
+    }
+    const rows = [...byCp.entries()]
+      .map(([cp, v]) => ({ cp, count: v.amounts.length, avg: v.amounts.reduce((s, a) => s + a, 0) / v.amounts.length, recurringFlag: v.recurringFlag }))
+      .filter(r => r.recurringFlag || r.count >= 3) // recurring if flagged or seen 3+ times
+      .map(r => ({ ...r, annual: r.avg * 12 }))
+      .sort((a, b) => b.annual - a.annual);
+    const annualTotal = rows.reduce((s, r) => s + r.annual, 0);
+    return { rows, annualTotal };
+  }, [store]);
+
+  return (
+    <div className="space-y-4">
+      <ModelNote text="Treats expenses that are flagged recurring or repeat to the same counterparty 3+ times as subscriptions, then annualises their average. A rough projection of recurring outflow — review before cancelling anything." />
+      {data.rows.length === 0 ? (
+        <EmptyState Icon={Repeat} title="No recurring spend detected" body="Mark transactions as recurring, or let repeat vendor charges accumulate, and they will be projected here." />
+      ) : (
+        <>
+          <KpiGrid items={[
+            { label: "Recurring vendors", value: `${data.rows.length}`, color: "text-[var(--color-text)]" },
+            { label: "Projected annual cost", value: formatCurrency(Math.round(data.annualTotal)), color: "text-red-400" },
+            { label: "Projected monthly cost", value: formatCurrency(Math.round(data.annualTotal / 12)), color: "text-yellow-400" },
+            { label: "Largest recurring", value: formatCurrency(Math.round(data.rows[0].annual)), color: "text-red-400", sub: data.rows[0].cp },
+          ]} />
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Vendor / charge", "Occurrences", "Avg charge", "Projected annual", "Source"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {data.rows.map(r => (
+                    <tr key={r.cp} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.cp}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.avg))}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(r.annual))}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${r.recurringFlag ? "text-[var(--color-primary)] bg-[var(--color-accent)]/30 border-[var(--color-border)]" : "text-[var(--color-muted)] bg-[var(--color-bg)] border-[var(--color-border)]"}`}>
+                          {r.recurringFlag ? "Flagged" : "Inferred"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

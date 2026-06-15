@@ -6,6 +6,8 @@ import {
   ShieldCheck, Landmark, Grid3x3, Inbox, Clock4, Share2, CalendarClock,
   ListChecks, Database, AlertTriangle, Plus, CheckCircle2, XCircle, Trash2,
   RefreshCw, Ban, ChevronRight, ScrollText,
+  FileText, Cookie, FileCheck, UserCheck, BarChart3, Layers,
+  GraduationCap, Calculator, MapPin, Megaphone, Timer, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, addDays, parseISO } from "date-fns";
@@ -18,7 +20,10 @@ const uid = () => crypto.randomUUID();
 
 type TabId =
   | "overview" | "aa" | "dpdp-log" | "perms" | "dsr" | "retention"
-  | "third-party" | "expiry" | "hygiene" | "data-map" | "breach";
+  | "third-party" | "expiry" | "hygiene" | "data-map" | "breach"
+  | "policy-gen" | "cookie" | "dpa-check" | "grievance" | "consent-rate"
+  | "classify" | "training" | "penalty" | "localization" | "marketing-consent"
+  | "sar-timer";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -32,6 +37,17 @@ const TABS = [
   ["hygiene", "Privacy Hygiene", ListChecks],
   ["data-map", "Data Inventory", Database],
   ["breach", "Breach Log", AlertTriangle],
+  ["policy-gen", "Policy Generator", FileText],
+  ["cookie", "Cookie Consent", Cookie],
+  ["dpa-check", "DPA Checklist", FileCheck],
+  ["grievance", "Grievance Officer", UserCheck],
+  ["consent-rate", "Consent Rate", BarChart3],
+  ["classify", "Classification", Layers],
+  ["training", "Staff Training", GraduationCap],
+  ["penalty", "Penalty Estimator", Calculator],
+  ["localization", "Localization", MapPin],
+  ["marketing-consent", "Marketing Opt-in", Megaphone],
+  ["sar-timer", "SAR SLA Timer", Timer],
 ] as const;
 
 export default function PrivacyPage() {
@@ -69,6 +85,17 @@ export default function PrivacyPage() {
       {tab === "hygiene" && <PrivacyHygiene />}
       {tab === "data-map" && <DataInventory />}
       {tab === "breach" && <BreachLog />}
+      {tab === "policy-gen" && <PolicyGenerator />}
+      {tab === "cookie" && <CookieConsentConfig />}
+      {tab === "dpa-check" && <DpaChecklist />}
+      {tab === "grievance" && <GrievanceOfficerRegister />}
+      {tab === "consent-rate" && <ConsentRateDashboard />}
+      {tab === "classify" && <ClassificationMatrix />}
+      {tab === "training" && <TrainingLog />}
+      {tab === "penalty" && <PenaltyEstimator />}
+      {tab === "localization" && <LocalizationChecklist />}
+      {tab === "marketing-consent" && <MarketingConsentRegister />}
+      {tab === "sar-timer" && <SarSlaTimer />}
     </div>
   );
 }
@@ -990,6 +1017,813 @@ function BreachLog() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Indicative exposure is a rough internal prompt (₹{PENALTY_PER_RECORD.toLocaleString("en-IN")}/high-severity record), not a legal estimate — DPDP penalties for failure to safeguard data can reach ₹250 crore. Notify the Data Protection Board promptly.</p>
+    </div>
+  );
+}
+
+// ── Privacy-Policy Generator ─────────────────────────────────────────────────────
+interface PolicyFirm {
+  name: string; email: string; officer: string; officerEmail: string;
+  purposes: string; thirdParties: string; retention: string;
+}
+const POLICY_DEFAULT: PolicyFirm = {
+  name: "", email: "", officer: "", officerEmail: "",
+  purposes: "order fulfilment, invoicing, customer support and statutory compliance",
+  thirdParties: "payment gateways, accounting/CA, logistics and email providers",
+  retention: "as long as the purpose requires or a statute (Income-tax, GST, Companies Act) mandates",
+};
+function buildPolicy(f: PolicyFirm): string {
+  const firm = f.name.trim() || "[Your firm]";
+  const mail = f.email.trim() || "[contact email]";
+  const officer = f.officer.trim() || "[Grievance Officer]";
+  const offMail = f.officerEmail.trim() || mail;
+  return [
+    `PRIVACY NOTICE — ${firm}`,
+    `Last updated: ${today()}`,
+    ``,
+    `${firm} ("we") acts as a Data Fiduciary under the Digital Personal Data Protection Act, 2023 (DPDP Act). This notice explains how we handle your personal data.`,
+    ``,
+    `1. DATA WE COLLECT`,
+    `We collect personal data such as your name, contact details, and transaction or KYC information that you provide to us directly or that is shared with your consent (including via RBI-licensed Account Aggregators).`,
+    ``,
+    `2. PURPOSE`,
+    `We process your personal data for ${f.purposes.trim() || "the stated business purposes"}. We collect only what each purpose requires (data minimisation).`,
+    ``,
+    `3. LAWFUL BASIS & CONSENT`,
+    `We rely on your specific, informed and freely-given consent, or on legitimate uses permitted by the DPDP Act. You may withdraw consent at any time; withdrawal does not affect processing done before withdrawal.`,
+    ``,
+    `4. SHARING`,
+    `We may share data with processors including ${f.thirdParties.trim() || "our service providers"}, each bound by a data processing agreement. We do not sell your personal data.`,
+    ``,
+    `5. RETENTION`,
+    `We retain personal data ${f.retention.trim()}, after which it is erased.`,
+    ``,
+    `6. YOUR RIGHTS`,
+    `You have the right to access, correct, complete, update and erase your personal data, to nominate, and to grievance redressal. To exercise these rights, contact us.`,
+    ``,
+    `7. GRIEVANCE OFFICER`,
+    `${officer} — ${offMail}. We will respond to grievances within the timelines prescribed under the DPDP Act.`,
+    ``,
+    `8. CONTACT`,
+    `${firm}, ${mail}.`,
+  ].join("\n");
+}
+function PolicyGenerator() {
+  const [f, setF] = useFeatureState<PolicyFirm>("priv-policy-firm", POLICY_DEFAULT);
+  const set = (k: keyof PolicyFirm, v: string) => setF({ ...f, [k]: v });
+  const text = useMemo(() => buildPolicy(f), [f]);
+  const copy = () => { navigator.clipboard?.writeText(text); toast.success("Privacy notice copied to clipboard"); };
+
+  const fields: { k: keyof PolicyFirm; label: string; placeholder: string; wide?: boolean }[] = [
+    { k: "name", label: "Firm / business name", placeholder: "Acme Traders Pvt Ltd" },
+    { k: "email", label: "Contact email", placeholder: "hello@acme.in" },
+    { k: "officer", label: "Grievance Officer name", placeholder: "Priya Sharma" },
+    { k: "officerEmail", label: "Grievance Officer email", placeholder: "privacy@acme.in" },
+    { k: "purposes", label: "Purposes of processing", placeholder: "order fulfilment, support…", wide: true },
+    { k: "thirdParties", label: "Processors / recipients", placeholder: "payment gateway, CA…", wide: true },
+    { k: "retention", label: "Retention statement", placeholder: "as long as purpose requires…", wide: true },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileText size={14} className="text-[var(--color-primary)]" /> Privacy-Policy Generator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Fill in your firm details and get a plain-English DPDP-aligned privacy notice you can paste onto your website or signup form. Edit to suit, then have your CA or counsel confirm.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {fields.map(fl => (
+            <div key={fl.k} className={fl.wide ? "md:col-span-2" : ""}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{fl.label}</label>
+              <input value={f[fl.k]} onChange={e => set(fl.k, e.target.value)} placeholder={fl.placeholder} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Generated notice</h3>
+          <button onClick={copy} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-1.5 text-xs font-medium"><Copy size={12} /> Copy</button>
+        </div>
+        <pre className="text-[11px] leading-relaxed whitespace-pre-wrap text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 max-h-[420px] overflow-y-auto">{text}</pre>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Template only — not legal advice. The DPDP Act expects notices to be clear and available in English and the Eighth-Schedule languages on request.</p>
+    </div>
+  );
+}
+
+// ── Cookie-Consent Config ──────────────────────────────────────────────────────────
+interface CookieCfg {
+  necessary: boolean; analytics: boolean; marketing: boolean; preferences: boolean;
+  bannerText: string; rejectAll: boolean; granular: boolean;
+}
+const COOKIE_DEFAULT: CookieCfg = {
+  necessary: true, analytics: false, marketing: false, preferences: false,
+  bannerText: "We use cookies to run this site and, with your consent, to understand usage and personalise content. You can accept, reject or choose categories.",
+  rejectAll: true, granular: true,
+};
+function CookieConsentConfig() {
+  const [cfg, setCfg] = useFeatureState<CookieCfg>("priv-cookie-cfg", COOKIE_DEFAULT);
+  const set = <K extends keyof CookieCfg>(k: K, v: CookieCfg[K]) => setCfg({ ...cfg, [k]: v });
+  const toggleCat = (k: "analytics" | "marketing" | "preferences") => set(k, !cfg[k]);
+
+  const categories: { k: "necessary" | "analytics" | "marketing" | "preferences"; label: string; desc: string; locked?: boolean }[] = [
+    { k: "necessary", label: "Strictly necessary", desc: "Required for the site to work — no consent needed.", locked: true },
+    { k: "analytics", label: "Analytics", desc: "Usage measurement (e.g. GA). Requires opt-in consent." },
+    { k: "marketing", label: "Marketing / ads", desc: "Retargeting and ad pixels. Requires opt-in consent." },
+    { k: "preferences", label: "Preferences", desc: "Remembers choices like language. Requires consent." },
+  ];
+  const compliant = cfg.rejectAll && cfg.granular;
+
+  const snippet = useMemo(() => JSON.stringify({
+    bannerText: cfg.bannerText.trim(),
+    showRejectAll: cfg.rejectAll,
+    granularChoice: cfg.granular,
+    categories: {
+      necessary: { enabled: true, consentRequired: false },
+      analytics: { enabledByDefault: false, consentRequired: true, active: cfg.analytics },
+      marketing: { enabledByDefault: false, consentRequired: true, active: cfg.marketing },
+      preferences: { enabledByDefault: false, consentRequired: true, active: cfg.preferences },
+    },
+  }, null, 2), [cfg]);
+  const copy = () => { navigator.clipboard?.writeText(snippet); toast.success("Cookie-banner config copied"); };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Cookie size={14} className="text-[var(--color-primary)]" /> Cookie-Consent Configurator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Design a compliant cookie banner. Non-essential cookies must default OFF and only run after consent. Always offer a "Reject all" that is as easy as "Accept all".</p>
+        <div className="space-y-2">
+          {categories.map(c => (
+            <div key={c.k} className="flex items-center gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="flex-1">
+                <p className="text-xs font-semibold">{c.label}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{c.desc}</p>
+              </div>
+              <button disabled={c.locked} onClick={() => { if (!c.locked && c.k !== "necessary") toggleCat(c.k); }} aria-label={`Toggle ${c.label}`}
+                className={`w-8 h-5 rounded-full relative transition-colors ${cfg[c.k] ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"} ${c.locked ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${cfg[c.k] ? "left-[14px]" : "left-0.5"}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Banner text</label>
+          <textarea value={cfg.bannerText} onChange={e => set("bannerText", e.target.value)} rows={3} className={`${INP} resize-y`} />
+        </div>
+        <div className="flex flex-wrap gap-4 mt-3">
+          <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={cfg.rejectAll} onChange={e => set("rejectAll", e.target.checked)} className="accent-[var(--color-primary)]" /> Show "Reject all" button</label>
+          <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={cfg.granular} onChange={e => set("granular", e.target.checked)} className="accent-[var(--color-primary)]" /> Allow per-category choice</label>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-3.5 border flex items-center gap-2.5 ${compliant ? "border-green-800/40 bg-green-950/20" : "border-yellow-800/40 bg-yellow-950/20"}`}>
+        {compliant ? <CheckCircle2 size={14} className="text-green-400 shrink-0" /> : <AlertTriangle size={14} className="text-yellow-400 shrink-0" />}
+        <p className={`text-xs font-medium ${compliant ? "text-green-300" : "text-yellow-300"}`}>{compliant ? "Banner design meets the freely-given consent bar (reject + granular choice)." : "Add a 'Reject all' button and per-category choice so consent is genuinely freely given."}</p>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Config (hand to your developer)</h3>
+          <button onClick={copy} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-1.5 text-xs font-medium"><Copy size={12} /> Copy JSON</button>
+        </div>
+        <pre className="text-[11px] leading-relaxed whitespace-pre-wrap text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 overflow-x-auto">{snippet}</pre>
+      </div>
+    </div>
+  );
+}
+
+// ── DPA Checklist ───────────────────────────────────────────────────────────────────
+const DPA_ITEMS = [
+  { id: "dp1", text: "Subject-matter, duration, nature and purpose of processing defined" },
+  { id: "dp2", text: "Types of personal data and categories of data subjects listed" },
+  { id: "dp3", text: "Processor acts only on the fiduciary's documented instructions" },
+  { id: "dp4", text: "Confidentiality undertaking from everyone handling the data" },
+  { id: "dp5", text: "Security safeguards (encryption, access control) specified" },
+  { id: "dp6", text: "Sub-processor use requires prior written authorisation" },
+  { id: "dp7", text: "Processor assists with data-subject rights requests" },
+  { id: "dp8", text: "Processor notifies you of any breach without undue delay" },
+  { id: "dp9", text: "Data returned or deleted at end of engagement, with proof" },
+  { id: "dp10", text: "Audit / inspection rights granted to the fiduciary" },
+  { id: "dp11", text: "Data localisation / cross-border terms align with DPDP rules" },
+] as const;
+function DpaChecklist() {
+  const [vendor, setVendor] = useState("");
+  const [checks, setChecks] = useFeatureState<Record<string, boolean>>("priv-dpa-checklist", {});
+  const done = DPA_ITEMS.filter(i => checks[i.id]).length;
+  const score = Math.round((done / DPA_ITEMS.length) * 100);
+  const toggle = (id: string) => setChecks({ ...checks, [id]: !checks[id] });
+  const reset = () => { setChecks({}); toast.success("Checklist reset for next vendor"); };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileCheck size={14} className="text-[var(--color-primary)]" /> Data-Processing-Agreement Checklist</h2>
+            <p className="text-xs text-[var(--color-muted)]">Run this before signing any processor. Tick each clause your DPA covers.</p>
+          </div>
+          <div className="text-right">
+            <p className={`text-2xl font-bold tabular-nums ${score >= 80 ? "text-green-400" : score >= 50 ? "text-yellow-400" : "text-red-400"}`}>{score}%</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{done}/{DPA_ITEMS.length} clauses</p>
+          </div>
+        </div>
+        <div className="flex gap-2 items-end max-w-md">
+          <div className="flex-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reviewing DPA for</label>
+            <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor / processor name" className={INP} />
+          </div>
+          <button onClick={reset} className="flex items-center justify-center gap-1.5 bg-[var(--color-accent)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><RefreshCw size={13} /> Reset</button>
+        </div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {DPA_ITEMS.map(i => (
+          <button key={i.id} onClick={() => toggle(i.id)} className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/2">
+            {checks[i.id] ? <CheckCircle2 size={16} className="text-green-400 shrink-0" /> : <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border)] shrink-0" />}
+            <span className={`text-sm flex-1 ${checks[i.id] ? "text-[var(--color-muted)] line-through" : ""}`}>{i.text}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A DPA is your contractual safeguard under DPDP — the fiduciary stays accountable even when a processor mishandles data. Pair this with the Sharing Registry tab.</p>
+    </div>
+  );
+}
+
+// ── Grievance-Officer Register ───────────────────────────────────────────────────────
+type GrievanceStatus = "open" | "in_progress" | "resolved";
+interface Grievance { id: string; complainant: string; subject: string; raisedOn: string; status: GrievanceStatus; resolution: string }
+const GRIEVANCE_SLA_DAYS = 30;
+const GRIEVANCE_PILL: Record<GrievanceStatus, string> = {
+  open: "bg-yellow-950/30 text-yellow-400 border-yellow-800/40",
+  in_progress: "bg-blue-950/30 text-blue-400 border-blue-800/40",
+  resolved: "bg-green-950/30 text-green-400 border-green-800/40",
+};
+function GrievanceOfficerRegister() {
+  const [officer, setOfficer] = useFeatureState<{ name: string; email: string; phone: string }>("priv-grievance-officer", { name: "", email: "", phone: "" });
+  const [rows, setRows] = useFeatureState<Grievance[]>("priv-grievances", []);
+  const [complainant, setComplainant] = useState("");
+  const [subject, setSubject] = useState("");
+
+  const add = () => {
+    if (!complainant.trim() || !subject.trim()) { toast.error("Enter who complained and about what"); return; }
+    setRows([{ id: uid(), complainant: complainant.trim(), subject: subject.trim(), raisedOn: today(), status: "open", resolution: "" }, ...rows]);
+    setComplainant(""); setSubject("");
+    toast.success("Grievance logged — SLA clock started");
+  };
+  const setStatus = (id: string, status: GrievanceStatus) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+  const overdue = rows.filter(r => r.status !== "resolved" && differenceInCalendarDays(addDays(parseISO(r.raisedOn), GRIEVANCE_SLA_DAYS), new Date()) < 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><UserCheck size={14} className="text-[var(--color-primary)]" /> Grievance-Officer Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">The DPDP Act requires you to publish a Grievance Officer and resolve data-subject grievances within prescribed timelines. Record the officer and every grievance here.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Grievance Officer name</label><input value={officer.name} onChange={e => setOfficer({ ...officer, name: e.target.value })} placeholder="Priya Sharma" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Officer email</label><input value={officer.email} onChange={e => setOfficer({ ...officer, email: e.target.value })} placeholder="privacy@firm.in" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Officer phone</label><input value={officer.phone} onChange={e => setOfficer({ ...officer, phone: e.target.value })} placeholder="+91…" className={INP} /></div>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-3">Log a grievance</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Complainant</label><input value={complainant} onChange={e => setComplainant(e.target.value)} placeholder="Name" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Subject</label><input value={subject} onChange={e => setSubject(e.target.value)} placeholder="What is the grievance about" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Log</button>
+        </div>
+      </div>
+
+      {overdue > 0 && (
+        <div className="rounded-lg p-3.5 border border-red-800/40 bg-red-950/20 flex items-center gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <p className="text-xs text-red-300">{overdue} grievance(s) past the ~{GRIEVANCE_SLA_DAYS}-day response window. Resolve and document promptly.</p>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No grievances logged yet — this register is ready when the first one arrives.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Complainant", "Subject", "Raised", "Due in", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const due = differenceInCalendarDays(addDays(parseISO(r.raisedOn), GRIEVANCE_SLA_DAYS), new Date());
+                  const closed = r.status === "resolved";
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3 font-medium">{r.complainant}</td>
+                      <td className="px-4 py-3 text-xs">{r.subject}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "—" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
+                      <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${GRIEVANCE_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <select value={r.status} onChange={e => setStatus(r.id, e.target.value as GrievanceStatus)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)] mr-2">
+                          {(Object.keys(GRIEVANCE_PILL) as GrievanceStatus[]).map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                        </select>
+                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Consent-Rate Dashboard ───────────────────────────────────────────────────────────
+function ConsentRateDashboard() {
+  const [dpdp] = useFeatureState<DpdpEntry[]>("priv-dpdp-log", []);
+
+  const stats = useMemo(() => {
+    const total = dpdp.length;
+    const live = dpdp.filter(d => d.granted).length;
+    const withdrawn = total - live;
+    const rate = total ? Math.round((live / total) * 100) : 0;
+    const byChannel = new Map<string, { total: number; live: number }>();
+    dpdp.forEach(d => {
+      const c = byChannel.get(d.channel) ?? { total: 0, live: 0 };
+      c.total += 1; if (d.granted) c.live += 1;
+      byChannel.set(d.channel, c);
+    });
+    const channels = Array.from(byChannel.entries())
+      .map(([channel, v]) => ({ channel, ...v, rate: Math.round((v.live / v.total) * 100) }))
+      .sort((a, b) => b.total - a.total);
+    return { total, live, withdrawn, rate, channels };
+  }, [dpdp]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Consent-Rate Dashboard</h2>
+        <p className="text-xs text-[var(--color-muted)]">How healthy is your consent base? A high withdrawal rate or a low-converting channel often signals a confusing notice or a dark pattern worth fixing. Data is pulled live from your DPDP Consent Log.</p>
+      </div>
+
+      {stats.total === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No consents logged yet. Add entries in the DPDP Consent Log to see rates here.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Active-consent rate", value: `${stats.rate}%`, color: stats.rate >= 80 ? "text-green-400" : stats.rate >= 50 ? "text-yellow-400" : "text-red-400" },
+              { label: "Total subjects", value: String(stats.total), color: "text-[var(--color-text)]" },
+              { label: "Currently granted", value: String(stats.live), color: "text-green-400" },
+              { label: "Withdrawn", value: String(stats.withdrawn), color: stats.withdrawn > 0 ? "text-yellow-400" : "text-[var(--color-muted)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+
+          <div className={`${CARD} p-5`}>
+            <h3 className="text-sm font-semibold mb-3">Consent rate by collection channel</h3>
+            <div className="space-y-3">
+              {stats.channels.map(c => (
+                <div key={c.channel}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium">{c.channel}</span>
+                    <span className="text-[var(--color-muted)] tabular-nums">{c.live}/{c.total} live · {c.rate}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${c.rate}%`, background: c.rate >= 80 ? "#22c55e" : c.rate >= 50 ? "#eab308" : "#ef4444" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Data-Classification Matrix ───────────────────────────────────────────────────────
+type ClassTier = "public" | "internal" | "confidential" | "sensitive";
+interface ClassRow { id: string; element: string; tier: ClassTier; handling: string }
+const CLASS_TIER_PILL: Record<ClassTier, string> = {
+  public: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  internal: "bg-blue-950/30 text-blue-400 border-blue-800/40",
+  confidential: "bg-yellow-950/30 text-yellow-400 border-yellow-800/40",
+  sensitive: "bg-red-950/30 text-red-400 border-red-800/40",
+};
+const CLASS_HANDLING: Record<ClassTier, string> = {
+  public: "No restriction; may be shared freely",
+  internal: "Staff only; access on need-to-know",
+  confidential: "Encrypted at rest; restricted access + DPA before sharing",
+  sensitive: "Encrypted; India-resident store; strict logging (PAN/Aadhaar/bank/health)",
+};
+const CLASS_DEFAULT: ClassRow[] = [
+  { id: "c1", element: "Marketing brochure content", tier: "public", handling: CLASS_HANDLING.public },
+  { id: "c2", element: "Internal pricing sheet", tier: "internal", handling: CLASS_HANDLING.internal },
+  { id: "c3", element: "Customer contact list", tier: "confidential", handling: CLASS_HANDLING.confidential },
+  { id: "c4", element: "PAN / Aadhaar / bank statements", tier: "sensitive", handling: CLASS_HANDLING.sensitive },
+];
+function ClassificationMatrix() {
+  const [rows, setRows] = useFeatureState<ClassRow[]>("priv-classification", CLASS_DEFAULT);
+  const [element, setElement] = useState("");
+  const [tier, setTier] = useState<ClassTier>("confidential");
+
+  const add = () => {
+    if (!element.trim()) { toast.error("Enter a data element"); return; }
+    setRows([...rows, { id: uid(), element: element.trim(), tier, handling: CLASS_HANDLING[tier] }]);
+    setElement("");
+    toast.success("Element classified");
+  };
+  const setTierOf = (id: string, t: ClassTier) => setRows(rows.map(r => r.id === id ? { ...r, tier: t, handling: CLASS_HANDLING[t] } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Layers size={14} className="text-[var(--color-primary)]" /> Data-Classification Matrix</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tag each data element with a sensitivity tier so the right handling rules apply. Classification is the basis for proportionate security — you protect the riskiest data hardest.</p>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data element</label>
+            <input value={element} onChange={e => setElement(e.target.value)} placeholder="e.g. Supplier bank details" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier</label>
+            <select value={tier} onChange={e => setTier(e.target.value as ClassTier)} className={INP}>
+              {(Object.keys(CLASS_TIER_PILL) as ClassTier[]).map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Classify</button>
+        </div>
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Data element", "Tier", "Required handling", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-medium">{r.element}</td>
+                  <td className="px-4 py-3">
+                    <select value={r.tier} onChange={e => setTierOf(r.id, e.target.value as ClassTier)} className={`text-[10px] font-semibold px-2 py-1 rounded-full border capitalize outline-none ${CLASS_TIER_PILL[r.tier]}`}>
+                      {(Object.keys(CLASS_TIER_PILL) as ClassTier[]).map(t => <option key={t} value={t} className="capitalize bg-[var(--color-bg)] text-[var(--color-text)]">{t}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.handling}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Employee Data-Handling Training Log ───────────────────────────────────────────────
+interface TrainingRow { id: string; employee: string; role: string; trainedOn: string; validMonths: number }
+function TrainingLog() {
+  const [rows, setRows] = useFeatureState<TrainingRow[]>("priv-training", []);
+  const [employee, setEmployee] = useState("");
+  const [role, setRole] = useState("");
+  const [validMonths, setValidMonths] = useState("12");
+
+  const add = () => {
+    if (!employee.trim()) { toast.error("Enter the employee name"); return; }
+    setRows([{ id: uid(), employee: employee.trim(), role: role.trim() || "Staff", trainedOn: today(), validMonths: Math.max(1, Math.round(parseFloat(validMonths) || 12)) }, ...rows]);
+    setEmployee(""); setRole("");
+    toast.success("Training recorded");
+  };
+  const renew = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, trainedOn: today() } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const current = rows.filter(r => differenceInCalendarDays(addDays(parseISO(r.trainedOn), r.validMonths * 30), new Date()) >= 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><GraduationCap size={14} className="text-[var(--color-primary)]" /> Employee Data-Handling Training Log</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Most breaches are human. Record who has been trained on data handling and consent, and when their training lapses. An auditor will ask for this.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Employee</label><input value={employee} onChange={e => setEmployee(e.target.value)} placeholder="Name" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Role</label><input value={role} onChange={e => setRole(e.target.value)} placeholder="Sales / Finance / Ops" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Valid (months)</label><input type="number" value={validMonths} onChange={e => setValidMonths(e.target.value)} className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Record</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No training recorded yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Staff trained", value: String(rows.length), color: "text-[var(--color-text)]" },
+              { label: "Currently valid", value: String(current), color: "text-green-400" },
+              { label: "Needs refresh", value: String(rows.length - current), color: rows.length - current > 0 ? "text-yellow-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Employee", "Role", "Trained", "Expires", "Status", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const expiry = addDays(parseISO(r.trainedOn), r.validMonths * 30);
+                    const days = differenceInCalendarDays(expiry, new Date());
+                    const valid = days >= 0;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-3 font-medium">{r.employee}</td>
+                        <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.role}</td>
+                        <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.trainedOn}</td>
+                        <td className="px-4 py-3 text-xs tabular-nums">{expiry.toISOString().split("T")[0]}</td>
+                        <td className="px-4 py-3">
+                          {valid
+                            ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Valid {days <= 30 ? `(${days}d)` : ""}</span>
+                            : <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><XCircle size={12} /> Expired</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <button onClick={() => renew(r.id)} className="inline-flex items-center gap-1 text-[10px] text-green-400 hover:underline mr-3"><RefreshCw size={11} /> Renew</button>
+                          <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── DPDP Penalty-Exposure Estimator ───────────────────────────────────────────────────
+const PENALTY_SCHEDULE = [
+  { id: "p1", label: "Failure to take reasonable security safeguards (breach)", max: 2500000000 },
+  { id: "p2", label: "Failure to notify a breach to the Board / data subjects", max: 2000000000 },
+  { id: "p3", label: "Breach of additional obligations for children's data", max: 2000000000 },
+  { id: "p4", label: "Breach of Significant-Data-Fiduciary obligations", max: 1500000000 },
+  { id: "p5", label: "Breach of any other DPDP provision / rule", max: 500000000 },
+] as const;
+function PenaltyEstimator() {
+  const [gaps, setGaps] = useFeatureState<Record<string, boolean>>("priv-penalty-gaps", {});
+  const [likelihood, setLikelihood] = useState("25");
+
+  const toggle = (id: string) => setGaps({ ...gaps, [id]: !gaps[id] });
+  const lk = Math.min(100, Math.max(0, parseFloat(likelihood) || 0)) / 100;
+  const headline = PENALTY_SCHEDULE.filter(p => gaps[p.id]).reduce((s, p) => s + p.max, 0);
+  const adjusted = Math.round(headline * lk);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Calculator size={14} className="text-[var(--color-primary)]" /> DPDP Penalty-Exposure Estimator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tick the obligations you are currently exposed on. This sums the statutory maximum penalties under the DPDP Act 2023 schedule, then applies a rough likelihood weighting to size your remediation budget.</p>
+        <div className="space-y-2">
+          {PENALTY_SCHEDULE.map(p => (
+            <button key={p.id} onClick={() => toggle(p.id)} className="w-full flex items-center gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-left hover:border-[var(--color-primary)]/40">
+              {gaps[p.id] ? <CheckCircle2 size={16} className="text-red-400 shrink-0" /> : <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border)] shrink-0" />}
+              <span className="text-xs flex-1">{p.label}</span>
+              <span className="text-[11px] tabular-nums text-[var(--color-muted)]">up to {formatCurrency(p.max)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated likelihood of action (%)</label>
+          <input type="number" value={likelihood} onChange={e => setLikelihood(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className={`${CARD} p-5`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Headline maximum exposure</p>
+          <p className="text-2xl font-bold tabular-nums text-red-400">{formatCurrency(headline)}</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Sum of statutory caps for ticked gaps</p>
+        </div>
+        <div className={`${CARD} p-5`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Likelihood-weighted exposure</p>
+          <p className="text-2xl font-bold tabular-nums text-yellow-400">{formatCurrency(adjusted)}</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">At {Math.round(lk * 100)}% likelihood — budgeting figure only</p>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Caps reflect the DPDP Act 2023 penalty schedule (the Board decides actual amounts case-by-case). This is a prioritisation aid, not a legal or actuarial estimate.</p>
+    </div>
+  );
+}
+
+// ── Data-Localization Checklist ────────────────────────────────────────────────────────
+const LOCALIZATION_ITEMS = [
+  { id: "l1", text: "Primary database hosted in an Indian region" },
+  { id: "l2", text: "Backups and replicas pinned to Indian soil" },
+  { id: "l3", text: "Payment data complies with RBI data-localisation circular" },
+  { id: "l4", text: "Aadhaar / biometric data stored only in India (UIDAI rules)" },
+  { id: "l5", text: "No personal data sent to jurisdictions restricted by the Govt." },
+  { id: "l6", text: "Each cross-border transfer logged with a lawful basis" },
+  { id: "l7", text: "SaaS/analytics vendors confirm Indian or approved data residency" },
+  { id: "l8", text: "Cloud region & residency clause written into vendor contracts" },
+] as const;
+function LocalizationChecklist() {
+  const [checks, setChecks] = useFeatureState<Record<string, boolean>>("priv-localization", {});
+  const done = LOCALIZATION_ITEMS.filter(i => checks[i.id]).length;
+  const score = Math.round((done / LOCALIZATION_ITEMS.length) * 100);
+  const toggle = (id: string) => setChecks({ ...checks, [id]: !checks[id] });
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><MapPin size={14} className="text-[var(--color-primary)]" /> Data-Localization Checklist</h2>
+            <p className="text-xs text-[var(--color-muted)]">Confirm where your regulated data physically lives. Many Indian clients now demand localisation assurance.</p>
+          </div>
+          <div className="text-right">
+            <p className={`text-2xl font-bold tabular-nums ${score >= 80 ? "text-green-400" : score >= 50 ? "text-yellow-400" : "text-red-400"}`}>{score}%</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{done}/{LOCALIZATION_ITEMS.length} confirmed</p>
+          </div>
+        </div>
+        <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, background: score >= 80 ? "#22c55e" : score >= 50 ? "#eab308" : "#ef4444" }} />
+        </div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {LOCALIZATION_ITEMS.map(i => (
+          <button key={i.id} onClick={() => toggle(i.id)} className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/2">
+            {checks[i.id] ? <CheckCircle2 size={16} className="text-green-400 shrink-0" /> : <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border)] shrink-0" />}
+            <span className={`text-sm flex-1 ${checks[i.id] ? "text-[var(--color-muted)] line-through" : ""}`}>{i.text}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Marketing-Consent (Opt-in/out) Register ───────────────────────────────────────────
+interface MarketingRow { id: string; contact: string; channel: string; optedIn: boolean; updatedOn: string }
+function MarketingConsentRegister() {
+  const [rows, setRows] = useFeatureState<MarketingRow[]>("priv-marketing-consent", []);
+  const [contact, setContact] = useState("");
+  const [channel, setChannel] = useState("Email");
+  const [optedIn, setOptedIn] = useState(true);
+
+  const add = () => {
+    if (!contact.trim()) { toast.error("Enter the contact (email / phone)"); return; }
+    setRows([{ id: uid(), contact: contact.trim(), channel, optedIn, updatedOn: today() }, ...rows]);
+    setContact("");
+    toast.success("Marketing preference recorded");
+  };
+  const toggle = (id: string) => setRows(rows.map(r => r.id === id ? { ...r, optedIn: !r.optedIn, updatedOn: today() } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const optedInCount = rows.filter(r => r.optedIn).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Megaphone size={14} className="text-[var(--color-primary)]" /> Marketing-Consent Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Only message contacts who have opted in. Record each opt-in / opt-out so you can prove consent for promotional communications and honour withdrawals (also relevant to TRAI / DLT rules).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Contact</label><input value={contact} onChange={e => setContact(e.target.value)} placeholder="email / phone" className={INP} /></div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value)} className={INP}>
+              {["Email", "SMS", "WhatsApp", "Phone", "Push"].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer h-[38px]"><input type="checkbox" checked={optedIn} onChange={e => setOptedIn(e.target.checked)} className="accent-[var(--color-primary)]" /> Opted in</label>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No marketing preferences recorded yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total contacts", value: String(rows.length), color: "text-[var(--color-text)]" },
+              { label: "Opted in", value: String(optedInCount), color: "text-green-400" },
+              { label: "Opted out", value: String(rows.length - optedInCount), color: "text-[var(--color-muted)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Contact", "Channel", "Status", "Updated", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3 font-medium">{r.contact}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => toggle(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.optedIn ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{r.optedIn ? "Opted in" : "Opted out"}</button>
+                      </td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.updatedOn}</td>
+                      <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Subject-Access-Request SLA Timer ─────────────────────────────────────────────────
+function SarSlaTimer() {
+  const [dsr] = useFeatureState<DsrRequest[]>("priv-dsr", []);
+  const now = new Date();
+
+  const live = useMemo(() =>
+    dsr
+      .filter(d => d.status === "open" || d.status === "in_progress")
+      .map(d => ({ ...d, days: differenceInCalendarDays(addDays(parseISO(d.raisedOn), DSR_SLA_DAYS), now) }))
+      .sort((a, b) => a.days - b.days),
+  [dsr, now]);
+
+  const overdue = live.filter(d => d.days < 0).length;
+  const urgent = live.filter(d => d.days >= 0 && d.days <= 7).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Timer size={14} className="text-[var(--color-primary)]" /> Subject-Access-Request SLA Timer</h2>
+        <p className="text-xs text-[var(--color-muted)]">A live countdown for every open data-rights request against the ~{DSR_SLA_DAYS}-day DPDP response clock. Open and in-progress requests are pulled live from the Access / Erasure tracker.</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Open requests", value: String(live.length), color: live.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Due within 7 days", value: String(urgent), color: urgent > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Overdue", value: String(overdue), color: overdue > 0 ? "text-red-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {live.length === 0 ? (
+        <div className={`${CARD} p-10 text-center`}>
+          <Timer size={24} className="mx-auto text-[var(--color-muted)] mb-3 opacity-50" />
+          <p className="text-sm font-medium mb-1">No open requests</p>
+          <p className="text-xs text-[var(--color-muted)]">Log access / correction / erasure requests in the Access / Erasure tab and their SLA timers appear here.</p>
+        </div>
+      ) : (
+        <div className={`${CARD}`}>
+          <div className="divide-y divide-[var(--color-border)]">
+            {live.map(r => {
+              const past = r.days < 0;
+              const soon = r.days >= 0 && r.days <= 7;
+              const pct = Math.min(100, Math.max(0, Math.round(((DSR_SLA_DAYS - r.days) / DSR_SLA_DAYS) * 100)));
+              return (
+                <div key={r.id} className="px-5 py-3.5">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{r.subject} <span className="text-[var(--color-muted)] font-normal">· {DSR_TYPE_LABEL[r.type]}</span></p>
+                      <p className="text-[11px] text-[var(--color-muted)]">Raised {r.raisedOn}{r.note ? ` · ${r.note}` : ""}</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${past ? "bg-red-950/30 text-red-400" : soon ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                      {past ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? "Due today" : `${r.days}d left`}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden mt-2">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: past ? "#ef4444" : soon ? "#eab308" : "#22c55e" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Update statuses in the Access / Erasure tab — fulfilled and rejected requests drop off this timer automatically.</p>
     </div>
   );
 }

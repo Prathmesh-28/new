@@ -6,6 +6,8 @@ import {
   Network, FileCheck2, GitCompareArrows, BookUser, Gauge, Search,
   MessageSquareWarning, PieChart, Star, FileSignature, CheckCircle2, AlertTriangle,
   Plus, Trash2, Building2, ShieldCheck, Link2, Copy,
+  ClipboardList, Handshake, FileSpreadsheet, History, UserPlus, Tags,
+  ClipboardCheck, Users, Send, ShieldAlert, CalendarClock, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -16,7 +18,10 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type TabId =
   | "overview" | "directory" | "confirm" | "recon" | "reference" | "scorecard"
-  | "discovery" | "disputes" | "concentration" | "rating" | "balance-confirm";
+  | "discovery" | "disputes" | "concentration" | "rating" | "balance-confirm"
+  | "onboarding" | "terms" | "joint-recon" | "pay-timeline" | "referrals"
+  | "price-list" | "sla" | "group-buy" | "intro" | "watchlist" | "meeting-log"
+  | "netting";
 
 const TABS = [
   ["overview", "Overview", Network],
@@ -30,6 +35,18 @@ const TABS = [
   ["concentration", "Top-Counterparty Concentration", PieChart],
   ["rating", "Payment-Behaviour Rating", Star],
   ["balance-confirm", "Balance Confirmation", ShieldCheck],
+  ["onboarding", "Onboarding Checklist", ClipboardList],
+  ["terms", "Trade-Terms Tracker", Handshake],
+  ["joint-recon", "Joint-Recon Export", FileSpreadsheet],
+  ["pay-timeline", "Payment-History Timeline", History],
+  ["referrals", "Referral Tracker", UserPlus],
+  ["price-list", "Price-List Manager", Tags],
+  ["sla", "Partner SLA Scorecard", ClipboardCheck],
+  ["group-buy", "Group-Buy Calculator", Users],
+  ["intro", "Warm-Intro Requester", Send],
+  ["watchlist", "Risk Watchlist", ShieldAlert],
+  ["meeting-log", "Meeting Log", CalendarClock],
+  ["netting", "Mutual-Credit Netting", Scale],
 ] as const;
 
 // Validate the structure of an Indian GSTIN (15 chars): 2-digit state + 10-char PAN + entity + Z + checksum.
@@ -96,6 +113,18 @@ export default function NetworkPage() {
       {tab === "concentration" && <Concentration live={liveCounterparties} />}
       {tab === "rating" && <PaymentBehaviourRating live={liveCounterparties} />}
       {tab === "balance-confirm" && <BalanceConfirmation live={liveCounterparties} />}
+      {tab === "onboarding" && <OnboardingChecklist live={liveCounterparties} />}
+      {tab === "terms" && <TradeTermsTracker live={liveCounterparties} />}
+      {tab === "joint-recon" && <JointReconExport live={liveCounterparties} />}
+      {tab === "pay-timeline" && <PaymentTimeline live={liveCounterparties} />}
+      {tab === "referrals" && <ReferralTracker />}
+      {tab === "price-list" && <PriceListManager />}
+      {tab === "sla" && <PartnerSLAScorecard live={liveCounterparties} />}
+      {tab === "group-buy" && <GroupBuyCalculator />}
+      {tab === "intro" && <WarmIntroRequester live={liveCounterparties} />}
+      {tab === "watchlist" && <RiskWatchlist live={liveCounterparties} />}
+      {tab === "meeting-log" && <MeetingLog live={liveCounterparties} />}
+      {tab === "netting" && <MutualNetting />}
     </div>
   );
 }
@@ -1168,6 +1197,1071 @@ function BalanceConfirmation({ live }: { live: Live[] }) {
             <pre className="text-xs whitespace-pre-wrap font-mono text-[var(--color-text)] leading-relaxed">{letter}</pre>
           </div>
           <p className="text-[10px] text-[var(--color-muted)]">Balance is the sum of this counterparty's open (unpaid) invoices plus any manual adjustment. Reconcile differences in the Counterparty Reconciliation tool before sending.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #11 Partner Onboarding Checklist ─────────────────────────────────────────
+const ONBOARD_STEPS = [
+  "Collect GSTIN & verify on portal",
+  "Verify bank account (penny drop)",
+  "Sign trade-terms / payment-terms agreement",
+  "Exchange PAN & address proof (KYB)",
+  "Set & share credit limit",
+  "Add AP/AR contact details",
+  "Link ledgers / share opening balance",
+  "First invoice raised & confirmed",
+] as const;
+type OnboardRecord = { id: string; party: string; gstin: string; done: number[]; startedAt: string };
+function OnboardingChecklist({ live }: { live: Live[] }) {
+  const [records, setRecords] = useFeatureState<OnboardRecord[]>("net-onboarding", []);
+  const [party, setParty] = useState("");
+  const [gstin, setGstin] = useState("");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a counterparty name"); return; }
+    const g = gstin.trim().toUpperCase();
+    if (g && !gstinValid(g)) { toast.error("That GSTIN doesn't look valid"); return; }
+    setRecords([...records, { id: crypto.randomUUID(), party: party.trim(), gstin: g, done: [], startedAt: new Date().toISOString().split("T")[0] }]);
+    setParty(""); setGstin("");
+    toast.success("Onboarding started");
+  };
+  const toggleStep = (id: string, step: number) => setRecords(records.map(r =>
+    r.id === id ? { ...r, done: r.done.includes(step) ? r.done.filter(s => s !== step) : [...r.done, step] } : r));
+  const remove = (id: string) => setRecords(records.filter(r => r.id !== id));
+
+  const options = useMemo(() => live.map(l => l.name).filter(n => !records.some(r => r.party.toLowerCase() === n.toLowerCase())), [live, records]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Partner Onboarding Checklist</h3>
+        <p className="text-xs text-[var(--color-muted)]">Run every new counterparty through the same {ONBOARD_STEPS.length}-step onboarding — verification, KYB, terms and ledger linking — so nothing is skipped before you start trading.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input list="net-onboard-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="New partner name" className={INP} />
+            <datalist id="net-onboard-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN</label>
+            <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="optional" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Start onboarding</button>
+        </div>
+      </div>
+
+      {records.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No onboardings in progress. Add a new partner to run the checklist.</p>
+      ) : (
+        <div className="space-y-3">
+          {records.map(r => {
+            const pct = Math.round((r.done.length / ONBOARD_STEPS.length) * 100);
+            const complete = r.done.length === ONBOARD_STEPS.length;
+            return (
+              <div key={r.id} className={`${CARD} p-4`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{r.party} {r.gstin && <span className="text-[10px] text-[var(--color-muted)] font-normal tabular-nums">· {r.gstin}</span>}</p>
+                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Started {r.startedAt} · {r.done.length}/{ONBOARD_STEPS.length} done</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold tabular-nums ${complete ? "text-green-400" : "text-[var(--color-text)]"}`}>{pct}%</span>
+                    <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden my-3">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: complete ? "#22c55e" : "var(--color-primary)" }} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                  {ONBOARD_STEPS.map((s, idx) => {
+                    const isDone = r.done.includes(idx);
+                    return (
+                      <label key={idx} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input type="checkbox" checked={isDone} onChange={() => toggleStep(r.id, idx)} className="accent-[var(--color-primary)]" />
+                        <span className={isDone ? "line-through text-[var(--color-muted)]" : ""}>{s}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #12 Trade-Terms Agreement Tracker ────────────────────────────────────────
+type TradeTerm = { id: string; party: string; creditDays: number; creditLimit: number; earlyPayDiscPct: number; latePenaltyPct: number; effectiveFrom: string; reviewOn: string; status: "draft" | "agreed"; note: string };
+function TradeTermsTracker({ live }: { live: Live[] }) {
+  const [terms, setTerms] = useFeatureState<TradeTerm[]>("net-trade-terms", []);
+  const [party, setParty] = useState("");
+  const [creditDays, setCreditDays] = useState("30");
+  const [creditLimit, setCreditLimit] = useState("");
+  const [earlyPay, setEarlyPay] = useState("");
+  const [latePenalty, setLatePenalty] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().split("T")[0]);
+  const [reviewOn, setReviewOn] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a counterparty"); return; }
+    setTerms([...terms, {
+      id: crypto.randomUUID(), party: party.trim(),
+      creditDays: Math.max(0, Math.round(parseFloat(creditDays) || 0)),
+      creditLimit: Math.max(0, parseFloat(creditLimit) || 0),
+      earlyPayDiscPct: Math.max(0, parseFloat(earlyPay) || 0),
+      latePenaltyPct: Math.max(0, parseFloat(latePenalty) || 0),
+      effectiveFrom, reviewOn, status: "draft", note: note.trim(),
+    }]);
+    setParty(""); setCreditLimit(""); setEarlyPay(""); setLatePenalty(""); setReviewOn(""); setNote("");
+    toast.success("Trade terms recorded");
+  };
+  const agree = (id: string) => { setTerms(terms.map(t => t.id === id ? { ...t, status: "agreed" } : t)); toast.success("Terms marked agreed"); };
+  const remove = (id: string) => setTerms(terms.filter(t => t.id !== id));
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+  const dueForReview = (t: TradeTerm) => t.reviewOn && differenceInCalendarDays(parseISO(t.reviewOn), new Date()) <= 14;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Handshake size={14} className="text-[var(--color-primary)]" /> Trade-Terms Agreement Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Record the credit days, limit, early-pay discount and late penalty agreed with each partner — so aging and reminders use the real terms, not guesses, and you know when each is due for review.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input list="net-terms-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} />
+            <datalist id="net-terms-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Credit days</label><input type="number" value={creditDays} onChange={e => setCreditDays(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Credit limit (₹)</label><input type="number" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} placeholder="500000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Early-pay disc %</label><input type="number" value={earlyPay} onChange={e => setEarlyPay(e.target.value)} placeholder="2" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Late penalty %/mo</label><input type="number" value={latePenalty} onChange={e => setLatePenalty(e.target.value)} placeholder="1.5" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Effective from</label><input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Review on</label><input type="date" value={reviewOn} onChange={e => setReviewOn(e.target.value)} className={INP} /></div>
+          <div className="flex items-end"><button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Record</button></div>
+        </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+      </div>
+
+      {terms.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No trade terms recorded yet.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Party", "Credit", "Limit", "Early-pay", "Late penalty", "Review", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {terms.map(t => (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{t.party}{t.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{t.note}</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.creditDays}d</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.creditLimit > 0 ? formatAmount(t.creditLimit) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.earlyPayDiscPct > 0 ? `${t.earlyPayDiscPct}%` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.latePenaltyPct > 0 ? `${t.latePenaltyPct}%/mo` : "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {t.reviewOn
+                        ? <span className={dueForReview(t) ? "text-orange-400 font-medium" : "text-[var(--color-muted)]"}>{t.reviewOn}{dueForReview(t) ? " ⚠" : ""}</span>
+                        : <span className="text-[var(--color-muted)]">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {t.status === "agreed"
+                        ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Agreed</span>
+                        : <button onClick={() => agree(t.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark agreed</button>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #13 Joint-Reconciliation Statement Export ────────────────────────────────
+function JointReconExport({ live }: { live: Live[] }) {
+  const { store } = useApp();
+  const { firm } = store;
+  const [party, setParty] = useState("");
+  const [asOf, setAsOf] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+
+  const lines = useMemo(() => {
+    if (!party) return [] as { date: string; ref: string; debit: number; credit: number }[];
+    const p = party.toLowerCase();
+    const rows: { date: string; ref: string; debit: number; credit: number }[] = [];
+    for (const i of store.invoices.filter(i => i.customer.toLowerCase() === p)) {
+      rows.push({ date: i.invoiceDate, ref: i.invoiceNumber ?? `INV-${i.id.slice(0, 6)}`, debit: i.amount, credit: 0 });
+    }
+    for (const t of store.transactions.filter(t => t.counterparty.toLowerCase() === p)) {
+      if (t.amount >= 0) rows.push({ date: t.date, ref: t.description.slice(0, 28), debit: 0, credit: t.amount });
+      else rows.push({ date: t.date, ref: t.description.slice(0, 28), debit: Math.abs(t.amount), credit: 0 });
+    }
+    return rows.sort((a, b) => (a.date < b.date ? -1 : 1));
+  }, [party, store.invoices, store.transactions]);
+
+  const totals = useMemo(() => {
+    const debit = lines.reduce((s, l) => s + l.debit, 0);
+    const credit = lines.reduce((s, l) => s + l.credit, 0);
+    return { debit, credit, balance: debit - credit };
+  }, [lines]);
+
+  const csv = useMemo(() => {
+    if (!party) return "";
+    const header = ["Date", "Reference", "Debit", "Credit", "Running Balance"];
+    let run = 0;
+    const body = lines.map(l => { run += l.debit - l.credit; return [l.date, `"${l.ref.replace(/"/g, "'")}"`, l.debit.toFixed(2), l.credit.toFixed(2), run.toFixed(2)].join(","); });
+    return [
+      `Statement of Account between ${firm?.legalName || firm?.name || "Our company"} and ${party} as on ${asOf}`,
+      header.join(","),
+      ...body,
+      ["", "TOTAL", totals.debit.toFixed(2), totals.credit.toFixed(2), totals.balance.toFixed(2)].join(","),
+    ].join("\n");
+  }, [party, lines, totals, asOf, firm]);
+
+  const download = () => {
+    if (!csv) return;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `joint-soa-${party.replace(/\s+/g, "-").toLowerCase()}-${asOf}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Statement exported as CSV");
+  };
+  const copyCsv = () => { if (!csv) return; navigator.clipboard?.writeText(csv).then(() => toast.success("Copied"), () => toast.error("Couldn't copy")); };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Joint-Reconciliation Statement Export</h3>
+        <p className="text-xs text-[var(--color-muted)]">Generate a clean statement of account with a running balance for a counterparty and export it as CSV — send it across so both sides reconcile against one shared document.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input list="net-jr-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Select or type" className={INP} />
+            <datalist id="net-jr-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">As on date</label>
+            <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {!party ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Select a counterparty to build a joint statement.</p>
+      ) : lines.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No ledger movements found for {party}.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total debit", value: formatAmount(totals.debit), color: "text-[var(--color-text)]" },
+              { label: "Total credit", value: formatAmount(totals.credit), color: "text-[var(--color-text)]" },
+              { label: "Closing balance", value: formatAmount(Math.abs(totals.balance)), color: totals.balance >= 0 ? "text-green-400" : "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={download} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><FileSpreadsheet size={13} /> Download CSV</button>
+            <button onClick={copyCsv} className="flex items-center gap-1.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-4 py-2 text-sm font-medium"><Copy size={13} /> Copy</button>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Date", "Reference", "Debit", "Credit", "Balance"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {(() => { let run = 0; return lines.map((l, idx) => { run += l.debit - l.credit; return (
+                    <tr key={idx} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
+                      <td className="px-4 py-2.5">{l.ref}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(run)}</td>
+                    </tr>
+                  ); }); })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #14 Counterparty Payment-History Timeline ────────────────────────────────
+function PaymentTimeline({ live }: { live: Live[] }) {
+  const { store } = useApp();
+  const [party, setParty] = useState("");
+  const options = useMemo(() => live.map(l => l.name), [live]);
+
+  const events = useMemo(() => {
+    if (!party) return [] as { date: string; label: string; amount: number; kind: "in" | "out" | "invoice" }[];
+    const p = party.toLowerCase();
+    const evs: { date: string; label: string; amount: number; kind: "in" | "out" | "invoice" }[] = [];
+    for (const i of store.invoices.filter(i => i.customer.toLowerCase() === p)) {
+      evs.push({ date: i.invoiceDate, label: `Invoice ${i.invoiceNumber ?? i.id.slice(0, 6)} raised`, amount: i.amount, kind: "invoice" });
+    }
+    for (const t of store.transactions.filter(t => t.counterparty.toLowerCase() === p)) {
+      evs.push({ date: t.date, label: t.description.slice(0, 40), amount: Math.abs(t.amount), kind: t.amount >= 0 ? "in" : "out" });
+    }
+    return evs.sort((a, b) => (a.date > b.date ? -1 : 1));
+  }, [party, store.invoices, store.transactions]);
+
+  const stats = useMemo(() => {
+    const inflow = events.filter(e => e.kind === "in").reduce((s, e) => s + e.amount, 0);
+    const outflow = events.filter(e => e.kind === "out").reduce((s, e) => s + e.amount, 0);
+    const dates = events.map(e => e.date).filter(Boolean).sort();
+    const firstSeen = dates[0];
+    const monthsActive = firstSeen ? Math.max(1, Math.round(differenceInCalendarDays(new Date(), parseISO(firstSeen)) / 30)) : 0;
+    return { inflow, outflow, count: events.length, monthsActive, firstSeen };
+  }, [events]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Counterparty Payment-History Timeline</h3>
+        <p className="text-xs text-[var(--color-muted)]">A chronological feed of every invoice and payment with one counterparty — see the full trade history at a glance instead of scrolling through scattered transactions.</p>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
+          <input list="net-pt-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Select or type" className={`${INP} max-w-md`} />
+          <datalist id="net-pt-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+        </div>
+      </div>
+
+      {!party ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Select a counterparty to view their history.</p>
+      ) : events.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No history found for {party}.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Money in", value: formatAmount(stats.inflow), color: "text-green-400", sub: "" },
+              { label: "Money out", value: formatAmount(stats.outflow), color: "text-red-400", sub: "" },
+              { label: "Events", value: String(stats.count), color: "text-[var(--color-text)]", sub: "" },
+              { label: "Relationship", value: stats.monthsActive ? `${stats.monthsActive} mo` : "—", color: "text-[var(--color-text)]", sub: stats.firstSeen ? `since ${stats.firstSeen}` : "" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>{k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}</div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4`}>
+            <div className="relative pl-4 border-l border-[var(--color-border)] space-y-4">
+              {events.map((e, idx) => (
+                <div key={idx} className="relative">
+                  <span className={`absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full ${e.kind === "in" ? "bg-green-400" : e.kind === "out" ? "bg-red-400" : "bg-[var(--color-primary)]"}`} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{e.label}</p>
+                      <p className="text-[10px] text-[var(--color-muted)]">{e.date} · {e.kind === "in" ? "Payment received" : e.kind === "out" ? "Payment made" : "Invoice"}</p>
+                    </div>
+                    <p className={`text-sm font-bold tabular-nums ${e.kind === "in" ? "text-green-400" : e.kind === "out" ? "text-red-400" : "text-[var(--color-text)]"}`}>{formatCurrency(e.amount)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #15 Network Referral Tracker ─────────────────────────────────────────────
+type Referral = { id: string; referredBy: string; newParty: string; expectedValue: number; rewardType: "discount" | "cash" | "credit-note" | "none"; rewardAmount: number; status: "pending" | "converted" | "rewarded"; date: string };
+function ReferralTracker() {
+  const [refs, setRefs] = useFeatureState<Referral[]>("net-referrals", []);
+  const [referredBy, setReferredBy] = useState("");
+  const [newParty, setNewParty] = useState("");
+  const [expectedValue, setExpectedValue] = useState("");
+  const [rewardType, setRewardType] = useState<Referral["rewardType"]>("discount");
+  const [rewardAmount, setRewardAmount] = useState("");
+
+  const add = () => {
+    if (!referredBy.trim() || !newParty.trim()) { toast.error("Enter referrer and new party"); return; }
+    setRefs([...refs, {
+      id: crypto.randomUUID(), referredBy: referredBy.trim(), newParty: newParty.trim(),
+      expectedValue: Math.max(0, parseFloat(expectedValue) || 0), rewardType,
+      rewardAmount: Math.max(0, parseFloat(rewardAmount) || 0), status: "pending", date: new Date().toISOString().split("T")[0],
+    }]);
+    setReferredBy(""); setNewParty(""); setExpectedValue(""); setRewardAmount("");
+    toast.success("Referral logged");
+  };
+  const advance = (id: string, status: Referral["status"]) => setRefs(refs.map(r => r.id === id ? { ...r, status } : r));
+  const remove = (id: string) => setRefs(refs.filter(r => r.id !== id));
+
+  const converted = refs.filter(r => r.status !== "pending");
+  const pipeline = refs.filter(r => r.status === "pending").reduce((s, r) => s + r.expectedValue, 0);
+  const rewardsOwed = refs.filter(r => r.status === "converted").reduce((s, r) => s + r.rewardAmount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> Network Referral Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Track who in your network introduced which new counterparty, the expected trade value, and any reward owed — so referrals are credited and incentives never get lost.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Referred by</label><input value={referredBy} onChange={e => setReferredBy(e.target.value)} placeholder="Existing partner" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">New party</label><input value={newParty} onChange={e => setNewParty(e.target.value)} placeholder="New lead" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Expected value (₹)</label><input type="number" value={expectedValue} onChange={e => setExpectedValue(e.target.value)} placeholder="100000" className={INP} /></div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Reward</label>
+            <select value={rewardType} onChange={e => setRewardType(e.target.value as Referral["rewardType"])} className={INP}>
+              <option value="discount">Discount</option><option value="cash">Cash</option><option value="credit-note">Credit note</option><option value="none">None</option>
+            </select>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Reward amt (₹)</label><input type="number" value={rewardAmount} onChange={e => setRewardAmount(e.target.value)} placeholder="2000" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Log referral</button>
+      </div>
+
+      {refs.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Pipeline value", value: formatAmount(pipeline), color: "text-[var(--color-text)]" },
+            { label: "Converted", value: `${converted.length}/${refs.length}`, color: "text-green-400" },
+            { label: "Rewards owed", value: formatAmount(rewardsOwed), color: "text-yellow-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+          ))}
+        </div>
+      )}
+
+      {refs.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No referrals logged yet.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Referred by", "New party", "Expected", "Reward", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {refs.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.referredBy}</td>
+                    <td className="px-4 py-2.5">{r.newParty}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.expectedValue > 0 ? formatAmount(r.expectedValue) : "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rewardType === "none" ? "—" : `${r.rewardType}${r.rewardAmount > 0 ? ` · ${formatAmount(r.rewardAmount)}` : ""}`}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.status === "rewarded" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "converted" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.status}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      {r.status === "pending" && <button onClick={() => advance(r.id, "converted")} className="text-[10px] text-blue-400 hover:underline mr-2">Converted</button>}
+                      {r.status === "converted" && <button onClick={() => advance(r.id, "rewarded")} className="text-[10px] text-green-400 hover:underline mr-2">Rewarded</button>}
+                      <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #16 Shared Price-List Manager ────────────────────────────────────────────
+type PriceItem = { id: string; sku: string; name: string; unit: string; price: number; gstPct: number };
+function PriceListManager() {
+  const [items, setItems] = useFeatureState<PriceItem[]>("net-price-list", []);
+  const [version, setVersion] = useFeatureState<string>("net-price-list-version", new Date().toISOString().split("T")[0]);
+  const [sku, setSku] = useState("");
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useState("pcs");
+  const [price, setPrice] = useState("");
+  const [gstPct, setGstPct] = useState("18");
+
+  const add = () => {
+    if (!name.trim() || !price) { toast.error("Enter item name and price"); return; }
+    setItems([...items, { id: crypto.randomUUID(), sku: sku.trim(), name: name.trim(), unit: unit.trim() || "pcs", price: Math.max(0, parseFloat(price) || 0), gstPct: Math.max(0, parseFloat(gstPct) || 0) }]);
+    setSku(""); setName(""); setPrice("");
+    setVersion(new Date().toISOString().split("T")[0]);
+    toast.success("Item added — price list re-versioned");
+  };
+  const remove = (id: string) => { setItems(items.filter(i => i.id !== id)); setVersion(new Date().toISOString().split("T")[0]); };
+
+  const exportCsv = () => {
+    if (items.length === 0) { toast.error("Add items first"); return; }
+    const csv = ["SKU,Item,Unit,Price,GST%,Price incl GST", ...items.map(i =>
+      [`"${i.sku}"`, `"${i.name.replace(/"/g, "'")}"`, i.unit, i.price.toFixed(2), i.gstPct.toFixed(1), (i.price * (1 + i.gstPct / 100)).toFixed(2)].join(","))].join("\n");
+    const blob = new Blob([`Price List v${version}\n${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `price-list-${version}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Price list exported");
+  };
+
+  const totalCatalogValue = items.reduce((s, i) => s + i.price, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Tags size={14} className="text-[var(--color-primary)]" /> Shared Price-List Manager</h3>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Maintain one versioned price list you share with buyers so invoice prices never get disputed. Export and send the latest version to every partner.</p>
+          </div>
+          <span className="text-[10px] px-2 py-1 rounded-full bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)]">Version {version}</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="SKU-01" className={INP} /></div>
+          <div className="col-span-2"><label className="text-[10px] text-[var(--color-muted)] block mb-1">Item</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Product name" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Unit</label><input value={unit} onChange={e => setUnit(e.target.value)} placeholder="pcs/kg" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Price (₹)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="100" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">GST %</label><input type="number" value={gstPct} onChange={e => setGstPct(e.target.value)} className={INP} /></div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add item</button>
+          <button onClick={exportCsv} className="flex items-center gap-1.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-4 py-2 text-sm font-medium"><FileSpreadsheet size={13} /> Export & share</button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No items in your price list yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Items</p><p className="text-xl font-bold tabular-nums">{items.length}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Catalog list value</p><p className="text-xl font-bold tabular-nums">{formatAmount(totalCatalogValue)}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["SKU", "Item", "Unit", "Price", "GST", "Incl GST", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {items.map(i => (
+                    <tr key={i.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.sku || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium">{i.name}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.price)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{i.gstPct}%</td>
+                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(i.price * (1 + i.gstPct / 100))}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #17 Partner SLA Scorecard ────────────────────────────────────────────────
+type SLARecord = { id: string; party: string; onTimeDelivery: number; quality: number; responsiveness: number; orders: number };
+function PartnerSLAScorecard({ live }: { live: Live[] }) {
+  const [records, setRecords] = useFeatureState<SLARecord[]>("net-sla", []);
+  const [party, setParty] = useState("");
+  const [onTime, setOnTime] = useState("90");
+  const [quality, setQuality] = useState("90");
+  const [resp, setResp] = useState("90");
+  const [orders, setOrders] = useState("");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a partner name"); return; }
+    const clamp = (v: string) => Math.min(100, Math.max(0, parseFloat(v) || 0));
+    setRecords([...records, { id: crypto.randomUUID(), party: party.trim(), onTimeDelivery: clamp(onTime), quality: clamp(quality), responsiveness: clamp(resp), orders: Math.max(0, Math.round(parseFloat(orders) || 0)) }]);
+    setParty(""); setOrders("");
+    toast.success("SLA scorecard saved");
+  };
+  const remove = (id: string) => setRecords(records.filter(r => r.id !== id));
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+  const scored = useMemo(() => records.map(r => {
+    // Weighted SLA: delivery 40%, quality 40%, responsiveness 20%.
+    const score = Math.round(r.onTimeDelivery * 0.4 + r.quality * 0.4 + r.responsiveness * 0.2);
+    const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : "D";
+    const color = score >= 85 ? "text-green-400" : score >= 70 ? "text-yellow-400" : score >= 55 ? "text-orange-400" : "text-red-400";
+    return { ...r, score, grade, color };
+  }).sort((a, b) => b.score - a.score), [records]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Partner SLA Scorecard</h3>
+        <p className="text-xs text-[var(--color-muted)]">Score suppliers on on-time delivery, quality and responsiveness to build an objective vendor track record — and decide who keeps your business at renewal.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
+            <input list="net-sla-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Supplier" className={INP} />
+            <datalist id="net-sla-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">On-time %</label><input type="number" value={onTime} onChange={e => setOnTime(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Quality %</label><input type="number" value={quality} onChange={e => setQuality(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Responsiveness %</label><input type="number" value={resp} onChange={e => setResp(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Orders</label><input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="12" className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Save scorecard</button>
+      </div>
+
+      {scored.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No partner scorecards yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {scored.map(r => (
+            <div key={r.id} className={`${CARD} p-4`}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2"><span className={`text-2xl font-bold ${r.color}`}>{r.grade}</span><div><p className="text-sm font-semibold">{r.party}</p><p className="text-[10px] text-[var(--color-muted)]">SLA score {r.score}/100 · {r.orders} orders</p></div></div>
+                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {[
+                  { l: "On-time delivery", v: r.onTimeDelivery },
+                  { l: "Quality", v: r.quality },
+                  { l: "Responsiveness", v: r.responsiveness },
+                ].map(m => (
+                  <div key={m.l}>
+                    <div className="flex items-center justify-between text-[11px] mb-0.5"><span>{m.l}</span><span className="tabular-nums">{m.v}%</span></div>
+                    <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${m.v}%`, background: m.v >= 85 ? "#22c55e" : m.v >= 70 ? "#f59e0b" : "#ef4444" }} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #18 Group-Buy / Consortium Calculator ────────────────────────────────────
+type BuyMember = { id: string; name: string; qty: number };
+function GroupBuyCalculator() {
+  const [members, setMembers] = useState<BuyMember[]>([{ id: crypto.randomUUID(), name: "My firm", qty: 100 }]);
+  const [soloPrice, setSoloPrice] = useState("100");
+  const [groupPrice, setGroupPrice] = useState("85");
+  const [minQty, setMinQty] = useState("500");
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState("");
+
+  const addMember = () => {
+    if (!name.trim() || !qty) { toast.error("Enter member name and quantity"); return; }
+    setMembers([...members, { id: crypto.randomUUID(), name: name.trim(), qty: Math.max(0, parseFloat(qty) || 0) }]);
+    setName(""); setQty("");
+  };
+  const remove = (id: string) => setMembers(members.filter(m => m.id !== id));
+
+  const calc = useMemo(() => {
+    const totalQty = members.reduce((s, m) => s + m.qty, 0);
+    const solo = parseFloat(soloPrice) || 0;
+    const group = parseFloat(groupPrice) || 0;
+    const min = parseFloat(minQty) || 0;
+    const qualifies = totalQty >= min;
+    const effPrice = qualifies ? group : solo;
+    const totalSavings = qualifies ? (solo - group) * totalQty : 0;
+    const perMember = members.map(m => ({
+      ...m,
+      soloCost: m.qty * solo,
+      groupCost: m.qty * effPrice,
+      saving: qualifies ? m.qty * (solo - group) : 0,
+    }));
+    return { totalQty, qualifies, min, effPrice, totalSavings, perMember, solo, group };
+  }, [members, soloPrice, groupPrice, minQty]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Group-Buy / Consortium Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Pool orders with other small buyers to clear a supplier's volume tier and unlock a lower price — see exactly how much each member saves once you cross the threshold.</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Solo price / unit (₹)</label><input type="number" value={soloPrice} onChange={e => setSoloPrice(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Group price / unit (₹)</label><input type="number" value={groupPrice} onChange={e => setGroupPrice(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Min qty for tier</label><input type="number" value={minQty} onChange={e => setMinQty(e.target.value)} className={INP} /></div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Add member</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Buyer name" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Quantity</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="200" className={INP} /></div>
+          <button onClick={addMember} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add to pool</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Pooled quantity", value: formatAmount(calc.totalQty), color: "text-[var(--color-text)]", sub: `tier needs ${formatAmount(calc.min)}` },
+          { label: "Tier status", value: calc.qualifies ? "Qualifies" : "Below tier", color: calc.qualifies ? "text-green-400" : "text-yellow-400", sub: calc.qualifies ? "" : `${formatAmount(Math.max(0, calc.min - calc.totalQty))} more` },
+          { label: "Effective price", value: formatCurrency(calc.effPrice), color: "text-[var(--color-primary)]", sub: `vs ${formatCurrency(calc.solo)} solo` },
+          { label: "Total pool saving", value: formatAmount(calc.totalSavings), color: "text-green-400", sub: "across all members" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>{k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}</div>
+        ))}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Member", "Qty", "Solo cost", "Group cost", "Saving", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {calc.perMember.map(m => (
+                <tr key={m.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{m.name}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(m.qty)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(m.soloCost)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.groupCost)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-green-400">{m.saving > 0 ? formatCurrency(m.saving) : "—"}</td>
+                  <td className="px-4 py-2.5 text-right">{m.name !== "My firm" && <button onClick={() => remove(m.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #19 Warm-Intro / Connection Requester ────────────────────────────────────
+function WarmIntroRequester({ live }: { live: Live[] }) {
+  const { store } = useApp();
+  const { firm } = store;
+  const [connector, setConnector] = useState("");
+  const [target, setTarget] = useState("");
+  const [reason, setReason] = useState("");
+  const [tone, setTone] = useState<"formal" | "friendly">("friendly");
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+  const me = firm?.legalName || firm?.name || "our firm";
+
+  const message = useMemo(() => {
+    if (!connector.trim() || !target.trim()) return "";
+    const greeting = tone === "formal" ? `Dear ${connector.trim()},` : `Hi ${connector.trim()},`;
+    const ask = tone === "formal"
+      ? `I am writing to request a warm introduction to ${target.trim()}.`
+      : `Hope you're well! Could you do me a favour and introduce me to ${target.trim()}?`;
+    const why = reason.trim() ? ` ${reason.trim()}` : ` We're keen to explore a trade relationship with them.`;
+    const close = tone === "formal"
+      ? `If you are comfortable making this connection, I would be grateful. Happy to share more context for you to forward.`
+      : `If you're up for connecting us, that'd be great — happy to send a blurb you can just forward on.`;
+    return [greeting, "", `${ask}${why}`, "", close, "", `Thanks a lot,`, me].join("\n");
+  }, [connector, target, reason, tone, me]);
+
+  const copy = () => { if (!message) { toast.error("Pick a connector and target first"); return; } navigator.clipboard?.writeText(message).then(() => toast.success("Intro message copied"), () => toast.error("Couldn't copy")); };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> Warm-Intro / Connection Requester</h3>
+        <p className="text-xs text-[var(--color-muted)]">Compose a ready-to-send message asking a partner in your network to introduce you to a new counterparty — warm intros convert far better than cold outreach.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Ask (existing partner)</label>
+            <input list="net-intro-conn" value={connector} onChange={e => setConnector(e.target.value)} placeholder="Who can connect you" className={INP} />
+            <datalist id="net-intro-conn">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target (who you want to meet)</label>
+            <input value={target} onChange={e => setTarget(e.target.value)} placeholder="New counterparty" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tone</label>
+            <select value={tone} onChange={e => setTone(e.target.value as "formal" | "friendly")} className={INP}>
+              <option value="friendly">Friendly</option><option value="formal">Formal</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Reason / context (optional)</label>
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. We supply packaging and they're scaling fast." className={INP} />
+        </div>
+      </div>
+
+      {!message ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Pick a connector and a target to draft the message.</p>
+      ) : (
+        <>
+          <button onClick={copy} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Copy size={13} /> Copy message</button>
+          <div className={`${CARD} p-4`}><p className="text-xs font-semibold mb-2 text-[var(--color-muted)]">Draft intro request</p><pre className="text-sm whitespace-pre-wrap font-sans text-[var(--color-text)] leading-relaxed">{message}</pre></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #20 Partner Risk Watchlist ───────────────────────────────────────────────
+type WatchItem = { id: string; party: string; risk: "low" | "medium" | "high"; reason: string; exposure: number; action: string; addedAt: string };
+function RiskWatchlist({ live }: { live: Live[] }) {
+  const { store } = useApp();
+  const [items, setItems] = useFeatureState<WatchItem[]>("net-watchlist", []);
+  const [party, setParty] = useState("");
+  const [risk, setRisk] = useState<WatchItem["risk"]>("medium");
+  const [reason, setReason] = useState("Slow payments");
+  const [action, setAction] = useState("");
+
+  const REASONS = ["Slow payments", "Stopped GST filing", "Bounced cheque", "Disputed invoice", "Bank-detail change", "Insolvency signal", "Over credit limit", "Other"] as const;
+
+  // Suggest exposure from open invoices for the selected party.
+  const exposureFor = (name: string) => store.invoices.filter(i => i.customer.toLowerCase() === name.toLowerCase() && i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a counterparty"); return; }
+    setItems([...items, { id: crypto.randomUUID(), party: party.trim(), risk, reason, exposure: exposureFor(party.trim()), action: action.trim(), addedAt: new Date().toISOString().split("T")[0] }]);
+    setParty(""); setAction("");
+    toast.success("Added to risk watchlist");
+  };
+  const setRiskLevel = (id: string, r: WatchItem["risk"]) => setItems(items.map(i => i.id === id ? { ...i, risk: r } : i));
+  const remove = (id: string) => setItems(items.filter(i => i.id !== id));
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+  const highExposure = items.filter(i => i.risk === "high").reduce((s, i) => s + i.exposure, 0);
+  const riskColor = (r: WatchItem["risk"]) => r === "high" ? "bg-red-900/30 text-red-400 border-red-800/40" : r === "medium" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-green-900/30 text-green-400 border-green-800/40";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Partner Risk Watchlist</h3>
+        <p className="text-xs text-[var(--color-muted)]">Flag counterparties showing distress signals — slow pay, filing gaps, bank-detail changes — with your exposure and the action to take. Your early-warning list before bad debt hits.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input list="net-wl-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} />
+            <datalist id="net-wl-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Risk</label>
+            <select value={risk} onChange={e => setRisk(e.target.value as WatchItem["risk"])} className={INP}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Signal</label>
+            <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Watch</button>
+        </div>
+        <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action to take (e.g. move to advance payment, hold orders)" className={INP} />
+      </div>
+
+      {items.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "On watchlist", value: String(items.length), color: "text-[var(--color-text)]" },
+            { label: "High risk", value: String(items.filter(i => i.risk === "high").length), color: "text-red-400" },
+            { label: "High-risk exposure", value: formatAmount(highExposure), color: "text-red-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+          ))}
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No partners on the watchlist. Flag a risky counterparty above.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map(i => (
+            <div key={i.id} className={`${CARD} p-4`}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-semibold">{i.party} <span className={`ml-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${riskColor(i.risk)}`}>{i.risk} risk</span></p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{i.reason} · flagged {i.addedAt}{i.action ? ` · Action: ${i.action}` : ""}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold tabular-nums text-red-400">{i.exposure > 0 ? formatCurrency(i.exposure) : "—"}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">open exposure</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-[10px] text-[var(--color-muted)]">Set risk:</span>
+                {(["low", "medium", "high"] as const).map(r => (
+                  <button key={r} onClick={() => setRiskLevel(i.id, r)} className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${i.risk === r ? riskColor(r) : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{r}</button>
+                ))}
+                <button onClick={() => remove(i.id)} className="ml-auto text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #21 Networking Event / Meeting Log ───────────────────────────────────────
+type MeetingEntry = { id: string; party: string; date: string; channel: "in-person" | "call" | "video" | "event"; summary: string; followUp: string; followUpDone: boolean };
+function MeetingLog({ live }: { live: Live[] }) {
+  const [entries, setEntries] = useFeatureState<MeetingEntry[]>("net-meetings", []);
+  const [party, setParty] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [channel, setChannel] = useState<MeetingEntry["channel"]>("call");
+  const [summary, setSummary] = useState("");
+  const [followUp, setFollowUp] = useState("");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a counterparty"); return; }
+    setEntries([{ id: crypto.randomUUID(), party: party.trim(), date, channel, summary: summary.trim(), followUp: followUp.trim(), followUpDone: false }, ...entries]);
+    setParty(""); setSummary(""); setFollowUp("");
+    toast.success("Meeting logged");
+  };
+  const toggleFollowUp = (id: string) => setEntries(entries.map(e => e.id === id ? { ...e, followUpDone: !e.followUpDone } : e));
+  const remove = (id: string) => setEntries(entries.filter(e => e.id !== id));
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+  const openFollowUps = entries.filter(e => e.followUp && !e.followUpDone).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Networking Event / Meeting Log</h3>
+        <p className="text-xs text-[var(--color-muted)]">Keep a running CRM-style log of every meeting and call with partners — what was discussed and the follow-up due — so relationships never go cold and nothing slips.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input list="net-ml-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} />
+            <datalist id="net-ml-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} /></div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as MeetingEntry["channel"])} className={INP}><option value="call">Call</option><option value="video">Video</option><option value="in-person">In-person</option><option value="event">Event</option></select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Log</button>
+        </div>
+        <input value={summary} onChange={e => setSummary(e.target.value)} placeholder="What was discussed?" className={INP} />
+        <input value={followUp} onChange={e => setFollowUp(e.target.value)} placeholder="Follow-up action (optional)" className={INP} />
+      </div>
+
+      {entries.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Logged interactions</p><p className="text-xl font-bold tabular-nums">{entries.length}</p></div>
+          <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Open follow-ups</p><p className={`text-xl font-bold tabular-nums ${openFollowUps > 0 ? "text-yellow-400" : "text-green-400"}`}>{openFollowUps}</p></div>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No meetings logged yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map(e => (
+            <div key={e.id} className={`${CARD} p-4`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{e.party} <span className="text-[10px] text-[var(--color-muted)] font-normal capitalize">· {e.channel} · {e.date}</span></p>
+                  {e.summary && <p className="text-[11px] text-[var(--color-muted)] mt-1">{e.summary}</p>}
+                </div>
+                <button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+              </div>
+              {e.followUp && (
+                <label className="flex items-center gap-2 mt-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={e.followUpDone} onChange={() => toggleFollowUp(e.id)} className="accent-[var(--color-primary)]" />
+                  <span className={e.followUpDone ? "line-through text-[var(--color-muted)]" : "text-[var(--color-text)]"}>Follow-up: {e.followUp}</span>
+                </label>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #22 Mutual-Credit Netting Calculator ─────────────────────────────────────
+type NetEntry = { id: string; party: string; theyOweMe: number; iOweThem: number };
+function MutualNetting() {
+  const [entries, setEntries] = useFeatureState<NetEntry[]>("net-netting", []);
+  const [party, setParty] = useState("");
+  const [theyOweMe, setTheyOweMe] = useState("");
+  const [iOweThem, setIOweThem] = useState("");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a counterparty"); return; }
+    setEntries([...entries, { id: crypto.randomUUID(), party: party.trim(), theyOweMe: Math.max(0, parseFloat(theyOweMe) || 0), iOweThem: Math.max(0, parseFloat(iOweThem) || 0) }]);
+    setParty(""); setTheyOweMe(""); setIOweThem("");
+    toast.success("Position added");
+  };
+  const remove = (id: string) => setEntries(entries.filter(e => e.id !== id));
+
+  const calc = useMemo(() => {
+    const rows = entries.map(e => {
+      const net = e.theyOweMe - e.iOweThem;
+      return { ...e, net, gross: e.theyOweMe + e.iOweThem };
+    });
+    const grossReceivable = rows.reduce((s, r) => s + r.theyOweMe, 0);
+    const grossPayable = rows.reduce((s, r) => s + r.iOweThem, 0);
+    const grossSettlement = grossReceivable + grossPayable;
+    const netSettlement = rows.reduce((s, r) => s + Math.abs(r.net), 0);
+    const reduction = grossSettlement > 0 ? 1 - netSettlement / grossSettlement : 0;
+    return { rows, grossReceivable, grossPayable, grossSettlement, netSettlement, reduction };
+  }, [entries]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Mutual-Credit Netting Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">When you both buy from and sell to the same partner, net the two positions so only the difference moves — fewer payments, less working capital tied up, lower transfer cost.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label><input value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">They owe me (₹)</label><input type="number" value={theyOweMe} onChange={e => setTheyOweMe(e.target.value)} placeholder="80000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">I owe them (₹)</label><input type="number" value={iOweThem} onChange={e => setIOweThem(e.target.value)} placeholder="55000" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Add a partner you both owe and are owed to see the netting benefit.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Gross to move", value: formatAmount(calc.grossSettlement), color: "text-[var(--color-text)]", sub: "without netting" },
+              { label: "Net to move", value: formatAmount(calc.netSettlement), color: "text-[var(--color-primary)]", sub: "after netting" },
+              { label: "Payments avoided", value: formatAmount(calc.grossSettlement - calc.netSettlement), color: "text-green-400", sub: "cash kept in hand" },
+              { label: "Settlement reduction", value: `${Math.round(calc.reduction * 100)}%`, color: "text-green-400", sub: "fewer rupees transferred" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Counterparty", "They owe me", "I owe them", "Net position", "Who pays", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {calc.rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.party}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.theyOweMe)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.iOweThem)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-medium ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.abs(r.net))}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.net === 0 ? "Square" : r.net > 0 ? "They pay me" : "I pay them"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
     </div>

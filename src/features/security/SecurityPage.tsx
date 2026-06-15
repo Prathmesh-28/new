@@ -6,6 +6,8 @@ import {
   ShieldAlert, ShieldCheck, Activity, Copy, Repeat, UserPlus, Landmark,
   ListChecks, History, Gauge, FileWarning, CheckSquare, AlertTriangle,
   CheckCircle2, Search, TrendingUp,
+  CalendarClock, BarChart3, Zap, Scissors, Moon, Receipt, Users, GitMerge,
+  Undo2, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -16,7 +18,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type TabId =
   | "overview" | "anomaly" | "duplicate" | "roundtrip" | "newpayee" | "bankchange"
-  | "rules" | "access" | "scorecard" | "invoice" | "hygiene";
+  | "rules" | "access" | "scorecard" | "invoice" | "hygiene"
+  | "weekend" | "benford" | "velocity" | "threshold" | "dormant" | "expense"
+  | "sod" | "vendordedupe" | "refund" | "recurring";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -30,6 +34,16 @@ const TABS = [
   ["scorecard", "Fraud Risk Score", Gauge],
   ["invoice", "Suspicious Invoices", FileWarning],
   ["hygiene", "Security Checklist", CheckSquare],
+  ["weekend", "Off-Hours Payments", CalendarClock],
+  ["benford", "Benford's-Law Audit", BarChart3],
+  ["velocity", "Payment Velocity", Zap],
+  ["threshold", "Under-Limit Splitting", Scissors],
+  ["dormant", "Dormant Reactivation", Moon],
+  ["expense", "Expense-Policy Flags", Receipt],
+  ["sod", "Duties Separation", Users],
+  ["vendordedupe", "Vendor Dedupe", GitMerge],
+  ["refund", "Refund Anomalies", Undo2],
+  ["recurring", "Recurring-Charge Watch", RefreshCw],
 ] as const;
 
 const DISCLAIMER = "These are heuristic flags — suspects, not verdicts. Confirm with source documents and the counterparty before acting.";
@@ -37,7 +51,7 @@ const DISCLAIMER = "These are heuristic flags — suspects, not verdicts. Confir
 // ── Shared helpers ────────────────────────────────────────────────────────────
 type Txn = {
   id: string; date: string; amount: number; description: string;
-  category: string; counterparty: string;
+  category: string; counterparty: string; isRecurring?: boolean;
 };
 
 function outflows(txns: Txn[]): Txn[] {
@@ -166,6 +180,16 @@ export default function SecurityPage() {
       {tab === "scorecard" && <FraudScorecard txns={txns} invoices={store.invoices} />}
       {tab === "invoice" && <SuspiciousInvoices invoices={store.invoices} />}
       {tab === "hygiene" && <SecurityChecklist />}
+      {tab === "weekend" && <OffHoursPayments txns={txns} />}
+      {tab === "benford" && <BenfordAudit txns={txns} />}
+      {tab === "velocity" && <PaymentVelocity txns={txns} />}
+      {tab === "threshold" && <UnderLimitSplitting txns={txns} />}
+      {tab === "dormant" && <DormantReactivation txns={txns} />}
+      {tab === "expense" && <ExpensePolicyFlags txns={txns} />}
+      {tab === "sod" && <DutiesSeparation txns={txns} />}
+      {tab === "vendordedupe" && <VendorDedupe txns={txns} />}
+      {tab === "refund" && <RefundAnomalies txns={txns} />}
+      {tab === "recurring" && <RecurringChargeWatch txns={txns} />}
     </div>
   );
 }
@@ -937,6 +961,713 @@ function SecurityChecklist() {
           );
         })}
       </div>
+      <Note />
+    </div>
+  );
+}
+
+// ── #11 Off-Hours / Weekend Payment Flags ────────────────────────────────────────
+function OffHoursPayments({ txns }: { txns: Txn[] }) {
+  const flagged = useMemo(() => {
+    return outflows(txns)
+      .map(t => {
+        let dow = -1;
+        try { dow = parseISO(t.date).getDay(); } catch { dow = -1; }
+        const isWeekend = dow === 0 || dow === 6;
+        return { t, dow, isWeekend };
+      })
+      .filter(r => r.isWeekend)
+      .sort((a, b) => Math.abs(b.t.amount) - Math.abs(a.t.amount));
+  }, [txns]);
+
+  const total = flagged.reduce((s, r) => s + Math.abs(r.t.amount), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Off-Hours &amp; Weekend Payments</h2>
+        <p className="text-xs text-[var(--color-muted)]">Outgoing payments dated on a Saturday or Sunday — when oversight is thinnest. Insider and business-email-compromise fraud disproportionately happens outside business hours, so weekend disbursements are worth a deliberate second look.</p>
+      </div>
+
+      {flagged.length === 0 ? (
+        <Empty icon={CalendarClock} msg="No outgoing payments dated on a weekend." />
+      ) : (
+        <>
+          <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flagged.length} weekend payment(s) totalling {formatCurrency(Math.round(total))} — suspects, confirm each was authorised before acting.</p>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Day", "Payee", "Amount", "Description"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {flagged.map(r => (
+                    <tr key={r.t.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
+                      <td className="px-4 py-2.5 text-xs text-yellow-400 font-medium">{r.dow === 0 ? "Sunday" : "Saturday"}</td>
+                      <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #12 Benford's-Law First-Digit Audit ──────────────────────────────────────────
+function BenfordAudit({ txns }: { txns: Txn[] }) {
+  const result = useMemo(() => {
+    const amts = outflows(txns).map(t => Math.abs(t.amount)).filter(a => a >= 1);
+    const n = amts.length;
+    const observed = Array<number>(10).fill(0); // index 1..9 used
+    amts.forEach(a => {
+      const d = parseInt(String(Math.round(a)).replace(/^0+/, "").charAt(0), 10);
+      if (d >= 1 && d <= 9) observed[d]++;
+    });
+    const expectedPct = [0, 30.1, 17.6, 12.5, 9.7, 7.9, 6.7, 5.8, 5.1, 4.6];
+    const rows = [] as { digit: number; obsCount: number; obsPct: number; expPct: number; diff: number }[];
+    let chi = 0;
+    for (let d = 1; d <= 9; d++) {
+      const obsPct = n ? (observed[d] / n) * 100 : 0;
+      const expCount = n ? (expectedPct[d] / 100) * n : 0;
+      if (expCount > 0) chi += ((observed[d] - expCount) ** 2) / expCount;
+      rows.push({ digit: d, obsCount: observed[d], obsPct, expPct: expectedPct[d], diff: obsPct - expectedPct[d] });
+    }
+    // chi-square critical value at 8 d.o.f.: ~15.51 (p=0.05), ~20.09 (p=0.01)
+    const verdict = n < 50 ? "insufficient" : chi > 20.09 ? "high" : chi > 15.51 ? "elevated" : "normal";
+    return { n, rows, chi, verdict };
+  }, [txns]);
+
+  const vColor = result.verdict === "high" ? "text-red-400" : result.verdict === "elevated" ? "text-yellow-400" : result.verdict === "normal" ? "text-green-400" : "text-[var(--color-muted)]";
+  const vLabel = result.verdict === "high" ? "Strong deviation" : result.verdict === "elevated" ? "Mild deviation" : result.verdict === "normal" ? "Conforms to Benford" : "Too few payments";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Benford's-Law Ledger Audit</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">In genuine spend the leading digit follows Benford's distribution — 1 appears about 30% of the time, 9 under 5%. Fabricated or padded numbers tend to break this. A large gap is a prompt to investigate, never proof on its own.</p>
+        {result.n < 50 ? (
+          <p className="text-xs text-[var(--color-muted)]">Need at least 50 outgoing payments for a meaningful test — you have {result.n}.</p>
+        ) : (
+          <div className="flex items-end gap-4 flex-wrap">
+            <div><p className={`text-3xl font-bold tabular-nums ${vColor}`}>{result.chi.toFixed(1)}</p><p className="text-xs text-[var(--color-muted)]">χ² statistic (8 d.o.f.)</p></div>
+            <span className={`text-sm font-bold px-3 py-1 rounded-full border ${result.verdict === "high" ? "bg-red-950/30 text-red-400 border-red-800/40" : result.verdict === "elevated" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>{vLabel}</span>
+          </div>
+        )}
+      </div>
+
+      {result.n >= 50 && (
+        <div className={`${CARD} p-5`}>
+          <p className="text-sm font-semibold mb-3">Leading-digit distribution</p>
+          <div className="space-y-2">
+            {result.rows.map(r => {
+              const flag = Math.abs(r.diff) >= 5;
+              return (
+                <div key={r.digit} className="flex items-center gap-3 text-xs">
+                  <span className="w-4 font-bold tabular-nums">{r.digit}</span>
+                  <div className="flex-1 h-3 bg-[var(--color-bg)] rounded-full overflow-hidden relative">
+                    <div className="absolute inset-y-0 left-0 border-r border-dashed border-[var(--color-muted)]/50" style={{ width: `${r.expPct}%` }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.obsPct)}%`, background: flag ? "#eab308" : "var(--color-primary)" }} />
+                  </div>
+                  <span className="w-14 text-right tabular-nums text-[var(--color-muted)]">{r.obsPct.toFixed(1)}%</span>
+                  <span className="w-12 text-right tabular-nums text-[10px] text-[var(--color-muted)]">exp {r.expPct}%</span>
+                  <span className={`w-12 text-right tabular-nums ${flag ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}`}>{r.diff > 0 ? "+" : ""}{r.diff.toFixed(1)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-3">Dashed line = Benford-expected share. Bars highlighted where observed differs from expected by 5 points or more.</p>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #13 Payment Velocity Burst Detector ──────────────────────────────────────────
+function PaymentVelocity({ txns }: { txns: Txn[] }) {
+  const [windowDays, setWindowDays] = useState(3);
+  const [minCount, setMinCount] = useState(3);
+
+  const bursts = useMemo(() => {
+    const byPayee = new Map<string, Txn[]>();
+    outflows(txns).forEach(t => {
+      const k = t.counterparty.trim().toLowerCase() || "(blank)";
+      byPayee.set(k, [...(byPayee.get(k) ?? []), t]);
+    });
+    const result: { payee: string; rows: Txn[]; total: number; spanDays: number }[] = [];
+    byPayee.forEach(rows => {
+      const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+      // sliding window: find the densest run of payments within the window
+      let best: Txn[] = [];
+      for (let i = 0; i < sorted.length; i++) {
+        const run = [sorted[i]];
+        for (let j = i + 1; j < sorted.length; j++) {
+          if (daysBetween(sorted[j].date, sorted[i].date) <= windowDays) run.push(sorted[j]);
+          else break;
+        }
+        if (run.length > best.length) best = run;
+      }
+      if (best.length >= minCount) {
+        const span = best.length > 1 ? daysBetween(best[0].date, best[best.length - 1].date) : 0;
+        result.push({ payee: best[0].counterparty || "(blank)", rows: best, total: best.reduce((s, r) => s + Math.abs(r.amount), 0), spanDays: span });
+      }
+    });
+    return result.sort((a, b) => b.rows.length - a.rows.length);
+  }, [txns, windowDays, minCount]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> Payment Velocity Burst</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Flags a single payee receiving an unusual flurry of payments in a short window — a pattern seen in mule activity, salami-style siphoning and runaway auto-mandates.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Window: <strong className="text-[var(--color-text)]">{windowDays} days</strong></label>
+            <input type="range" min={1} max={14} step={1} value={windowDays} onChange={e => setWindowDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">At least <strong className="text-[var(--color-text)]">{minCount} payments</strong> in the window</label>
+            <input type="range" min={2} max={10} step={1} value={minCount} onChange={e => setMinCount(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {bursts.length === 0 ? (
+        <Empty icon={Zap} msg="No payment bursts match these settings." />
+      ) : (
+        <div className="space-y-3">
+          {bursts.map((b, i) => (
+            <div key={i} className={`${CARD} p-4`}>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <p className="text-sm font-semibold">{b.payee} · {b.rows.length} payments in {b.spanDays} day(s)</p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-950/30 text-orange-400 border border-orange-800/40 font-semibold">{formatCurrency(Math.round(b.total))} total</span>
+              </div>
+              <div className="space-y-1">
+                {b.rows.map(r => (
+                  <div key={r.id} className="flex items-center justify-between text-xs py-1 border-b border-[var(--color-border)] last:border-0">
+                    <span className="text-[var(--color-muted)]">{safeFormatDate(r.date)} · {r.description}</span>
+                    <span className="tabular-nums text-red-400">{formatCurrency(Math.round(Math.abs(r.amount)))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #14 Under-Limit Splitting / Structuring Detector ─────────────────────────────
+function UnderLimitSplitting({ txns }: { txns: Txn[] }) {
+  const [limit, setLimit] = useFeatureState<number>("sec-approval-limit", 100000);
+  const [bandPct, setBandPct] = useState(10);
+
+  const justUnder = useMemo(() => {
+    const lo = limit * (1 - bandPct / 100);
+    return outflows(txns)
+      .filter(t => { const a = Math.abs(t.amount); return a >= lo && a < limit; })
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  }, [txns, limit, bandPct]);
+
+  // split pattern: a payee paid multiple just-under amounts close together that would breach the limit if combined
+  const splits = useMemo(() => {
+    const byPayee = new Map<string, Txn[]>();
+    justUnder.forEach(t => { const k = t.counterparty.trim().toLowerCase() || "(blank)"; byPayee.set(k, [...(byPayee.get(k) ?? []), t]); });
+    const result: { payee: string; rows: Txn[]; combined: number }[] = [];
+    byPayee.forEach(rows => {
+      if (rows.length < 2) return;
+      const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+      const close = sorted.some((r, i) => i > 0 && daysBetween(r.date, sorted[i - 1].date) <= 7);
+      if (close) result.push({ payee: rows[0].counterparty || "(blank)", rows: sorted, combined: rows.reduce((s, r) => s + Math.abs(r.amount), 0) });
+    });
+    return result.sort((a, b) => b.combined - a.combined);
+  }, [justUnder]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Under-Limit Splitting Detector</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces payments that sit just below your approval threshold — the signature of structuring, where a larger payment is split to dodge the second-approver check.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Approval limit (₹)</label>
+            <input type="number" value={limit} onChange={e => setLimit(Math.max(0, Number(e.target.value)))} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Flag band: within <strong className="text-[var(--color-text)]">{bandPct}%</strong> below the limit</label>
+            <input type="range" min={1} max={25} step={1} value={bandPct} onChange={e => setBandPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {splits.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {splits.length} payee(s) received multiple just-under-limit payments within a week — possible deliberate splitting.</p>
+        </div>
+      )}
+
+      {justUnder.length === 0 ? (
+        <Empty icon={Scissors} msg="No payments fall in the just-under-limit band." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{justUnder.length} payment(s) just below {formatCurrency(limit)}</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "% of limit", "Description"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {justUnder.map(t => (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{limit ? Math.round((Math.abs(t.amount) / limit) * 100) : 0}%</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{t.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #15 Dormant-Account Reactivation Flag ─────────────────────────────────────────
+function DormantReactivation({ txns }: { txns: Txn[] }) {
+  const [dormantDays, setDormantDays] = useState(180);
+
+  const reactivated = useMemo(() => {
+    const byParty = new Map<string, Txn[]>();
+    txns.forEach(t => { const k = t.counterparty.trim().toLowerCase(); if (!k) return; byParty.set(k, [...(byParty.get(k) ?? []), t]); });
+    const result: { party: string; gapDays: number; lastBefore: Txn; reactivation: Txn }[] = [];
+    byParty.forEach(rows => {
+      if (rows.length < 2) return;
+      const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+      for (let i = 1; i < sorted.length; i++) {
+        const gap = daysBetween(sorted[i].date, sorted[i - 1].date);
+        if (gap >= dormantDays) {
+          result.push({ party: sorted[i].counterparty, gapDays: gap, lastBefore: sorted[i - 1], reactivation: sorted[i] });
+        }
+      }
+    });
+    return result.sort((a, b) => b.gapDays - a.gapDays);
+  }, [txns, dormantDays]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Moon size={14} className="text-[var(--color-primary)]" /> Dormant-Account Reactivation</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Counterparties that went quiet for a long stretch and then suddenly transacted again. Long-idle accounts that reawaken are a known hijack and ghost-vendor signal — verify the party is still who you think before transacting.</p>
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Treat a gap of <strong className="text-[var(--color-text)]">{dormantDays} days</strong> or more as dormancy</label>
+        <input type="range" min={60} max={540} step={30} value={dormantDays} onChange={e => setDormantDays(Number(e.target.value))} className="w-full max-w-md accent-[var(--color-primary)]" />
+      </div>
+
+      {reactivated.length === 0 ? (
+        <Empty icon={Moon} msg="No dormant accounts reactivated within this threshold." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{reactivated.length} reactivation event(s)</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Counterparty", "Quiet since", "Reactivated", "Idle gap", "Amount"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {reactivated.map((r, i) => (
+                  <tr key={i} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.party || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.lastBefore.date)}</td>
+                    <td className="px-4 py-2.5 text-xs text-yellow-400">{safeFormatDate(r.reactivation.date)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{r.gapDays} days</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.reactivation.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.round(Math.abs(r.reactivation.amount)))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #16 Expense-Policy Violation Detector ─────────────────────────────────────────
+type ExpPolicy = { perTxnCap: number; flagWeekend: boolean; keywords: string };
+function ExpensePolicyFlags({ txns }: { txns: Txn[] }) {
+  const [policy, setPolicy] = useFeatureState<ExpPolicy>("sec-expense-policy", { perTxnCap: 50000, flagWeekend: true, keywords: "alcohol, bar, gift, cash, entertainment" });
+
+  const flags = useMemo(() => {
+    const kws = policy.keywords.split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
+    return outflows(txns)
+      .filter(t => t.category === "expense")
+      .map(t => {
+        const reasons: string[] = [];
+        const amt = Math.abs(t.amount);
+        if (policy.perTxnCap > 0 && amt > policy.perTxnCap) reasons.push(`Over ${formatCurrency(policy.perTxnCap)} cap`);
+        let dow = -1; try { dow = parseISO(t.date).getDay(); } catch { /* noop */ }
+        if (policy.flagWeekend && (dow === 0 || dow === 6)) reasons.push("Weekend spend");
+        const hay = `${t.description} ${t.counterparty}`.toLowerCase();
+        const hit = kws.find(k => hay.includes(k));
+        if (hit) reasons.push(`Restricted: "${hit}"`);
+        return { t, reasons };
+      })
+      .filter(x => x.reasons.length > 0)
+      .sort((a, b) => Math.abs(b.t.amount) - Math.abs(a.t.amount));
+  }, [txns, policy]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Expense-Policy Violation Detector</h2>
+        <p className="text-xs text-[var(--color-muted)]">Checks expense transactions against your own policy — a per-transaction cap, weekend spend, and restricted keywords. Matches are suspects to review against the receipt, not automatic violations.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Per-transaction cap (₹)</label>
+            <input type="number" value={policy.perTxnCap} onChange={e => setPolicy({ ...policy, perTxnCap: Math.max(0, Number(e.target.value)) })} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Restricted keywords (comma-separated)</label>
+            <input value={policy.keywords} onChange={e => setPolicy({ ...policy, keywords: e.target.value })} className={INP} />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] py-2 cursor-pointer">
+            <input type="checkbox" checked={policy.flagWeekend} onChange={e => setPolicy({ ...policy, flagWeekend: e.target.checked })} className="accent-[var(--color-primary)]" />
+            Flag weekend-dated expenses
+          </label>
+        </div>
+      </div>
+
+      {flags.length === 0 ? (
+        <Empty icon={Receipt} msg="No expense transactions breach this policy." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flags.length} expense(s) to review</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Violations"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {flags.map(f => (
+                  <tr key={f.t.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
+                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #17 Segregation-of-Duties Checker ─────────────────────────────────────────────
+type SodMap = { id: string; payee: string; creator: string; approver: string };
+function DutiesSeparation({ txns }: { txns: Txn[] }) {
+  const [maps, setMaps] = useFeatureState<SodMap[]>("sec-sod-map", []);
+  const [payee, setPayee] = useState("");
+  const [creator, setCreator] = useState("");
+  const [approver, setApprover] = useState("");
+
+  const knownPayees = useMemo(
+    () => [...new Set(outflows(txns).map(t => t.counterparty).filter(Boolean))].sort(),
+    [txns],
+  );
+
+  const add = () => {
+    if (!payee.trim() || !creator.trim() || !approver.trim()) { toast.error("Enter payee, creator and approver"); return; }
+    setMaps([...maps, { id: crypto.randomUUID(), payee: payee.trim(), creator: creator.trim(), approver: approver.trim() }]);
+    setPayee(""); setCreator(""); setApprover("");
+    toast.success("Duty assignment recorded");
+  };
+
+  const conflicts = maps.filter(m => m.creator.trim().toLowerCase() === m.approver.trim().toLowerCase());
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Segregation-of-Duties Checker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Record who creates and who approves payments for each vendor. When the same person does both, no independent check exists — the classic gap that lets a single insider move money unchecked.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor / payee</label>
+            <input list="sec-sod-payees" value={payee} onChange={e => setPayee(e.target.value)} placeholder="Vendor" className={INP} />
+            <datalist id="sec-sod-payees">{knownPayees.map(v => <option key={v} value={v} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Created by</label>
+            <input value={creator} onChange={e => setCreator(e.target.value)} placeholder="e.g. Rohit" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Approved by</label>
+            <input value={approver} onChange={e => setApprover(e.target.value)} placeholder="e.g. Priya" className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Add entry</button>
+        </div>
+      </div>
+
+      {conflicts.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {conflicts.length} vendor(s) where one person both creates and approves — assign a separate approver.</p>
+        </div>
+      )}
+
+      {maps.length === 0 ? (
+        <Empty icon={Users} msg="No duty assignments recorded yet." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Vendor", "Created by", "Approved by", "Status", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {maps.map(m => {
+                  const conflict = m.creator.trim().toLowerCase() === m.approver.trim().toLowerCase();
+                  return (
+                    <tr key={m.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium text-xs">{m.payee}</td>
+                      <td className="px-4 py-2.5 text-xs">{m.creator}</td>
+                      <td className="px-4 py-2.5 text-xs">{m.approver}</td>
+                      <td className="px-4 py-2.5">
+                        {conflict
+                          ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Same person</span>
+                          : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Separated</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setMaps(maps.filter(x => x.id !== m.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #18 Near-Duplicate Vendor Dedupe ──────────────────────────────────────────────
+function VendorDedupe({ txns }: { txns: Txn[] }) {
+  const pairs = useMemo(() => {
+    const vendors = [...new Set(outflows(txns).map(t => t.counterparty.trim()).filter(Boolean))];
+    const norm = (s: string) => s.toLowerCase().replace(/\b(pvt|ltd|llp|inc|co|company|limited|private|the|and|&)\b/g, "").replace(/[^a-z0-9]/g, "");
+    // Levenshtein distance for close-but-not-identical names
+    const lev = (a: string, b: string): number => {
+      const m = a.length, n = b.length;
+      if (!m) return n; if (!n) return m;
+      let prev = Array.from({ length: n + 1 }, (_, i) => i);
+      for (let i = 1; i <= m; i++) {
+        const cur = [i];
+        for (let j = 1; j <= n; j++) {
+          cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j - 1], prev[j], cur[j - 1]);
+        }
+        prev = cur;
+      }
+      return prev[n];
+    };
+    const result: { a: string; b: string; dist: number; reason: string }[] = [];
+    for (let i = 0; i < vendors.length; i++) {
+      for (let j = i + 1; j < vendors.length; j++) {
+        const na = norm(vendors[i]), nb = norm(vendors[j]);
+        if (!na || !nb) continue;
+        if (na === nb) { result.push({ a: vendors[i], b: vendors[j], dist: 0, reason: "Identical after normalising" }); continue; }
+        const d = lev(na, nb);
+        const maxLen = Math.max(na.length, nb.length);
+        if (maxLen >= 4 && d > 0 && d <= 2) result.push({ a: vendors[i], b: vendors[j], dist: d, reason: `${d} character(s) apart` });
+      }
+    }
+    return result.sort((a, b) => a.dist - b.dist);
+  }, [txns]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitMerge size={14} className="text-[var(--color-primary)]" /> Near-Duplicate Vendor Dedupe</h2>
+        <p className="text-xs text-[var(--color-muted)]">Finds vendor names that are suspiciously similar — typos, extra spaces or a swapped suffix. Twin vendor records let the same payee be paid twice or enable split-payment and ghost-vendor padding.</p>
+      </div>
+
+      {pairs.length === 0 ? (
+        <Empty icon={GitMerge} msg="No near-duplicate vendor names found." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{pairs.length} possible duplicate vendor pair(s)</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Vendor A", "Vendor B", "Why flagged"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {pairs.map((p, i) => (
+                  <tr key={i} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{p.a}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{p.b}</td>
+                    <td className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{p.reason}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #19 Refund-Anomaly Flags ──────────────────────────────────────────────────────
+function RefundAnomalies({ txns }: { txns: Txn[] }) {
+  const flags = useMemo(() => {
+    // refunds = inbound revenue reversals (negative-amount revenue) OR outbound payments whose description mentions refund
+    const refundLike = txns.filter(t =>
+      /\brefund|reversal|chargeback|return\b/i.test(t.description) ||
+      (t.category === "revenue" && t.amount < 0),
+    );
+    // also count refunds per counterparty to flag unusually frequent refunders
+    const countByParty = new Map<string, number>();
+    refundLike.forEach(t => { const k = t.counterparty.trim().toLowerCase() || "(blank)"; countByParty.set(k, (countByParty.get(k) ?? 0) + 1); });
+    return refundLike
+      .map(t => {
+        const reasons: string[] = [];
+        const k = t.counterparty.trim().toLowerCase() || "(blank)";
+        const cnt = countByParty.get(k) ?? 0;
+        if (cnt >= 3) reasons.push(`${cnt} refunds to this party`);
+        if (Math.abs(t.amount) >= 10000 && Math.abs(t.amount) % 10000 === 0) reasons.push("Round-number refund");
+        if (t.amount < 0 && t.category === "revenue") reasons.push("Revenue reversal");
+        if (reasons.length === 0) reasons.push("Refund / reversal entry");
+        return { t, reasons };
+      })
+      .sort((a, b) => Math.abs(b.t.amount) - Math.abs(a.t.amount));
+  }, [txns]);
+
+  const total = flags.reduce((s, f) => s + Math.abs(f.t.amount), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Undo2 size={14} className="text-[var(--color-primary)]" /> Refund-Anomaly Flags</h2>
+        <p className="text-xs text-[var(--color-muted)]">Surfaces refunds, reversals and chargebacks in your ledger and highlights the abuse patterns — the same party refunded repeatedly, round-number refunds and revenue reversals — which can mask skimming or collusion.</p>
+      </div>
+
+      {flags.length === 0 ? (
+        <Empty icon={Undo2} msg="No refund or reversal entries detected." />
+      ) : (
+        <>
+          <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flags.length} refund/reversal entr(ies) totalling {formatCurrency(Math.round(total))} — suspects, confirm against original transactions.</p>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Counterparty", "Amount", "Flags", "Description"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {flags.map(f => (
+                    <tr key={f.t.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
+                      <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
+                      <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{f.t.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #20 Recurring-Charge Sentinel ─────────────────────────────────────────────────
+function RecurringChargeWatch({ txns }: { txns: Txn[] }) {
+  const result = useMemo(() => {
+    // group recurring outflows by payee; detect new recurring charges and amount creep
+    const byPayee = new Map<string, Txn[]>();
+    outflows(txns).filter(t => t.isRecurring).forEach(t => {
+      const k = t.counterparty.trim().toLowerCase() || "(blank)";
+      byPayee.set(k, [...(byPayee.get(k) ?? []), t]);
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    const rows: { payee: string; count: number; latest: number; first: number; changePct: number; firstDate: string; isNew: boolean }[] = [];
+    byPayee.forEach(arr => {
+      const sorted = [...arr].sort((a, b) => a.date.localeCompare(b.date));
+      const first = Math.abs(sorted[0].amount);
+      const latest = Math.abs(sorted[sorted.length - 1].amount);
+      const changePct = first > 0 ? Math.round(((latest - first) / first) * 100) : 0;
+      const isNew = daysBetween(sorted[0].date, today) <= 60;
+      rows.push({ payee: sorted[0].counterparty || "(blank)", count: sorted.length, latest, first, changePct, firstDate: sorted[0].date, isNew });
+    });
+    return rows.sort((a, b) => b.latest - a.latest);
+  }, [txns]);
+
+  const monthlyTotal = result.reduce((s, r) => s + r.latest, 0);
+  const newCount = result.filter(r => r.isNew).length;
+  const creepCount = result.filter(r => r.changePct >= 15).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Recurring-Charge Sentinel</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tracks your recurring outflows — subscriptions and auto-mandates. New recurring debits and quiet price creep are how subscription leakage and unauthorised mandates drain cash unnoticed.</p>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Recurring payees", value: String(result.length), color: "text-[var(--color-text)]" },
+            { label: "New (≤60d)", value: String(newCount), color: newCount > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Price creep ≥15%", value: String(creepCount), color: creepCount > 0 ? "text-orange-400" : "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+        {result.length > 0 && <p className="text-[10px] text-[var(--color-muted)] mt-2">Latest recurring outflow run-rate ≈ {formatCurrency(Math.round(monthlyTotal))}.</p>}
+      </div>
+
+      {result.length === 0 ? (
+        <Empty icon={RefreshCw} msg="No recurring outflows in the ledger yet." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Payee", "Started", "Charges", "Latest", "Change", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {result.map((r, i) => (
+                  <tr key={i} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.payee}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.firstDate)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.count}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.latest))}</td>
+                    <td className={`px-4 py-2.5 tabular-nums text-xs ${r.changePct >= 15 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{r.changePct > 0 ? "+" : ""}{r.changePct}%</td>
+                    <td className="px-4 py-2.5">{r.isNew && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">New</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <Note />
     </div>
   );

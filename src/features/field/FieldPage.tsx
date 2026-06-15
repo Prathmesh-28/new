@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import {
   Wifi, WifiOff, RefreshCw, Calculator, MapPin, Truck, Gauge, ClipboardList,
   Sun, Route, Camera, CloudUpload, CheckCircle2, Plus, Trash2, Signal, Smartphone,
+  Clock, ShoppingCart, Receipt as ReceiptIcon, Wallet, PackagePlus, PenLine, PackageCheck, Target,
+  Eraser,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -54,7 +56,9 @@ function useOnline(): boolean {
 
 type FieldTab =
   | "overview" | "connectivity" | "queue" | "quickbill" | "collection"
-  | "daysheet" | "lowdata" | "visits" | "summary" | "beat" | "receipt";
+  | "daysheet" | "lowdata" | "visits" | "summary" | "beat" | "receipt"
+  | "attendance" | "order" | "outstanding" | "expense" | "stockreq"
+  | "signature" | "pod" | "target";
 
 const TABS = [
   ["overview", "Overview", Smartphone],
@@ -68,6 +72,14 @@ const TABS = [
   ["summary", "Day Summary", Sun],
   ["beat", "Beat / Route", Route],
   ["receipt", "Receipt Capture", Camera],
+  ["attendance", "Beat Check-In", Clock],
+  ["order", "Order Booking", ShoppingCart],
+  ["outstanding", "Beat Outstanding", ReceiptIcon],
+  ["expense", "On-the-Go Expense", Wallet],
+  ["stockreq", "Stock Request", PackagePlus],
+  ["signature", "Signature Capture", PenLine],
+  ["pod", "Proof of Delivery", PackageCheck],
+  ["target", "Daily Target", Target],
 ] as const;
 
 export default function FieldPage() {
@@ -108,6 +120,14 @@ export default function FieldPage() {
       {tab === "summary" && <DaySummary />}
       {tab === "beat" && <BeatPlan />}
       {tab === "receipt" && <ReceiptCapture />}
+      {tab === "attendance" && <BeatCheckIn />}
+      {tab === "order" && <OrderBooking />}
+      {tab === "outstanding" && <BeatOutstanding />}
+      {tab === "expense" && <FieldExpense />}
+      {tab === "stockreq" && <StockRequest />}
+      {tab === "signature" && <SignatureCapture />}
+      {tab === "pod" && <ProofOfDelivery />}
+      {tab === "target" && <DailyTarget />}
     </div>
   );
 }
@@ -861,6 +881,615 @@ function ReceiptCapture() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">`capture="environment"` opens the rear camera on supported mobiles; desktops show a normal file picker. Large photos are stored by filename only to keep synced data small.</p>
+    </div>
+  );
+}
+
+// ── #11 Beat check-in (geo + time attendance) ────────────────────────────────────────
+interface CheckIn { id: string; type: "in" | "out"; at: string; place: string; gps: string | null }
+function BeatCheckIn() {
+  const [log, setLog] = useFeatureState<CheckIn[]>("field-attendance", []);
+  const [place, setPlace] = useState("");
+  const [busy, setBusy] = useState<"in" | "out" | null>(null);
+  const geoSupported = typeof navigator !== "undefined" && "geolocation" in navigator;
+
+  const last = log[0];
+  const isIn = last?.type === "in";
+
+  const punch = (type: "in" | "out") => {
+    if (!place.trim()) { toast.error("Add the beat / market you're at"); return; }
+    setBusy(type);
+    const commit = (gps: string | null) => {
+      setLog(prev => [{ id: crypto.randomUUID(), type, at: new Date().toISOString(), place: place.trim(), gps }, ...prev]);
+      setBusy(null);
+      toast.success(`Checked ${type === "in" ? "in" : "out"} at ${place.trim()}`);
+    };
+    if (!geoSupported) { commit(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => commit(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`),
+      () => { commit(null); toast.message("Punched without GPS — location declined"); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Beat Check-In</h3>
+        <p className="text-xs text-[var(--color-muted)]">Geo + time attendance for field reps. Punch in when you reach the beat and out at end-of-day — proof against ghost visits.</p>
+        <input value={place} onChange={e => setPlace(e.target.value)} placeholder="Beat / market (e.g. Sadar Bazaar)" className={INP} />
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => punch("in")} disabled={busy !== null || isIn}
+            className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium disabled:opacity-40">
+            <Clock size={14} /> {busy === "in" ? "Stamping…" : "Check in"}
+          </button>
+          <button onClick={() => punch("out")} disabled={busy !== null || !isIn}
+            className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2.5 text-sm font-medium hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <CheckCircle2 size={14} /> {busy === "out" ? "Stamping…" : "Check out"}
+          </button>
+        </div>
+        {!geoSupported && <p className="text-[10px] text-[var(--color-muted)]">GPS not available on this device — check-ins record with time only.</p>}
+      </div>
+
+      {log.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No check-ins yet today.</p>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {log.slice(0, 12).map(c => (
+            <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.type === "in" ? "bg-green-950/30 text-green-400" : "bg-red-950/30 text-red-400"}`}>{c.type === "in" ? "IN" : "OUT"}</span>
+              <span className="flex-1 truncate">{c.place}</span>
+              <span className="text-[10px] text-[var(--color-muted)] tabular-nums">{c.gps ?? "no GPS"}</span>
+              <span className="text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(c.at), "d MMM, h:mm a")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #12 Order booking quick form (offline queue) ─────────────────────────────────────
+function OrderBooking() {
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [lines, setLines] = useState<BillLine[]>([]);
+  const [customer, setCustomer] = useState("");
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState("1");
+  const [price, setPrice] = useState("");
+
+  const total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+
+  const add = () => {
+    const p = parseFloat(price);
+    if (!name.trim() || isNaN(p)) { toast.error("Add an item name and rate"); return; }
+    setLines(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), qty: Math.max(1, parseInt(qty) || 1), price: p }]);
+    setName(""); setQty("1"); setPrice("");
+  };
+
+  const book = () => {
+    if (!customer.trim()) { toast.error("Add the customer / shop"); return; }
+    if (lines.length === 0) { toast.error("Add at least one line item"); return; }
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "sale",
+      label: `Order · ${customer.trim()} (${lines.length} item${lines.length === 1 ? "" : "s"})`,
+      amount: Math.round(total), at: new Date().toISOString(), synced: false,
+      meta: lines.map(l => `${l.qty}×${l.name}`).join(", "),
+    }, ...prev]);
+    setLines([]); setCustomer("");
+    toast.success("Order queued — syncs to the books on reconnect");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShoppingCart size={14} className="text-[var(--color-primary)]" /> Order Booking</h3>
+        <p className="text-xs text-[var(--color-muted)]">Take a shop's order on the beat — no signal needed. The order lands in the offline queue and posts when you're back online.</p>
+        <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / shop *" className={INP} />
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-6">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Atta 10kg" className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Qty</label>
+            <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate ₹</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="350" className={INP} />
+          </div>
+          <button onClick={add} className="col-span-2 flex items-center justify-center gap-1 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-2 py-2 text-sm font-medium">
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </div>
+
+      {lines.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {lines.map(l => (
+                <tr key={l.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{l.name}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{l.qty} × {formatCurrency(l.price)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-right font-semibold">{formatCurrency(l.qty * l.price)}</td>
+                  <td className="px-4 py-2.5 text-right w-10">
+                    <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t border-[var(--color-border)]">
+              <tr>
+                <td colSpan={2} className="px-4 py-3 font-semibold">Order value</td>
+                <td className="px-4 py-3 tabular-nums text-right text-lg font-bold text-[var(--color-primary)]">{formatCurrency(total)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <button onClick={book} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+        <CheckCircle2 size={14} /> Book order to queue
+      </button>
+    </div>
+  );
+}
+
+// ── #13 Beat outstanding (from live store invoices) ──────────────────────────────────
+function BeatOutstanding() {
+  const { store } = useApp();
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [q, setQ] = useState("");
+
+  const dues = useMemo(() => {
+    return store.invoices
+      .filter(inv => inv.status !== "paid")
+      .filter(inv => inv.customer.toLowerCase().includes(q.trim().toLowerCase()))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [store.invoices, q]);
+
+  const totalDue = dues.reduce((s, inv) => s + inv.amount, 0);
+
+  const markCollected = (customer: string, amount: number, invNo?: string) => {
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "collection",
+      label: `Collection · ${customer}`, amount: Math.round(amount),
+      at: new Date().toISOString(), synced: false,
+      meta: invNo ? `Against invoice ${invNo}` : "Beat collection",
+    }, ...prev]);
+    toast.success(`${formatCurrency(amount)} from ${customer} queued`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ReceiptIcon size={14} className="text-[var(--color-primary)]" /> Beat Outstanding</h3>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">
+            {dues.length} due · {formatCurrency(totalDue)}
+          </span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Unpaid invoices from your books, oldest-due first — collect on the beat and queue each receipt offline.</p>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter by customer" className={INP} />
+      </div>
+
+      {dues.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No outstanding invoices to collect. Dues are pulled live from your invoice book.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Customer", "Invoice", "Due", "Status", "Amount", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {dues.map(inv => (
+                <tr key={inv.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-xs font-medium">{inv.customer}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{inv.invoiceNumber ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(inv.dueDate), "d MMM")}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] font-semibold ${inv.status === "overdue" ? "text-red-400" : "text-yellow-400"}`}>{inv.status === "overdue" ? "Overdue" : "Pending"}</span>
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums text-xs font-semibold">{formatCurrency(inv.amount)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button onClick={() => markCollected(inv.customer, inv.amount, inv.invoiceNumber)}
+                      className="text-[10px] bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded hover:bg-[var(--color-primary)]/25 whitespace-nowrap">
+                      Collect
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Reads the shared invoice book; collections you mark queue offline and post against the customer's ledger on reconnect.</p>
+    </div>
+  );
+}
+
+// ── #14 On-the-go expense logger ─────────────────────────────────────────────────────
+interface FieldExp { id: string; category: string; amount: number; note: string; at: string }
+const EXP_CATS = ["Fuel", "Toll / Parking", "Food", "Loading", "Phone / Data", "Other"] as const;
+function FieldExpense() {
+  const [exps, setExps] = useFeatureState<FieldExp[]>("field-expenses", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [category, setCategory] = useState<string>(EXP_CATS[0]);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+
+  const todayStr = new Date().toDateString();
+  const todayTotal = exps.filter(e => new Date(e.at).toDateString() === todayStr).reduce((s, e) => s + e.amount, 0);
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) { toast.error("Add a positive amount"); return; }
+    const e: FieldExp = { id: crypto.randomUUID(), category, amount: Math.round(amt), note: note.trim(), at: new Date().toISOString() };
+    setExps(prev => [e, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "receipt", label: `Expense · ${category}`, amount: e.amount, at: e.at, synced: false, meta: note.trim() || undefined }, ...prev]);
+    setAmount(""); setNote("");
+    toast.success("Expense logged");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> On-the-Go Expense</h3>
+          <span className="text-[10px] text-[var(--color-muted)]">Today: <span className="text-[var(--color-text)] font-semibold tabular-nums">{formatCurrency(todayTotal)}</span></span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Log travel and field spends as they happen — they queue for reimbursement on reconnect.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
+              {EXP_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="200" className={INP} />
+          </div>
+        </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+        <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <Plus size={14} /> Log expense
+        </button>
+      </div>
+
+      {exps.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {exps.slice(0, 15).map(e => (
+            <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="text-xs font-medium w-28 shrink-0">{e.category}</span>
+              <span className="flex-1 text-xs text-[var(--color-muted)] truncate">{e.note || format(new Date(e.at), "d MMM, h:mm a")}</span>
+              <span className="tabular-nums text-sm font-semibold">{formatCurrency(e.amount)}</span>
+              <button onClick={() => setExps(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #15 Stock request from the field ─────────────────────────────────────────────────
+interface StockLine { id: string; item: string; qty: number; urgent: boolean }
+function StockRequest() {
+  const [lines, setLines] = useFeatureState<StockLine[]>("field-stock-req", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [item, setItem] = useState("");
+  const [qty, setQty] = useState("1");
+  const [urgent, setUrgent] = useState(false);
+
+  const add = () => {
+    if (!item.trim()) { toast.error("Add an item to request"); return; }
+    setLines(prev => [{ id: crypto.randomUUID(), item: item.trim(), qty: Math.max(1, parseInt(qty) || 1), urgent }, ...prev]);
+    setItem(""); setQty("1"); setUrgent(false);
+  };
+
+  const send = () => {
+    if (lines.length === 0) { toast.error("Add items first"); return; }
+    setQueue(prev => [{
+      id: crypto.randomUUID(), kind: "visit", label: `Stock request (${lines.length} item${lines.length === 1 ? "" : "s"})`,
+      amount: 0, at: new Date().toISOString(), synced: false,
+      meta: lines.map(l => `${l.qty}×${l.item}${l.urgent ? " (urgent)" : ""}`).join(", "),
+    }, ...prev]);
+    setLines([]);
+    toast.success("Stock request sent to the warehouse queue");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PackagePlus size={14} className="text-[var(--color-primary)]" /> Stock Request</h3>
+        <p className="text-xs text-[var(--color-muted)]">Out of stock on the van or counter? Raise a replenishment request — it queues for the warehouse.</p>
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-6">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={item} onChange={e => setItem(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Sugar 1kg" className={INP} />
+          </div>
+          <div className="col-span-3">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Qty</label>
+            <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className={INP} />
+          </div>
+          <label className="col-span-3 flex items-center gap-1.5 text-xs text-[var(--color-muted)] pb-2.5 cursor-pointer">
+            <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} className="accent-[var(--color-primary)]" /> Urgent
+          </label>
+        </div>
+        <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+          <Plus size={14} /> Add to request
+        </button>
+      </div>
+
+      {lines.length > 0 && (
+        <>
+          <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+            {lines.map(l => (
+              <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <span className="flex-1 font-medium">{l.item}</span>
+                {l.urgent && <span className="text-[10px] font-semibold text-red-400 bg-red-950/30 px-2 py-0.5 rounded-full">Urgent</span>}
+                <span className="tabular-nums text-[var(--color-muted)]">×{l.qty}</span>
+                <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+          <button onClick={send} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <CheckCircle2 size={14} /> Send request
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #16 Customer signature capture (canvas) ──────────────────────────────────────────
+interface SignedDoc { id: string; customer: string; at: string; image: string }
+function SignatureCapture() {
+  const [docs, setDocs] = useFeatureState<SignedDoc[]>("field-signatures", []);
+  const [customer, setCustomer] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawing = useRef(false);
+  const hasInk = useRef(false);
+  const canvasSupported = typeof document !== "undefined" && !!document.createElement("canvas").getContext;
+
+  const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+  };
+  const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    drawing.current = true; hasInk.current = true;
+    const { x, y } = pos(e);
+    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  };
+  const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = pos(e);
+    ctx.lineTo(x, y); ctx.stroke();
+  };
+  const stop = () => { drawing.current = false; };
+  const clear = () => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (c && ctx) ctx.clearRect(0, 0, c.width, c.height);
+    hasInk.current = false;
+  };
+
+  const save = () => {
+    if (!customer.trim()) { toast.error("Add the customer name"); return; }
+    if (!hasInk.current) { toast.error("Capture a signature first"); return; }
+    const c = canvasRef.current;
+    if (!c) return;
+    const doc: SignedDoc = { id: crypto.randomUUID(), customer: customer.trim(), at: new Date().toISOString(), image: c.toDataURL("image/png") };
+    setDocs(prev => [doc, ...prev]);
+    clear(); setCustomer("");
+    toast.success("Signature captured");
+  };
+
+  if (!canvasSupported) {
+    return (
+      <div className={`${CARD} p-5 max-w-xl`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PenLine size={14} className="text-[var(--color-primary)]" /> Signature Capture</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-2">This device's browser doesn't support canvas drawing, so on-screen signing isn't available here. Use a touch device, or capture a photo of a paper signature in Receipt Capture instead.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PenLine size={14} className="text-[var(--color-primary)]" /> Signature Capture</h3>
+        <p className="text-xs text-[var(--color-muted)]">Customer signs on screen to acknowledge a credit sale or delivery — proof against later disputes.</p>
+        <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer name" className={INP} />
+        <canvas
+          ref={canvasRef} width={560} height={200}
+          onPointerDown={start} onPointerMove={draw} onPointerUp={stop} onPointerLeave={stop}
+          className="w-full h-[160px] rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] touch-none cursor-crosshair"
+        />
+        <div className="flex items-center gap-2">
+          <button onClick={save} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
+            <CheckCircle2 size={14} /> Save signature
+          </button>
+          <button onClick={clear} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)]">
+            <Eraser size={12} /> Clear
+          </button>
+        </div>
+      </div>
+
+      {docs.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {docs.map(d => (
+            <div key={d.id} className={`${CARD} p-2`}>
+              <img src={d.image} alt={`${d.customer} signature`} className="w-full h-20 object-contain rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] mb-2" />
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">{d.customer}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{format(new Date(d.at), "d MMM, h:mm a")}</p>
+                </div>
+                <button onClick={() => setDocs(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #17 Proof of delivery (photo + note + geo) ───────────────────────────────────────
+interface Pod { id: string; customer: string; note: string; at: string; gps: string | null; image: string | null }
+function ProofOfDelivery() {
+  const [pods, setPods] = useFeatureState<Pod[]>("field-pod", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [customer, setCustomer] = useState("");
+  const [note, setNote] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [coords, setCoords] = useState<string | null>(null);
+  const geoSupported = typeof navigator !== "undefined" && "geolocation" in navigator;
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo — stored by reference to keep data light"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const stamp = () => {
+    if (!geoSupported) { toast.error("This device doesn't expose location"); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => { setCoords(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`); toast.success("Location stamped"); },
+      err => toast.error(`Location unavailable: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const save = () => {
+    if (!customer.trim()) { toast.error("Add the customer / delivery point"); return; }
+    const p: Pod = { id: crypto.randomUUID(), customer: customer.trim(), note: note.trim(), at: new Date().toISOString(), gps: coords, image };
+    setPods(prev => [p, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Delivered · ${p.customer}`, amount: 0, at: p.at, synced: false, meta: coords ? `POD · GPS ${coords}` : "POD" }, ...prev]);
+    setCustomer(""); setNote(""); setImage(null); setCoords(null);
+    toast.success("Proof of delivery captured");
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PackageCheck size={14} className="text-[var(--color-primary)]" /> Proof of Delivery</h3>
+        <p className="text-xs text-[var(--color-muted)]">Capture a delivery photo, note and optional GPS at the doorstep — releases the invoice and settles delivery disputes.</p>
+        <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / delivery point *" className={INP} />
+        <label className="flex items-center justify-center gap-2 border border-dashed border-[var(--color-border)] rounded-lg py-5 cursor-pointer hover:border-[var(--color-primary)]/40 text-sm text-[var(--color-muted)]">
+          <Camera size={16} /> {image ? "Re-capture photo" : "Capture delivery photo"}
+          <input type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
+        </label>
+        {image && <img src={image} alt="delivery proof" className="w-20 h-20 object-cover rounded-lg border border-[var(--color-border)]" />}
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (received by, condition)" className={INP} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={stamp} disabled={!geoSupported}
+            className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40 disabled:opacity-40">
+            <MapPin size={12} /> {coords ? "Re-stamp location" : "Add GPS stamp"}
+          </button>
+          {coords && <span className="text-[10px] text-green-400 tabular-nums">{coords}</span>}
+          {!geoSupported && <span className="text-[10px] text-[var(--color-muted)]">GPS not available</span>}
+        </div>
+        <button onClick={save} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <CheckCircle2 size={14} /> Save proof of delivery
+        </button>
+      </div>
+
+      {pods.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {pods.map(p => (
+            <div key={p.id} className={`${CARD} p-2`}>
+              {p.image
+                ? <img src={p.image} alt={p.customer} className="w-full h-24 object-cover rounded-md border border-[var(--color-border)] mb-2" />
+                : <div className="w-full h-24 rounded-md border border-[var(--color-border)] flex items-center justify-center text-[var(--color-muted)] mb-2"><PackageCheck size={20} /></div>}
+              <p className="text-xs font-medium truncate">{p.customer}</p>
+              <p className="text-[10px] text-[var(--color-muted)] truncate">{p.gps ? `GPS ${p.gps}` : (p.note || format(new Date(p.at), "d MMM"))}</p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(p.at), "d MMM")}</span>
+                <button onClick={() => setPods(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #18 Daily target tracker for field reps ──────────────────────────────────────────
+function DailyTarget() {
+  const [salesTarget, setSalesTarget] = useFeatureState<number>("field-target-sales", 25000);
+  const [visitTarget, setVisitTarget] = useFeatureState<number>("field-target-visits", 15);
+  const [queue] = useFeatureState<QueueItem[]>("field-queue", []);
+
+  const todayStr = new Date().toDateString();
+  const today = queue.filter(q => new Date(q.at).toDateString() === todayStr);
+  const salesDone = today.filter(q => q.kind === "sale" || q.kind === "collection" || q.kind === "daysheet").reduce((s, q) => s + q.amount, 0);
+  const visitsDone = today.filter(q => q.kind === "visit").length;
+
+  const salesPct = salesTarget > 0 ? Math.min(100, Math.round((salesDone / salesTarget) * 100)) : 0;
+  const visitPct = visitTarget > 0 ? Math.min(100, Math.round((visitsDone / visitTarget) * 100)) : 0;
+
+  const bar = (pct: number) => pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-[var(--color-primary)]" : "bg-yellow-500";
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Daily Target</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set today's beat goals; progress is read live from what you've captured in the offline queue.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sales target (₹)</label>
+            <input type="number" value={salesTarget} onChange={e => setSalesTarget(parseInt(e.target.value) || 0)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Visits target</label>
+            <input type="number" value={visitTarget} onChange={e => setVisitTarget(parseInt(e.target.value) || 0)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5 space-y-4`}>
+        <div>
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-[var(--color-muted)]">Sales &amp; collections</span>
+            <span className="tabular-nums font-semibold">{formatCurrency(salesDone)} / {formatCurrency(salesTarget)} · {salesPct}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${bar(salesPct)}`} style={{ width: `${salesPct}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-[var(--color-muted)]">Visits logged</span>
+            <span className="tabular-nums font-semibold">{visitsDone} / {visitTarget} · {visitPct}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${bar(visitPct)}`} style={{ width: `${visitPct}%` }} />
+          </div>
+        </div>
+        {salesPct >= 100 && visitPct >= 100 && (
+          <p className="text-xs text-green-400 font-medium flex items-center gap-1.5"><CheckCircle2 size={13} /> Both targets hit for today — strong beat!</p>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Targets are stored and synced across your devices; progress recalculates as you capture sales, collections and visits in the field.</p>
     </div>
   );
 }

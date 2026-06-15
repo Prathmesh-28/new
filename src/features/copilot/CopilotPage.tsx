@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { computeFinancialSnapshot } from "@/lib/finance";
+import { computeFinancialSnapshot, type FinancialSnapshot } from "@/lib/finance";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import {
   Bot, Sparkles, ListChecks, Send, MessageSquareText, Target, Bell,
   ShieldCheck, ToggleRight, ScrollText, CalendarRange, ArrowRight, Info,
   TrendingDown, AlertTriangle, CheckCircle2, Plus, Search, Wand2,
+  ClipboardCheck, Calculator, Wallet, CalendarClock, ShieldAlert,
+  Scissors, Gauge, Presentation, Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -18,7 +20,9 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 type TabId =
   | "overview" | "brief" | "actions" | "launcher" | "qa" | "goal"
-  | "attention" | "guardrails" | "autopilot" | "audit" | "review";
+  | "attention" | "guardrails" | "autopilot" | "audit" | "review"
+  | "close" | "explain" | "prioritize" | "compliance-digest" | "risks"
+  | "savings" | "targets" | "eod";
 
 const TABS = [
   ["overview", "Overview", Bot],
@@ -27,6 +31,14 @@ const TABS = [
   ["launcher", "Quick-Action Launcher", Send],
   ["qa", "Ask the Copilot", MessageSquareText],
   ["goal", "Runway Goal Planner", Target],
+  ["close", "Month-End Close", ClipboardCheck],
+  ["explain", "Explain a Number", Calculator],
+  ["prioritize", "Payment Prioritizer", Wallet],
+  ["compliance-digest", "Due This Week", CalendarClock],
+  ["risks", "Top Risks", ShieldAlert],
+  ["savings", "Savings Finder", Scissors],
+  ["targets", "KPI Targets", Gauge],
+  ["eod", "End-of-Day Brief", Presentation],
   ["attention", "Attention Feed", Bell],
   ["guardrails", "Guardrails & Limits", ShieldCheck],
   ["autopilot", "Autopilot Toggles", ToggleRight],
@@ -122,6 +134,14 @@ export default function CopilotPage() {
       {tab === "launcher" && <QuickActionLauncher navigate={navigate} />}
       {tab === "qa" && <CopilotQA signals={signals} />}
       {tab === "goal" && <RunwayGoalPlanner signals={signals} navigate={navigate} />}
+      {tab === "close" && <MonthEndClose snap={snap} navigate={navigate} />}
+      {tab === "explain" && <ExplainNumber snap={snap} signals={signals} navigate={navigate} />}
+      {tab === "prioritize" && <PaymentPrioritizer signals={signals} navigate={navigate} />}
+      {tab === "compliance-digest" && <ComplianceDigest snap={snap} navigate={navigate} />}
+      {tab === "risks" && <TopRisks snap={snap} signals={signals} navigate={navigate} />}
+      {tab === "savings" && <SavingsFinder navigate={navigate} />}
+      {tab === "targets" && <KpiTargets snap={snap} signals={signals} />}
+      {tab === "eod" && <EndOfDayBrief snap={snap} signals={signals} />}
       {tab === "attention" && <AttentionFeed signals={signals} navigate={navigate} />}
       {tab === "guardrails" && <GuardrailsConfig />}
       {tab === "autopilot" && <AutopilotToggles />}
@@ -711,6 +731,609 @@ function WeeklyReview({ signals }: { signals: Signals }) {
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-4">An auto-generated wins / watch-outs summary built from this week's numbers. Paste it into your team update or board notes.</p>
         <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{review}</pre>
+      </div>
+    </div>
+  );
+}
+
+// ── Month-End Close Checklist (auto-status from store) ─────────────────────────
+// A pre-close checklist whose status is read from your live data where the data
+// can answer it, and manually tickable where only you can. Assistive only — it
+// tells you what looks done vs. open; it doesn't post or file anything.
+function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: Nav }) {
+  const { store } = useApp();
+  const monthLabel = format(new Date(), "MMMM yyyy");
+
+  const auto = useMemo(() => {
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const unflagged = store.transactions.filter(t => t.date.startsWith(monthKey) && (t.counterparty || "").trim() === "").length;
+    const draftPo = store.procurement.filter(p => p.status === "draft").length;
+    const overdueObl = store.obligations.filter(o => o.dueDate < new Date().toISOString().split("T")[0]).length;
+    const items: { id: string; label: string; detail: string; status: "done" | "open" | "review"; path?: string }[] = [
+      {
+        id: "txns", label: "All transactions categorised",
+        detail: unflagged === 0 ? "Every transaction this month has a counterparty." : `${unflagged} transaction(s) this month have no counterparty — label them.`,
+        status: unflagged === 0 ? "done" : "review", path: "/transactions",
+      },
+      {
+        id: "ar", label: "Receivables reviewed",
+        detail: snap.overdueReceivable === 0 ? "No overdue invoices outstanding." : `${formatCurrency(Math.round(snap.overdueReceivable))} overdue — chase or write-off before close.`,
+        status: snap.overdueReceivable === 0 ? "done" : "review", path: "/receivables",
+      },
+      {
+        id: "ap", label: "Payables / POs settled",
+        detail: draftPo === 0 ? "No draft purchase orders pending." : `${draftPo} draft PO(s) awaiting approval.`,
+        status: draftPo === 0 ? "done" : "open", path: "/spend",
+      },
+      {
+        id: "obl", label: "Obligations current",
+        detail: overdueObl === 0 ? "No overdue obligations on the calendar." : `${overdueObl} obligation(s) past due.`,
+        status: overdueObl === 0 ? "done" : "review", path: "/compliance",
+      },
+      {
+        id: "gst", label: "GST position computed",
+        detail: `Net GST payable this month ≈ ${formatCurrency(snap.gstThisMonth.netPayable)} (ITC ${formatCurrency(snap.gstThisMonth.inputCredit)}).`,
+        status: "review", path: "/tax",
+      },
+    ];
+    return items;
+  }, [store, snap]);
+
+  // Manual sign-offs the data can't verify (durable).
+  const MANUAL = [
+    { id: "bank", label: "Bank statements reconciled" },
+    { id: "depr", label: "Depreciation & accruals posted" },
+    { id: "payroll", label: "Payroll & statutory dues run" },
+    { id: "review", label: "Owner / CA sign-off on numbers" },
+  ];
+  const [checked, setChecked] = useFeatureState<string[]>("cop-close-checklist", []);
+  const toggle = (id: string) => setChecked(checked.includes(id) ? checked.filter(x => x !== id) : [...checked, id]);
+
+  const autoDone = auto.filter(a => a.status === "done").length;
+  const manualDone = MANUAL.filter(m => checked.includes(m.id)).length;
+  const total = auto.length + MANUAL.length;
+  const done = autoDone + manualDone;
+  const pct = Math.round((done / total) * 100);
+
+  const statusDot: Record<string, string> = { done: "text-green-400", open: "text-[var(--color-muted)]", review: "text-yellow-400" };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Month-End Close · {monthLabel}</h2>
+          <span className="text-[10px] text-[var(--color-muted)]">{done}/{total} steps · {pct}%</span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Status is auto-read from your data where possible and tickable where only you can confirm. This is a checklist, not an automation — nothing closes the books for you.</p>
+        <div className="h-1.5 w-full rounded-full bg-[var(--color-border)] overflow-hidden">
+          <div className="h-full bg-[var(--color-primary)] transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {auto.map(a => (
+          <div key={a.id} className="flex items-start gap-3 p-4">
+            {a.status === "done"
+              ? <CheckCircle2 size={15} className="text-green-400 shrink-0 mt-0.5" />
+              : <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${statusDot[a.status]}`} />}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{a.label} <span className="text-[10px] text-[var(--color-muted)] font-normal">· auto</span></p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{a.detail}</p>
+            </div>
+            {a.path && a.status !== "done" && (
+              <button onClick={() => navigate(a.path!)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0 mt-0.5">Open <ArrowRight size={11} /></button>
+            )}
+          </div>
+        ))}
+        {MANUAL.map(m => {
+          const isDone = checked.includes(m.id);
+          return (
+            <button key={m.id} onClick={() => toggle(m.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-[var(--color-accent)]/40 transition-colors">
+              {isDone ? <CheckCircle2 size={15} className="text-green-400 shrink-0 mt-0.5" /> : <Circle size={15} className="text-[var(--color-muted)] shrink-0 mt-0.5" />}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{m.label} <span className="text-[10px] text-[var(--color-muted)] font-normal no-underline">· manual sign-off</span></p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Explain a Number (drill-down helper) ──────────────────────────────────────
+// Pick a headline metric and the copilot shows how it was built from your data —
+// the inputs, the formula in words, and where to dig further. Read-only.
+function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  type Metric = { id: string; label: string; value: string; formula: string; rows: { k: string; v: string }[]; path: string };
+  const metrics = useMemo<Metric[]>(() => [
+    {
+      id: "runway", label: "Runway", value: runwayLabel(signals.runwayDays), path: "/forecast",
+      formula: "Cash on hand ÷ daily net burn (3-month average).",
+      rows: [
+        { k: "Cash on hand", v: formatCurrency(Math.round(signals.cash)) },
+        { k: "Avg monthly revenue (3mo)", v: formatCurrency(Math.round(snap.monthlyRevenue)) },
+        { k: "Avg monthly expense (3mo)", v: formatCurrency(Math.round(snap.monthlyExpense)) },
+        { k: "Monthly net", v: `${signals.monthlyNet >= 0 ? "+" : ""}${formatCurrency(Math.round(signals.monthlyNet))}` },
+        { k: "Daily burn", v: signals.monthlyNet < 0 ? formatCurrency(Math.round(-signals.monthlyNet / 30)) : "—" },
+      ],
+    },
+    {
+      id: "margin", label: "Gross margin", value: snap.grossMarginPct === null ? "n/a" : `${snap.grossMarginPct.toFixed(0)}%`, path: "/analytics",
+      formula: "(6-month revenue − 6-month expense) ÷ 6-month revenue.",
+      rows: [
+        { k: "Revenue (6mo)", v: formatCurrency(Math.round(snap.months.reduce((s, m) => s + m.revenue, 0))) },
+        { k: "Expense (6mo)", v: formatCurrency(Math.round(snap.months.reduce((s, m) => s + m.expense, 0))) },
+      ],
+    },
+    {
+      id: "dscr", label: "Debt coverage (DSCR)", value: snap.dscr === null ? "no debt" : `${snap.dscr.toFixed(2)}x`, path: "/debt",
+      formula: "(Monthly net + monthly debt service) ÷ monthly debt service.",
+      rows: [
+        { k: "Monthly net", v: `${signals.monthlyNet >= 0 ? "+" : ""}${formatCurrency(Math.round(signals.monthlyNet))}` },
+        { k: "Monthly debt service", v: formatCurrency(Math.round(snap.monthlyDebtService)) },
+        { k: "Lender bar", v: "≥ 1.25x" },
+      ],
+    },
+    {
+      id: "ccc", label: "Cash conversion cycle", value: `${snap.cccDays} days`, path: "/working-capital",
+      formula: "DSO + DIO − DPO (days cash is tied up in the operating cycle).",
+      rows: [
+        { k: "Days sales outstanding (DSO)", v: `${snap.dsoDays} d` },
+        { k: "Days inventory outstanding (DIO)", v: `${snap.dioDays} d` },
+        { k: "Days payables outstanding (DPO)", v: `${snap.dpoDays} d` },
+        { k: "Cash tied up", v: formatCurrency(Math.round(snap.workingCapitalGap)) },
+      ],
+    },
+    {
+      id: "health", label: "Health score", value: `${Math.round(signals.healthScore)} · ${signals.healthGrade}`, path: "/health",
+      formula: "Weighted average of seven driver scores (liquidity 25%, profitability 20%, …).",
+      rows: snap.health.components.map(c => ({ k: `${c.label} (${c.weight}%)`, v: `${Math.round(c.score)}/100` })),
+    },
+  ], [snap, signals]);
+
+  const [sel, setSel] = useState<string>("runway");
+  const m = metrics.find(x => x.id === sel) ?? metrics[0];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Explain a Number</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a headline figure and see exactly how it was computed from your data — the inputs, the formula in plain words, and where to dig in. Nothing here changes a value.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {metrics.map(x => (
+            <button key={x.id} onClick={() => setSel(x.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${sel === x.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+          <p className="text-sm text-[var(--color-muted)]">{m.label}</p>
+          <p className="text-2xl font-bold tabular-nums text-[var(--color-text)]">{m.value}</p>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mb-4 italic">{m.formula}</p>
+        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
+          {m.rows.map(r => (
+            <div key={r.k} className="flex items-center justify-between py-2 text-sm">
+              <span className="text-[var(--color-muted)]">{r.k}</span>
+              <span className="tabular-nums font-medium">{r.v}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => navigate(m.path)} className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
+          See the underlying detail <ArrowRight size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Payment Prioritizer (which to pay first within available cash) ─────────────
+// Ranks upcoming obligations and approved POs by urgency, then walks down the
+// list spending only the cash you have — a suggestion to triage, never a payment.
+function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const { store } = useApp();
+  const [reserve, setReserve] = useFeatureState<number>("cop-pay-reserve", 0);
+
+  const ranked = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const horizon = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+    // Urgency weight per obligation type — statutory first, then payroll, loans, other.
+    const typeRank: Record<string, number> = { tax: 0, payroll: 1, loan: 2, other: 3 };
+    type Bill = { id: string; name: string; amount: number; dueDate: string; kind: string; rank: number };
+    const bills: Bill[] = [];
+    store.obligations
+      .filter(o => o.dueDate <= horizon)
+      .forEach(o => bills.push({ id: `obl-${o.id}`, name: o.name, amount: o.amount, dueDate: o.dueDate, kind: o.type, rank: typeRank[o.type] ?? 3 }));
+    store.procurement
+      .filter(p => p.status === "approved" || p.status === "ordered")
+      .slice(0, 8)
+      .forEach(p => bills.push({ id: `po-${p.id}`, name: `${p.supplierName} (PO)`, amount: p.totalValue, dueDate: p.expectedDate, kind: "supplier", rank: 4 }));
+    // Sort: overdue first, then by type urgency, then by due date.
+    return bills.sort((a, b) => {
+      const ao = a.dueDate < today ? 0 : 1, bo = b.dueDate < today ? 0 : 1;
+      return ao - bo || a.rank - b.rank || a.dueDate.localeCompare(b.dueDate);
+    });
+  }, [store]);
+
+  const spendable = Math.max(0, signals.cash - reserve);
+  let running = 0;
+  const plan = ranked.map(b => {
+    const before = running;
+    running += b.amount;
+    const covered = before + b.amount <= spendable;
+    const partial = !covered && before < spendable;
+    return { ...b, covered, partial, payNow: covered ? b.amount : partial ? spendable - before : 0 };
+  });
+  const totalDue = ranked.reduce((s, b) => s + b.amount, 0);
+  const shortfall = Math.max(0, totalDue - spendable);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Payment Prioritizer</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When cash is tight, this ranks what's due in the next 30 days — statutory dues and payroll first — and walks down the list spending only the cash you have. It's triage advice; it never releases a payment.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Cash on hand", value: formatAmount(signals.cash), color: "text-[var(--color-text)]" },
+            { label: "Spendable now", value: formatAmount(spendable), color: "text-green-400" },
+            { label: "Due (30 days)", value: formatAmount(totalDue), color: "text-yellow-400" },
+            { label: "Shortfall", value: formatAmount(shortfall), color: shortfall > 0 ? "text-red-400" : "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+        <label className="text-xs text-[var(--color-muted)] block mt-4 mb-1">Keep a cash reserve untouched (₹)</label>
+        <input type="number" value={reserve} onChange={e => setReserve(Math.max(0, Number(e.target.value) || 0))} className={INP} />
+      </div>
+
+      {plan.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">Nothing due in the next 30 days</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">No obligations or approved POs to prioritise.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {plan.map((b, i) => (
+            <div key={b.id} className="flex items-center gap-3 p-4">
+              <span className="text-xs font-bold text-[var(--color-muted)] w-5 shrink-0">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{b.name}</p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                  {formatCurrency(Math.round(b.amount))} · {b.kind} · due {format(new Date(b.dueDate), "d MMM")}
+                  {b.dueDate < new Date().toISOString().split("T")[0] && <span className="text-red-400"> · overdue</span>}
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${b.covered ? "text-green-400 bg-green-950/30 border-green-800/30" : b.partial ? "text-yellow-400 bg-yellow-950/30 border-yellow-800/30" : "text-red-400 bg-red-950/30 border-red-800/30"}`}>
+                {b.covered ? "PAY NOW" : b.partial ? `PARTIAL ${formatCurrency(Math.round(b.payNow))}` : "DEFER"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {shortfall > 0 && (
+        <button onClick={() => navigate("/credit")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
+          {formatCurrency(Math.round(shortfall))} short — explore working capital <ArrowRight size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Compliance / Tax Due-This-Week digest ─────────────────────────────────────
+// Pulls the advance-tax schedule and obligation calendar into one "what's due
+// soon" list. Surfaces deadlines; filing still happens on the relevant page.
+function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigate: Nav }) {
+  const { store } = useApp();
+  const [horizon, setHorizon] = useState(7);
+
+  const items = useMemo(() => {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const end = new Date(now.getTime() + horizon * 86400000).toISOString().split("T")[0];
+    const out: { id: string; name: string; amount: number; dueDate: string; kind: string; overdue: boolean }[] = [];
+    store.obligations.forEach(o => {
+      if (o.dueDate <= end) out.push({ id: `o-${o.id}`, name: o.name, amount: o.amount, dueDate: o.dueDate, kind: o.type, overdue: o.dueDate < today });
+    });
+    snap.advanceTax.filter(a => a.dueDate >= today && a.dueDate <= end).forEach((a, i) => {
+      out.push({ id: `at-${i}`, name: `Advance tax · ${a.label.split("·")[0].trim()}`, amount: a.installment, dueDate: a.dueDate, kind: "tax", overdue: false });
+    });
+    return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  }, [store.obligations, snap.advanceTax, horizon]);
+
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  const copy = () => {
+    const txt = `Due in the next ${horizon} days (total ${formatCurrency(Math.round(total))}):\n` +
+      items.map(i => `• ${format(new Date(i.dueDate), "d MMM")} — ${i.name}: ${formatCurrency(Math.round(i.amount))}${i.overdue ? " (OVERDUE)" : ""}`).join("\n");
+    navigator.clipboard?.writeText(txt);
+    toast.success("Digest copied");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Due This Week</h2>
+          <div className="flex gap-1">
+            {[7, 14, 30].map(d => (
+              <button key={d} onClick={() => setHorizon(d)} className={`text-[10px] px-2 py-1 rounded border ${horizon === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{d}d</button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Tax, statutory and obligation deadlines landing in your chosen window, soonest first — plus the advance-tax installments from your schedule. It reminds you; the actual filing/payment happens on its own page.</p>
+        {items.length > 0 && <p className="text-sm font-semibold mt-3">Total due: <span className="tabular-nums">{formatCurrency(Math.round(total))}</span></p>}
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">Nothing due in the next {horizon} days</p>
+        </div>
+      ) : (
+        <>
+          <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+            {items.map(it => (
+              <div key={it.id} className="flex items-center gap-3 p-4">
+                <CalendarClock size={15} className={`shrink-0 ${it.overdue ? "text-red-400" : "text-[var(--color-primary)]"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{it.name}</p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{it.kind} · {format(new Date(it.dueDate), "EEE d MMM")}{it.overdue && <span className="text-red-400"> · overdue</span>}</p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(Math.round(it.amount))}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => navigate("/compliance")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Open compliance calendar <ArrowRight size={11} /></button>
+            <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Copy digest</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Top Risks summarizer (ranked from health components + signals) ─────────────
+// Distils the seven health drivers plus a couple of live signals into the three
+// things most worth your attention, each with a one-line "why" and a fix link.
+function TopRisks({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const risks = useMemo(() => {
+    type Risk = { id: string; title: string; why: string; weight: number; path: string; cta: string };
+    const out: Risk[] = [];
+    // Lowest-scoring health drivers are the structural risks.
+    snap.health.components
+      .filter(c => c.score < 60)
+      .forEach(c => out.push({ id: `h-${c.key}`, title: c.label, why: c.detail, weight: (60 - c.score) * c.weight, path: c.fixPath, cta: c.fixLabel }));
+    // Acute live signals layered on top.
+    if (signals.overdueReceivable > 0) out.push({ id: "od", title: "Overdue receivables", why: `${formatCurrency(Math.round(signals.overdueReceivable))} across ${signals.overdueInvoiceCount} invoice(s) past due.`, weight: signals.overdueReceivable / 1000, path: "/collections", cta: "Chase now" });
+    if (signals.runwayDays < 90 && signals.monthlyNet < 0) out.push({ id: "rw", title: "Short runway", why: `Only ${runwayLabel(signals.runwayDays)} of cash left at current burn.`, weight: 5000, path: "/forecast", cta: "Open forecast" });
+    if (snap.obligationsDue90 > signals.cash) out.push({ id: "obl", title: "Obligations exceed cash", why: `${formatCurrency(Math.round(snap.obligationsDue90))} due in 90 days vs ${formatCurrency(Math.round(signals.cash))} cash.`, weight: 4000, path: "/forecast", cta: "Stress-test" });
+    // Dedupe by title, keep heaviest, take top 3.
+    const seen = new Set<string>();
+    return out.sort((a, b) => b.weight - a.weight).filter(r => (seen.has(r.title) ? false : (seen.add(r.title), true))).slice(0, 3);
+  }, [snap, signals]);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-[var(--color-muted)] px-1">The three issues that most drag on your financial health right now, ranked by how much they cost your score and cash. A focusing aid — review before acting.</p>
+      {risks.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">No material risks flagged</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Every health driver is scoring above 60 and no acute signals are firing.</p>
+        </div>
+      ) : risks.map((r, i) => (
+        <div key={r.id} className={`${CARD} p-4 flex items-start gap-3`}>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)] text-sm font-bold">{i + 1}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium flex items-center gap-1.5"><ShieldAlert size={13} className="text-yellow-400" /> {r.title}</p>
+            <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{r.why}</p>
+          </div>
+          <button onClick={() => navigate(r.path)} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-medium whitespace-nowrap shrink-0">{r.cta} <ArrowRight size={11} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Smart-Savings Finder (recurring / duplicate spend) ─────────────────────────
+// Groups outflows by counterparty to surface recurring spend and likely
+// duplicates worth reviewing to cut. It flags candidates; you decide what to cut.
+function SavingsFinder({ navigate }: { navigate: Nav }) {
+  const { store } = useApp();
+  const [cut, setCut] = useFeatureState<string[]>("cop-savings-cut", []);
+
+  const findings = useMemo(() => {
+    const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const map = new Map<string, { name: string; total: number; count: number; recurring: boolean }>();
+    store.transactions
+      .filter(t => t.amount < 0 && t.category === "expense" && t.date >= cutoff)
+      .forEach(t => {
+        const name = (t.counterparty || t.description || "Unlabelled").trim();
+        const key = name.toLowerCase();
+        const e = map.get(key) ?? { name, total: 0, count: 0, recurring: false };
+        e.total += Math.abs(t.amount);
+        e.count += 1;
+        if (t.isRecurring) e.recurring = true;
+        map.set(key, e);
+      });
+    return [...map.values()]
+      .map(e => {
+        const monthly = e.total / 3;
+        const repeated = e.recurring || e.count >= 3;
+        const tag = e.recurring ? "recurring" : e.count >= 3 ? "frequent" : "one-off";
+        return { ...e, monthly, repeated, tag };
+      })
+      .filter(e => e.repeated && e.monthly >= 5000)
+      .sort((a, b) => b.monthly - a.monthly)
+      .slice(0, 12);
+  }, [store.transactions]);
+
+  const toggle = (name: string) => setCut(cut.includes(name) ? cut.filter(x => x !== name) : [...cut, name]);
+  const targetedMonthly = findings.filter(f => cut.includes(f.name)).reduce((s, f) => s + f.monthly, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Savings Finder</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Recurring and frequently-repeated outflows over the last 90 days, ranked by monthly cost — the usual place to find subscriptions and duplicate spend to trim. Tick what you'd cut to tally the saving; it doesn't cancel anything.</p>
+        {targetedMonthly > 0 && (
+          <p className="text-sm font-semibold text-green-400">Earmarked to cut: {formatCurrency(Math.round(targetedMonthly))}/mo <span className="text-[var(--color-muted)] font-normal">(≈ {formatCurrency(Math.round(targetedMonthly * 12))}/yr)</span></p>
+        )}
+      </div>
+
+      {findings.length === 0 ? (
+        <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
+          <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
+          <p className="text-sm font-medium">No recurring spend over ₹5,000/mo found</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Either spend is well spread or there isn't enough labelled history yet.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {findings.map(f => {
+            const isCut = cut.includes(f.name);
+            return (
+              <div key={f.name} className={`flex items-center gap-3 p-4 ${isCut ? "bg-green-950/10" : ""}`}>
+                <button onClick={() => toggle(f.name)} className="shrink-0">
+                  {isCut ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} className="text-[var(--color-muted)]" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{f.name}</p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{f.count} payment(s) in 90d · {f.tag}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold tabular-nums">{formatCurrency(Math.round(f.monthly))}/mo</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{formatCurrency(Math.round(f.total))} total</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Review full spend <ArrowRight size={11} /></button>
+    </div>
+  );
+}
+
+// ── KPI Target Nudge Tracker ───────────────────────────────────────────────────
+// Set targets for a few core KPIs; the tracker compares them to live values and
+// nudges with the gap and direction. Targets are durable; values are read-only.
+interface KpiTargetState { runwayMonths: number; marginPct: number; dsoDays: number; healthScore: number }
+const DEFAULT_KPI_TARGETS: KpiTargetState = { runwayMonths: 12, marginPct: 20, dsoDays: 45, healthScore: 70 };
+
+function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signals }) {
+  const [t, setT] = useFeatureState<KpiTargetState>("cop-kpi-targets", DEFAULT_KPI_TARGETS);
+  const set = <K extends keyof KpiTargetState>(k: K, v: number) => setT({ ...t, [k]: v });
+
+  const rows = useMemo(() => {
+    const runwayMonths = signals.runwayDays >= 999 ? 999 : signals.runwayDays / 30;
+    const margin = snap.grossMarginPct ?? 0;
+    return [
+      { id: "runwayMonths", label: "Runway (months)", target: t.runwayMonths, actual: runwayMonths, fmt: (n: number) => n >= 999 ? "∞" : n.toFixed(1), higherBetter: true },
+      { id: "marginPct", label: "Gross margin (%)", target: t.marginPct, actual: margin, fmt: (n: number) => `${n.toFixed(0)}%`, higherBetter: true },
+      { id: "dsoDays", label: "DSO (days)", target: t.dsoDays, actual: snap.dsoDays, fmt: (n: number) => `${Math.round(n)}d`, higherBetter: false },
+      { id: "healthScore", label: "Health score", target: t.healthScore, actual: signals.healthScore, fmt: (n: number) => `${Math.round(n)}`, higherBetter: true },
+    ] as const;
+  }, [t, snap, signals]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> KPI Targets</h2>
+        <p className="text-xs text-[var(--color-muted)]">Set a target for each core KPI; the tracker compares it to the live value and nudges you on the gap. Targets are saved with your workspace — the actuals are read straight from your data.</p>
+      </div>
+
+      <div className="space-y-3">
+        {rows.map(r => {
+          const met = r.higherBetter ? r.actual >= r.target : r.actual <= r.target;
+          const gap = r.higherBetter ? r.target - r.actual : r.actual - r.target;
+          const pct = r.higherBetter
+            ? Math.min(100, r.target > 0 ? (r.actual / r.target) * 100 : 100)
+            : Math.min(100, r.actual > 0 ? (r.target / r.actual) * 100 : 100);
+          return (
+            <div key={r.id} className={`${CARD} p-4`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    {met ? <CheckCircle2 size={13} className="text-green-400" /> : <AlertTriangle size={13} className="text-yellow-400" />} {r.label}
+                  </p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                    Now <strong className="text-[var(--color-text)]">{r.fmt(r.actual)}</strong> · target {r.fmt(r.target)}
+                    {met ? <span className="text-green-400"> · on target</span> : <span className="text-yellow-400"> · {r.fmt(Math.abs(gap))} {r.higherBetter ? "below" : "above"}</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[var(--color-muted)]">Target</span>
+                  <input type="number" value={r.target} onChange={e => set(r.id, Math.max(0, Number(e.target.value) || 0))} className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                </div>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-[var(--color-border)] overflow-hidden mt-3">
+                <div className={`h-full transition-all ${met ? "bg-green-400" : "bg-yellow-400"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={() => { setT(DEFAULT_KPI_TARGETS); toast.success("Targets reset to defaults"); }}
+        className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
+        Reset targets
+      </button>
+    </div>
+  );
+}
+
+// ── End-of-Day / Meeting-Prep Brief ────────────────────────────────────────────
+// A copy-ready end-of-day or meeting-prep summary: the position, what moved
+// today, and the open items. Generated from the same live numbers.
+function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Signals }) {
+  const { store } = useApp();
+  const today = new Date();
+
+  const brief = useMemo(() => {
+    const todayIso = today.toISOString().split("T")[0];
+    const todays = store.transactions.filter(t => t.date === todayIso && t.category !== "transfer");
+    const inToday = todays.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const outToday = Math.abs(todays.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const L: string[] = [];
+    L.push(`End-of-Day Brief — ${format(today, "EEEE, d MMM yyyy")}`);
+    L.push("");
+    L.push("Position:");
+    L.push(`• Cash ${formatCurrency(Math.round(signals.cash))} · runway ${runwayLabel(signals.runwayDays)} · health ${Math.round(signals.healthScore)}/100 (${signals.healthGrade})`);
+    L.push("");
+    L.push("Today's movement:");
+    L.push(`• Money in: ${formatCurrency(Math.round(inToday))} across ${todays.filter(t => t.amount > 0).length} txn(s)`);
+    L.push(`• Money out: ${formatCurrency(Math.round(outToday))} across ${todays.filter(t => t.amount < 0).length} txn(s)`);
+    L.push(`• Net for the day: ${inToday - outToday >= 0 ? "+" : ""}${formatCurrency(Math.round(inToday - outToday))}`);
+    L.push("");
+    L.push("Open items:");
+    if (signals.overdueReceivable > 0) L.push(`• ${formatCurrency(Math.round(signals.overdueReceivable))} overdue across ${signals.overdueInvoiceCount} invoice(s)`);
+    if (signals.dueTodayCount > 0) L.push(`• ${signals.dueTodayCount} item(s) worth ${formatCurrency(Math.round(signals.dueToday))} due today`);
+    if (snap.gstThisMonth.netPayable > 0) L.push(`• GST payable this month ≈ ${formatCurrency(snap.gstThisMonth.netPayable)}`);
+    if (signals.runwayDays < 120 && signals.monthlyNet < 0) L.push(`• Runway under 4 months — watch the burn`);
+    if (L[L.length - 1] === "Open items:") L.push("• Nothing outstanding — clean slate.");
+    return L.join("\n");
+  }, [store.transactions, snap, signals, today]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Presentation size={14} className="text-[var(--color-primary)]" /> End-of-Day / Meeting-Prep Brief</h2>
+          <button onClick={() => { navigator.clipboard?.writeText(brief); toast.success("Brief copied"); }}
+            className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">
+            Copy
+          </button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A copy-ready wrap of where the business stands, what moved today and what's still open — paste it into a standup, a WhatsApp update or your meeting notes. Built from your live numbers.</p>
+        <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{brief}</pre>
       </div>
     </div>
   );
