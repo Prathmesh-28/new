@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -117,7 +117,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings">("directory");
+  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -232,6 +232,10 @@ export default function VendorsPage() {
             ["stmt-recon", "Statement Recon", FileCheck2],
             ["msme-interest", "MSME Interest 43B(h)", Gavel],
             ["savings", "Savings Tracker", PiggyBank],
+            ["form16a", "Form 16A Tracker", FileBadge],
+            ["rebate", "Rebate Tracker", BadgePercent],
+            ["watchlist", "Watchlist / Blacklist", Ban],
+            ["pay-mode", "Payment-Mode Mix", CreditCard],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -538,6 +542,10 @@ export default function VendorsPage() {
       {view === "stmt-recon"    && <StatementReconciliation />}
       {view === "msme-interest" && <MsmeInterestLiability />}
       {view === "savings"       && <SavingsTracker />}
+      {view === "form16a"       && <Form16ATracker />}
+      {view === "rebate"        && <RebateTracker />}
+      {view === "watchlist"     && <VendorWatchlist />}
+      {view === "pay-mode"      && <PaymentModeMix />}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
     </div>
@@ -2861,6 +2869,390 @@ function SavingsTracker() {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TDS Form-16A Issuance Tracker — track quarterly TDS certificates owed to vendors.
+   ───────────────────────────────────────────────────────────────────────── */
+type F16Status = "pending" | "downloaded" | "issued";
+interface F16Cert { id: string; vendor: string; pan: string; quarter: string; fy: string; tdsAmount: number; status: F16Status; }
+
+const F16_STATUS_META: Record<F16Status, { label: string; cls: string }> = {
+  pending:    { label: "Pending",    cls: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" },
+  downloaded: { label: "Downloaded", cls: "bg-blue-950/30 text-blue-400 border-blue-800/30" },
+  issued:     { label: "Issued",     cls: "bg-green-950/30 text-green-400 border-green-800/30" },
+};
+const F16_QUARTERS = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"] as const;
+
+function Form16ATracker() {
+  const { store } = useApp();
+  const [certs, setCerts] = useFeatureState<F16Cert[]>("ven-f16a-certs", []);
+  const [vendor, setVendor] = useState("");
+  const [pan, setPan] = useState("");
+  const [quarter, setQuarter] = useState<string>(F16_QUARTERS[0]);
+  const [fy, setFy] = useState("2025-26");
+  const [tds, setTds] = useState("");
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    const amt = parseFloat(tds) || 0;
+    if (!vendor.trim() || amt <= 0) { toast.error("Enter vendor and TDS amount"); return; }
+    const c: F16Cert = { id: crypto.randomUUID(), vendor: vendor.trim(), pan: pan.trim().toUpperCase(), quarter, fy: fy.trim(), tdsAmount: amt, status: "pending" };
+    setCerts(prev => [c, ...prev]);
+    setVendor(""); setPan(""); setTds("");
+    toast.success(`Form 16A queued for ${c.vendor}`);
+  };
+  const cycle = (id: string) => setCerts(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "pending" ? "downloaded" : c.status === "downloaded" ? "issued" : "pending" } : c));
+  const remove = (id: string) => setCerts(prev => prev.filter(c => c.id !== id));
+
+  const pending = certs.filter(c => c.status !== "issued").length;
+  const totalTds = certs.reduce((s, c) => s + c.tdsAmount, 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every quarter you must issue Form 16A (TDS certificate) to vendors you deducted tax from, within 15 days of filing the TDS return. Miss it and you face a ₹100/day penalty per certificate. Track each one from TRACES download to handover here.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Certificates", value: certs.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Awaiting Issue", value: pending.toString(), color: pending > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Total TDS Covered", value: formatCurrency(Math.round(totalTds)), color: "text-blue-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileBadge size={15} className="text-[var(--color-primary)]" /> Add Certificate</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input list="f16-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="f16-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input value={pan} onChange={e => setPan(e.target.value)} placeholder="Vendor PAN" className={inpCls} />
+          <select value={quarter} onChange={e => setQuarter(e.target.value)} className={inpCls}>
+            {F16_QUARTERS.map(q => <option key={q} value={q}>{q}</option>)}
+          </select>
+          <input value={fy} onChange={e => setFy(e.target.value)} placeholder="FY (e.g. 2025-26)" className={inpCls} />
+          <input type="number" value={tds} onChange={e => setTds(e.target.value)} placeholder="TDS deducted ₹ *" className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add Certificate</button>
+      </div>
+
+      {certs.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileBadge size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No certificates tracked. Add one per vendor per quarter to stay ahead of the 15-day issuance deadline.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Quarter", "TDS", "Status", ""].map(h => (
+                  <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Vendor" || h === "Quarter" ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {certs.map(c => (
+                <tr key={c.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{c.vendor}</p>
+                    {c.pan && <p className="text-[10px] text-[var(--color-muted)] font-mono">{c.pan}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{c.quarter} · {c.fy}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(c.tdsAmount))}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => cycle(c.id)} className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${F16_STATUS_META[c.status].cls}`}>{F16_STATUS_META[c.status].label}</button>
+                  </td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+            <p className="text-xs text-[var(--color-muted)]">Tip: click a status chip to advance Pending → Downloaded → Issued.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Vendor Rebate / Volume-Discount Tracker — accrue rebates earned against slabs.
+   ───────────────────────────────────────────────────────────────────────── */
+interface RebateDeal { id: string; vendor: string; threshold: number; ratePct: number; ytdPurchase: number; }
+
+function RebateTracker() {
+  const { store } = useApp();
+  const [deals, setDeals] = useFeatureState<RebateDeal[]>("ven-rebate-deals", []);
+  const [vendor, setVendor] = useState("");
+  const [threshold, setThreshold] = useState("");
+  const [rate, setRate] = useState("");
+
+  const spendByVendor = useMemo(() => {
+    const m: Record<string, number> = {};
+    store.transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => { m[t.counterparty] = (m[t.counterparty] ?? 0) + Math.abs(t.amount); });
+    return m;
+  }, [store.transactions]);
+  const knownVendors = useMemo(() => Object.keys(spendByVendor).sort(), [spendByVendor]);
+
+  const add = () => {
+    const th = parseFloat(threshold) || 0;
+    const rt = parseFloat(rate) || 0;
+    if (!vendor.trim() || th <= 0 || rt <= 0) { toast.error("Enter vendor, threshold and rebate rate"); return; }
+    const d: RebateDeal = { id: crypto.randomUUID(), vendor: vendor.trim(), threshold: th, ratePct: rt, ytdPurchase: Math.round(spendByVendor[vendor.trim()] ?? 0) };
+    setDeals(prev => [d, ...prev]);
+    setVendor(""); setThreshold(""); setRate("");
+    toast.success(`Rebate slab added for ${d.vendor}`);
+  };
+  const refresh = (id: string, name: string) => { setDeals(prev => prev.map(d => d.id === id ? { ...d, ytdPurchase: Math.round(spendByVendor[name] ?? 0) } : d)); toast.success("YTD purchase refreshed from transactions"); };
+  const remove = (id: string) => setDeals(prev => prev.filter(d => d.id !== id));
+
+  const earned = (d: RebateDeal) => d.ytdPurchase >= d.threshold ? (d.ytdPurchase * d.ratePct) / 100 : 0;
+  const totalEarned = deals.reduce((s, d) => s + earned(d), 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Many suppliers offer a year-end rebate once you cross a purchase slab — money that's easy to forget to claim. Define each slab and track how close you are; rebate accrues once YTD purchases clear the threshold.</p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "Active Slabs", value: deals.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Rebate Accrued", value: formatCurrency(Math.round(totalEarned)), color: "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BadgePercent size={15} className="text-[var(--color-primary)]" /> Add Rebate Slab</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <input list="reb-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="reb-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} placeholder="Purchase threshold ₹ *" className={inpCls} />
+          <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="Rebate % *" className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add Slab</button>
+      </div>
+
+      {deals.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <BadgePercent size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No rebate slabs yet. Add a supplier's volume-discount terms to start accruing what you've earned.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {deals.map(d => {
+            const pct = d.threshold > 0 ? Math.min(100, (d.ytdPurchase / d.threshold) * 100) : 0;
+            const hit = d.ytdPurchase >= d.threshold;
+            return (
+              <div key={d.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div>
+                    <p className="font-medium text-sm">{d.vendor}</p>
+                    <p className="text-[11px] text-[var(--color-muted)]">{d.ratePct}% above {formatCurrency(Math.round(d.threshold))} · YTD {formatCurrency(d.ytdPurchase)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold tabular-nums ${hit ? "text-green-400" : "text-[var(--color-muted)]"}`}>{hit ? formatCurrency(Math.round(earned(d))) : "—"}</span>
+                    <button onClick={() => refresh(d.id, d.vendor)} className="text-[10px] text-[var(--color-primary)] hover:underline">Refresh</button>
+                    <button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full ${hit ? "bg-green-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">{hit ? "Slab reached — rebate accruing" : `${(100 - pct).toFixed(0)}% to go (${formatCurrency(Math.round(d.threshold - d.ytdPurchase))} more)`}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Vendor Watchlist / Blacklist — flag risky vendors and warn before new POs.
+   ───────────────────────────────────────────────────────────────────────── */
+type FlagLevel = "watch" | "hold" | "blacklist";
+interface VendorFlag { id: string; vendor: string; level: FlagLevel; reason: string; date: string; }
+
+const FLAG_META: Record<FlagLevel, { label: string; cls: string }> = {
+  watch:     { label: "Watch",     cls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  hold:      { label: "On Hold",   cls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  blacklist: { label: "Blacklist", cls: "bg-red-950/30 text-red-400 border-red-800/30" },
+};
+
+function VendorWatchlist() {
+  const { store } = useApp();
+  const [flags, setFlags] = useFeatureState<VendorFlag[]>("ven-watchlist-flags", []);
+  const [vendor, setVendor] = useState("");
+  const [level, setLevel] = useState<FlagLevel>("watch");
+  const [reason, setReason] = useState("");
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    if (!vendor.trim() || !reason.trim()) { toast.error("Enter vendor and a reason"); return; }
+    const f: VendorFlag = { id: crypto.randomUUID(), vendor: vendor.trim(), level, reason: reason.trim(), date: new Date().toISOString().split("T")[0] };
+    setFlags(prev => [f, ...prev]);
+    setVendor(""); setReason("");
+    toast.success(`${vendor.trim()} added to ${FLAG_META[level].label}`);
+  };
+  const remove = (id: string) => setFlags(prev => prev.filter(f => f.id !== id));
+
+  const blacklisted = flags.filter(f => f.level === "blacklist").length;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Keep a living record of vendors you're cautious about — quality slips, compliance gaps, disputes. Flag them Watch, On Hold, or Blacklist so anyone raising a PO sees the risk before they commit spend.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Flagged Vendors", value: flags.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Blacklisted", value: blacklisted.toString(), color: blacklisted > 0 ? "text-red-400" : "text-green-400" },
+          { label: "On Watch / Hold", value: (flags.length - blacklisted).toString(), color: "text-orange-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Ban size={15} className="text-[var(--color-primary)]" /> Flag a Vendor</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input list="wl-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <datalist id="wl-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          <select value={level} onChange={e => setLevel(e.target.value as FlagLevel)} className={inpCls}>
+            {(Object.keys(FLAG_META) as FlagLevel[]).map(l => <option key={l} value={l}>{FLAG_META[l].label}</option>)}
+          </select>
+        </div>
+        <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason *" className={inpCls} />
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add Flag</button>
+      </div>
+
+      {flags.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Ban size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No vendors flagged. Add a watch, hold, or blacklist entry to warn your team before they raise a PO.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {flags.map(f => (
+            <div key={f.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{f.vendor}</span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${FLAG_META[f.level].cls}`}>{FLAG_META[f.level].label}</span>
+                </div>
+                <p className="text-xs text-[var(--color-muted)] mt-1">{f.reason}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Flagged {format(new Date(f.date), "dd MMM yyyy")}</p>
+              </div>
+              <button onClick={() => remove(f.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Payment-Mode Mix — breakdown of how vendor payments leave the business.
+   ───────────────────────────────────────────────────────────────────────── */
+const PAY_MODE_META: Record<string, { label: string; cls: string; bar: string }> = {
+  upi:    { label: "UPI",          cls: "text-purple-400", bar: "bg-purple-400" },
+  neft:   { label: "NEFT / RTGS",  cls: "text-blue-400",   bar: "bg-blue-400" },
+  cheque: { label: "Cheque",       cls: "text-orange-400", bar: "bg-orange-400" },
+  cash:   { label: "Cash",         cls: "text-red-400",    bar: "bg-red-400" },
+  card:   { label: "Card",         cls: "text-green-400",  bar: "bg-green-400" },
+};
+function classifyMode(desc: string): string {
+  const d = desc.toLowerCase();
+  if (d.includes("upi") || d.includes("@")) return "upi";
+  if (d.includes("neft") || d.includes("rtgs") || d.includes("imps")) return "neft";
+  if (d.includes("chq") || d.includes("cheque")) return "cheque";
+  if (d.includes("cash") || d.includes("atm")) return "cash";
+  if (d.includes("card") || d.includes("pos")) return "card";
+  return "neft";
+}
+
+function PaymentModeMix() {
+  const { store } = useApp();
+
+  const breakdown = useMemo(() => {
+    const m: Record<string, { count: number; total: number }> = {};
+    store.transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+      const mode = classifyMode(`${t.description ?? ""} ${t.counterparty ?? ""}`);
+      const cur = m[mode] ?? { count: 0, total: 0 };
+      m[mode] = { count: cur.count + 1, total: cur.total + Math.abs(t.amount) };
+    });
+    const grand = Object.values(m).reduce((s, v) => s + v.total, 0);
+    return (Object.keys(PAY_MODE_META) as string[])
+      .map(k => ({ mode: k, count: m[k]?.count ?? 0, total: m[k]?.total ?? 0, pct: grand > 0 ? ((m[k]?.total ?? 0) / grand) * 100 : 0 }))
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [store.transactions]);
+
+  const grandTotal = breakdown.reduce((s, r) => s + r.total, 0);
+  const cashRow = breakdown.find(r => r.mode === "cash");
+  const cashPct = grandTotal > 0 && cashRow ? (cashRow.total / grandTotal) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">How your vendor money actually leaves the business — inferred from transaction descriptions. A high cash share is a red flag for both fraud control and the ₹10,000/payment cash-expense disallowance under Section 40A(3).</p>
+
+      {breakdown.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CreditCard size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No vendor payments found. Import bank transactions to see your payment-mode mix.</p>
+        </div>
+      ) : (
+        <>
+          {cashPct > 15 && (
+            <div className="bg-red-950/20 border border-red-800/30 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-400">{cashPct.toFixed(0)}% of vendor payments look like cash — review against the Section 40A(3) ₹10,000 per-payment limit to avoid disallowed expenses.</p>
+            </div>
+          )}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><CreditCard size={15} className="text-[var(--color-primary)]" /> Mode Breakdown</h3>
+            {breakdown.map(r => {
+              const meta = PAY_MODE_META[r.mode];
+              return (
+                <div key={r.mode}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className={`font-medium ${meta.cls}`}>{meta.label}</span>
+                    <span className="tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.total))} · {r.count} txns · {r.pct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                    <div className={`h-full ${meta.bar}`} style={{ width: `${r.pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="pt-2 border-t border-[var(--color-border)]">
+              <p className="text-xs text-[var(--color-muted)]">Total vendor outflow: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(Math.round(grandTotal))}</span></p>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

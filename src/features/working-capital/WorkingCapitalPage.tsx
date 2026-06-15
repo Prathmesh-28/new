@@ -5,7 +5,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn, paymentTermsSuggestions } from "@/lib/finance";
 import type { FinancialSnapshot, AgingBucket } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank, Calculator, FileSpreadsheet, FileText, Repeat, Split } from "lucide-react";
+import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank, Calculator, FileSpreadsheet, FileText, Repeat, Split, Clock, Sliders, ArrowLeftRight, Award } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -15,7 +15,7 @@ const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 export default function WorkingCapitalPage() {
   const { store } = useApp();
   const navigate = useNavigate();
-  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od">("overview");
+  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od" | "operating-cycle" | "current-ratio-planner" | "terms-gap" | "wc-efficiency-score">("overview");
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const aging = useMemo(() => agingBuckets(store.invoices), [store.invoices]);
   const options = useMemo(
@@ -44,7 +44,7 @@ export default function WorkingCapitalPage() {
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split], ["operating-cycle", "Operating Cycle", Clock], ["current-ratio-planner", "Current-Ratio Planner", Sliders], ["terms-gap", "Terms Gap", ArrowLeftRight], ["wc-efficiency-score", "WC Efficiency Score", Award]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setWcTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${wcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -377,6 +377,10 @@ export default function WorkingCapitalPage() {
       {wcTab === "creditor-stretch" && <CreditorStretchImpact snap={snap} />}
       {wcTab === "wc-turnover" && <WorkingCapitalTurnover snap={snap} />}
       {wcTab === "factoring-vs-od" && <FactoringVsOdDecision snap={snap} />}
+      {wcTab === "operating-cycle" && <OperatingCycleBreakdown snap={snap} />}
+      {wcTab === "current-ratio-planner" && <CurrentRatioTargetPlanner snap={snap} />}
+      {wcTab === "terms-gap" && <TermsGapAnalyzer snap={snap} />}
+      {wcTab === "wc-efficiency-score" && <WcEfficiencyScore snap={snap} />}
     </div>
   );
 }
@@ -1985,6 +1989,286 @@ function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">OD cost = amount × OD rate × days/365. Factoring cost = amount × factoring rate × days/365 + one-off fee. Effective annual cost annualises each over the tenor. Non-recourse factoring costs more but transfers buyer-default risk — value that against your debtor quality.</p>
+    </div>
+  );
+}
+
+// ── #99 Operating Cycle Breakdown — gross vs net cycle ──────────────────────────
+function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
+  // Operating cycle = DSO + DIO (cash-to-cash before supplier credit). CCC nets out DPO.
+  const operatingCycle = snap.dsoDays + snap.dioDays;
+  const supplierFunded = Math.min(snap.dpoDays, operatingCycle);
+  const selfFunded = Math.max(0, operatingCycle - snap.dpoDays);
+  const supplierCoverPct = operatingCycle > 0 ? Math.round((supplierFunded / operatingCycle) * 100) : 0;
+  const dailyOpex = snap.monthlyExpense / 30;
+  const selfFundedCash = Math.round(dailyOpex * selfFunded);
+
+  const segs = [
+    { label: "DSO — customers hold cash", days: snap.dsoDays, color: "bg-yellow-500" },
+    { label: "DIO — cash sits in stock", days: snap.dioDays, color: "bg-orange-500" },
+  ];
+  const maxSeg = Math.max(operatingCycle, 1);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Clock size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Operating Cycle Breakdown</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          The operating cycle (DSO + DIO = {operatingCycle} days) is how long cash is locked from buying stock to collecting the sale. Supplier credit (DPO) funds part of it for free — what's left is the self-funded gap you carry.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Operating Cycle", value: `${operatingCycle} days`, color: "text-[var(--color-text)]" },
+          { label: "Supplier-Funded", value: `${supplierFunded} days`, color: "text-green-400" },
+          { label: "Self-Funded Gap", value: `${selfFunded} days`, color: selfFunded <= 30 ? "text-yellow-400" : "text-red-400" },
+          { label: "Cash You Fund", value: formatAmount(selfFundedCash), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5 space-y-4`}>
+        <p className="text-sm font-semibold">Operating cycle = DSO + DIO</p>
+        {segs.map(s => (
+          <div key={s.label}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium">{s.label}</span>
+              <span className="text-sm font-bold tabular-nums">{s.days}d</span>
+            </div>
+            <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${s.color}`} style={{ width: `${(s.days / maxSeg) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+        <div className="pt-3 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium">Supplier credit covers</span>
+            <span className="text-sm font-bold tabular-nums text-green-400">{supplierCoverPct}%</span>
+          </div>
+          <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-green-500" style={{ width: `${supplierCoverPct}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${selfFunded <= 30 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm ${selfFunded <= 30 ? "text-green-400" : "text-orange-400"}`}>
+          {selfFunded <= 0
+            ? "Your suppliers fund the entire operating cycle — you run on negative working capital. Excellent."
+            : `Suppliers cover ${supplierCoverPct}% of your ${operatingCycle}-day cycle; you self-fund the remaining ${selfFunded} days (${formatAmount(selfFundedCash)}). Stretching DPO or cutting DSO closes this directly.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Operating cycle = DSO + DIO. Cash conversion cycle = operating cycle − DPO. Self-funded days = max(0, operating cycle − DPO), valued at daily operating spend (monthly expense ÷ 30). Figures are directional, derived from your current ledger.</p>
+    </div>
+  );
+}
+
+// ── #100 Current-Ratio Target Planner — what moves the ratio ────────────────────
+function CurrentRatioTargetPlanner({ snap }: { snap: FinancialSnapshot }) {
+  const [targetRatio, setTargetRatio] = useState("1.5");
+  // Approximate current assets / liabilities from snapshot components.
+  const currentAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue;
+  const currentLiabilities = snap.accountsPayable + snap.obligationsDue90;
+  const ratio = currentLiabilities > 0 ? currentAssets / currentLiabilities : 0;
+  const target = Math.max(0.1, parseFloat(targetRatio) || 0);
+
+  // Two levers to hit the target: add current assets, or pay down current liabilities.
+  // To reach target T: assets needed = T × CL  → extra assets = T×CL − CA.
+  const extraAssetsNeeded = Math.max(0, Math.round(target * currentLiabilities - currentAssets));
+  // Pay down liabilities L so that CA/(CL−L) = T → L = CL − CA/T.
+  const liabPaydownNeeded = Math.max(0, Math.round(currentLiabilities - currentAssets / target));
+
+  const meetsTarget = ratio >= target;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Sliders size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Current-Ratio Target Planner</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Lenders and your own buffer want current assets comfortably above short-term dues. You're at <strong>{ratio.toFixed(2)}x</strong> ({formatAmount(currentAssets)} assets ÷ {formatAmount(currentLiabilities)} dues). Set a target and see exactly what it takes to get there.
+        </p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Target current ratio</label>
+          <input type="number" step="0.1" value={targetRatio} onChange={e => setTargetRatio(e.target.value)} className={WC_INP} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Current Ratio", value: currentLiabilities > 0 ? `${ratio.toFixed(2)}x` : "—", color: ratio >= 1.5 ? "text-green-400" : ratio >= 1 ? "text-yellow-400" : "text-red-400" },
+          { label: "Current Assets", value: formatAmount(currentAssets), color: "text-[var(--color-text)]" },
+          { label: "Short-Term Dues", value: formatAmount(currentLiabilities), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {meetsTarget ? (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm text-green-400">You already clear {target.toFixed(2)}x with headroom of {formatAmount(Math.round(currentAssets - target * currentLiabilities))}. You could deploy some buffer without breaching the target.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`${WC_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-1">Lever A — add current assets</p>
+            <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatAmount(extraAssetsNeeded)}</p>
+            <p className="text-xs text-[var(--color-muted)] mt-2">Raise cash, collect receivables faster, or inject capital so current assets reach {target.toFixed(2)}× your dues.</p>
+          </div>
+          <div className={`${WC_CARD} p-5`}>
+            <p className="text-sm font-semibold mb-1">Lever B — clear short-term dues</p>
+            <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatAmount(liabPaydownNeeded)}</p>
+            <p className="text-xs text-[var(--color-muted)] mt-2">Pay down payables or near-term obligations (or term them out) to shrink the denominator to the target.</p>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Current ratio ≈ (cash + receivables + inventory) ÷ (payables + obligations due ≤90 days). Lever A: extra assets = target × dues − assets. Lever B: paydown = dues − assets ÷ target. A ratio under 1x means short-term dues exceed liquid resources. Estimates from your ledger; refine with your full balance sheet.</p>
+    </div>
+  );
+}
+
+// ── #101 Supplier vs Customer Terms Gap — the credit mismatch ───────────────────
+function TermsGapAnalyzer({ snap }: { snap: FinancialSnapshot }) {
+  // The squeeze: if you collect (DSO) slower than you pay (DPO), you bankroll the gap.
+  const termsGap = snap.dsoDays - snap.dpoDays;
+  const dailyOpex = snap.monthlyExpense / 30;
+  const gapCash = Math.round(dailyOpex * Math.abs(termsGap));
+  const favourable = termsGap <= 0;
+
+  const rows = [
+    { label: "You give customers", days: snap.dsoDays, note: "Days to collect (DSO)", color: "text-yellow-400" },
+    { label: "Suppliers give you", days: snap.dpoDays, note: "Days you take to pay (DPO)", color: "text-green-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <ArrowLeftRight size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Supplier vs Customer Terms Gap</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          The single most under-managed working-capital lever: the mismatch between how fast you collect and how fast you pay. If customers take longer than suppliers give you, you fund the difference out of your own pocket.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Customer Terms (DSO)", value: `${snap.dsoDays} days`, color: "text-yellow-400" },
+          { label: "Supplier Terms (DPO)", value: `${snap.dpoDays} days`, color: "text-green-400" },
+          { label: "Terms Gap", value: `${termsGap > 0 ? "+" : ""}${termsGap} days`, color: favourable ? "text-green-400" : "text-red-400" },
+          { label: favourable ? "Free Float Earned" : "Cash You Bridge", value: formatAmount(gapCash), color: favourable ? "text-green-400" : "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5 space-y-3`}>
+        {rows.map(r => (
+          <div key={r.label} className="flex items-center justify-between px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+            <div>
+              <p className="text-sm font-medium">{r.label}</p>
+              <p className="text-[10px] text-[var(--color-muted)]">{r.note}</p>
+            </div>
+            <span className={`text-lg font-bold tabular-nums ${r.color}`}>{r.days}d</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 border ${favourable ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm ${favourable ? "text-green-400" : "text-orange-400"}`}>
+          {favourable
+            ? `You collect ${Math.abs(termsGap)} days before you pay suppliers — a ${formatAmount(gapCash)} free float. Protect it: don't let customer terms drift longer than supplier terms.`
+            : `You wait ${termsGap} extra days to collect after paying suppliers, bridging ${formatAmount(gapCash)} yourself. Closing the gap means tightening customer terms (deposits, shorter credit) or negotiating longer supplier terms.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Terms gap = DSO − DPO. A positive gap is self-funded days valued at daily operating spend (monthly expense ÷ 30); a negative gap means suppliers fund you. This is a directional read from your current ledger averages, not contracted terms.</p>
+    </div>
+  );
+}
+
+// ── #102 WC Efficiency Score — composite 0-100 ─────────────────────────────────
+function WcEfficiencyScore({ snap }: { snap: FinancialSnapshot }) {
+  // Composite of four working-capital signals, each scored 0-25 and summed.
+  const clamp = (n: number) => Math.max(0, Math.min(25, n));
+  // CCC: 0 days → 25, 90+ days → 0.
+  const cccScore = clamp(25 - (snap.cccDays / 90) * 25);
+  // Overdue share of AR: 0% → 25, 40%+ → 0.
+  const overduePct = snap.accountsReceivable > 0 ? snap.overdueReceivable / snap.accountsReceivable : 0;
+  const overdueScore = clamp(25 - (overduePct / 0.4) * 25);
+  // Supplier credit covers operating cycle: full cover → 25.
+  const opCycle = snap.dsoDays + snap.dioDays;
+  const coverRatio = opCycle > 0 ? Math.min(1, snap.dpoDays / opCycle) : 1;
+  const coverScore = clamp(coverRatio * 25);
+  // Current ratio: 1.5x+ → 25, 0.5x → 0.
+  const cr = snap.currentRatio ?? 0;
+  const crScore = clamp(((cr - 0.5) / 1.0) * 25);
+
+  const total = Math.round(cccScore + overdueScore + coverScore + crScore);
+  const grade = total >= 80 ? "Excellent" : total >= 60 ? "Healthy" : total >= 40 ? "Average" : "Strained";
+  const gradeColor = total >= 80 ? "text-green-400" : total >= 60 ? "text-green-400" : total >= 40 ? "text-yellow-400" : "text-red-400";
+
+  const components = [
+    { label: "Cash Conversion Cycle", score: cccScore, detail: `${snap.cccDays} days` },
+    { label: "Receivables Quality", score: overdueScore, detail: `${Math.round(overduePct * 100)}% overdue` },
+    { label: "Supplier-Credit Cover", score: coverScore, detail: `${Math.round(coverRatio * 100)}% of cycle` },
+    { label: "Liquidity (Current Ratio)", score: crScore, detail: snap.currentRatio != null ? `${cr.toFixed(2)}x` : "n/a" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Award size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Working-Capital Efficiency Score</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          One number that blends the four levers that decide whether your cash cycle helps or hurts you: how fast cash turns, how clean your receivables are, how much suppliers fund, and your liquidity cushion. Each scores out of 25.
+        </p>
+      </div>
+
+      <div className={`${WC_CARD} p-6 flex items-center justify-between`}>
+        <div>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Efficiency Score</p>
+          <p className={`text-4xl font-bold tabular-nums ${gradeColor}`}>{total}<span className="text-lg text-[var(--color-muted)]">/100</span></p>
+          <p className={`text-sm font-semibold mt-1 ${gradeColor}`}>{grade}</p>
+        </div>
+        <div className="w-28 h-2.5 sm:w-48 bg-[var(--color-bg)] rounded-full overflow-hidden">
+          <div className={`h-full rounded-full ${total >= 60 ? "bg-green-500" : total >= 40 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${total}%` }} />
+        </div>
+      </div>
+
+      <div className={`${WC_CARD} p-5 space-y-4`}>
+        <p className="text-sm font-semibold">What's driving it</p>
+        {components.map(c => (
+          <div key={c.label}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium">{c.label}</span>
+              <span className="text-xs tabular-nums text-[var(--color-muted)]">{c.detail} · {Math.round(c.score)}/25</span>
+            </div>
+            <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${c.score >= 17 ? "bg-green-500" : c.score >= 9 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${(c.score / 25) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Score = sum of four 0-25 sub-scores: CCC (0d→25, 90d→0), receivables quality (0% overdue→25, 40%→0), supplier-credit cover (DPO ÷ operating cycle), and current ratio (1.5x→25, 0.5x→0). Weights are equal and directional — a planning lens, not a credit rating.</p>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   Plus, CheckCircle2, AlertTriangle, TrendingDown,
   CalendarRange, Target, Percent, DoorClosed, CircleDollarSign, ArrowDownUp, BadgeIndianRupee,
   PiggyBank, Gem, Factory, RefreshCw, Layers, Wallet,
+  Activity, BarChart3, Coins, Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, format, parseISO } from "date-fns";
@@ -35,6 +36,7 @@ export default function DebtPage() {
     | "overview" | "amortise" | "dscr" | "refinance" | "moratorium"
     | "schedule" | "optimizer" | "wacd" | "foreclosure" | "balloon" | "stepemi" | "subsidy"
     | "lasf" | "gold" | "equip" | "reset" | "stacking" | "wcdl"
+    | "icr" | "maturity" | "prepaypenalty" | "gearing"
   >("overview");
   const [selectedId, setSelectedId] = useState<string | null>(loans[0]?.id ?? null);
   const [prepay, setPrepay] = useState(100000);
@@ -94,6 +96,10 @@ export default function DebtPage() {
             ["reset", "Rate-Reset Impact", RefreshCw],
             ["stacking", "Exposure / Stacking", Layers],
             ["wcdl", "WC Demand Loan / OD", Wallet],
+            ["icr", "Interest Coverage", Activity],
+            ["maturity", "Maturity Profile", BarChart3],
+            ["prepaypenalty", "Prepay vs Penalty", Coins],
+            ["gearing", "Debt-to-Equity Target", Gauge],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -120,6 +126,10 @@ export default function DebtPage() {
       {tab === "reset" && <RateResetImpact loans={loans} />}
       {tab === "stacking" && <ExposureStackingTracker loans={loans} />}
       {tab === "wcdl" && <WorkingCapitalLineCalculator />}
+      {tab === "icr" && <InterestCoverageTrend loans={loans} />}
+      {tab === "maturity" && <DebtMaturityProfile loans={loans} />}
+      {tab === "prepaypenalty" && <PrepaymentPenaltyVsSavings loans={loans} />}
+      {tab === "gearing" && <DebtToEquityPlanner loans={loans} />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -2369,6 +2379,329 @@ function WorkingCapitalLineCalculator() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">CC/OD interest is charged on the daily drawn balance, so light users pay far less than on a term loan. Some lenders levy a commitment / non-utilisation fee on the idle limit and an annual renewal charge — include both for the true cost. Drawing power is also capped by your stock-and-debtor statements.</p>
+    </div>
+  );
+}
+
+// ── #103 Interest-Coverage (ICR) Trend & Rate-Shock ──────────────────────────────
+// Interest-coverage ratio = pre-debt operating cash flow ÷ interest. Lenders watch
+// it alongside DSCR. This shows headroom today and how it erodes if rates rise.
+function InterestCoverageTrend({ loans }: { loans: ActiveLoanLike[] }) {
+  const { store } = useApp();
+  const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
+  const [shockBps, setShockBps] = useFeatureState<number>("debt-icr-shock-bps", 200);
+  const fc = formatCurrency;
+
+  const data = useMemo(() => {
+    const ocf = snap.monthlyNet + snap.monthlyDebtService; // pre-debt operating cash flow (monthly)
+    const annualOcf = ocf * 12;
+    const monthlyInterest = snap.monthlyInterest;
+    const baseAnnualInterest = monthlyInterest * 12;
+    const icr = monthlyInterest > 0 ? ocf / monthlyInterest : null;
+    const steps = [0, 100, 200, 300, 400, 500];
+    const curve = steps.map(bps => {
+      const shockedAnnualInterest = loans.reduce((s, l) => s + l.outstanding * ((l.rate + bps / 100) / 100), 0);
+      return { bps, icr: shockedAnnualInterest > 0 ? annualOcf / shockedAnnualInterest : 0 };
+    });
+    const shockedAnnualInterest = loans.reduce((s, l) => s + l.outstanding * ((l.rate + shockBps / 100) / 100), 0);
+    const shockedIcr = shockedAnnualInterest > 0 ? annualOcf / shockedAnnualInterest : null;
+    const extraInterest = shockedAnnualInterest - baseAnnualInterest;
+    return { ocf, annualOcf, icr, curve, shockedIcr, extraInterest, baseAnnualInterest };
+  }, [snap, loans, shockBps]);
+
+  if (loans.length === 0) return <NoLoansHint what="Your interest-coverage headroom and rate-shock test" />;
+
+  const icrThin = data.icr !== null && data.icr < 3;
+  const shockBreach = data.shockedIcr !== null && data.shockedIcr < 2;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Interest coverage (ICR)", value: data.icr !== null ? `${data.icr.toFixed(2)}x` : "—", color: icrThin ? "text-yellow-400" : "text-green-400", sub: "OCF ÷ interest; aim ≥ 3x" },
+          { label: "Pre-debt cash flow", value: fc(Math.round(data.ocf)) + "/mo", color: "text-[var(--color-text)]", sub: "EMIs added back" },
+          { label: "Annual interest", value: formatAmount(Math.round(data.baseAnnualInterest)), color: "text-red-400", sub: "at current rates" },
+          { label: `ICR at +${shockBps}bps`, value: data.shockedIcr !== null ? `${data.shockedIcr.toFixed(2)}x` : "—", color: shockBreach ? "text-red-400" : "text-green-400", sub: `+${formatAmount(Math.round(data.extraInterest))} interest/yr` },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Coverage under rising rates</h3>
+          <span className="text-xs text-[var(--color-muted)]">shock: +{shockBps}bps</span>
+        </div>
+        <input type="range" min={0} max={500} step={25} value={shockBps} onChange={e => setShockBps(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data.curve}>
+              <XAxis dataKey="bps" tickFormatter={v => `+${v}bps`} tick={{ fontSize: 10, fill: "var(--color-muted)" }} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} />
+              <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, "ICR"]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+              <Area type="monotone" dataKey="icr" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.15} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${shockBreach ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold flex items-center gap-2 ${shockBreach ? "text-red-400" : "text-green-400"}`}>
+          {shockBreach ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          {shockBreach
+            ? `A +${shockBps}bps repo move would pull ICR to ${data.shockedIcr?.toFixed(2)}x — below the ~2x comfort bar — adding ${formatAmount(Math.round(data.extraInterest))}/yr of interest. Hedge or fix rates before your next reset.`
+            : `Even after a +${shockBps}bps shock, interest is covered ${data.shockedIcr?.toFixed(2)}x by operating cash flow. Comfortable headroom.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">ICR = pre-debt operating cash flow ÷ interest expense. It isolates the interest burden (DSCR includes principal too). Floating-rate loans reprice at reset dates — stress-test before borrowing more.</p>
+    </div>
+  );
+}
+
+// ── #104 Debt-Maturity Profile ───────────────────────────────────────────────────
+// Buckets every loan's payoff date into maturity windows so you can see refinancing
+// "walls" — years where a lot of debt rolls off and may need replacing or repaying.
+function DebtMaturityProfile({ loans }: { loans: ActiveLoanLike[] }) {
+  const fc = formatCurrency;
+  const buckets = useMemo(() => {
+    const defs = [
+      { key: "0-12m", label: "0–12m", lo: 0, hi: 12 },
+      { key: "1-2y", label: "1–2y", lo: 12, hi: 24 },
+      { key: "2-3y", label: "2–3y", lo: 24, hi: 36 },
+      { key: "3-5y", label: "3–5y", lo: 36, hi: 60 },
+      { key: "5y+", label: "5y+", lo: 60, hi: Infinity },
+    ];
+    const rows = defs.map(d => ({ label: d.label, outstanding: 0, count: 0 }));
+    loans.forEach(l => {
+      const m = remainingMonths(l);
+      for (let i = 0; i < defs.length; i++) {
+        const d = defs[i];
+        if (m > d.lo && m <= d.hi) { rows[i].outstanding += l.outstanding; rows[i].count += 1; break; }
+      }
+    });
+    const total = rows.reduce((s, r) => s + r.outstanding, 0);
+    return rows.map(r => ({ ...r, sharePct: total > 0 ? (r.outstanding / total) * 100 : 0 }));
+  }, [loans]);
+
+  if (loans.length === 0) return <NoLoansHint what="Your debt-maturity profile" />;
+
+  const wall = buckets.reduce((a, b) => (b.sharePct > a.sharePct ? b : a), buckets[0]);
+  const nearTerm = buckets[0].sharePct;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Outstanding by time-to-maturity</h3>
+        <div className="h-52">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={buckets}>
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--color-muted)" }} />
+              <YAxis tickFormatter={v => formatAmount(v)} tick={{ fontSize: 10, fill: "var(--color-muted)" }} width={64} />
+              <Tooltip formatter={(v: number) => [fc(Math.round(v)), "Outstanding"]} contentStyle={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+              <Bar dataKey="outstanding" radius={[4, 4, 0, 0]}>
+                {buckets.map((b, i) => <Cell key={i} fill={b.sharePct > 40 ? "#f87171" : "var(--color-primary)"} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <table className="w-full text-sm">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>{["Maturity window", "Loans", "Outstanding", "Share"].map(h =>
+              <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {buckets.map(b => (
+              <tr key={b.label} className="hover:bg-white/2">
+                <td className="px-4 py-2.5 font-medium">{b.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{b.count}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(b.outstanding))}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.sharePct.toFixed(0)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${wall.sharePct > 40 ? "border-yellow-800/40 bg-yellow-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm font-bold flex items-center gap-2 ${wall.sharePct > 40 ? "text-yellow-400" : "text-green-400"}`}>
+          {wall.sharePct > 40 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          {wall.sharePct > 40
+            ? `${wall.sharePct.toFixed(0)}% of debt matures in the ${wall.label} window — a refinancing "wall". ${nearTerm > 30 ? `${nearTerm.toFixed(0)}% rolls off within a year, so line up replacement facilities early.` : "Plan replacement facilities ahead of that bunching."}`
+            : `Maturities are well laddered across windows — no single year carries an outsized roll-off. Refinancing risk is low.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Time-to-maturity is estimated from each loan's outstanding, rate and EMI. Bunched maturities concentrate refinancing risk in one window — spreading them smooths cash flow and reduces dependence on any single credit cycle.</p>
+    </div>
+  );
+}
+
+// ── #105 Prepayment-Penalty vs Interest-Saved ────────────────────────────────────
+// Foreclosing or part-paying a loan saves future interest but may trigger a penalty.
+// This nets the two off across each loan so you prepay the one with the best payback.
+function PrepaymentPenaltyVsSavings({ loans }: { loans: ActiveLoanLike[] }) {
+  const [penaltyPct, setPenaltyPct] = useFeatureState<string>("debt-prepay-penalty-pct", "2");
+  const [amountStr, setAmountStr] = useState("200000");
+  const fc = formatCurrency;
+  const pen = parseFloat(penaltyPct) || 0;
+  const amount = parseFloat(amountStr) || 0;
+
+  const rows = useMemo(() => {
+    if (amount <= 0) return [];
+    return loans.map(l => {
+      const rem = remainingMonths(l);
+      const applied = Math.min(amount, l.outstanding);
+      const impact = prepaymentImpact(l.outstanding, l.rate, rem, applied);
+      const penalty = applied * (pen / 100);
+      const net = impact.interestSaved - penalty;
+      return {
+        id: l.id, lender: l.lender, rate: l.rate, applied,
+        interestSaved: impact.interestSaved, penalty, net,
+        worthIt: net > 0,
+      };
+    }).sort((a, b) => b.net - a.net);
+  }, [loans, amount, pen]);
+
+  if (loans.length === 0) return <NoLoansHint what="The prepay-penalty vs interest-saved trade-off" />;
+
+  const best = rows[0] ?? null;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Prepayment penalty vs interest saved</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lump-sum to deploy (₹)</label>
+            <input type="number" value={amountStr} onChange={e => setAmountStr(e.target.value)} placeholder="200000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Foreclosure penalty (% of prepaid)</label>
+            <input type="number" value={penaltyPct} onChange={e => setPenaltyPct(e.target.value)} placeholder="2" className={DINP} />
+          </div>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter a lump-sum amount to compare net savings across your loans.</p>
+      ) : (
+        <>
+          <div className={`${CARD} overflow-hidden`}>
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Loan", "Rate", "Prepaid", "Interest saved", "Penalty", "Net benefit"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.applied))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.interestSaved))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">−{formatAmount(Math.round(r.penalty))}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.worthIt ? "text-green-400" : "text-red-400"}`}>{r.net >= 0 ? "" : "−"}{formatAmount(Math.round(Math.abs(r.net)))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {best && (
+            <div className={`rounded-lg p-4 border ${best.worthIt ? "border-green-800/40 bg-green-950/20" : "border-yellow-800/40 bg-yellow-950/20"}`}>
+              <p className={`text-sm font-bold flex items-center gap-2 ${best.worthIt ? "text-green-400" : "text-yellow-400"}`}>
+                {best.worthIt ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                {best.worthIt
+                  ? `Prepay ${best.lender} first: ${formatAmount(Math.round(best.interestSaved))} interest saved beats the ${formatAmount(Math.round(best.penalty))} penalty — net ${fc(Math.round(best.net))} ahead. Target the highest-rate loan for the biggest payback.`
+                  : `At a ${pen}% penalty, no loan clears its foreclosure cost on this lump-sum — interest saved is below the penalty. Hold the cash or wait for the penalty-free window.`}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Floating-rate term loans to individuals are usually penalty-free under RBI rules; fixed-rate and business loans often carry 2–4% foreclosure charges. Confirm the penalty in your sanction letter and net it against the interest saved before prepaying.</p>
+    </div>
+  );
+}
+
+// ── #106 Debt-to-Equity Target Planner ───────────────────────────────────────────
+// Sets a target D/E (gearing) ratio and shows how much debt to repay — or equity to
+// inject — to hit it, so you stay inside covenant gearing caps before raising more.
+function DebtToEquityPlanner({ loans }: { loans: ActiveLoanLike[] }) {
+  const [equityStr, setEquityStr] = useFeatureState<string>("debt-de-equity", "");
+  const [targetDE, setTargetDE] = useState(1.5);
+  const fc = formatCurrency;
+
+  const totalDebt = useMemo(() => loans.reduce((s, l) => s + l.outstanding, 0), [loans]);
+  const equity = parseFloat(equityStr) || 0;
+
+  const result = useMemo(() => {
+    if (equity <= 0) return null;
+    const currentDE = totalDebt / equity;
+    const allowedDebt = targetDE * equity;
+    const repayNeeded = Math.max(0, totalDebt - allowedDebt);
+    const equityNeeded = totalDebt / targetDE - equity; // > 0 means inject equity
+    const headroom = allowedDebt - totalDebt; // > 0 means room to borrow more
+    return { currentDE, allowedDebt, repayNeeded, equityNeeded, headroom };
+  }, [equity, totalDebt, targetDE]);
+
+  if (loans.length === 0) return <NoLoansHint what="Your debt-to-equity gearing plan" />;
+
+  const overGeared = result !== null && result.currentDE > targetDE;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Debt-to-equity target planner</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Net worth / equity (₹)</label>
+            <input type="number" value={equityStr} onChange={e => setEquityStr(e.target.value)} placeholder="5000000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target D/E: <strong className="text-[var(--color-text)]">{targetDE.toFixed(1)}x</strong></label>
+            <input type="range" min={0.5} max={3} step={0.1} value={targetDE} onChange={e => setTargetDE(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Total debt tracked: {formatAmount(Math.round(totalDebt))} across {loans.length} loan(s).</p>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter your net worth to compute current gearing and the path to your target.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Current D/E", value: `${result.currentDE.toFixed(2)}x`, color: overGeared ? "text-red-400" : "text-green-400", sub: `target ${targetDE.toFixed(1)}x` },
+              { label: "Debt allowed at target", value: formatAmount(Math.round(result.allowedDebt)), color: "text-[var(--color-text)]", sub: `${targetDE.toFixed(1)}x × equity` },
+              { label: overGeared ? "Repay to hit target" : "Borrowing headroom", value: formatAmount(Math.round(overGeared ? result.repayNeeded : result.headroom)), color: overGeared ? "text-red-400" : "text-green-400", sub: overGeared ? "debt reduction needed" : "room before breach" },
+              { label: "Or inject equity", value: result.equityNeeded > 0 ? formatAmount(Math.round(result.equityNeeded)) : "—", color: "text-yellow-400", sub: "alternative to repaying" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${overGeared ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${overGeared ? "text-red-400" : "text-green-400"}`}>
+              {overGeared ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {overGeared
+                ? `Geared at ${result.currentDE.toFixed(2)}x — above your ${targetDE.toFixed(1)}x target. Repay ${fc(Math.round(result.repayNeeded))} of debt or raise ${fc(Math.round(result.equityNeeded))} of equity to come back inside. Many term-loan covenants cap D/E at 2–3x.`
+                : `Geared at ${result.currentDE.toFixed(2)}x, comfortably under your ${targetDE.toFixed(1)}x target. You have ${fc(Math.round(result.headroom))} of debt headroom before you'd breach it.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">D/E (gearing) = total debt ÷ shareholders' equity. Lenders embed gearing caps in covenants and re-test at every drawdown. Enter equity from your latest balance sheet; this tool tracks only loans recorded here.</p>
     </div>
   );
 }

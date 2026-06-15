@@ -13,6 +13,7 @@ import {
   AlertTriangle, CheckCircle2,
   LineChart, Receipt, Users, Flame, Layers, ArrowLeftRight, Scale, Target,
   CalendarClock, Wallet, HandCoins, Clock, Gauge, Boxes,
+  CalendarDays, Truck, Landmark, Rocket,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -48,6 +49,7 @@ export default function ForecastPage() {
     | "cash-bridge" | "ar-ap-timing" | "fixed-variable" | "break-even"
     | "rolling-pl" | "capex-plan" | "owner-draw" | "credit-aging"
     | "forecast-accuracy" | "product-mix"
+    | "weekly-calendar" | "vendor-timing" | "gst-forecast" | "runway-pipeline"
   >("main");
 
   const navigate = useNavigate();
@@ -211,6 +213,10 @@ export default function ForecastPage() {
           ["credit-aging", "Credit-Sale Aging", Clock],
           ["forecast-accuracy", "Forecast Accuracy", Gauge],
           ["product-mix", "Product Mix Forecast", Boxes],
+          ["weekly-calendar", "Weekly Cash Calendar", CalendarDays],
+          ["vendor-timing", "Vendor Payment Timing", Truck],
+          ["gst-forecast", "GST Payment Forecast", Landmark],
+          ["runway-pipeline", "Runway with Pipeline", Rocket],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setFcTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap ${fcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -238,6 +244,10 @@ export default function ForecastPage() {
       {fcTab === "credit-aging"      && <CreditSaleAgingForecast />}
       {fcTab === "forecast-accuracy" && <ForecastAccuracyTracker />}
       {fcTab === "product-mix"       && <ProductMixForecast />}
+      {fcTab === "weekly-calendar"   && <WeeklyCashCalendar />}
+      {fcTab === "vendor-timing"     && <VendorPaymentTiming />}
+      {fcTab === "gst-forecast"      && <GstPaymentForecast />}
+      {fcTab === "runway-pipeline"   && <RunwayWithPipeline />}
 
       {fcTab === "main" && <>
 
@@ -2376,6 +2386,301 @@ function ProductMixForecast() {
             <Area type="monotone" dataKey="revenue" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5510" animationDuration={400} />
           </ComposedChart>
         </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Weekly Cash Calendar — week-by-week expected inflows (due invoices) minus
+// outflows (recurring expense run-rate) over the next 8 weeks, with running balance.
+// ─────────────────────────────────────────────────────────────────────────────
+function WeeklyCashCalendar() {
+  const { store } = useApp();
+  const transactions = store.transactions ?? [];
+  const invoices = store.invoices ?? [];
+  const [opening, setOpening] = useFeatureState<number>("fc-weekly-opening-cash", 0);
+
+  const weeks = useMemo(() => {
+    const recurExpense = transactions
+      .filter(t => t.category !== "revenue" && t.isRecurring)
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    const weeklyOut = recurExpense / 4.3;
+    const now = new Date();
+    const out: { label: string; inflow: number; outflow: number; net: number; balance: number }[] = [];
+    let bal = opening;
+    for (let i = 0; i < 8; i++) {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i * 7);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (i + 1) * 7);
+      const inflow = invoices
+        .filter(inv => inv.status !== "paid")
+        .filter(inv => { const d = new Date(inv.dueDate); return d >= start && d < end; })
+        .reduce((s, inv) => s + inv.amount, 0);
+      const net = inflow - weeklyOut;
+      bal += net;
+      out.push({ label: format(start, "dd MMM"), inflow: Math.round(inflow), outflow: Math.round(weeklyOut), net: Math.round(net), balance: Math.round(bal) });
+    }
+    return out;
+  }, [transactions, invoices, opening]);
+
+  const lowest = weeks.reduce((m, w) => Math.min(m, w.balance), Infinity);
+  const negWeeks = weeks.filter(w => w.balance < 0).length;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={CalendarDays} title="Weekly Cash Calendar" blurb="An 8-week, week-by-week view of expected inflows (invoices due) minus your recurring outflow run-rate, with a running cash balance so you can spot the tight weeks early." />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Opening cash balance (₹)</label>
+        <input type="number" value={opening || ""} onChange={e => setOpening(Number(e.target.value) || 0)} placeholder="e.g. 500000"
+          className="w-full md:w-64 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+      </div>
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Lowest weekly balance", value: lowest === Infinity ? "—" : formatCurrency(lowest), color: lowest < 0 ? "text-red-400" : "text-[var(--color-text)]" },
+        { label: "Weeks in deficit", value: `${negWeeks} / 8`, color: negWeeks > 0 ? "text-red-400" : "text-green-400" },
+        { label: "8-week net swing", value: formatCurrency(weeks.reduce((s, w) => s + w.net, 0)), color: "text-[var(--color-text)]" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Running cash balance (₹L)</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={weeks.map(w => ({ label: w.label, balance: Math.round(w.balance / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Balance"]} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 2" />
+            <Area type="monotone" dataKey="balance" stroke="#1A6B55" strokeWidth={2} fill="#1A6B5510" animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <div className="mt-3 space-y-1.5">
+          {weeks.map(w => (
+            <div key={w.label} className="flex items-center justify-between text-xs py-1 border-b border-[var(--color-border)] last:border-0">
+              <span className="text-[var(--color-muted)]">Week of {w.label}</span>
+              <span className="flex gap-3 tabular-nums">
+                <span className="text-green-400">+{formatCurrency(w.inflow)}</span>
+                <span className="text-red-400">-{formatCurrency(w.outflow)}</span>
+                <span className={w.balance < 0 ? "text-red-400 font-semibold" : "text-[var(--color-text)] font-semibold"}>{formatCurrency(w.balance)}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendor Payment-Timing Forecast — schedule planned vendor payments and see when
+// each lands, the monthly outflow profile and the single heaviest payment month.
+// ─────────────────────────────────────────────────────────────────────────────
+interface VendorPayment { id: string; vendor: string; amount: number; offsetDays: number }
+
+function VendorPaymentTiming() {
+  const [items, setItems] = useFeatureState<VendorPayment[]>("fc-vendor-payments", []);
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [offset, setOffset] = useState("30");
+
+  const add = () => {
+    if (!vendor || !amount) { toast.error("Add a vendor and amount"); return; }
+    setItems(prev => [...prev, { id: generateId(), vendor, amount: Number(amount), offsetDays: clampNum(Number(offset) || 0, 0, 180) }]);
+    toast.success("Vendor payment scheduled");
+    setVendor(""); setAmount(""); setOffset("30");
+  };
+
+  const months = useMemo(() => {
+    const now = new Date();
+    const buckets: { label: string; amount: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      buckets.push({ label: format(d, "MMM yy"), amount: 0 });
+    }
+    for (const it of items) {
+      const due = new Date(now.getFullYear(), now.getMonth(), now.getDate() + it.offsetDays);
+      const idx = (due.getFullYear() - now.getFullYear()) * 12 + (due.getMonth() - now.getMonth());
+      if (idx >= 0 && idx < 6) buckets[idx].amount += it.amount;
+    }
+    return buckets;
+  }, [items]);
+
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  const peak = months.reduce((m, b) => b.amount > m.amount ? b : m, { label: "—", amount: 0 });
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Truck} title="Vendor Payment-Timing Forecast" blurb="Schedule each planned vendor payment by how many days out it is due, then see the resulting monthly outflow profile and the heaviest payment month so you can pace cash." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Scheduled payments", value: `${items.length}`, color: "text-[var(--color-text)]" },
+        { label: "Total committed", value: formatCurrency(total), color: "text-red-400" },
+        { label: "Heaviest month", value: peak.amount > 0 ? formatCurrency(peak.amount) : "—", color: "text-red-400", sub: peak.amount > 0 ? peak.label : undefined },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Schedule a vendor payment</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+          <input placeholder="Vendor" value={vendor} onChange={e => setVendor(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Amount (₹)" value={amount} onChange={e => setAmount(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Due in (days)" value={offset} onChange={e => setOffset(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded font-semibold hover:opacity-90"><Plus size={12} /> Add payment</button>
+        <div className="mt-3 space-y-2">
+          {items.map(it => (
+            <div key={it.id} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div>
+                <p className="text-sm font-medium">{it.vendor}</p>
+                <p className="text-xs text-[var(--color-muted)]">{formatCurrency(it.amount)} · due in {it.offsetDays}d</p>
+              </div>
+              <button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {items.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No vendor payments scheduled yet</p>}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Monthly vendor outflow (₹L)</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={months.map(m => ({ label: m.label, amount: Math.round(m.amount / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "Outflow"]} />
+            <Bar dataKey="amount" fill="#d97706" radius={[4, 4, 0, 0]} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GST Payment Forecast — projects upcoming monthly GST cash outflow from the
+// trailing taxable-revenue run-rate and the firm's GST rate.
+// ─────────────────────────────────────────────────────────────────────────────
+function GstPaymentForecast() {
+  const { store } = useApp();
+  const transactions = store.transactions ?? [];
+  const { firm } = store;
+  const [growth, setGrowth] = useFeatureState<number>("fc-gst-rev-growth", 0);
+
+  const hist = useMemo(() => monthlyAggregates(transactions, 6), [transactions]);
+  const avgRev = hist.length ? hist.reduce((s, m) => s + m.revenue, 0) / hist.length : 0;
+  const rate = firm.gstRate ?? 18;
+
+  const proj = useMemo(() => {
+    const now = new Date();
+    const out: { label: string; gst: number }[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const rev = avgRev * (1 + growth / 100) ** i;
+      const gst = rev * (rate / 100);
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 20);
+      out.push({ label: format(d, "dd MMM"), gst: Math.round(gst) });
+    }
+    return out;
+  }, [avgRev, growth, rate]);
+
+  const totalDue = proj.reduce((s, p) => s + p.gst, 0);
+  const nextDue = proj.length ? proj[0].gst : 0;
+
+  if (!firm.gstRegistered) {
+    return (
+      <div className="space-y-4">
+        <ToolHeader icon={Landmark} title="GST Payment Forecast" blurb="Projects your upcoming monthly GST cash outflow from trailing taxable revenue and your registered GST rate." />
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Landmark size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <h3 className="text-sm font-semibold mb-1">Not GST registered</h3>
+          <p className="text-sm text-[var(--color-muted)] max-w-xs mx-auto">Set your firm as GST-registered with a GST rate in Settings to forecast monthly GST liability.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Landmark} title="GST Payment Forecast" blurb="Projects your upcoming monthly GST cash outflow (paid by the 20th) from the trailing taxable-revenue run-rate and your registered GST rate, so the liability never surprises you." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Next month's GST", value: formatCurrency(Math.round(nextDue)), color: "text-red-400" },
+        { label: "6-month GST due", value: formatCurrency(Math.round(totalDue)), color: "text-red-400" },
+        { label: "GST rate", value: `${rate}%`, color: "text-[var(--color-text)]", sub: `on ~${formatCurrency(Math.round(avgRev))}/mo` },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Assumed revenue growth %/month: <span className="text-[var(--color-text)] font-semibold">{growth}%</span></label>
+        <input type="range" min="-10" max="20" step="1" value={growth} onChange={e => setGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected monthly GST outflow (₹L)</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={proj.map(p => ({ label: p.label, gst: Math.round(p.gst / 100000) }))}>
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`₹${v}L`, "GST due"]} />
+            <Bar dataKey="gst" fill="#d97706" radius={[4, 4, 0, 0]} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runway with Pipeline — extends the base cash runway by layering risk-weighted
+// pipeline deals (value × win-probability) into the inflow, showing the uplift.
+// ─────────────────────────────────────────────────────────────────────────────
+interface PipelineDeal { id: string; name: string; value: number; winPct: number }
+
+function RunwayWithPipeline() {
+  const { store } = useApp();
+  const transactions = store.transactions ?? [];
+  const [deals, setDeals] = useFeatureState<PipelineDeal[]>("fc-pipeline-deals", []);
+  const [name, setName] = useState("");
+  const [value, setValue] = useState("");
+  const [winPct, setWinPct] = useState("50");
+
+  const add = () => {
+    if (!name || !value) { toast.error("Add a deal name and value"); return; }
+    setDeals(prev => [...prev, { id: generateId(), name, value: Number(value), winPct: clampNum(Number(winPct) || 0, 0, 100) }]);
+    toast.success("Pipeline deal added");
+    setName(""); setValue(""); setWinPct("50");
+  };
+
+  const { cash, burn, baseRunway, pipelineRunway, weighted } = useMemo(() => {
+    const hist = monthlyAggregates(transactions, 6);
+    const avgRev = hist.length ? hist.reduce((s, m) => s + m.revenue, 0) / hist.length : 0;
+    const avgExp = hist.length ? hist.reduce((s, m) => s + m.expense, 0) / hist.length : 0;
+    const burn = Math.max(0, avgExp - avgRev);
+    const cash = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+    const weighted = deals.reduce((s, d) => s + d.value * (d.winPct / 100), 0);
+    const baseRunway = burn > 0 ? cash / burn : Infinity;
+    const pipelineRunway = burn > 0 ? (cash + weighted) / burn : Infinity;
+    return { cash, burn, baseRunway, pipelineRunway, weighted };
+  }, [transactions, store.bankAccounts, deals]);
+
+  const fmtMonths = (m: number) => m === Infinity ? "Cash-flow positive" : `${m.toFixed(1)} mo`;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Rocket} title="Runway with Pipeline" blurb="Extends your base cash runway by layering in risk-weighted pipeline deals (value × win-probability) as expected inflow, so you see how much closing the funnel buys you." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
+        { label: "Monthly burn", value: burn > 0 ? formatCurrency(Math.round(burn)) : "—", color: burn > 0 ? "text-red-400" : "text-green-400" },
+        { label: "Base runway", value: fmtMonths(baseRunway), color: baseRunway < 6 && baseRunway !== Infinity ? "text-red-400" : "text-[var(--color-text)]" },
+        { label: "With pipeline", value: fmtMonths(pipelineRunway), color: "text-green-400", sub: weighted > 0 ? `+${formatCurrency(Math.round(weighted))} weighted` : undefined },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Add a pipeline deal</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+          <input placeholder="Deal / customer" value={name} onChange={e => setName(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Value (₹)" value={value} onChange={e => setValue(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <input type="number" placeholder="Win %" value={winPct} onChange={e => setWinPct(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded font-semibold hover:opacity-90"><Plus size={12} /> Add deal</button>
+        <div className="mt-3 space-y-2">
+          {deals.map(d => (
+            <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+              <div>
+                <p className="text-sm font-medium">{d.name}</p>
+                <p className="text-xs text-[var(--color-muted)]">{formatCurrency(d.value)} × {d.winPct}% = {formatCurrency(Math.round(d.value * d.winPct / 100))} weighted</p>
+              </div>
+              <button onClick={() => setDeals(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {deals.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No pipeline deals yet — add one to extend runway</p>}
+        </div>
       </div>
     </div>
   );
