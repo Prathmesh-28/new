@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import { gstLedger } from "@/lib/finance";
-import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity } from "lucide-react";
+import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
@@ -19,7 +19,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 export default function GstPage() {
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -241,7 +241,7 @@ export default function GstPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity]] as const).map(([id, label, Icon]) => (
+        {([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -1447,6 +1447,14 @@ export default function GstPage() {
       {tab === "gst-advances"       && <GstAdvancesTracker />}
       {tab === "zero-rated"         && <ZeroRatedInvoiceKit />}
       {tab === "health-score"       && <GstHealthScore />}
+      {tab === "interest-fee"       && <GstInterestLateFee />}
+      {tab === "threshold"          && <RegistrationThresholdAdvisor />}
+      {tab === "gstr1-3b"           && <Gstr1Vs3bReconciler />}
+      {tab === "rule180"            && <Rule180ReversalTracker />}
+      {tab === "einv30"             && <EInvoice30DayTracker />}
+      {tab === "inverted"           && <InvertedDutyRefundCalculator />}
+      {tab === "cdn-register"       && <CreditDebitNoteRegister />}
+      {tab === "cess"               && <CompensationCessCalculator />}
     </div>
   );
 }
@@ -3138,6 +3146,579 @@ function GstHealthScore() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">A single compliance score with actionable nudges. Late GSTR-3B: ₹50/day (₹20 if nil), capped, plus 18% interest on tax. A clean streak supports lender trust and smoother refunds.</p>
+    </div>
+  );
+}
+
+const GST_INPUT = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+const GST_CARD  = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5";
+
+// ── INTEREST & LATE-FEE CALCULATOR (Sec 50 + Sec 47) ──
+function GstInterestLateFee() {
+  const [taxDue, setTaxDue]   = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [retType, setRetType] = useState<"GSTR-3B" | "GSTR-1">("GSTR-3B");
+  const [isNil, setIsNil]     = useState(false);
+
+  const result = useMemo(() => {
+    const tax = parseFloat(taxDue) || 0;
+    if (!dueDate || !payDate) return null;
+    const d1 = new Date(dueDate).getTime();
+    const d2 = new Date(payDate).getTime();
+    const days = Math.max(0, Math.round((d2 - d1) / 86400000));
+    // Sec 50: 18% p.a. simple interest on net cash tax paid late.
+    const interest = Math.round((tax * 0.18 * days) / 365);
+    // Sec 47 late fee: GSTR-3B/1 = ₹50/day (₹25 CGST + ₹25 SGST), ₹20/day for nil. Cap ₹5,000 per Act each side → ₹10,000 total (simplified).
+    const perDay = isNil ? 20 : 50;
+    const lateFee = Math.min(perDay * days, isNil ? 1000 : 10000);
+    return { days, interest, lateFee, total: interest + lateFee, perDay };
+  }, [taxDue, dueDate, payDate, isNil]);
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-1"><Timer size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Interest &amp; Late-Fee Calculator</h2></div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Estimate Sec 50 interest (18% p.a. on net cash tax) and Sec 47 late fee (₹50/day, ₹20/day for nil) on a delayed return.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Net tax payable in cash (₹)</label>
+            <input type="number" min={0} value={taxDue} onChange={e => setTaxDue(e.target.value)} placeholder="e.g. 48000" className={GST_INPUT} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Return</label>
+            <select value={retType} onChange={e => setRetType(e.target.value as typeof retType)} className={GST_INPUT}>
+              <option>GSTR-3B</option><option>GSTR-1</option>
+            </select>
+          </div>
+          <label className="flex items-end gap-2 text-xs cursor-pointer pb-2">
+            <input type="checkbox" checked={isNil} onChange={e => setIsNil(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <span>Nil return (₹20/day)</span>
+          </label>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Original due date</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={GST_INPUT} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Actual / planned filing date</label>
+            <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={GST_INPUT} />
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <div className="bg-[var(--color-surface)] border border-orange-700/40 rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">{result.days} day{result.days !== 1 ? "s" : ""} late · {retType}</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Interest (Sec 50)", value: result.interest, color: "text-orange-400" },
+              { label: `Late fee @ ₹${result.perDay}/day`, value: result.lateFee, color: "text-red-400" },
+              { label: "Total payable", value: result.total, color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{formatCurrency(k.value)}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Interest = tax × 18% × days ÷ 365 (simple). Late fee split equally between CGST &amp; SGST. Caps simplified — confirm current notification before paying.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── TURNOVER vs REGISTRATION-THRESHOLD ADVISOR ──
+function RegistrationThresholdAdvisor() {
+  const { store } = useApp();
+  const [supplyType, setSupplyType] = useState<"goods" | "services">("goods");
+  const [special, setSpecial]       = useState(false); // special-category state (₹10L/₹20L)
+  const [manual, setManual]         = useState("");
+
+  // Trailing-12-month turnover from positive transactions (inflows = outward supply proxy).
+  const autoTurnover = useMemo(() => {
+    const cutoff = Date.now() - 365 * 86400000;
+    return store.transactions.filter(t => t.amount > 0 && new Date(t.date).getTime() >= cutoff).reduce((s, t) => s + t.amount, 0);
+  }, [store.transactions]);
+
+  const turnover = manual.trim() ? (parseFloat(manual) || 0) : autoTurnover;
+  // Thresholds: goods ₹40L (₹20L special); services ₹20L (₹10L special). E-invoice ₹5cr, audit/9C ₹5cr.
+  const regThreshold = supplyType === "goods" ? (special ? 2000000 : 4000000) : (special ? 1000000 : 2000000);
+  const eInvoiceThreshold = 50000000;
+  const compositionThreshold = supplyType === "goods" ? 15000000 : 5000000;
+  const pct = Math.min(100, Math.round((turnover / regThreshold) * 100));
+  const mustRegister = turnover >= regThreshold;
+
+  const milestones = [
+    { label: "GST registration", limit: regThreshold, crossed: turnover >= regThreshold, note: "Compulsory registration required." },
+    { label: "Composition eligibility cap", limit: compositionThreshold, crossed: turnover >= compositionThreshold, note: "Above this you cannot opt for / must exit composition." },
+    { label: "e-Invoicing (IRN) mandate", limit: eInvoiceThreshold, crossed: turnover >= eInvoiceThreshold, note: "B2B e-invoicing becomes mandatory." },
+    { label: "GSTR-9C audit reconciliation", limit: 50000000, crossed: turnover >= 50000000, note: "Self-certified reconciliation (9C) required." },
+  ];
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-1"><Gauge size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Registration &amp; Threshold Advisor</h2></div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Compares your aggregate turnover against GST registration, composition, e-invoice and audit thresholds. Auto-reads last-12-month inflows unless you override.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Supply type</label>
+            <select value={supplyType} onChange={e => setSupplyType(e.target.value as typeof supplyType)} className={GST_INPUT}>
+              <option value="goods">Goods</option><option value="services">Services / mixed</option>
+            </select>
+          </div>
+          <label className="flex items-end gap-2 text-xs cursor-pointer pb-2">
+            <input type="checkbox" checked={special} onChange={e => setSpecial(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <span>Special-category state (NE / hill states)</span>
+          </label>
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Aggregate turnover (₹) — leave blank to use last-12-month inflows ({formatAmount(autoTurnover)})</label>
+            <input type="number" min={0} value={manual} onChange={e => setManual(e.target.value)} placeholder={String(Math.round(autoTurnover))} className={GST_INPUT} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`rounded-lg border p-5 ${mustRegister ? "bg-red-950/20 border-red-800/40" : "bg-green-950/20 border-green-800/40"}`}>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold">{mustRegister ? "Registration required" : "Below registration threshold"}</p>
+          <p className="text-sm tabular-nums text-[var(--color-muted)]">{formatCurrency(turnover)} / {formatCurrency(regThreshold)}</p>
+        </div>
+        <div className="h-2 w-full bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full ${mustRegister ? "bg-red-400" : pct > 80 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} /></div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">{mustRegister ? "You have crossed the limit — register within 30 days of crossing." : pct > 80 ? "Approaching the threshold — plan registration ahead of crossing." : "Voluntary registration still allowed to claim ITC and sell B2B."}</p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Milestone", "Threshold", "Status", "Note"].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+          <tbody>
+            {milestones.map(m => (
+              <tr key={m.label} className="border-t border-[var(--color-border)]">
+                <td className="px-3 py-2 font-medium">{m.label}</td>
+                <td className="px-3 py-2 tabular-nums">{formatCurrency(m.limit)}</td>
+                <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${m.crossed ? "bg-red-950/30 text-red-400" : "bg-green-950/30 text-green-400"}`}>{m.crossed ? "Crossed" : "Within"}</span></td>
+                <td className="px-3 py-2 text-[var(--color-muted)]">{m.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── GSTR-1 vs GSTR-3B RECONCILIATION ──
+function Gstr1Vs3bReconciler() {
+  const { store } = useApp();
+  const firm = store.firm;
+  const rate = firm.gstRate ?? 18;
+  const [g3bTaxable, setG3bTaxable] = useState("");
+  const [g3bTax, setG3bTax]         = useState("");
+
+  // GSTR-1 figures derived from invoice register (taxable + tax at firm rate).
+  const g1 = useMemo(() => {
+    const taxable = store.invoices.reduce((s, inv) => s + (inv.amount || 0), 0);
+    const tax = Math.round(taxable * rate) / 100;
+    return { taxable, tax };
+  }, [store.invoices, rate]);
+
+  const rec = useMemo(() => {
+    const t3b = parseFloat(g3bTaxable) || 0;
+    const tax3b = parseFloat(g3bTax) || 0;
+    return {
+      taxableDelta: g1.taxable - t3b,
+      taxDelta: g1.tax - tax3b,
+      taxableMatch: Math.abs(g1.taxable - t3b) < 1,
+      taxMatch: Math.abs(g1.tax - tax3b) < 1,
+    };
+  }, [g1, g3bTaxable, g3bTax]);
+
+  const ok = rec.taxableMatch && rec.taxMatch;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-1"><Scale size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">GSTR-1 vs GSTR-3B Reconciliation</h2></div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Liability declared in GSTR-3B (Table 3.1) must match outward supplies reported in GSTR-1. Mismatches are the top trigger for ASMT-10 scrutiny. GSTR-1 is computed from your invoice register; enter your filed 3B figures.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">GSTR-3B taxable value (₹)</label>
+            <input type="number" min={0} value={g3bTaxable} onChange={e => setG3bTaxable(e.target.value)} placeholder={String(Math.round(g1.taxable))} className={GST_INPUT} />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">GSTR-3B output tax (₹)</label>
+            <input type="number" min={0} value={g3bTax} onChange={e => setG3bTax(e.target.value)} placeholder={String(Math.round(g1.tax))} className={GST_INPUT} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Particulars", "GSTR-1 (books)", "GSTR-3B (filed)", "Difference"].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {[
+              { label: "Taxable outward supplies", a: g1.taxable, b: parseFloat(g3bTaxable) || 0, delta: rec.taxableDelta, match: rec.taxableMatch },
+              { label: `Output tax @ ${rate}%`, a: g1.tax, b: parseFloat(g3bTax) || 0, delta: rec.taxDelta, match: rec.taxMatch },
+            ].map(r => (
+              <tr key={r.label}>
+                <td className="px-4 py-3 font-medium">{r.label}</td>
+                <td className="px-4 py-3 tabular-nums">{formatCurrency(r.a)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatCurrency(r.b)}</td>
+                <td className={`px-4 py-3 tabular-nums font-semibold ${r.match ? "text-green-400" : "text-red-400"}`}>{r.delta >= 0 ? formatCurrency(r.delta) : `(${formatCurrency(Math.abs(r.delta))})`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg border px-4 py-3 text-sm flex items-center gap-3 ${ok ? "bg-green-950/20 border-green-800/40" : "bg-orange-950/20 border-orange-800/40"}`}>
+        {ok ? <CheckCircle2 size={16} className="text-green-400 shrink-0" /> : <AlertTriangle size={16} className="text-orange-400 shrink-0" />}
+        <p>{ok ? "GSTR-1 and GSTR-3B reconcile — no liability mismatch." : "Mismatch detected. Reconcile before filing: under-reported 3B liability attracts interest; over-reported needs amendment in the next period."}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── 180-DAY ITC REVERSAL TRACKER (Rule 37 / Sec 16(2)) ──
+function Rule180ReversalTracker() {
+  type Bill = { id: string; supplier: string; invoiceNo: string; invoiceDate: string; amount: number; rate: number; paid: boolean };
+  const [bills, setBills] = useFeatureState<Bill[]>("gst-rule180-bills", []);
+  const [supplier, setSupplier] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [amount, setAmount] = useState("");
+  const [rate, setRate] = useState(18);
+
+  const add = () => {
+    if (!supplier || !amount) { toast.error("Supplier and amount required"); return; }
+    setBills(prev => [...prev, { id: crypto.randomUUID(), supplier, invoiceNo, invoiceDate, amount: parseFloat(amount) || 0, rate, paid: false }]);
+    setSupplier(""); setInvoiceNo(""); setAmount("");
+  };
+  const togglePaid = (id: string) => setBills(prev => prev.map(b => b.id === id ? { ...b, paid: !b.paid } : b));
+  const remove = (id: string) => setBills(prev => prev.filter(b => b.id !== id));
+
+  const rows = bills.map(b => {
+    const itc = Math.round(b.amount * b.rate / 100);
+    const daysSince = Math.floor((Date.now() - new Date(b.invoiceDate).getTime()) / 86400000);
+    const deadline = format(addDays(new Date(b.invoiceDate), 180), "d MMM yyyy");
+    const overdue = !b.paid && daysSince > 180;
+    const due = !b.paid && daysSince > 150 && daysSince <= 180;
+    return { ...b, itc, daysSince, deadline, overdue, due };
+  });
+  const atRisk = rows.filter(r => r.overdue).reduce((s, r) => s + r.itc, 0);
+  const dueSoon = rows.filter(r => r.due).reduce((s, r) => s + r.itc, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-orange-300">180-Day Payment Rule (Rule 37)</strong> — If you don't pay a supplier within 180 days of the invoice date, the ITC claimed must be reversed (with interest) and can be re-claimed only after payment.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add purchase invoice</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier name *" className={GST_INPUT} />
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no" className={GST_INPUT} />
+          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={GST_INPUT} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Taxable amount (₹) *" className={GST_INPUT} />
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-red-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">ITC to reverse (overdue &gt;180d)</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(atRisk)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Due soon (151–180 days)</p><p className="text-lg font-bold tabular-nums text-orange-400">{formatCurrency(dueSoon)}</p></div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Supplier", "Invoice", "Date", "ITC", "Days", "Reverse by", "Paid", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className={`border-t border-[var(--color-border)] ${r.overdue ? "bg-red-950/10" : r.due ? "bg-orange-950/10" : ""}`}>
+                  <td className="px-3 py-2 font-medium">{r.supplier}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{r.invoiceNo || "—"}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{r.invoiceDate}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatCurrency(r.itc)}</td>
+                  <td className={`px-3 py-2 tabular-nums ${r.overdue ? "text-red-400 font-semibold" : ""}`}>{r.paid ? "—" : r.daysSince}</td>
+                  <td className="px-3 py-2">{r.paid ? "Paid" : r.deadline}</td>
+                  <td className="px-3 py-2"><button onClick={() => togglePaid(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.paid ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.paid ? "Paid" : "Mark paid"}</button></td>
+                  <td className="px-3 py-2"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── E-INVOICE 30-DAY REPORTING DEADLINE TRACKER ──
+function EInvoice30DayTracker() {
+  type Inv = { id: string; invoiceNo: string; invoiceDate: string; value: number; reported: boolean };
+  const [invs, setInvs] = useFeatureState<Inv[]>("gst-einv30-invoices", []);
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [value, setValue] = useState("");
+
+  const add = () => {
+    if (!invoiceNo || !invoiceDate) { toast.error("Invoice no and date required"); return; }
+    setInvs(prev => [...prev, { id: crypto.randomUUID(), invoiceNo, invoiceDate, value: parseFloat(value) || 0, reported: false }]);
+    setInvoiceNo(""); setValue("");
+  };
+  const toggle = (id: string) => setInvs(prev => prev.map(i => i.id === id ? { ...i, reported: !i.reported } : i));
+  const remove = (id: string) => setInvs(prev => prev.filter(i => i.id !== id));
+
+  const rows = invs.map(i => {
+    const daysSince = Math.floor((Date.now() - new Date(i.invoiceDate).getTime()) / 86400000);
+    const daysLeft = 30 - daysSince;
+    const deadline = format(addDays(new Date(i.invoiceDate), 30), "d MMM yyyy");
+    const locked = !i.reported && daysLeft < 0;
+    const urgent = !i.reported && daysLeft >= 0 && daysLeft <= 5;
+    return { ...i, daysLeft, deadline, locked, urgent };
+  }).sort((a, b) => a.daysLeft - b.daysLeft);
+
+  const lockedCount = rows.filter(r => r.locked).length;
+  const urgentCount = rows.filter(r => r.urgent).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">30-Day IRP Reporting Rule</strong> — Invoices must be reported to the Invoice Registration Portal within 30 days of the invoice date. After that the IRP rejects the IRN, blocking e-invoicing and the buyer's ITC. Track every invoice here.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add invoice to track</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no *" className={GST_INPUT} />
+          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={GST_INPUT} />
+          <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Invoice value (₹)" className={GST_INPUT} />
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-red-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Locked out (deadline passed)</p><p className="text-lg font-bold tabular-nums text-red-400">{lockedCount}</p></div>
+        <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Report now (≤5 days left)</p><p className="text-lg font-bold tabular-nums text-orange-400">{urgentCount}</p></div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Invoice", "Date", "Value", "Report by", "Days left", "IRN", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className={`border-t border-[var(--color-border)] ${r.locked ? "bg-red-950/10" : r.urgent ? "bg-orange-950/10" : ""}`}>
+                  <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{r.invoiceDate}</td>
+                  <td className="px-3 py-2 tabular-nums">{r.value ? formatCurrency(r.value) : "—"}</td>
+                  <td className="px-3 py-2">{r.reported ? "—" : r.deadline}</td>
+                  <td className={`px-3 py-2 tabular-nums font-semibold ${r.locked ? "text-red-400" : r.urgent ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{r.reported ? "—" : r.locked ? `${Math.abs(r.daysLeft)}d over` : `${r.daysLeft}d`}</td>
+                  <td className="px-3 py-2"><button onClick={() => toggle(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.reported ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.reported ? "Reported" : "Mark reported"}</button></td>
+                  <td className="px-3 py-2"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── INVERTED-DUTY REFUND CALCULATOR (Rule 89(5)) ──
+function InvertedDutyRefundCalculator() {
+  const [inwardItc, setInwardItc]       = useState(""); // total ITC on inputs
+  const [inputItc, setInputItc]         = useState(""); // ITC on inputs only (goods, not services/cap goods)
+  const [outwardTurnover, setOutwardTurnover] = useState(""); // turnover of inverted-rated supply
+  const [totalTurnover, setTotalTurnover]     = useState("");
+  const [outputTaxPaid, setOutputTaxPaid]     = useState("");
+
+  const result = useMemo(() => {
+    const netItc = parseFloat(inputItc) || 0;            // Net ITC (inputs only) per Rule 89(5)
+    const invTurnover = parseFloat(outwardTurnover) || 0;
+    const adjTotal = parseFloat(totalTurnover) || 0;
+    const outTax = parseFloat(outputTaxPaid) || 0;
+    if (adjTotal <= 0) return null;
+    // Rule 89(5): Max Refund = (Turnover of inverted supply × Net ITC ÷ Adjusted Total Turnover) − tax payable on such inverted supply
+    const maxRefund = Math.max(0, Math.round((invTurnover * netItc) / adjTotal - outTax));
+    const totalItc = parseFloat(inwardItc) || 0;
+    const ineligible = Math.max(0, totalItc - netItc); // services + capital goods ITC not refundable here
+    return { maxRefund, netItc, ineligible };
+  }, [inwardItc, inputItc, outwardTurnover, totalTurnover, outputTaxPaid]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-1"><Coins size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Inverted-Duty Refund Calculator</h2></div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When inputs are taxed higher than outputs, accumulated ITC can be refunded under Rule 89(5). Only ITC on input <em>goods</em> counts as Net ITC — services &amp; capital goods are excluded.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Total ITC availed (₹)</label><input type="number" min={0} value={inwardItc} onChange={e => setInwardItc(e.target.value)} placeholder="all inputs + services + cap goods" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Net ITC — input goods only (₹)</label><input type="number" min={0} value={inputItc} onChange={e => setInputItc(e.target.value)} placeholder="goods inputs only" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover of inverted-rated supply (₹)</label><input type="number" min={0} value={outwardTurnover} onChange={e => setOutwardTurnover(e.target.value)} className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Adjusted total turnover (₹)</label><input type="number" min={0} value={totalTurnover} onChange={e => setTotalTurnover(e.target.value)} className={GST_INPUT} /></div>
+          <div className="col-span-2"><label className="block text-xs text-[var(--color-muted)] mb-1">Output tax payable on inverted supply (₹)</label><input type="number" min={0} value={outputTaxPaid} onChange={e => setOutputTaxPaid(e.target.value)} className={GST_INPUT} /></div>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-green-800/40 rounded-lg p-5">
+            <p className="text-sm font-semibold mb-2">Maximum refund (Rule 89(5) formula)</p>
+            <p className="text-3xl font-bold tabular-nums text-green-400">{formatCurrency(result.maxRefund)}</p>
+            <p className="text-[11px] text-[var(--color-muted)] mt-2">= (Inverted turnover × Net ITC ÷ Adjusted total turnover) − tax payable on inverted supply.</p>
+          </div>
+          {result.ineligible > 0 && (
+            <div className="bg-orange-950/20 border border-orange-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+              <AlertTriangle size={15} className="text-orange-400 shrink-0" />
+              <p>{formatCurrency(result.ineligible)} of ITC (on services / capital goods) is excluded from Net ITC and not refundable under this route.</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── CREDIT / DEBIT NOTE GST REGISTER ──
+function CreditDebitNoteRegister() {
+  type Note = { id: string; noteNo: string; kind: "credit" | "debit"; party: string; origInvoice: string; date: string; taxable: number; rate: number };
+  const [notes, setNotes] = useFeatureState<Note[]>("gst-cdn-register", []);
+  const [noteNo, setNoteNo]   = useState("");
+  const [kind, setKind]       = useState<"credit" | "debit">("credit");
+  const [party, setParty]     = useState("");
+  const [origInvoice, setOrigInvoice] = useState("");
+  const [date, setDate]       = useState(() => new Date().toISOString().split("T")[0]);
+  const [taxable, setTaxable] = useState("");
+  const [rate, setRate]       = useState(18);
+
+  const add = () => {
+    if (!noteNo || !taxable) { toast.error("Note number and taxable value required"); return; }
+    setNotes(prev => [...prev, { id: crypto.randomUUID(), noteNo, kind, party, origInvoice, date, taxable: parseFloat(taxable) || 0, rate }]);
+    setNoteNo(""); setParty(""); setOrigInvoice(""); setTaxable("");
+  };
+  const remove = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
+
+  const taxOf = (n: Note) => Math.round(n.taxable * n.rate / 100);
+  const creditTax = notes.filter(n => n.kind === "credit").reduce((s, n) => s + taxOf(n), 0);
+  const debitTax  = notes.filter(n => n.kind === "debit").reduce((s, n) => s + taxOf(n), 0);
+  const netAdj = debitTax - creditTax; // +ve increases output liability, -ve reduces it
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
+        <strong className="text-[var(--color-text)]">Credit / Debit Notes (Sec 34)</strong> — Credit notes reduce your output GST liability (returns, discounts, overcharge); debit notes increase it (undercharge). Both must be reported in GSTR-1 and linked to the original invoice.
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add note</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={noteNo} onChange={e => setNoteNo(e.target.value)} placeholder="Note no *" className={GST_INPUT} />
+          <select value={kind} onChange={e => setKind(e.target.value as typeof kind)} className={GST_INPUT}><option value="credit">Credit note</option><option value="debit">Debit note</option></select>
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={GST_INPUT} />
+          <input value={origInvoice} onChange={e => setOrigInvoice(e.target.value)} placeholder="Original invoice no" className={GST_INPUT} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={GST_INPUT} />
+          <input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} placeholder="Taxable value (₹) *" className={GST_INPUT} />
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add note</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Credit-note GST (reduces liability)</p><p className="text-lg font-bold tabular-nums text-green-400">{formatCurrency(creditTax)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Debit-note GST (adds liability)</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(debitTax)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Net liability adjustment</p><p className={`text-lg font-bold tabular-nums ${netAdj >= 0 ? "text-red-400" : "text-green-400"}`}>{netAdj >= 0 ? formatCurrency(netAdj) : `(${formatCurrency(Math.abs(netAdj))})`}</p></div>
+      </div>
+
+      {notes.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Note", "Type", "Party", "Orig. invoice", "Date", "Taxable", "GST", ""].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {notes.slice().reverse().map(n => (
+                <tr key={n.id} className="border-t border-[var(--color-border)]">
+                  <td className="px-3 py-2 font-mono">{n.noteNo}</td>
+                  <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${n.kind === "credit" ? "bg-green-950/30 text-green-400" : "bg-red-950/30 text-red-400"}`}>{n.kind === "credit" ? "Credit" : "Debit"}</span></td>
+                  <td className="px-3 py-2">{n.party || "—"}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{n.origInvoice || "—"}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{n.date}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatCurrency(n.taxable)}</td>
+                  <td className={`px-3 py-2 tabular-nums font-semibold ${n.kind === "credit" ? "text-green-400" : "text-red-400"}`}>{formatCurrency(taxOf(n))}</td>
+                  <td className="px-3 py-2"><button onClick={() => remove(n.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── COMPENSATION CESS CALCULATOR (sin / luxury goods) ──
+function CompensationCessCalculator() {
+  const ITEMS: { label: string; gst: number; cess: string; cessPct: number }[] = [
+    { label: "Aerated / sugary drinks", gst: 28, cess: "12%", cessPct: 12 },
+    { label: "Small petrol car (≤1200cc, ≤4m)", gst: 28, cess: "1%", cessPct: 1 },
+    { label: "Small diesel car (≤1500cc, ≤4m)", gst: 28, cess: "3%", cessPct: 3 },
+    { label: "Mid-size car (>1500cc)", gst: 28, cess: "17%", cessPct: 17 },
+    { label: "SUV (>1500cc, >4m, >170mm clearance)", gst: 28, cess: "22%", cessPct: 22 },
+    { label: "Cigarettes / tobacco products", gst: 28, cess: "36%", cessPct: 36 },
+    { label: "Pan masala", gst: 28, cess: "60%", cessPct: 60 },
+    { label: "Coal / lignite (per tonne basis)", gst: 5, cess: "₹400/tonne", cessPct: 0 },
+  ];
+  const [idx, setIdx]       = useState(0);
+  const [value, setValue]   = useState("");
+
+  const item = ITEMS[idx];
+  const result = useMemo(() => {
+    const base = parseFloat(value) || 0;
+    const gst = Math.round(base * item.gst / 100);
+    const cess = Math.round(base * item.cessPct / 100);
+    return { base, gst, cess, total: base + gst + cess };
+  }, [value, item]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={GST_CARD}>
+        <div className="flex items-center gap-2 mb-1"><Flame size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Compensation Cess Calculator</h2></div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">GST compensation cess applies on top of GST for sin &amp; luxury goods (tobacco, aerated drinks, cars, coal). Pick a category and enter the taxable value.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Category</label>
+            <select value={idx} onChange={e => setIdx(Number(e.target.value))} className={GST_INPUT}>
+              {ITEMS.map((it, i) => <option key={it.label} value={i}>{it.label} — {it.gst}% GST + {it.cess} cess</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Taxable value (₹)</label>
+            <input type="number" min={0} value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 800000" className={GST_INPUT} />
+          </div>
+        </div>
+      </div>
+
+      {result.base > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Taxable value", value: result.base, color: "text-[var(--color-text)]" },
+              { label: `GST @ ${item.gst}%`, value: result.gst, color: "text-orange-400" },
+              { label: `Cess (${item.cess})`, value: result.cess, color: "text-red-400" },
+              { label: "Total invoice value", value: result.total, color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{formatCurrency(k.value)}</p>
+              </div>
+            ))}
+          </div>
+          {item.cessPct === 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3">This item carries a specific (per-quantity) cess, not ad-valorem — the cess figure above is shown as ₹0; apply ₹400/tonne on quantity instead.</p>}
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Cess is collected over and above GST and credited to the compensation fund. Rates are indicative — verify the current cess notification for your exact HSN.</p>
+        </div>
+      )}
     </div>
   );
 }

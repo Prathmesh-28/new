@@ -8,6 +8,7 @@ import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
   Palette, Truck, Percent, Trash2, ArrowRight, Copy,
+  Layers, UploadCloud, FileSearch, Calculator, MessageSquareWarning, ScrollText, Milestone, PiggyBank,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -287,6 +288,7 @@ export default function InvoicesPage() {
     "all" | "pending" | "paid" | "collection"
     | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
     | "multicurrency" | "approval" | "template" | "challan" | "latefee"
+    | "ageing" | "bulk" | "pomatch" | "tds" | "dispute" | "terms" | "milestone" | "advance"
   >("all");
 
   // Mirror the backend invoices into the shared store so the analytics engine,
@@ -413,6 +415,14 @@ export default function InvoicesPage() {
           ["template", "Template Studio", Palette],
           ["challan", "Delivery Challan", Truck],
           ["latefee", "Late-Fee/Interest", Percent],
+          ["ageing", "Ageing Buckets", Layers],
+          ["bulk", "Bulk (CSV)", UploadCloud],
+          ["pomatch", "PO Matcher", FileSearch],
+          ["tds", "TDS & Round-off", Calculator],
+          ["dispute", "Dispute Tracker", MessageSquareWarning],
+          ["terms", "Payment Terms", ScrollText],
+          ["milestone", "Milestone Billing", Milestone],
+          ["advance", "Advance/Retainer", PiggyBank],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -432,6 +442,14 @@ export default function InvoicesPage() {
        tab === "template"      ? <TemplateStudio /> :
        tab === "challan"       ? <DeliveryChallan /> :
        tab === "latefee"       ? <LateFeeApplier invoices={invoices} /> :
+       tab === "ageing"        ? <AgeingBuckets invoices={invoices} /> :
+       tab === "bulk"          ? <BulkInvoiceGenerator onCreated={load} /> :
+       tab === "pomatch"       ? <PoMatcher invoices={invoices} /> :
+       tab === "tds"           ? <TdsRoundOffHelper /> :
+       tab === "dispute"       ? <DisputeTracker invoices={invoices} /> :
+       tab === "terms"         ? <PaymentTermsLibrary /> :
+       tab === "milestone"     ? <MilestoneBilling /> :
+       tab === "advance"       ? <AdvanceAdjustment invoices={invoices} /> :
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
       ) : loading ? (
@@ -1369,6 +1387,661 @@ function LateFeeApplier({ invoices }: { invoices: Invoice[] }) {
         </div>
       ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No overdue invoices past the grace period — nothing to charge.</p></div>}
       {NOTE("Simple interest = principal × rate% × days/365 (after grace). Late fees/interest are a separate supply; re-invoice with a debit note where GST applies per your terms.")}
+    </div>
+  );
+}
+
+// #50 ── Receivables Ageing Buckets ──────────────────────────────────────────
+// Classic AR ageing report computed from live unpaid invoices, days-past-due.
+function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
+  const BUCKETS = ["Not due", "1–30", "31–60", "61–90", "90+"] as const;
+
+  const byCustomer = useMemo(() => {
+    const now = Date.now();
+    const bucketOf = (due?: string) => {
+      if (!due) return "Not due" as const;
+      const days = Math.floor((now - new Date(due).getTime()) / 86400000);
+      if (days <= 0) return "Not due" as const;
+      if (days <= 30) return "1–30" as const;
+      if (days <= 60) return "31–60" as const;
+      if (days <= 90) return "61–90" as const;
+      return "90+" as const;
+    };
+    const map: Record<string, Record<string, number>> = {};
+    invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").forEach(i => {
+      const amt = Number(i.total_amount) || 0;
+      const b = bucketOf(i.due_date);
+      map[i.customer_name] = map[i.customer_name] || { "Not due": 0, "1–30": 0, "31–60": 0, "61–90": 0, "90+": 0 };
+      map[i.customer_name][b] += amt;
+    });
+    return map;
+  }, [invoices]);
+
+  const totals = BUCKETS.reduce((acc, b) => {
+    acc[b] = Object.values(byCustomer).reduce((s, row) => s + (row[b] || 0), 0);
+    return acc;
+  }, {} as Record<string, number>);
+  const grand = BUCKETS.reduce((s, b) => s + (totals[b] || 0), 0);
+  const overdueTotal = (totals["1–30"] || 0) + (totals["31–60"] || 0) + (totals["61–90"] || 0) + (totals["90+"] || 0);
+
+  const colour = (b: string) => b === "Not due" ? "text-green-400" : b === "1–30" ? "text-yellow-400" : b === "31–60" ? "text-orange-400" : "text-red-400";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total outstanding", value: formatCurrency(Math.round(grand)), color: "text-[var(--color-text)]" },
+          { label: "Overdue (past due)", value: formatCurrency(Math.round(overdueTotal)), color: "text-red-400" },
+          { label: "% overdue", value: grand > 0 ? `${Math.round((overdueTotal / grand) * 100)}%` : "0%", color: "text-orange-400" },
+        ].map(c => <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p><p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p></div>)}
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Receivables Ageing Buckets</h2>
+        <div className="flex flex-wrap gap-2">
+          {BUCKETS.map(b => (
+            <div key={b} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 min-w-[110px]">
+              <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">{b} days</p>
+              <p className={`text-sm font-bold tabular-nums ${colour(b)}`}>{formatCurrency(Math.round(totals[b] || 0))}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {Object.keys(byCustomer).length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Customer", ...BUCKETS, "Total"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {Object.entries(byCustomer).sort((a, b) => Object.values(b[1]).reduce((s, v) => s + v, 0) - Object.values(a[1]).reduce((s, v) => s + v, 0)).map(([cust, row]) => {
+                const rowTotal = BUCKETS.reduce((s, b) => s + (row[b] || 0), 0);
+                return (
+                  <tr key={cust} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{cust}</td>
+                    {BUCKETS.map(b => <td key={b} className={`px-4 py-2.5 tabular-nums text-xs ${row[b] ? colour(b) : "text-[var(--color-muted)]"}`}>{row[b] ? formatCurrency(Math.round(row[b])) : "—"}</td>)}
+                    <td className="px-4 py-2.5 tabular-nums font-bold">{formatCurrency(Math.round(rowTotal))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No outstanding receivables — all invoices are paid.</p></div>}
+      {NOTE("Buckets are by days past the due date, computed live from unpaid invoices. Use the 61–90 / 90+ columns to prioritise collection calls and provisioning.")}
+    </div>
+  );
+}
+
+// #51 ── Bulk Invoice Generator (CSV) ────────────────────────────────────────
+// Paste/upload CSV: customer,gstin,description,qty,rate,gst,due_date — one invoice per row.
+interface BulkRow { customer: string; gstin: string; description: string; qty: number; rate: number; gst: number; due: string; valid: boolean; error: string; }
+function BulkInvoiceGenerator({ onCreated }: { onCreated: () => void }) {
+  const SAMPLE = "customer,gstin,description,qty,rate,gst,due_date\nAcme Pvt Ltd,27AAAAA0000A1Z5,Consulting,10,5000,18,2026-07-31\nBeta Traders,,Annual maintenance,1,120000,18,2026-08-15";
+  const [raw, setRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(0);
+
+  const rows = useMemo<BulkRow[]>(() => {
+    const lines = raw.trim().split(/\r?\n/).filter(l => l.trim());
+    if (lines.length === 0) return [];
+    const start = /customer/i.test(lines[0]) ? 1 : 0;
+    return lines.slice(start).map(line => {
+      const c = line.split(",").map(x => x.trim());
+      const qty = parseFloat(c[3]) || 0;
+      const rate = parseFloat(c[4]) || 0;
+      const gst = c[5] !== undefined && c[5] !== "" ? parseFloat(c[5]) : 18;
+      let error = "";
+      if (!c[0]) error = "missing customer";
+      else if (!c[2]) error = "missing description";
+      else if (qty <= 0) error = "qty must be > 0";
+      else if (rate <= 0) error = "rate must be > 0";
+      else if (!GST_RATES.includes(String(gst) as typeof GST_RATES[number])) error = "GST not 0/5/12/18/28";
+      return { customer: c[0] || "", gstin: c[1] || "", description: c[2] || "", qty, rate, gst, due: c[6] || "", valid: !error, error };
+    });
+  }, [raw]);
+
+  const valid = rows.filter(r => r.valid);
+  const grandTotal = valid.reduce((s, r) => s + r.qty * r.rate * (1 + r.gst / 100), 0);
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => setRaw(String(reader.result || ""));
+    reader.readAsText(f);
+  };
+
+  const run = async () => {
+    if (valid.length === 0) { toast.error("No valid rows to invoice"); return; }
+    setSubmitting(true); setDone(0);
+    let ok = 0;
+    for (const r of valid) {
+      try {
+        await api.post("/api/invoices", {
+          customer_name: r.customer, customer_gstin: r.gstin || undefined,
+          gst_rate: r.gst, due_date: r.due || undefined,
+          items: [{ description: r.description, quantity: r.qty, unit_price: r.rate, gst_rate: r.gst }],
+        });
+        ok++; setDone(d => d + 1);
+      } catch { /* continue */ }
+    }
+    setSubmitting(false);
+    toast.success(`${ok}/${valid.length} invoices created`);
+    if (ok > 0) { setRaw(""); onCreated(); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><UploadCloud size={14} className="text-[var(--color-primary)]" /> Bulk Invoice Generator (CSV)</h2>
+        <p className="text-xs text-[var(--color-muted)]">One invoice per row. Columns: <code className="text-[10px]">customer, gstin, description, qty, rate, gst, due_date</code>. Header row optional.</p>
+        <div className="flex items-center gap-3">
+          <label className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90">
+            Upload CSV<input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+          </label>
+          <button onClick={() => setRaw(SAMPLE)} className="text-xs text-[var(--color-primary)] hover:underline">Load sample</button>
+        </div>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} className={`${INP} h-32 font-mono text-xs`} placeholder={SAMPLE} />
+      </div>
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Rows parsed", value: String(rows.length), color: "text-[var(--color-text)]" },
+              { label: "Valid", value: String(valid.length), color: "text-green-400" },
+              { label: "Total (incl GST)", value: formatCurrency(Math.round(grandTotal)), color: "text-[var(--color-primary)]" },
+            ].map(c => <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p><p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p></div>)}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["#", "Customer", "Description", "Qty", "Rate", "GST", "Total", "Status"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map((r, i) => (
+                  <tr key={i} className={`hover:bg-white/2 ${!r.valid ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{i + 1}</td>
+                    <td className="px-4 py-2.5">{r.customer || <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5 text-xs">{r.description || <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(r.rate)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.gst}%</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(r.qty * r.rate * (1 + r.gst / 100)))}</td>
+                    <td className="px-4 py-2.5">{r.valid ? <span className="text-[10px] text-green-400 inline-flex items-center gap-1"><Check size={10} /> ok</span> : <span className="text-[10px] text-red-400">{r.error}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={run} disabled={submitting || valid.length === 0} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 px-4 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            {submitting ? `Creating… ${done}/${valid.length}` : `Generate ${valid.length} invoice${valid.length === 1 ? "" : "s"}`}
+          </button>
+        </>
+      )}
+      {NOTE("Each valid row posts a real GST invoice via the backend (one line item each). Invalid rows are skipped — fix the flagged errors and re-run.")}
+    </div>
+  );
+}
+
+// #52 ── Invoice ↔ PO Matcher (2-way match) ──────────────────────────────────
+interface PoRec { id: string; poNumber: string; customer: string; poAmount: string; invoiceNumber: string; tolerancePct: string; createdAt: string; }
+function PoMatcher({ invoices }: { invoices: Invoice[] }) {
+  const [pos, setPos] = useFeatureState<PoRec[]>("invoice-po-match", []);
+  const [poNumber, setPoNumber] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [poAmount, setPoAmount] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [tolerancePct, setTolerancePct] = useState("2");
+
+  const onPickInv = (num: string) => {
+    setInvoiceNumber(num);
+    const inv = invoices.find(i => i.invoice_number === num);
+    if (inv) setCustomer(inv.customer_name);
+  };
+
+  const add = () => {
+    if (!poNumber || !poAmount) { toast.error("Add PO number and PO amount"); return; }
+    setPos(p => [{ id: uid(), poNumber, customer, poAmount, invoiceNumber, tolerancePct, createdAt: new Date().toISOString() }, ...p]);
+    setPoNumber(""); setPoAmount(""); setInvoiceNumber(""); setCustomer("");
+    toast.success("PO recorded for matching");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> Invoice ↔ PO Matcher</h2>
+        <p className="text-xs text-[var(--color-muted)]">2-way match: invoice value vs buyer PO. Flags over-billing beyond tolerance before you dispatch.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={poNumber} onChange={e => setPoNumber(e.target.value)} className={INP} placeholder="PO number *" />
+          <input type="number" value={poAmount} onChange={e => setPoAmount(e.target.value)} className={INP} placeholder="PO amount ₹ *" />
+          <select value={invoiceNumber} onChange={e => onPickInv(e.target.value)} className={INP}>
+            <option value="">— match invoice —</option>
+            {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number}</option>)}
+          </select>
+          <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer" />
+          <input type="number" value={tolerancePct} onChange={e => setTolerancePct(e.target.value)} className={INP} placeholder="Tolerance %" />
+        </div>
+        <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">+ Record PO</button>
+      </div>
+      {pos.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["PO", "Customer", "PO value", "Invoice", "Inv value", "Variance", "Match", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {pos.map(p => {
+                const po = parseFloat(p.poAmount) || 0;
+                const inv = invoices.find(i => i.invoice_number === p.invoiceNumber);
+                const invAmt = inv ? Number(inv.total_amount) || 0 : 0;
+                const variance = invAmt - po;
+                const tol = (parseFloat(p.tolerancePct) || 0) / 100 * po;
+                const status = !inv ? "unmatched" : Math.abs(variance) <= tol ? "matched" : variance > 0 ? "over-billed" : "under-billed";
+                const cls = status === "matched" ? "bg-green-900/30 text-green-400 border-green-800/40"
+                  : status === "unmatched" ? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"
+                  : status === "over-billed" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40";
+                return (
+                  <tr key={p.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-mono text-xs">{p.poNumber}</td>
+                    <td className="px-4 py-2.5">{p.customer || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(po)}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.invoiceNumber || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{inv ? formatCurrency(invAmt) : "—"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums text-xs font-semibold ${!inv ? "text-[var(--color-muted)]" : variance === 0 ? "text-[var(--color-muted)]" : variance > 0 ? "text-red-400" : "text-yellow-400"}`}>{inv ? (variance < 0 ? `(${formatCurrency(Math.abs(Math.round(variance)))})` : formatCurrency(Math.round(variance))) : "—"}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${cls}`}>{status}</span></td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setPos(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {NOTE("Variance = invoice total − PO value. Within tolerance ⇒ matched. Over-billed invoices should be reduced via a credit note; under-billed may need a debit note.")}
+    </div>
+  );
+}
+
+// #53 ── TDS-on-Invoice & Round-off Helper ───────────────────────────────────
+// Buyer-side TDS (192J/194C/194Q etc.) net-payable + GST round-off ledger entry.
+const TDS_SECTIONS = [
+  { code: "194C", label: "194C — Contractor/sub-contractor", rate: 1 },
+  { code: "194C-2", label: "194C — Contractor (firm/company)", rate: 2 },
+  { code: "194J", label: "194J — Professional/technical fees", rate: 10 },
+  { code: "194J-T", label: "194J — Technical services", rate: 2 },
+  { code: "194H", label: "194H — Commission/brokerage", rate: 5 },
+  { code: "194I", label: "194I — Rent (plant/machinery)", rate: 2 },
+  { code: "194Q", label: "194Q — Purchase of goods", rate: 0.1 },
+] as const;
+function TdsRoundOffHelper() {
+  const [taxable, setTaxable] = useState("100000");
+  const [gst, setGst] = useState("18");
+  const [section, setSection] = useState<string>("194J");
+  const [tdsOnGst, setTdsOnGst] = useState(false);
+
+  const tx = parseFloat(taxable) || 0;
+  const gstAmt = tx * ((parseFloat(gst) || 0) / 100);
+  const rawTotal = tx + gstAmt;
+  const rounded = Math.round(rawTotal);
+  const roundOff = Math.round((rounded - rawTotal) * 100) / 100;
+
+  const sec = TDS_SECTIONS.find(s => s.code === section) ?? TDS_SECTIONS[0];
+  // TDS is normally on the taxable value (excl GST) unless GST not separately shown.
+  const tdsBase = tdsOnGst ? rounded : tx;
+  const tds = Math.round(tdsBase * (sec.rate / 100));
+  const netPayable = rounded - tds;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> TDS-on-Invoice & Round-off Helper</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className={LBL}>Taxable value (₹)</label><input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} className={INP} /></div>
+          <div><label className={LBL}>GST rate</label><select value={gst} onChange={e => setGst(e.target.value)} className={INP}>{GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
+          <div className="col-span-2"><label className={LBL}>TDS section (buyer deducts)</label><select value={section} onChange={e => setSection(e.target.value)} className={INP}>{TDS_SECTIONS.map(s => <option key={s.code} value={s.code}>{s.label} ({s.rate}%)</option>)}</select></div>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+          <input type="checkbox" checked={tdsOnGst} onChange={e => setTdsOnGst(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Deduct TDS on GST-inclusive value (only if GST is not shown separately — CBDT Circular 23/2017)
+        </label>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-2 text-sm">
+        <div className="flex justify-between text-[var(--color-muted)]"><span>Taxable value</span><span className="tabular-nums">{formatCurrency(tx)}</span></div>
+        <div className="flex justify-between text-[var(--color-muted)]"><span>GST {gst}%</span><span className="tabular-nums">{formatCurrency(Math.round(gstAmt))}</span></div>
+        <div className="flex justify-between text-[var(--color-muted)]"><span>Invoice total (raw)</span><span className="tabular-nums">{rawTotal.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span>Round-off (ledger entry)</span><span className={`tabular-nums ${roundOff >= 0 ? "text-green-400" : "text-red-400"}`}>{roundOff >= 0 ? "+" : ""}{roundOff.toFixed(2)}</span></div>
+        <div className="flex justify-between font-semibold border-t border-[var(--color-border)] pt-2"><span>Invoice total (rounded)</span><span className="tabular-nums">{formatCurrency(rounded)}</span></div>
+        <div className="flex justify-between text-orange-400"><span>Less: TDS {sec.code} @ {sec.rate}% on {formatCurrency(tdsBase)}</span><span className="tabular-nums">({formatCurrency(tds)})</span></div>
+        <div className="flex justify-between font-bold text-base text-[var(--color-primary)] border-t border-[var(--color-border)] pt-2"><span>Net payable by buyer</span><span className="tabular-nums">{formatCurrency(netPayable)}</span></div>
+      </div>
+      {NOTE("You still pay full GST to the government; the buyer deducts TDS from the net remittance and deposits it against your PAN (claim it in 26AS). Round-off books to the 'Round Off' ledger.")}
+    </div>
+  );
+}
+
+// #54 ── Invoice Dispute Tracker ─────────────────────────────────────────────
+interface Dispute { id: string; invoiceNumber: string; customer: string; amount: number; reason: string; raisedOn: string; status: "open" | "in-review" | "resolved" | "written-off"; resolution: string; }
+const DISPUTE_REASONS = ["Price mismatch", "Quantity/short supply", "Quality/deficiency", "Duplicate billing", "Tax/GST error", "Goods not received", "Other"];
+function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
+  const [disputes, setDisputes] = useFeatureState<Dispute[]>("invoice-disputes", []);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [reason, setReason] = useState(DISPUTE_REASONS[0]);
+
+  const onPickInv = (num: string) => {
+    setInvoiceNumber(num);
+    const inv = invoices.find(i => i.invoice_number === num);
+    if (inv) setCustomer(inv.customer_name);
+  };
+
+  const raise = () => {
+    if (!invoiceNumber) { toast.error("Pick the disputed invoice"); return; }
+    const inv = invoices.find(i => i.invoice_number === invoiceNumber);
+    setDisputes(p => [{ id: uid(), invoiceNumber, customer: customer || inv?.customer_name || "", amount: inv ? Number(inv.total_amount) || 0 : 0, reason, raisedOn: new Date().toISOString().split("T")[0], status: "open", resolution: "" }, ...p]);
+    setInvoiceNumber(""); setCustomer("");
+    toast.success("Dispute logged");
+  };
+  const setStatus = (id: string, status: Dispute["status"]) => {
+    setDisputes(p => p.map(d => d.id === id ? { ...d, status } : d));
+    toast.success(`Dispute ${status}`);
+  };
+
+  const open = disputes.filter(d => d.status === "open" || d.status === "in-review");
+  const disputedValue = open.reduce((s, d) => s + d.amount, 0);
+  const STAT_CLS: Record<Dispute["status"], string> = {
+    open: "bg-red-900/30 text-red-400 border-red-800/40",
+    "in-review": "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    resolved: "bg-green-900/30 text-green-400 border-green-800/40",
+    "written-off": "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 max-w-md">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Open disputes</p><p className={`text-xl font-bold tabular-nums ${open.length ? "text-red-400" : "text-[var(--color-muted)]"}`}>{open.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Value in dispute</p><p className="text-xl font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(disputedValue))}</p></div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MessageSquareWarning size={14} className="text-[var(--color-primary)]" /> Invoice Dispute Tracker</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <select value={invoiceNumber} onChange={e => onPickInv(e.target.value)} className={INP}>
+            <option value="">— disputed invoice * —</option>
+            {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number} · {i.customer_name}</option>)}
+          </select>
+          <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer" />
+          <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+        </div>
+        <button onClick={raise} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">Log dispute</button>
+      </div>
+      {disputes.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Invoice", "Customer", "Amount", "Reason", "Raised", "Status", "Action"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {disputes.map(d => (
+                <tr key={d.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-mono text-xs">{d.invoiceNumber}</td>
+                  <td className="px-4 py-2.5">{d.customer}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(d.amount)}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.reason}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.raisedOn}</td>
+                  <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${STAT_CLS[d.status]}`}>{d.status}</span></td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    {d.status === "open" && <button onClick={() => setStatus(d.id, "in-review")} className="text-xs text-yellow-400 hover:underline">Review</button>}
+                    {(d.status === "open" || d.status === "in-review") && <>
+                      <button onClick={() => setStatus(d.id, "resolved")} className="ml-2 text-xs text-green-400 hover:underline">Resolve</button>
+                      <button onClick={() => setStatus(d.id, "written-off")} className="ml-2 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Write off</button>
+                    </>}
+                    <button onClick={() => setDisputes(p => p.filter(x => x.id !== d.id))} className="ml-2 text-[var(--color-muted)] hover:text-red-400 align-middle inline-flex"><Trash2 size={13} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {NOTE("Track buyer disputes to an audit trail. A resolved dispute may need a credit note (over-billing) or fresh delivery proof; write-offs hit bad-debt expense.")}
+    </div>
+  );
+}
+
+// #55 ── Payment Terms Library ───────────────────────────────────────────────
+interface PaymentTerm { id: string; name: string; netDays: number; earlyPayDays: number; earlyPayDiscount: number; lateRate: number; isDefault: boolean; }
+const SEED_TERMS: PaymentTerm[] = [
+  { id: "net15", name: "Net 15", netDays: 15, earlyPayDays: 0, earlyPayDiscount: 0, lateRate: 18, isDefault: true },
+  { id: "net30", name: "Net 30", netDays: 30, earlyPayDays: 0, earlyPayDiscount: 0, lateRate: 18, isDefault: false },
+  { id: "2-10-net30", name: "2/10 Net 30", netDays: 30, earlyPayDays: 10, earlyPayDiscount: 2, lateRate: 18, isDefault: false },
+  { id: "due-receipt", name: "Due on receipt", netDays: 0, earlyPayDays: 0, earlyPayDiscount: 0, lateRate: 24, isDefault: false },
+];
+function PaymentTermsLibrary() {
+  const [terms, setTerms] = useFeatureState<PaymentTerm[]>("invoice-payment-terms", SEED_TERMS);
+  const [name, setName] = useState("");
+  const [netDays, setNetDays] = useState("30");
+  const [earlyDays, setEarlyDays] = useState("0");
+  const [earlyDisc, setEarlyDisc] = useState("0");
+  const [lateRate, setLateRate] = useState("18");
+
+  const today = new Date();
+  const add = () => {
+    if (!name) { toast.error("Name the term"); return; }
+    setTerms(p => [...p, { id: uid(), name, netDays: parseInt(netDays) || 0, earlyPayDays: parseInt(earlyDays) || 0, earlyPayDiscount: parseFloat(earlyDisc) || 0, lateRate: parseFloat(lateRate) || 0, isDefault: p.length === 0 }]);
+    setName("");
+    toast.success("Payment term added");
+  };
+  const makeDefault = (id: string) => { setTerms(p => p.map(t => ({ ...t, isDefault: t.id === id }))); toast.success("Default term set"); };
+  const addDays = (n: number) => { const d = new Date(today); d.setDate(d.getDate() + n); return d.toLocaleDateString("en-IN"); };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Payment Terms Library</h2>
+        <p className="text-xs text-[var(--color-muted)]">Reusable terms applied to new invoices — sets due date, early-pay discount and late-interest rate.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <input value={name} onChange={e => setName(e.target.value)} className={INP} placeholder="Term name *" />
+          <input type="number" value={netDays} onChange={e => setNetDays(e.target.value)} className={INP} placeholder="Net days" />
+          <input type="number" value={earlyDays} onChange={e => setEarlyDays(e.target.value)} className={INP} placeholder="Early-pay within (days)" />
+          <input type="number" value={earlyDisc} onChange={e => setEarlyDisc(e.target.value)} className={INP} placeholder="Early-pay disc %" />
+          <input type="number" value={lateRate} onChange={e => setLateRate(e.target.value)} className={INP} placeholder="Late rate % p.a." />
+        </div>
+        <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">+ Add term</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[760px]">
+          <thead><tr className="border-b border-[var(--color-border)]">{["Term", "Net days", "Due if today", "Early pay", "Late rate", "Default", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {terms.map(t => (
+              <tr key={t.id} className="hover:bg-white/2">
+                <td className="px-4 py-2.5 font-medium">{t.name}</td>
+                <td className="px-4 py-2.5 tabular-nums">{t.netDays}d</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{addDays(t.netDays)}</td>
+                <td className="px-4 py-2.5 text-xs">{t.earlyPayDiscount > 0 ? `${t.earlyPayDiscount}% in ${t.earlyPayDays}d` : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-xs">{t.lateRate}% p.a.</td>
+                <td className="px-4 py-2.5">{t.isDefault ? <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-[var(--color-primary)]/30">default</span> : <button onClick={() => makeDefault(t.id)} className="text-xs text-[var(--color-primary)] hover:underline">Set default</button>}</td>
+                <td className="px-4 py-2.5 text-right"><button onClick={() => setTerms(p => p.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {NOTE("e.g. '2/10 Net 30' = 2% discount if paid within 10 days, else full amount by 30 days. The default term pre-fills the due date on every new invoice.")}
+    </div>
+  );
+}
+
+// #56 ── Milestone / Stage Billing ───────────────────────────────────────────
+interface MilestoneStage { id: string; name: string; pct: string; billed: boolean; }
+interface MilestoneProject { id: string; customer: string; contractValue: string; gst: string; milestones: MilestoneStage[]; createdAt: string; }
+function MilestoneBilling() {
+  const [projects, setProjects] = useFeatureState<MilestoneProject[]>("invoice-milestones", []);
+  const [customer, setCustomer] = useState("");
+  const [contractValue, setContractValue] = useState("");
+  const [gst, setGst] = useState("18");
+  const [draft, setDraft] = useState<MilestoneStage[]>([
+    { id: uid(), name: "Advance / kick-off", pct: "30", billed: false },
+    { id: uid(), name: "Mid-delivery", pct: "40", billed: false },
+    { id: uid(), name: "Completion", pct: "30", billed: false },
+  ]);
+
+  const draftSum = draft.reduce((s, m) => s + (parseFloat(m.pct) || 0), 0);
+  const updDraft = (id: string, k: "name" | "pct", v: string) => setDraft(p => p.map(m => m.id === id ? { ...m, [k]: v } : m));
+
+  const create = () => {
+    if (!customer || !contractValue) { toast.error("Add customer and contract value"); return; }
+    if (Math.round(draftSum) !== 100) { toast.error(`Milestone % must total 100 (now ${draftSum}%)`); return; }
+    setProjects(p => [{ id: uid(), customer, contractValue, gst, milestones: draft.map(m => ({ ...m, id: uid() })), createdAt: new Date().toISOString() }, ...p]);
+    setCustomer(""); setContractValue("");
+    toast.success("Milestone schedule created");
+  };
+  const bill = (pid: string, mid: string) => {
+    setProjects(p => p.map(pr => pr.id === pid ? { ...pr, milestones: pr.milestones.map(m => m.id === mid ? { ...m, billed: true } : m) } : pr));
+    toast.success("Milestone marked billed — raise the tax invoice for this stage");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Milestone size={14} className="text-[var(--color-primary)]" /> Milestone / Stage Billing</h2>
+        <p className="text-xs text-[var(--color-muted)]">Split a contract into stage-wise invoices (projects/construction/services). Each milestone bills its % of the contract + GST.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer *" />
+          <input type="number" value={contractValue} onChange={e => setContractValue(e.target.value)} className={INP} placeholder="Contract value ₹ *" />
+          <select value={gst} onChange={e => setGst(e.target.value)} className={INP}>{GST_RATES.map(r => <option key={r} value={r}>GST {r}%</option>)}</select>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Milestones</label>
+            <button type="button" onClick={() => setDraft(p => [...p, { id: uid(), name: "", pct: "0", billed: false }])} className="text-xs text-[var(--color-primary)] hover:underline">+ Add milestone</button>
+          </div>
+          {draft.map(m => (
+            <div key={m.id} className="grid grid-cols-12 gap-2 items-center">
+              <input value={m.name} onChange={e => updDraft(m.id, "name", e.target.value)} className={`${INP} col-span-7`} placeholder="Milestone name" />
+              <input type="number" value={m.pct} onChange={e => updDraft(m.id, "pct", e.target.value)} className={`${INP} col-span-3`} placeholder="%" />
+              <span className="col-span-1 text-xs tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round((parseFloat(contractValue) || 0) * (parseFloat(m.pct) || 0) / 100))}</span>
+              {draft.length > 1 && <button type="button" onClick={() => setDraft(p => p.filter(x => x.id !== m.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>}
+            </div>
+          ))}
+          <p className={`text-xs ${Math.round(draftSum) === 100 ? "text-green-400" : "text-yellow-400"}`}>Milestones total: {draftSum}% {Math.round(draftSum) === 100 ? "✓" : "(must be 100%)"}</p>
+        </div>
+        <button onClick={create} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 px-4 rounded-lg text-sm hover:opacity-90">Create schedule</button>
+      </div>
+      {projects.map(pr => {
+        const cv = parseFloat(pr.contractValue) || 0;
+        const g = parseFloat(pr.gst) || 0;
+        const billedPct = pr.milestones.filter(m => m.billed).reduce((s, m) => s + (parseFloat(m.pct) || 0), 0);
+        return (
+          <div key={pr.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div><p className="font-semibold text-sm">{pr.customer}</p><p className="text-xs text-[var(--color-muted)]">Contract {formatCurrency(cv)} · GST {g}% · {Math.round(billedPct)}% billed</p></div>
+              <button onClick={() => setProjects(p => p.filter(x => x.id !== pr.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+            <div className="space-y-1.5">
+              {pr.milestones.map(m => {
+                const base = cv * (parseFloat(m.pct) || 0) / 100;
+                const withGst = base * (1 + g / 100);
+                return (
+                  <div key={m.id} className="flex items-center justify-between gap-3 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                    <span className="flex-1 min-w-0 truncate">{m.name || "—"} <span className="text-[var(--color-muted)] text-xs">({m.pct}%)</span></span>
+                    <span className="tabular-nums text-xs text-[var(--color-muted)]">{formatCurrency(Math.round(base))} + GST</span>
+                    <span className="tabular-nums font-semibold">{formatCurrency(Math.round(withGst))}</span>
+                    {m.billed ? <span className="text-[10px] text-green-400 inline-flex items-center gap-1 shrink-0"><Check size={10} /> billed</span>
+                      : <button onClick={() => bill(pr.id, m.id)} className="text-xs text-[var(--color-primary)] hover:underline shrink-0">Bill now</button>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {NOTE("GST is due on each milestone at the earlier of invoice or payment. Raise a separate tax invoice when you click 'Bill now' for that stage.")}
+    </div>
+  );
+}
+
+// #57 ── Advance / Retainer Adjustment Ledger ────────────────────────────────
+interface Advance { id: string; customer: string; received: string; adjusted: string; createdAt: string; }
+function AdvanceAdjustment({ invoices }: { invoices: Invoice[] }) {
+  const [advances, setAdvances] = useFeatureState<Advance[]>("invoice-advances", []);
+  const [customer, setCustomer] = useState("");
+  const [received, setReceived] = useState("");
+  const [adjustId, setAdjustId] = useState("");
+  const [adjustAmt, setAdjustAmt] = useState("");
+
+  const customers = useMemo(() => Array.from(new Set(invoices.map(i => i.customer_name))), [invoices]);
+
+  const addAdvance = () => {
+    if (!customer || !received) { toast.error("Add customer and advance amount"); return; }
+    setAdvances(p => [{ id: uid(), customer, received, adjusted: "0", createdAt: new Date().toISOString() }, ...p]);
+    setCustomer(""); setReceived("");
+    toast.success("Advance recorded (Receipt Voucher — GST on advance for services)");
+  };
+  const applyAdjust = () => {
+    const a = advances.find(x => x.id === adjustId);
+    const amt = parseFloat(adjustAmt) || 0;
+    if (!a || amt <= 0) { toast.error("Pick an advance and a positive amount"); return; }
+    const remaining = (parseFloat(a.received) || 0) - (parseFloat(a.adjusted) || 0);
+    if (amt > remaining) { toast.error(`Only ${formatCurrency(remaining)} unadjusted on this advance`); return; }
+    setAdvances(p => p.map(x => x.id === adjustId ? { ...x, adjusted: String((parseFloat(x.adjusted) || 0) + amt) } : x));
+    setAdjustAmt("");
+    toast.success("Advance adjusted against invoice");
+  };
+
+  const totalReceived = advances.reduce((s, a) => s + (parseFloat(a.received) || 0), 0);
+  const totalAdjusted = advances.reduce((s, a) => s + (parseFloat(a.adjusted) || 0), 0);
+  const unadjusted = totalReceived - totalAdjusted;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Advances received", value: formatCurrency(Math.round(totalReceived)), color: "text-blue-400" },
+          { label: "Adjusted to invoices", value: formatCurrency(Math.round(totalAdjusted)), color: "text-green-400" },
+          { label: "Unadjusted (liability)", value: formatCurrency(Math.round(unadjusted)), color: unadjusted > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+        ].map(c => <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p><p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p></div>)}
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Advance / Retainer Adjustment</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input value={customer} onChange={e => setCustomer(e.target.value)} list="adv-cust" className={INP} placeholder="Customer *" />
+          <datalist id="adv-cust">{customers.map(c => <option key={c} value={c} />)}</datalist>
+          <input type="number" value={received} onChange={e => setReceived(e.target.value)} className={INP} placeholder="Advance received ₹ *" />
+          <button onClick={addAdvance} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">+ Record advance</button>
+        </div>
+      </div>
+      {advances.length > 0 && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[180px]">
+              <label className={LBL}>Adjust an advance</label>
+              <select value={adjustId} onChange={e => setAdjustId(e.target.value)} className={INP}>
+                <option value="">— select advance —</option>
+                {advances.filter(a => (parseFloat(a.received) || 0) - (parseFloat(a.adjusted) || 0) > 0).map(a => {
+                  const rem = (parseFloat(a.received) || 0) - (parseFloat(a.adjusted) || 0);
+                  return <option key={a.id} value={a.id}>{a.customer} · {formatCurrency(rem)} left</option>;
+                })}
+              </select>
+            </div>
+            <div className="w-40"><label className={LBL}>Amount to adjust ₹</label><input type="number" value={adjustAmt} onChange={e => setAdjustAmt(e.target.value)} className={INP} /></div>
+            <button onClick={applyAdjust} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">Adjust</button>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Received", "Adjusted", "Unadjusted", "Date", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {advances.map(a => {
+                  const rec = parseFloat(a.received) || 0;
+                  const adj = parseFloat(a.adjusted) || 0;
+                  const rem = rec - adj;
+                  return (
+                    <tr key={a.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{a.customer}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(rec)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(adj)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${rem > 0 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{formatCurrency(rem)}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{a.createdAt.split("T")[0]}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setAdvances(p => p.filter(x => x.id !== a.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {NOTE("Advances for services attract GST on receipt (issue a Receipt Voucher). On the final invoice, adjust the advance and pay GST only on the balance to avoid double tax.")}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   TrendingUp, FileText, Plus, ArrowRight, Calculator, Scale, Clock,
   Receipt, FileSearch, Search, FileCheck, Layers, Repeat,
   FilePlus2, Globe, PiggyBank, ShoppingCart, CalendarClock, Gavel,
+  Home, Building2, Percent, Truck, Umbrella, Heart, Coins, Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
@@ -68,7 +69,8 @@ export default function TaxPage() {
   const [pushed, setPushed] = useState<Set<string>>(new Set());
   const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax"
     | "tds-return" | "form26as" | "tds-finder" | "ldc-197" | "depreciation" | "loss-setoff"
-    | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice">("overview");
+    | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice"
+    | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -143,7 +145,8 @@ export default function TaxPage() {
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
-            ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel]] as const).map(([id, label, Icon]) => (
+            ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
+            ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -781,6 +784,14 @@ export default function TaxPage() {
       {taxTab === "eq-levy"         && <EqualisationLevyTracker />}
       {taxTab === "advtax-calendar" && <AdvTaxCashCalendar />}
       {taxTab === "tax-notice"      && <TaxNoticeResponder />}
+      {taxTab === "hra"             && <HraExemptionCalc />}
+      {taxTab === "house-prop"      && <HousePropertyCalc />}
+      {taxTab === "44ae"            && <Presumptive44AE />}
+      {taxTab === "gratuity"        && <GratuityLeaveExemption />}
+      {taxTab === "relief-89"       && <Relief89Calc />}
+      {taxTab === "donation-80g"    && <Donation80GCalc />}
+      {taxTab === "cg-exempt"       && <CapitalGainExemptionPlanner />}
+      {taxTab === "interest-234"    && <Interest234Calc />}
     </div>
   );
 }
@@ -2330,6 +2341,709 @@ function TaxNoticeResponder() {
         </div>
       </>}
       <p className="text-[10px] text-[var(--color-muted)]">Most notices carry a 15–30 day response window from the date of the notice. Rectification u/s 154 corrects mistakes apparent from record; appeal to CIT(A) within 30 days of a demand. Always respond via the e-filing portal e-Proceedings and keep the DIN. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── HRA Exemption Calculator (Sec 10(13A), Rule 2A) ─────────────────────────────
+function HraExemptionCalc() {
+  const [basic, setBasic]     = useState("");
+  const [hra, setHra]         = useState("");
+  const [rent, setRent]       = useState("");
+  const [metro, setMetro]     = useState(true);
+  const fc = formatCurrency;
+
+  const b = parseFloat(basic) || 0;          // basic + DA, annual
+  const hraReceived = parseFloat(hra) || 0;  // annual
+  const rentPaid = parseFloat(rent) || 0;    // annual
+
+  // Three limbs of Rule 2A — least is exempt
+  const limbActual  = hraReceived;
+  const limbPct     = (metro ? 0.50 : 0.40) * b;
+  const limbRent    = Math.max(0, rentPaid - 0.10 * b);
+  const exempt      = Math.round(Math.max(0, Math.min(limbActual, limbPct, limbRent)));
+  const taxable     = Math.max(0, hraReceived - exempt);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Home size={14} className="text-[var(--color-primary)]" /> HRA Exemption Calculator (Sec 10(13A))</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Exemption is the least of: actual HRA received, 50%/40% of (Basic+DA), or rent paid minus 10% of (Basic+DA). Available only in the Old Regime. Enter annual figures.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Basic + DA (annual ₹)</label>
+            <input type="number" value={basic} onChange={e => setBasic(e.target.value)} placeholder="e.g. 600000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">HRA received (annual ₹)</label>
+            <input type="number" value={hra} onChange={e => setHra(e.target.value)} placeholder="e.g. 240000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rent paid (annual ₹)</label>
+            <input type="number" value={rent} onChange={e => setRent(e.target.value)} placeholder="e.g. 300000" className={INP} />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-3">
+          {([["metro", "Metro (50%)", true], ["non", "Non-metro (40%)", false]] as const).map(([k, lbl, val]) => (
+            <button key={k} onClick={() => setMetro(val)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${metro === val ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+
+      {b > 0 && hraReceived > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Computation (least of three is exempt)</h3>
+          <div className="space-y-2">
+            {[
+              { label: "Actual HRA received", value: fc(Math.round(limbActual)), win: exempt === Math.round(limbActual) },
+              { label: `${metro ? "50%" : "40%"} of Basic+DA`, value: fc(Math.round(limbPct)), win: exempt === Math.round(limbPct) },
+              { label: "Rent paid − 10% of Basic+DA", value: fc(Math.round(limbRent)), win: exempt === Math.round(limbRent) },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}{r.win && exempt > 0 ? " ✓ (least)" : ""}</span>
+                <span className={`tabular-nums ${r.win && exempt > 0 ? "text-green-400 font-semibold" : "text-[var(--color-text)]"}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Exempt HRA</p>
+              <p className="text-lg font-bold tabular-nums text-green-400">{fc(exempt)}</p>
+            </div>
+            <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Taxable HRA</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{fc(taxable)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Metro = Delhi, Mumbai, Kolkata, Chennai (50%); all other cities 40%. If annual rent &gt; ₹1L, landlord PAN must be reported. HRA exemption is not available under the New Regime. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── House Property Income (Sec 22-24) ───────────────────────────────────────────
+function HousePropertyCalc() {
+  const [mode, setMode]       = useState<"letout" | "self">("letout");
+  const [rent, setRent]       = useState("");
+  const [muniTax, setMuniTax] = useState("");
+  const [interest, setInterest] = useState("");
+  const fc = formatCurrency;
+
+  const annualRent = parseFloat(rent) || 0;
+  const mt = parseFloat(muniTax) || 0;
+  const intPaid = parseFloat(interest) || 0;
+
+  const nav = mode === "letout" ? Math.max(0, annualRent - mt) : 0;          // Net Annual Value
+  const stdDeduction = mode === "letout" ? Math.round(nav * 0.30) : 0;        // 30% u/s 24(a)
+  // Self-occupied: interest capped at ₹2L; let-out: full interest (loss capped at ₹2L set-off)
+  const intDeduction = mode === "self" ? Math.min(intPaid, 200000) : intPaid;
+  const income = nav - stdDeduction - intDeduction;
+  const setOffLoss = Math.max(0, -income);
+  const allowedLoss = Math.min(setOffLoss, 200000);                           // ₹2L cap on set-off vs other heads
+  const carryForward = Math.max(0, setOffLoss - 200000);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Income from House Property (Sec 22-24)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Net Annual Value = rent − municipal taxes. Less 30% standard deduction (Sec 24(a)) and home-loan interest (Sec 24(b)). Self-occupied: NAV nil, interest capped at ₹2L.</p>
+        <div className="flex gap-2 mb-4">
+          {([["letout", "Let-out / Deemed let-out"], ["self", "Self-occupied"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setMode(k)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{lbl}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {mode === "letout" && <>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Annual rent received (₹)</label>
+              <input type="number" value={rent} onChange={e => setRent(e.target.value)} placeholder="e.g. 360000" className={INP} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Municipal taxes paid (₹)</label>
+              <input type="number" value={muniTax} onChange={e => setMuniTax(e.target.value)} placeholder="e.g. 12000" className={INP} />
+            </div>
+          </>}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Home loan interest (₹)</label>
+            <input type="number" value={interest} onChange={e => setInterest(e.target.value)} placeholder="e.g. 200000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-3">Computation</h3>
+        <div className="space-y-2">
+          {[
+            { label: "Net Annual Value (NAV)", value: fc(nav) },
+            { label: "Less: Standard Deduction (30% u/s 24a)", value: `(${fc(stdDeduction)})` },
+            { label: "Less: Interest on borrowed capital (24b)", value: `(${fc(Math.round(intDeduction))})` },
+            { label: income >= 0 ? "Income from House Property" : "Loss from House Property", value: fc(income), bold: true },
+          ].map(r => (
+            <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+              <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+              <span className={`tabular-nums ${r.bold ? (income >= 0 ? "text-[var(--color-text)] font-semibold" : "text-red-400 font-semibold") : "text-[var(--color-text)]"}`}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+        {setOffLoss > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Loss set-off this year (cap ₹2L)</p>
+              <p className="text-base font-bold tabular-nums text-green-400">{fc(allowedLoss)}</p>
+            </div>
+            <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Carry forward (8 years)</p>
+              <p className="text-base font-bold tabular-nums text-orange-400">{fc(carryForward)}</p>
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Loss from house property set-off against other heads is capped at ₹2L per year (Sec 71(3A)); the balance carries forward 8 years. Self-occupied interest is restricted to ₹2L (₹30k if not acquired/constructed within 5 years). New Regime disallows the let-out loss set-off against other heads. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Presumptive 44AE — Goods Carriages ──────────────────────────────────────────
+function Presumptive44AE() {
+  const [heavy, setHeavy]   = useState("");   // GVW > 12,000 kg
+  const [light, setLight]   = useState("");   // other vehicles
+  const [months, setMonths] = useState("12");
+  const [tonnage, setTonnage] = useState("15");
+  const fc = formatCurrency;
+
+  const nHeavy = parseInt(heavy) || 0;
+  const nLight = parseInt(light) || 0;
+  const m = Math.min(12, Math.max(0, parseInt(months) || 0));
+  const tons = parseFloat(tonnage) || 0;
+
+  // Heavy goods vehicle: ₹1,000 per ton of GVW per month. Other: ₹7,500 per month.
+  const heavyIncome = nHeavy * tons * 1000 * m;
+  const lightIncome = nLight * 7500 * m;
+  const presumptiveIncome = Math.round(heavyIncome + lightIncome);
+  const totalVehicles = nHeavy + nLight;
+  const eligible = totalVehicles <= 10;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Presumptive Income — Goods Transport (Sec 44AE)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">For transporters owning ≤10 goods carriages. Heavy vehicle (GVW &gt; 12 t): ₹1,000 per ton of gross vehicle weight per month. Other vehicles: ₹7,500 per month each.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Heavy vehicles (count)</label>
+            <input type="number" min={0} value={heavy} onChange={e => setHeavy(e.target.value)} placeholder="e.g. 3" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Avg GVW per heavy (tons)</label>
+            <input type="number" min={0} value={tonnage} onChange={e => setTonnage(e.target.value)} placeholder="e.g. 15" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Other vehicles (count)</label>
+            <input type="number" min={0} value={light} onChange={e => setLight(e.target.value)} placeholder="e.g. 2" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months held (per vehicle)</label>
+            <input type="number" min={0} max={12} value={months} onChange={e => setMonths(e.target.value)} placeholder="12" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {totalVehicles > 0 && (
+        <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${eligible ? "border-[var(--color-border)]" : "border-red-700/40"}`}>
+          {!eligible && (
+            <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-950/20 border border-red-800/30 rounded-lg">
+              <AlertTriangle size={12} className="text-red-400 shrink-0" />
+              <p className="text-xs text-red-300">{totalVehicles} vehicles exceed the 10-vehicle limit — 44AE not available. Maintain books and get a tax audit (44AB).</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            {[
+              { label: `Heavy vehicles (${nHeavy} × ${tons}t × ₹1,000 × ${m}mo)`, value: fc(Math.round(heavyIncome)) },
+              { label: `Other vehicles (${nLight} × ₹7,500 × ${m}mo)`, value: fc(Math.round(lightIncome)) },
+              { label: "Presumptive Income (Sec 44AE)", value: fc(presumptiveIncome), bold: true },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.bold ? "text-[var(--color-primary)] font-bold" : "text-[var(--color-text)]"}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 44AE applies if you own ≤10 goods carriages at any time in the year. Income is computed per vehicle per month (part of a month = full month). Actual income, if higher, may be declared. No further business expense deduction is allowed. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Gratuity & Leave Encashment Exemption (Sec 10(10), 10(10AA)) ─────────────────
+function GratuityLeaveExemption() {
+  const [kind, setKind]     = useState<"gratuity" | "leave">("gratuity");
+  const [salary, setSalary] = useState("");   // last drawn monthly (basic + DA)
+  const [years, setYears]   = useState("");
+  const [received, setReceived] = useState("");
+  const [leaveDays, setLeaveDays] = useState("");
+  const [covered, setCovered] = useState(true);   // covered by Payment of Gratuity Act
+  const fc = formatCurrency;
+
+  const sal = parseFloat(salary) || 0;
+  const yrs = parseFloat(years) || 0;
+  const rec = parseFloat(received) || 0;
+  const lDays = parseFloat(leaveDays) || 0;
+
+  let limbs: { label: string; value: number }[] = [];
+  let statutoryCap = 0;
+  if (kind === "gratuity") {
+    statutoryCap = 2000000; // ₹20L lifetime cap
+    const formula = covered
+      ? Math.round((15 / 26) * sal * Math.round(yrs))            // covered: 15/26 × last salary × years
+      : Math.round((15 / 30) * sal * Math.floor(yrs));           // not covered: half-month avg × completed years
+    limbs = [
+      { label: "Actual gratuity received", value: rec },
+      { label: covered ? "15/26 × salary × years" : "½ month × completed years", value: formula },
+      { label: "Statutory cap (₹20 lakh)", value: statutoryCap },
+    ];
+  } else {
+    statutoryCap = 2500000; // ₹25L cap (non-govt) per CBDT notification 2023
+    const avgMonthly = sal;
+    const earnedDays = Math.max(0, lDays);
+    const leaveValue = Math.round(avgMonthly / 30 * earnedDays);
+    const tenMonthCap = Math.round(avgMonthly * 10);
+    limbs = [
+      { label: "Actual leave encashment received", value: rec },
+      { label: "Cash equiv. of earned leave", value: leaveValue },
+      { label: "10 months' avg salary", value: tenMonthCap },
+      { label: "Statutory cap (₹25 lakh)", value: statutoryCap },
+    ];
+  }
+
+  const exempt = Math.round(Math.max(0, Math.min(...limbs.map(l => l.value))));
+  const taxable = Math.max(0, rec - exempt);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Umbrella size={14} className="text-[var(--color-primary)]" /> Gratuity / Leave Encashment Exemption</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Exemption is the least of statutory limbs (Sec 10(10) for gratuity, Sec 10(10AA) for leave encashment). For non-government employees. Enter last-drawn monthly Basic+DA.</p>
+        <div className="flex gap-2 mb-4">
+          {([["gratuity", "Gratuity 10(10)"], ["leave", "Leave Encashment 10(10AA)"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setKind(k)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${kind === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{lbl}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last-drawn salary (monthly ₹)</label>
+            <input type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 50000" className={INP} />
+          </div>
+          {kind === "gratuity" ? (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Years of service</label>
+              <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="e.g. 12" className={INP} />
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Unutilised earned-leave days</label>
+              <input type="number" value={leaveDays} onChange={e => setLeaveDays(e.target.value)} placeholder="e.g. 300" className={INP} />
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received (₹)</label>
+            <input type="number" value={received} onChange={e => setReceived(e.target.value)} placeholder="e.g. 1500000" className={INP} />
+          </div>
+        </div>
+        {kind === "gratuity" && (
+          <label className="flex items-center gap-2 text-xs cursor-pointer mt-3">
+            <input type="checkbox" checked={covered} onChange={e => setCovered(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Covered by the Payment of Gratuity Act, 1972 (15/26 formula)
+          </label>
+        )}
+      </div>
+
+      {rec > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Exemption (least of the following)</h3>
+          <div className="space-y-2">
+            {limbs.map(l => (
+              <div key={l.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{l.label}{Math.round(l.value) === exempt && exempt > 0 ? " ✓ (least)" : ""}</span>
+                <span className={`tabular-nums ${Math.round(l.value) === exempt && exempt > 0 ? "text-green-400 font-semibold" : "text-[var(--color-text)]"}`}>{fc(Math.round(l.value))}</span>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="bg-green-950/20 border border-green-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Exempt amount</p>
+              <p className="text-lg font-bold tabular-nums text-green-400">{fc(exempt)}</p>
+            </div>
+            <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Taxable as salary</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{fc(taxable)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Government employees: gratuity and leave encashment are fully exempt. Non-government: limits above (gratuity ₹20L lifetime, leave encashment ₹25L per CBDT Notification 31/2023). "Salary" means Basic + DA (+ commission as % of turnover, if applicable). Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Salary Arrears Relief u/s 89(1) ─────────────────────────────────────────────
+function Relief89Calc() {
+  const [arrears, setArrears]       = useState("");
+  const [curIncome, setCurIncome]   = useState("");   // current year income excl. arrears
+  const [prevIncome, setPrevIncome] = useState("");   // earlier year(s) income to which arrears relate
+  const fc = formatCurrency;
+
+  // New regime slabs (FY 2024-25) reused for an indicative computation
+  const BANDS: SlabBand[] = NEW_BANDS;
+  const taxOf = (inc: number) => {
+    const t = slabTax(Math.max(0, inc), BANDS);
+    return Math.round(t * 1.04); // + 4% cess
+  };
+
+  const arr = parseFloat(arrears) || 0;
+  const cur = parseFloat(curIncome) || 0;
+  const prev = parseFloat(prevIncome) || 0;
+
+  // Tax on current year with and without arrears
+  const taxCurWith = taxOf(cur + arr);
+  const taxCurWithout = taxOf(cur);
+  const incrCurrent = Math.max(0, taxCurWith - taxCurWithout);
+
+  // Tax on prior year with and without the arrears portion
+  const taxPrevWith = taxOf(prev + arr);
+  const taxPrevWithout = taxOf(prev);
+  const incrPrior = Math.max(0, taxPrevWith - taxPrevWithout);
+
+  const relief = Math.max(0, incrCurrent - incrPrior);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Salary Arrears Relief (Sec 89(1))</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When you receive arrears taxed in a higher slab now, Sec 89(1) gives relief = extra tax on arrears this year minus extra tax had they been taxed in the year they related to. File Form 10E before the ITR.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Arrears received (₹)</label>
+            <input type="number" value={arrears} onChange={e => setArrears(e.target.value)} placeholder="e.g. 300000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current-year income (excl. arrears) (₹)</label>
+            <input type="number" value={curIncome} onChange={e => setCurIncome(e.target.value)} placeholder="e.g. 1100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Earlier-year income (₹)</label>
+            <input type="number" value={prevIncome} onChange={e => setPrevIncome(e.target.value)} placeholder="e.g. 500000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {arr > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Relief Computation (Form 10E)</h3>
+          <div className="space-y-2">
+            {[
+              { label: "Extra tax on arrears — current year", value: fc(incrCurrent), color: "text-orange-400" },
+              { label: "Extra tax on arrears — earlier year", value: fc(incrPrior), color: "text-blue-400" },
+              { label: "Relief u/s 89(1)", value: fc(relief), color: "text-green-400 font-bold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg p-3 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400">{relief > 0 ? `✓ You can claim ${fc(relief)} relief — reduce your tax payable after filing Form 10E.` : "No relief — the arrears do not push you into a higher effective rate than the earlier year."}</p>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative computation using current (new-regime) slabs for both years; the actual Form 10E uses each year's own slabs. Form 10E must be filed on the e-filing portal before submitting the ITR, else relief is disallowed. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Donations 80G Deduction Calculator ──────────────────────────────────────────
+type DonationRow = { id: string; donee: string; amount: number; category: "100nl" | "50nl" | "100ql" | "50ql"; mode: "digital" | "cash" };
+const DONATION_CATS: Record<DonationRow["category"], { label: string; pct: number; qualifying: boolean }> = {
+  "100nl": { label: "100% — no limit (PM CARES, National Defence Fund)", pct: 100, qualifying: false },
+  "50nl":  { label: "50% — no limit (PM Drought Relief, Jawaharlal Nehru Fund)", pct: 50, qualifying: false },
+  "100ql": { label: "100% — subject to 10% of AGTI (Govt for family planning)", pct: 100, qualifying: true },
+  "50ql":  { label: "50% — subject to 10% of AGTI (most charitable trusts)", pct: 50, qualifying: true },
+};
+function Donation80GCalc() {
+  const [rows, setRows] = useFeatureState<DonationRow[]>("tax-80g-donations", []);
+  const [agti, setAgti] = useFeatureState<string>("tax-80g-agti", "");
+  const [donee, setDonee] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState<DonationRow["category"]>("50ql");
+  const [mode, setMode] = useState<DonationRow["mode"]>("digital");
+  const fc = formatCurrency;
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!donee || amt <= 0) { toast.error("Enter donee name and amount"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), donee, amount: amt, category, mode }]);
+    setDonee(""); setAmount("");
+    toast.success("Donation recorded");
+  };
+
+  const agtiVal = parseFloat(agti) || 0;
+  const qualifyingCap = agtiVal * 0.10;
+
+  // Eligible donations: cash > ₹2,000 is disallowed
+  const eligible = rows.map(r => ({ ...r, allowedDonation: r.mode === "cash" && r.amount > 2000 ? 0 : r.amount }));
+  const nonQualSum = eligible.filter(r => !DONATION_CATS[r.category].qualifying).reduce((s, r) => s + Math.round(r.allowedDonation * DONATION_CATS[r.category].pct / 100), 0);
+  const qualGross = eligible.filter(r => DONATION_CATS[r.category].qualifying).reduce((s, r) => s + r.allowedDonation, 0);
+  const qualCapped = agtiVal > 0 ? Math.min(qualGross, qualifyingCap) : qualGross;
+  const qualDeduction = eligible.filter(r => DONATION_CATS[r.category].qualifying)
+    .reduce((s, r) => {
+      const share = qualGross > 0 ? r.allowedDonation / qualGross : 0;
+      return s + Math.round(qualCapped * share * DONATION_CATS[r.category].pct / 100);
+    }, 0);
+  const totalDeduction = nonQualSum + qualDeduction;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Heart size={14} className="text-[var(--color-primary)]" /> Donations 80G Deduction Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Deduction depends on the donee category (100%/50%) and whether it is capped at 10% of Adjusted Gross Total Income. Cash donations above ₹2,000 are disallowed. Old Regime only.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <input value={donee} onChange={e => setDonee(e.target.value)} placeholder="Donee / institution *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Donation amount (₹) *" className={INP} />
+          <select value={category} onChange={e => setCategory(e.target.value as DonationRow["category"])} className={INP}>
+            {(Object.keys(DONATION_CATS) as DonationRow["category"][]).map(k => <option key={k} value={k}>{DONATION_CATS[k].label}</option>)}
+          </select>
+          <select value={mode} onChange={e => setMode(e.target.value as DonationRow["mode"])} className={INP}>
+            <option value="digital">Digital / cheque</option>
+            <option value="cash">Cash</option>
+          </select>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Adjusted Gross Total Income (₹) — for 10% cap</label>
+            <input type="number" value={agti} onChange={e => setAgti(e.target.value)} placeholder="e.g. 1500000" className={INP} />
+          </div>
+          <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add donation</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total donated", value: fc(rows.reduce((s, r) => s + r.amount, 0)), color: "text-[var(--color-text)]" },
+            { label: "Qualifying-limit cap (10% AGTI)", value: agtiVal > 0 ? fc(Math.round(qualifyingCap)) : "—", color: "text-blue-400" },
+            { label: "Eligible 80G deduction", value: fc(totalDeduction), color: "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Donee", "Amount", "Category", "Mode", "Eligible", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {eligible.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.donee}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{DONATION_CATS[r.category].pct}%{DONATION_CATS[r.category].qualifying ? " · QL" : ""}</td>
+                  <td className="px-3 py-2.5 text-xs capitalize">{r.mode}</td>
+                  <td className={`px-3 py-2.5 text-xs tabular-nums ${r.allowedDonation === 0 ? "text-red-400" : "text-green-400"}`}>{r.allowedDonation === 0 ? "Cash >₹2k" : fc(r.allowedDonation)}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">From FY 2023-24, 80G claims need the donee's Form 10BE certificate and the donation must reflect in your AIS. Qualifying-limit donations are restricted to 10% of Adjusted GTI. 80G is not available under the New Regime. Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Capital-Gains Exemption Planner (Sec 54 / 54EC / 54F) ───────────────────────
+function CapitalGainExemptionPlanner() {
+  const [section, setSection] = useState<"54" | "54EC" | "54F">("54");
+  const [gain, setGain]       = useState("");      // LTCG (54/54EC) — capital gain
+  const [netConsideration, setNetConsideration] = useState(""); // for 54F — full sale value
+  const [reinvest, setReinvest] = useState("");    // amount reinvested
+  const fc = formatCurrency;
+
+  const cg = parseFloat(gain) || 0;
+  const nc = parseFloat(netConsideration) || 0;
+  const inv = parseFloat(reinvest) || 0;
+
+  let exemption = 0;
+  let cap = 0;
+  let note = "";
+  if (section === "54") {
+    // Exemption = lower of capital gain or amount invested in new residential house
+    exemption = Math.min(cg, inv);
+    cap = cg;
+    note = "Reinvest the LTCG from a residential house into another residential house (1 yr before / 2 yrs after purchase, or 3 yrs construction).";
+  } else if (section === "54EC") {
+    // Invest in NHAI/REC bonds, capped at ₹50L
+    const bondCap = 5000000;
+    exemption = Math.min(cg, inv, bondCap);
+    cap = Math.min(cg, bondCap);
+    note = "Invest LTCG from land/building into 54EC bonds (NHAI/REC/PFC/IRFC) within 6 months. Max ₹50 lakh, 5-year lock-in.";
+  } else {
+    // 54F — exemption proportionate to net consideration reinvested; full only if entire NC invested
+    exemption = nc > 0 ? Math.round(cg * Math.min(inv, nc) / nc) : 0;
+    cap = cg;
+    note = "Reinvest the entire net sale consideration of any LTCA (other than a house) into one residential house. Proportionate exemption if part-invested.";
+  }
+  exemption = Math.max(0, Math.min(exemption, cap));
+  const taxableGain = Math.max(0, cg - exemption);
+  const taxSaved = Math.round(exemption * 0.125); // LTCG @ 12.5% (Budget 2024)
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Capital-Gains Exemption Planner (54 / 54EC / 54F)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Defer or eliminate LTCG by reinvesting in a house (54/54F) or specified bonds (54EC). Model how much to reinvest to wipe out the tax.</p>
+        <div className="flex gap-2 mb-4">
+          {([["54", "Sec 54 — House → House"], ["54EC", "Sec 54EC — Bonds"], ["54F", "Sec 54F — Any asset → House"]] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setSection(k)}
+              className={`flex-1 py-2 text-[11px] font-semibold rounded-lg border transition-colors ${section === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{lbl}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Long-term capital gain (₹)</label>
+            <input type="number" value={gain} onChange={e => setGain(e.target.value)} placeholder="e.g. 4000000" className={INP} />
+          </div>
+          {section === "54F" && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Net sale consideration (₹)</label>
+              <input type="number" value={netConsideration} onChange={e => setNetConsideration(e.target.value)} placeholder="e.g. 10000000" className={INP} />
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{section === "54EC" ? "Amount in 54EC bonds (₹)" : "Amount reinvested in house (₹)"}</label>
+            <input type="number" value={reinvest} onChange={e => setReinvest(e.target.value)} placeholder="e.g. 4000000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {cg > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Exemption &amp; Residual Tax</h3>
+          <div className="space-y-2">
+            {[
+              { label: "Capital gain", value: fc(cg), color: "text-[var(--color-text)]" },
+              { label: `Exemption u/s ${section}`, value: fc(exemption), color: "text-green-400" },
+              { label: "Taxable gain after exemption", value: fc(taxableGain), color: taxableGain > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "Approx. LTCG tax saved (@12.5%)", value: fc(taxSaved), color: "text-[var(--color-primary)] font-semibold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg p-3 border border-blue-800/30 bg-blue-950/20">
+            <p className="text-xs text-blue-300">{note}</p>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 54/54F exemption (for residential house) is itself capped at ₹10 crore of investment from FY 2023-24. 54EC bonds: ₹50L max, 5-year lock-in. Unutilised gains must be parked in a Capital Gains Account Scheme before the ITR due date. Tax saved shown at the 12.5% LTCG rate (indicative). Consult your CA.</p>
+    </div>
+  );
+}
+
+// ── Interest u/s 234A / 234B / 234C Calculator ──────────────────────────────────
+function Interest234Calc() {
+  const [assessedTax, setAssessedTax] = useState(""); // tax liability less TDS/TCS/relief
+  const [advancePaid, setAdvancePaid] = useState("");
+  const [monthsLate, setMonthsLate] = useState("0"); // months after due date for 234A (self-assessment)
+  const fc = formatCurrency;
+
+  const tax = parseFloat(assessedTax) || 0;
+  const paid = parseFloat(advancePaid) || 0;
+  const lateM = Math.max(0, parseInt(monthsLate) || 0);
+
+  // 234A: 1%/month on unpaid tax for late ITR filing
+  const unpaid = Math.max(0, tax - paid);
+  const int234A = Math.round(unpaid * 0.01 * lateM);
+
+  // 234B: 1%/month if advance tax < 90% of assessed tax (assume ~4 months Apr-Jul till filing, indicative)
+  const below90 = paid < tax * 0.90 && tax > 10000;
+  const int234B = below90 ? Math.round(unpaid * 0.01 * 4) : 0;
+
+  // 234C: shortfall in each installment (15/45/75/100), 1%/month ×3,3,3,1
+  const cuts = [
+    { label: "By 15 Jun (15%)", duePct: 0.15, months: 3 },
+    { label: "By 15 Sep (45%)", duePct: 0.45, months: 3 },
+    { label: "By 15 Dec (75%)", duePct: 0.75, months: 3 },
+    { label: "By 15 Mar (100%)", duePct: 1.00, months: 1 },
+  ];
+  // Assume advance paid evenly is unknown; use cumulative paid vs cumulative due with single 'paid' as final — indicative
+  const int234C = cuts.reduce((s, c) => {
+    const due = tax * c.duePct;
+    const expectedPaidByThen = paid * c.duePct; // proportional assumption
+    const shortfall = Math.max(0, due - expectedPaidByThen);
+    return s + Math.round(shortfall * 0.01 * c.months);
+  }, 0);
+
+  const totalInterest = int234A + int234B + int234C;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Interest u/s 234A / 234B / 234C</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Estimate penal interest at 1% per month — 234A (late ITR), 234B (under-paid advance tax), 234C (installment shortfall). Enter tax net of TDS/TCS.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Assessed tax (net of TDS) (₹)</label>
+            <input type="number" value={assessedTax} onChange={e => setAssessedTax(e.target.value)} placeholder="e.g. 200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Advance tax paid (₹)</label>
+            <input type="number" value={advancePaid} onChange={e => setAdvancePaid(e.target.value)} placeholder="e.g. 120000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months ITR filed late (234A)</label>
+            <input type="number" min={0} value={monthsLate} onChange={e => setMonthsLate(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {tax > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-3">Interest Breakup (indicative)</h3>
+          <div className="space-y-2">
+            {[
+              { label: `234A — late filing (${lateM} mo × 1%)`, value: fc(int234A), color: int234A > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "234B — advance tax < 90% (≈4 mo × 1%)", value: fc(int234B), color: int234B > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "234C — installment shortfall", value: fc(int234C), color: int234C > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "Total interest", value: fc(totalInterest), color: "text-red-400 font-bold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="bg-red-950/20 border border-red-800/30 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Tax + interest payable</p>
+              <p className="text-lg font-bold tabular-nums text-red-400">{fc(Math.max(0, tax - paid) + totalInterest)}</p>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)]">Effective interest cost</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{tax > 0 ? `${((totalInterest / tax) * 100).toFixed(1)}%` : "—"}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">All sections charge 1% per month (simple). 234A runs from the ITR due date to the date of filing; 234B from 1 April of the AY; 234C is on each installment shortfall. 234C months are 3/3/3/1 for the four instalments. A part of a month counts as a full month. Indicative only — consult your CA.</p>
     </div>
   );
 }

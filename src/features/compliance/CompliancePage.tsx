@@ -8,6 +8,7 @@ import {
   CalendarCheck, AlertTriangle, ArrowRight, ShieldCheck, FileText, Plus, X,
   FileStack, UserCheck, Users, BookMarked, Store, BadgeCheck, CalendarClock,
   FileSignature, ScrollText, Gavel, Activity, CheckCircle2, Copy,
+  Receipt, Award, Ship, Leaf, Flame, HandCoins, GitCompareArrows, UserX, FileClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
@@ -15,7 +16,9 @@ import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns
 type ComplianceTab =
   | "overview" | "roc-prep" | "kyc-dpt3" | "board-agm" | "registers"
   | "shop-license" | "fssai-license" | "labour-calendar" | "templates"
-  | "posh-policy" | "penalty-multi" | "health-score";
+  | "posh-policy" | "penalty-multi" | "health-score"
+  | "ptax-tracker" | "ip-renewal" | "iec-compliance" | "pollution-consent"
+  | "fire-noc" | "csr-spend" | "rpt-register" | "dir-disqual" | "event-roc";
 
 interface ComplianceEvent {
   date: Date;
@@ -147,6 +150,15 @@ export default function CompliancePage() {
           ["posh-policy", "POSH / Policies", ScrollText],
           ["penalty-multi", "Penalty Estimator", Gavel],
           ["health-score", "Health Score", Activity],
+          ["ptax-tracker", "Professional Tax", Receipt],
+          ["ip-renewal", "Trademark / IP", Award],
+          ["iec-compliance", "Import-Export (IEC)", Ship],
+          ["pollution-consent", "Pollution Consent", Leaf],
+          ["fire-noc", "Fire / Safety NOC", Flame],
+          ["csr-spend", "CSR Spend", HandCoins],
+          ["rpt-register", "Related-Party Txns", GitCompareArrows],
+          ["dir-disqual", "Director Disqual.", UserX],
+          ["event-roc", "Event-Based ROC", FileClock],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -166,6 +178,15 @@ export default function CompliancePage() {
       {tab === "posh-policy" && <PoshPolicyTracker />}
       {tab === "penalty-multi" && <MultiActPenaltyEstimator />}
       {tab === "health-score" && <ComplianceHealthScore />}
+      {tab === "ptax-tracker" && <ProfessionalTaxTracker />}
+      {tab === "ip-renewal" && <TrademarkIpRenewal />}
+      {tab === "iec-compliance" && <IecComplianceTracker />}
+      {tab === "pollution-consent" && <PollutionConsentTracker />}
+      {tab === "fire-noc" && <FireNocTracker />}
+      {tab === "csr-spend" && <CsrSpendTracker />}
+      {tab === "rpt-register" && <RelatedPartyRegister />}
+      {tab === "dir-disqual" && <DirectorDisqualChecker />}
+      {tab === "event-roc" && <EventBasedRocTracker />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -1387,6 +1408,586 @@ function ComplianceHealthScore() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── #134 PROFESSIONAL TAX — MULTI-STATE REGISTRATION TRACKER ─────────────────
+type PtRegState = { id: string; state: string; ec: boolean; rc: boolean; ecNo: string; rcNo: string; slab: string; due: number };
+function ProfessionalTaxTracker() {
+  // PT is a state levy. EC = Enrolment Certificate (employer/firm itself), RC = Registration Certificate (to deduct from employees).
+  const STATE_INFO: { state: string; max: string; freq: string }[] = [
+    { state: "Maharashtra",   max: "₹2,500/yr",  freq: "Monthly (₹200, ₹300 in Feb)" },
+    { state: "Karnataka",     max: "₹2,400/yr",  freq: "Monthly (₹200)" },
+    { state: "West Bengal",   max: "₹2,500/yr",  freq: "Monthly / annual" },
+    { state: "Tamil Nadu",    max: "₹2,500/yr",  freq: "Half-yearly" },
+    { state: "Telangana",     max: "₹2,500/yr",  freq: "Monthly" },
+    { state: "Gujarat",       max: "₹2,400/yr",  freq: "Monthly" },
+    { state: "Andhra Pradesh",max: "₹2,500/yr",  freq: "Monthly" },
+    { state: "Madhya Pradesh",max: "₹2,500/yr",  freq: "Monthly" },
+  ];
+  const NO_PT = ["Delhi", "Haryana", "Uttar Pradesh", "Rajasthan", "Uttarakhand", "Himachal Pradesh", "Goa (none)", "J&K"];
+  const [rows, setRows] = useFeatureState<PtRegState[]>("comp-pt-states", []);
+  const [state, setState] = useState(STATE_INFO[0].state);
+  const add = () => {
+    if (rows.some(r => r.state === state)) { toast.error(`${state} already added`); return; }
+    setRows(prev => [...prev, { id: Math.random().toString(36).slice(2), state, ec: false, rc: false, ecNo: "", rcNo: "", slab: "", due: 0 }]);
+    toast.success(`${state} added`);
+  };
+  const upd = (id: string, patch: Partial<PtRegState>) => setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+  const totalDue = rows.reduce((s, r) => s + (r.due || 0), 0);
+  const pendingReg = rows.filter(r => !r.ec || !r.rc).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Receipt size={14} className="text-[var(--color-primary)]" /> Professional Tax — Multi-State Registration Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">PT is a state levy. Track the employer Enrolment Certificate (EC) and the Registration Certificate (RC, to deduct from staff) for every state you operate in. Capped at ₹2,500/employee/year.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select className={INP} value={state} onChange={e => setState(e.target.value)}>
+            {STATE_INFO.map(s => <option key={s.state} value={s.state}>{s.state}</option>)}
+          </select>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add state</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">States tracked</p><p className="text-lg font-bold tabular-nums">{rows.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Registrations pending</p><p className={`text-lg font-bold tabular-nums ${pendingReg > 0 ? "text-yellow-400" : "text-green-400"}`}>{pendingReg}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">PT payable / period</p><p className="text-lg font-bold tabular-nums text-orange-400">{formatCurrency(totalDue)}</p></div>
+      </div>
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+          {rows.map(r => {
+            const info = STATE_INFO.find(s => s.state === r.state);
+            return (
+              <div key={r.id} className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-sm font-semibold flex-1">{r.state}</p>
+                  <span className="text-[10px] text-[var(--color-muted)]">{info?.freq} · max {info?.max}</span>
+                  <button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={r.ec} onChange={e => upd(r.id, { ec: e.target.checked })} className="accent-[var(--color-primary)]" /> EC obtained</label>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={r.rc} onChange={e => upd(r.id, { rc: e.target.checked })} className="accent-[var(--color-primary)]" /> RC obtained</label>
+                  <input className={INP} placeholder="EC no." value={r.ecNo} onChange={e => upd(r.id, { ecNo: e.target.value })} />
+                  <input className={INP} placeholder="RC no." value={r.rcNo} onChange={e => upd(r.id, { rcNo: e.target.value })} />
+                  <input type="number" className={INP} placeholder="PT this period (₹)" value={r.due || ""} onChange={e => upd(r.id, { due: parseFloat(e.target.value) || 0 })} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />States with no PT: {NO_PT.join(", ")}. Due dates and slabs vary by state — verify on the state commercial-tax portal.</p>
+    </div>
+  );
+}
+
+// ── #135 TRADEMARK / IP RENEWAL TRACKER ─────────────────────────────────────
+type IpAsset = { id: string; name: string; kind: "Trademark" | "Patent" | "Copyright" | "Design"; regNo: string; cls: string; regDate: string };
+function TrademarkIpRenewal() {
+  const [assets, setAssets] = useFeatureState<IpAsset[]>("comp-ip-assets", []);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<IpAsset["kind"]>("Trademark");
+  const [regNo, setRegNo] = useState("");
+  const [cls, setCls] = useState("");
+  const [regDate, setRegDate] = useState("");
+  // TM: renew every 10 years. Patent: 20-year term, annuity from year 3. Design: 10 yrs +5 extension. Copyright: life+60 (no renewal).
+  const termYears = (k: IpAsset["kind"]) => k === "Trademark" ? 10 : k === "Patent" ? 20 : k === "Design" ? 10 : 0;
+  const add = () => {
+    if (!name || !regDate) { toast.error("Enter name and registration date"); return; }
+    setAssets(prev => [...prev, { id: Math.random().toString(36).slice(2), name, kind, regNo, cls, regDate }]);
+    setName(""); setRegNo(""); setCls(""); setRegDate(""); toast.success("IP asset added");
+  };
+  const today = new Date();
+  const enriched = assets.map(a => {
+    const term = termYears(a.kind);
+    const renewal = term > 0 ? new Date(new Date(a.regDate).getFullYear() + term, new Date(a.regDate).getMonth(), new Date(a.regDate).getDate()) : null;
+    const days = renewal ? differenceInDays(renewal, today) : null;
+    return { ...a, renewal, days };
+  }).sort((a, b) => (a.days ?? 1e9) - (b.days ?? 1e9));
+  const dueSoon = enriched.filter(a => a.days !== null && a.days >= 0 && a.days <= 180).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Award size={14} className="text-[var(--color-primary)]" /> Trademark / IP Renewal Tracker {dueSoon > 0 && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">{dueSoon} renewing ≤6mo</span>}</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Trademarks renew every 10 years; patents need annuity from year 3 (20-yr term); registered designs run 10+5 years. A lapsed renewal can permanently lose protection.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <input className={INP} placeholder="Mark / IP name *" value={name} onChange={e => setName(e.target.value)} />
+          <select className={INP} value={kind} onChange={e => setKind(e.target.value as IpAsset["kind"])}>
+            {(["Trademark", "Patent", "Copyright", "Design"] as const).map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <input className={INP} placeholder="Reg. no." value={regNo} onChange={e => setRegNo(e.target.value)} />
+          <input className={INP} placeholder="Class / field" value={cls} onChange={e => setCls(e.target.value)} />
+          <input type="date" className={INP} value={regDate} onChange={e => setRegDate(e.target.value)} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add IP asset</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {enriched.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No IP assets tracked yet.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {enriched.map(a => (
+              <div key={a.id} className="py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium">{a.name}</p>
+                    <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full text-[var(--color-muted)]">{a.kind}</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-muted)]">{[a.regNo && `No. ${a.regNo}`, a.cls && `Class ${a.cls}`, `Registered ${a.regDate}`].filter(Boolean).join(" · ")}{a.renewal ? ` · Renew by ${format(a.renewal, "dd MMM yyyy")}` : " · No renewal (copyright runs life+60)"}</p>
+                </div>
+                {a.days !== null && <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${a.days < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : a.days <= 180 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{a.days < 0 ? `Lapsed ${-a.days}d` : `${a.days}d`}</span>}
+                <button onClick={() => setAssets(prev => prev.filter(x => x.id !== a.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #136 IMPORT-EXPORT (IEC) COMPLIANCE TRACKER ─────────────────────────────
+function IecComplianceTracker() {
+  const [iec, setIec] = useFeatureState<string>("comp-iec-number", "");
+  const [updated, setUpdated] = useFeatureState<string>("comp-iec-updated", "");
+  const [adCodes, setAdCodes] = useFeatureState<{ id: string; port: string; bank: string; reg: boolean }[]>("comp-iec-adcodes", []);
+  const [port, setPort] = useState("");
+  const [bank, setBank] = useState("");
+  // DGFT mandates annual IEC update during Apr–Jun each FY, even if no change, else IEC is deactivated.
+  const now = new Date();
+  const fyStart = now.getMonth() >= 3 ? new Date(now.getFullYear(), 3, 1) : new Date(now.getFullYear() - 1, 3, 1);
+  const updatedThisFy = updated ? new Date(updated) >= fyStart : false;
+  const updateDeadline = new Date(fyStart.getFullYear(), 5, 30); // 30 Jun
+  const daysToDeadline = differenceInDays(updateDeadline, now);
+  const addAd = () => {
+    if (!port) { toast.error("Enter port"); return; }
+    setAdCodes(prev => [...prev, { id: Math.random().toString(36).slice(2), port, bank, reg: false }]);
+    setPort(""); setBank("");
+  };
+  const CHECKS = [
+    { label: "IEC obtained from DGFT (PAN-based, lifetime)", ok: !!iec },
+    { label: "IEC updated/confirmed this financial year (Apr–Jun)", ok: updatedThisFy },
+    { label: "AD-Code registered at every port of export", ok: adCodes.length > 0 && adCodes.every(a => a.reg) },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Ship size={14} className="text-[var(--color-primary)]" /> Import-Export (IEC) Compliance</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">IEC is a one-time, PAN-based code, but DGFT requires you to electronically update/confirm it every year (Apr–Jun) or it is deactivated and shipments stop.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">IEC Number</label>
+            <input className={INP} placeholder="10-digit IEC (= PAN)" value={iec} onChange={e => setIec(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last DGFT update date</label>
+            <input type="date" className={INP} value={updated} onChange={e => setUpdated(e.target.value)} />
+          </div>
+        </div>
+        <div className={`mt-3 rounded-lg p-3 border text-xs ${updatedThisFy ? "bg-green-950/20 border-green-800/40 text-green-400" : "bg-yellow-950/20 border-yellow-800/40 text-yellow-300"}`}>
+          {updatedThisFy
+            ? `IEC confirmed for FY ${fyStart.getFullYear()}–${(fyStart.getFullYear() + 1).toString().slice(2)}. Next update window opens 1 Apr ${fyStart.getFullYear() + 1}.`
+            : `Annual IEC update is pending — deadline ${format(updateDeadline, "dd MMM yyyy")} (${daysToDeadline >= 0 ? `${daysToDeadline}d left` : `${-daysToDeadline}d overdue — IEC may be deactivated`}).`}
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-3">AD-Code Registration by Port</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+          <input className={INP} placeholder="Port / customs station" value={port} onChange={e => setPort(e.target.value)} />
+          <input className={INP} placeholder="Authorised Dealer bank" value={bank} onChange={e => setBank(e.target.value)} />
+          <button onClick={addAd} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add port</button>
+        </div>
+        {adCodes.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-2">No AD-codes registered. You must register your bank's AD-code at every customs port before exporting from it.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {adCodes.map(a => (
+              <div key={a.id} className="py-2.5 flex items-center gap-3">
+                <button onClick={() => setAdCodes(prev => prev.map(x => x.id === a.id ? { ...x, reg: !x.reg } : x))} className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${a.reg ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{a.reg ? "Registered" : "Pending"}</button>
+                <div className="flex-1 min-w-0"><p className="text-sm font-medium">{a.port}</p>{a.bank && <p className="text-[10px] text-[var(--color-muted)]">{a.bank}</p>}</div>
+                <button onClick={() => setAdCodes(prev => prev.filter(x => x.id !== a.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <p className="text-sm font-semibold mb-3">Compliance Checklist</p>
+        <div className="space-y-2">
+          {CHECKS.map(c => (
+            <div key={c.label} className="flex items-center gap-2 text-sm">
+              <span className={c.ok ? "text-green-400" : "text-[var(--color-muted)]"}>{c.ok ? <CheckCircle2 size={14} /> : <X size={14} />}</span>
+              <span className={c.ok ? "" : "text-[var(--color-muted)]"}>{c.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #137 ENVIRONMENTAL / POLLUTION-BOARD CONSENT (CTE / CTO) TRACKER ─────────
+type Consent = { id: string; kind: "CTE" | "CTO"; category: "Red" | "Orange" | "Green" | "White"; number: string; issued: string; valid: string };
+function PollutionConsentTracker() {
+  const [items, setItems] = useFeatureState<Consent[]>("comp-pollution-consents", []);
+  const [kind, setKind] = useState<Consent["kind"]>("CTO");
+  const [category, setCategory] = useState<Consent["category"]>("Green");
+  const [number, setNumber] = useState("");
+  const [issued, setIssued] = useState("");
+  const [valid, setValid] = useState("");
+  // SPCB consent validity by category: Red 5yr, Orange 10yr, Green 15yr, White exempt (intimation only).
+  const CAT_VALIDITY: Record<Consent["category"], string> = { Red: "5 years", Orange: "10 years", Green: "15 years", White: "Exempt — intimation only" };
+  const add = () => {
+    if (category !== "White" && (!number || !valid)) { toast.error("Enter consent number and validity date"); return; }
+    setItems(prev => [...prev, { id: Math.random().toString(36).slice(2), kind, category, number, issued, valid }]);
+    setNumber(""); setIssued(""); setValid(""); toast.success("Consent added");
+  };
+  const today = new Date();
+  const sorted = [...items].sort((a, b) => (a.valid || "9999").localeCompare(b.valid || "9999"));
+  const CAT_COLOR: Record<Consent["category"], string> = { Red: "text-red-400", Orange: "text-orange-400", Green: "text-green-400", White: "text-[var(--color-muted)]" };
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Leaf size={14} className="text-[var(--color-primary)]" /> Environmental Consent (CTE / CTO) Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">State Pollution Control Board Consent-to-Establish (before setup) and Consent-to-Operate (renewable). Validity depends on the unit's pollution category. A lapsed CTO can halt operations on inspection.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <select className={INP} value={kind} onChange={e => setKind(e.target.value as Consent["kind"])}>
+            <option value="CTE">CTE (Establish)</option>
+            <option value="CTO">CTO (Operate)</option>
+          </select>
+          <select className={INP} value={category} onChange={e => setCategory(e.target.value as Consent["category"])}>
+            {(["Red", "Orange", "Green", "White"] as const).map(c => <option key={c} value={c}>{c} category</option>)}
+          </select>
+          <input className={INP} placeholder="Consent no." value={number} onChange={e => setNumber(e.target.value)} />
+          <input type="date" className={INP} title="Issued" value={issued} onChange={e => setIssued(e.target.value)} />
+          <input type="date" className={INP} title="Valid until" value={valid} onChange={e => setValid(e.target.value)} />
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Validity for {category}: <span className={CAT_COLOR[category]}>{CAT_VALIDITY[category]}</span></p>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add consent</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {sorted.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No consents tracked yet.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {sorted.map(c => {
+              const days = c.valid ? differenceInDays(new Date(c.valid), today) : null;
+              return (
+                <div key={c.id} className="py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{c.kind} <span className={`text-[10px] font-semibold ${CAT_COLOR[c.category]}`}>· {c.category}</span></p>
+                      {c.number && <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full text-[var(--color-muted)] font-mono">{c.number}</span>}
+                    </div>
+                    <p className="text-[11px] text-[var(--color-muted)]">{[c.issued && `Issued ${c.issued}`, c.valid && `Valid until ${c.valid}`].filter(Boolean).join(" · ") || "Validity not set"}</p>
+                  </div>
+                  {days !== null && <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${days < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : days <= 90 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{days < 0 ? `Expired ${-days}d` : `${days}d left`}</span>}
+                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #138 FIRE / SAFETY NOC TRACKER ──────────────────────────────────────────
+type FireRecord = { id: string; premise: string; type: "Provisional NOC" | "Final NOC" | "Fire Safety Certificate"; number: string; issued: string; valid: string; mockDrill: string };
+function FireNocTracker() {
+  const [records, setRecords] = useFeatureState<FireRecord[]>("comp-fire-noc", []);
+  const [premise, setPremise] = useState("");
+  const [type, setType] = useState<FireRecord["type"]>("Fire Safety Certificate");
+  const [number, setNumber] = useState("");
+  const [valid, setValid] = useState("");
+  const add = () => {
+    if (!premise || !valid) { toast.error("Enter premise and validity date"); return; }
+    setRecords(prev => [...prev, { id: Math.random().toString(36).slice(2), premise, type, number, issued: "", valid, mockDrill: "" }]);
+    setPremise(""); setNumber(""); setValid(""); toast.success("Fire NOC added");
+  };
+  const today = new Date();
+  const sorted = [...records].sort((a, b) => a.valid.localeCompare(b.valid));
+  const expiringSoon = records.filter(r => { const d = differenceInDays(new Date(r.valid), today); return d >= 0 && d <= 60; }).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Flame size={14} className="text-[var(--color-primary)]" /> Fire / Safety NOC Tracker {expiringSoon > 0 && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">{expiringSoon} renewing ≤60d</span>}</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Fire NOC / fire-safety certificate from the State Fire Service is mandatory for factories, offices above prescribed area, and high-occupancy premises. Usually renewed yearly. Track per premise and log periodic mock drills.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <input className={INP} placeholder="Premise / branch *" value={premise} onChange={e => setPremise(e.target.value)} />
+          <select className={INP} value={type} onChange={e => setType(e.target.value as FireRecord["type"])}>
+            {(["Provisional NOC", "Final NOC", "Fire Safety Certificate"] as const).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input className={INP} placeholder="Certificate no." value={number} onChange={e => setNumber(e.target.value)} />
+          <input type="date" className={INP} title="Valid until" value={valid} onChange={e => setValid(e.target.value)} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add NOC</button>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {sorted.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No fire NOCs tracked yet.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {sorted.map(r => {
+              const days = differenceInDays(new Date(r.valid), today);
+              return (
+                <div key={r.id} className="py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{r.premise}</p>
+                      <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full text-[var(--color-muted)]">{r.type}</span>
+                    </div>
+                    <p className="text-[11px] text-[var(--color-muted)]">{[r.number && `No. ${r.number}`, `Valid until ${r.valid}`].filter(Boolean).join(" · ")}</p>
+                    <input value={r.mockDrill} onChange={e => setRecords(prev => prev.map(x => x.id === r.id ? { ...x, mockDrill: e.target.value } : x))} placeholder="Last mock-drill date / note…" className="w-full mt-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)]" />
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${days < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : days <= 60 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{days < 0 ? `Expired ${-days}d` : `${days}d left`}</span>
+                    <button onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #139 CSR APPLICABILITY & SPEND TRACKER ──────────────────────────────────
+function CsrSpendTracker() {
+  const { store } = useApp();
+  const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
+  const [netWorth, setNetWorth] = useState("");
+  const [turnover, setTurnover] = useState(() => String(Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0))));
+  const [netProfit, setNetProfit] = useState(() => String(Math.round(snap.estAnnualProfit ?? 0)));
+  const [spent, setSpent] = useState("");
+  const nw = parseFloat(netWorth) || 0;
+  const to = parseFloat(turnover) || 0;
+  const np = parseFloat(netProfit) || 0;
+  const sp = parseFloat(spent) || 0;
+  // Sec 135: applies if net worth ≥ ₹500cr OR turnover ≥ ₹1000cr OR net profit ≥ ₹5cr in immediately preceding FY.
+  const applies = nw >= 5000000000 || to >= 10000000000 || np >= 50000000;
+  // Obligation = 2% of avg net profit of last 3 FY (proxied here by current net profit).
+  const obligation = applies ? Math.round(np * 0.02) : 0;
+  const shortfall = Math.max(0, obligation - sp);
+  const pct = obligation > 0 ? Math.min(100, Math.round((sp / obligation) * 100)) : 0;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><HandCoins size={14} className="text-[var(--color-primary)]" /> CSR Applicability & Spend Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Section 135 CSR applies if any of: net worth ≥ ₹500 cr, turnover ≥ ₹1,000 cr, or net profit ≥ ₹5 cr. Obligation is 2% of the average net profit of the last 3 financial years.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Net worth (₹)</label><input type="number" className={INP} placeholder="e.g. 200000000" value={netWorth} onChange={e => setNetWorth(e.target.value)} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Turnover (₹)</label><input type="number" className={INP} value={turnover} onChange={e => setTurnover(e.target.value)} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Net profit (₹)</label><input type="number" className={INP} value={netProfit} onChange={e => setNetProfit(e.target.value)} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">CSR spent this FY (₹)</label><input type="number" className={INP} placeholder="0" value={spent} onChange={e => setSpent(e.target.value)} /></div>
+        </div>
+      </div>
+      <div className={`rounded-lg p-4 border ${applies ? "border-[var(--color-primary)]/40 bg-[var(--color-accent)]" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className="text-sm font-semibold">{applies ? "CSR is applicable to your company." : "CSR is not applicable — you are below all three thresholds."}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-1">{applies ? "Constitute a CSR committee, adopt a policy, spend, and file Form CSR-2 with AOC-4." : "Re-check at each year-end; CSR triggers if you cross any one threshold."}</p>
+      </div>
+      {applies && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">2% obligation</p><p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(obligation)}</p></div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Spent</p><p className="text-lg font-bold tabular-nums text-blue-400">{formatCurrency(sp)}</p></div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Shortfall</p><p className={`text-lg font-bold tabular-nums ${shortfall > 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(shortfall)}</p></div>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-center justify-between mb-2"><p className="text-sm font-semibold">CSR spend progress</p><span className="text-xs text-[var(--color-muted)]">{pct}%</span></div>
+            <div className="h-2.5 rounded-full bg-[var(--color-bg)] overflow-hidden"><div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} /></div>
+            <p className="text-[11px] text-[var(--color-muted)] mt-3">{shortfall > 0 ? `Unspent CSR (other than ongoing projects) must be transferred to a Schedule-VII fund within 6 months of FY-end. Ongoing-project unspent goes to a separate Unspent CSR Account within 30 days.` : "CSR obligation met for this year. File Form CSR-2."}</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #140 RELATED-PARTY TRANSACTION (RPT) REGISTER ───────────────────────────
+type Rpt = { id: string; party: string; relation: string; nature: string; amount: number; basis: "Arm's length" | "Not arm's length"; boardApproval: boolean; date: string };
+function RelatedPartyRegister() {
+  const [rows, setRows] = useFeatureState<Rpt[]>("comp-rpt-register", []);
+  const [party, setParty] = useState("");
+  const [relation, setRelation] = useState("Director");
+  const [nature, setNature] = useState("");
+  const [amount, setAmount] = useState("");
+  const [basis, setBasis] = useState<Rpt["basis"]>("Arm's length");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const RELATIONS = ["Director", "KMP", "Relative of Director/KMP", "Holding Company", "Subsidiary", "Associate", "Director's other firm", "Other"];
+  const add = () => {
+    if (!party || !nature) { toast.error("Enter party and nature of transaction"); return; }
+    setRows(prev => [...prev, { id: Math.random().toString(36).slice(2), party, relation, nature, amount: parseFloat(amount) || 0, basis, boardApproval: false, date }]);
+    setParty(""); setNature(""); setAmount(""); toast.success("RPT logged");
+  };
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const needApproval = rows.filter(r => !r.boardApproval).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /> Related-Party Transaction Register</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Section 188 / MBP-4. Log every transaction with directors, KMP, their relatives and group companies. Non-arm's-length RPTs need board (and sometimes shareholder) approval and AOC-2 disclosure.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <input className={INP} placeholder="Related party *" value={party} onChange={e => setParty(e.target.value)} />
+          <select className={INP} value={relation} onChange={e => setRelation(e.target.value)}>{RELATIONS.map(r => <option key={r}>{r}</option>)}</select>
+          <input className={INP} placeholder="Nature (sale/loan/lease…) *" value={nature} onChange={e => setNature(e.target.value)} />
+          <input type="number" className={INP} placeholder="Amount (₹)" value={amount} onChange={e => setAmount(e.target.value)} />
+          <select className={INP} value={basis} onChange={e => setBasis(e.target.value as Rpt["basis"])}>
+            {(["Arm's length", "Not arm's length"] as const).map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <input type="date" className={INP} value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Log transaction</button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Transactions</p><p className="text-lg font-bold tabular-nums">{rows.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Total value</p><p className="text-lg font-bold tabular-nums text-blue-400">{formatCurrency(total)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Awaiting approval</p><p className={`text-lg font-bold tabular-nums ${needApproval > 0 ? "text-yellow-400" : "text-green-400"}`}>{needApproval}</p></div>
+      </div>
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+          {[...rows].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
+            <div key={r.id} className="p-3.5 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium">{r.party}</p>
+                  <span className="text-[9px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full text-[var(--color-muted)]">{r.relation}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.basis === "Arm's length" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-orange-900/30 text-orange-400 border-orange-800/40"}`}>{r.basis}</span>
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)]">{r.nature}{r.amount > 0 ? ` · ${formatCurrency(r.amount)}` : ""} · {r.date}</p>
+              </div>
+              <button onClick={() => setRows(prev => prev.map(x => x.id === r.id ? { ...x, boardApproval: !x.boardApproval } : x))} className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${r.boardApproval ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.boardApproval ? "Board-approved" : "Approve"}</button>
+              <button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />RPTs above prescribed thresholds (e.g. ≥10% of turnover) require prior shareholder approval by ordinary resolution. All RPTs must be entered in register MBP-4 and disclosed in AOC-2.</p>
+    </div>
+  );
+}
+
+// ── #141 DIRECTOR DISQUALIFICATION CHECKER (Sec 164) ────────────────────────
+type DirCheck = { id: string; name: string; din: string; flags: Record<string, boolean> };
+function DirectorDisqualChecker() {
+  const TRIGGERS: { key: string; label: string; sub: string }[] = [
+    { key: "unsound", label: "Of unsound mind (declared by a court)", sub: "Sec 164(1)(a)" },
+    { key: "insolvent", label: "Undischarged insolvent / applied to be adjudged insolvent", sub: "Sec 164(1)(b)/(c)" },
+    { key: "convicted", label: "Convicted of an offence (≥6 months, last 5 years)", sub: "Sec 164(1)(d)" },
+    { key: "courtOrder", label: "Disqualified by a court/Tribunal order in force", sub: "Sec 164(1)(e)" },
+    { key: "unpaidCalls", label: "Unpaid calls on shares for over 6 months", sub: "Sec 164(1)(f)" },
+    { key: "relatedConvict", label: "Convicted of related-party-transaction offence (last 5 yrs)", sub: "Sec 164(1)(g)" },
+    { key: "noDin", label: "Has not complied with DIN / DIR-3 KYC requirements", sub: "Sec 164(1)(h)" },
+    { key: "noFiling3yr", label: "Other company failed to file financials/returns for 3 continuous FYs", sub: "Sec 164(2)(a)" },
+    { key: "deposits", label: "Other company failed to repay deposits / pay dividend ≥1 year", sub: "Sec 164(2)(b)" },
+  ];
+  const [dirs, setDirs] = useFeatureState<DirCheck[]>("comp-dir-disqual", []);
+  const [name, setName] = useState("");
+  const [din, setDin] = useState("");
+  const add = () => {
+    if (!name) { toast.error("Enter director name"); return; }
+    setDirs(prev => [...prev, { id: Math.random().toString(36).slice(2), name, din, flags: {} }]);
+    setName(""); setDin("");
+  };
+  const toggle = (id: string, key: string) => setDirs(prev => prev.map(d => d.id === id ? { ...d, flags: { ...d.flags, [key]: !d.flags[key] } } : d));
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><UserX size={14} className="text-[var(--color-primary)]" /> Director Disqualification Checker (Sec 164)</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Self-assessment against Section 164 disqualification triggers. A director defaulting under 164(2) in one company is disqualified across all companies for 5 years — verify each board member.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <input className={INP} placeholder="Director name *" value={name} onChange={e => setName(e.target.value)} />
+          <input className={INP} placeholder="DIN" value={din} onChange={e => setDin(e.target.value)} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add director</button>
+        </div>
+      </div>
+      {dirs.length === 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 text-center text-xs text-[var(--color-muted)]">Add a director to run the disqualification self-check.</div>
+      ) : dirs.map(d => {
+        const hit = TRIGGERS.filter(t => d.flags[t.key]).length;
+        const disqualified = hit > 0;
+        return (
+          <div key={d.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-sm font-semibold flex-1">{d.name} {d.din && <span className="text-[10px] text-[var(--color-muted)] font-mono">· DIN {d.din}</span>}</p>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${disqualified ? "bg-red-900/30 text-red-400 border border-red-800/40" : "bg-green-900/30 text-green-400 border border-green-800/40"}`}>{disqualified ? `Disqualified — ${hit} trigger${hit > 1 ? "s" : ""}` : "No triggers flagged"}</span>
+              <button onClick={() => setDirs(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              {TRIGGERS.map(t => (
+                <label key={t.key} className="flex items-start gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={!!d.flags[t.key]} onChange={() => toggle(d.id, t.key)} className="mt-0.5 accent-red-500 shrink-0" />
+                  <span className={d.flags[t.key] ? "text-red-400" : "text-[var(--color-muted)]"}>{t.label} <span className="opacity-60">· {t.sub}</span></span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Acting as a director while disqualified is an offence (fine + imprisonment). This is an indicative self-check — confirm DIN status on the MCA portal.</p>
+    </div>
+  );
+}
+
+// ── #142 EVENT-BASED ROC FILING TRACKER (PAS-3 / MGT-14 / DIR-12 / CHG-1) ────
+type EventFiling = { id: string; form: string; event: string; eventDate: string; filed: boolean };
+function EventBasedRocTracker() {
+  // Most event-based forms must be filed within a fixed number of days of the triggering event.
+  const FORMS: { form: string; event: string; window: number; note: string }[] = [
+    { form: "PAS-3", event: "Allotment of shares", window: 30, note: "Return of allotment within 30 days of allotment." },
+    { form: "MGT-14", event: "Special / specified board resolution passed", window: 30, note: "File certain resolutions within 30 days of passing." },
+    { form: "DIR-12", event: "Director appointment / resignation / change", window: 30, note: "File within 30 days of the change in directors." },
+    { form: "CHG-1", event: "Charge created / modified (loan secured)", window: 30, note: "Register charge within 30 days; condonation needed after." },
+    { form: "CHG-4", event: "Satisfaction of charge (loan repaid)", window: 30, note: "Intimate satisfaction within 30 days of repayment." },
+    { form: "INC-22", event: "Change of registered office", window: 30, note: "Notice of situation/change of registered office, within 30 days." },
+    { form: "SH-7", event: "Increase in authorised share capital", window: 30, note: "Notice of alteration of share capital, within 30 days." },
+    { form: "ADT-3", event: "Resignation of auditor", window: 30, note: "Auditor files within 30 days of resignation." },
+  ];
+  const [filings, setFilings] = useFeatureState<EventFiling[]>("comp-event-roc", []);
+  const [form, setForm] = useState(FORMS[0].form);
+  const [eventDate, setEventDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const meta = (f: string) => FORMS.find(x => x.form === f)!;
+  const add = () => {
+    if (!eventDate) { toast.error("Pick the event date"); return; }
+    const m = meta(form);
+    setFilings(prev => [...prev, { id: Math.random().toString(36).slice(2), form, event: m.event, eventDate, filed: false }]);
+    toast.success(`${form} obligation added`);
+  };
+  const today = new Date();
+  const enriched = filings.map(f => {
+    const m = meta(f.form);
+    const due = new Date(f.eventDate); due.setDate(due.getDate() + (m?.window ?? 30));
+    return { ...f, due, daysLeft: differenceInDays(due, today) };
+  }).sort((a, b) => a.due.getTime() - b.due.getTime());
+  const overdue = enriched.filter(f => !f.filed && f.daysLeft < 0).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileClock size={14} className="text-[var(--color-primary)]" /> Event-Based ROC Filing Tracker {overdue > 0 && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">{overdue} overdue</span>}</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Unlike annual filings, these are triggered by corporate events (allotment, resolution, director change, charge) and must reach MCA within a fixed window — usually 30 days. Log the event date to get the deadline.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select className={INP} value={form} onChange={e => setForm(e.target.value)}>
+            {FORMS.map(f => <option key={f.form} value={f.form}>{f.form} — {f.event}</option>)}
+          </select>
+          <input type="date" className={INP} title="Event date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add filing</button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">{meta(form).note}</p>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        {enriched.length === 0 ? <p className="text-xs text-[var(--color-muted)] text-center py-4">No event-based filings tracked. Log a corporate event above.</p> : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {enriched.map(f => (
+              <div key={f.id} className="py-3 flex items-center gap-3">
+                <button onClick={() => setFilings(prev => prev.map(x => x.id === f.id ? { ...x, filed: !x.filed } : x))} className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${f.filed ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{f.filed ? "Filed" : "Pending"}</button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium"><span className="font-mono text-[var(--color-primary)] text-xs">{f.form}</span> · {f.event}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">Event {f.eventDate} · due {format(f.due, "dd MMM yyyy")}</p>
+                </div>
+                {!f.filed && <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${f.daysLeft < 0 ? "bg-red-900/30 text-red-400 border-red-800/40" : f.daysLeft <= 7 ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{f.daysLeft < 0 ? `${-f.daysLeft}d overdue` : `${f.daysLeft}d left`}</span>}
+                <button onClick={() => setFilings(prev => prev.filter(x => x.id !== f.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative — confirm the exact rule per form.</p>
     </div>
   );
 }

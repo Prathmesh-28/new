@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { exportElementAsPdf as exportPdf } from "@/lib/exporters";
-import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send } from "lucide-react";
+import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Banknote, FileText, Download, Building2, FileCheck, AlertTriangle, ShieldCheck, TrendingUp, Wallet, CalendarDays, Receipt, Percent, Briefcase, BarChart3, Sparkles, BookOpen, UsersRound, PiggyBank, Send, Timer, Plane, LogOut, HandCoins, Landmark, Scale, Baby, Target } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -120,7 +120,7 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
-  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal">("employees");
+  const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
@@ -223,7 +223,7 @@ export default function PayrollPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">
-        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send]] as const).map(([id, label, Icon]) => (
+        {([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -970,6 +970,14 @@ export default function PayrollPage() {
       {tab === "headcount" && <HeadcountForecastTab employees={employees} />}
       {tab === "liability" && <StatutoryLiabilityTab employees={employees} />}
       {tab === "portal" && <PayslipPortalTab employees={employees} firmName={store.firm?.name ?? "Your Company"} />}
+      {tab === "overtime" && <OvertimeShiftTab employees={employees} />}
+      {tab === "leave-encash" && <LeaveEncashmentTab employees={employees} />}
+      {tab === "notice" && <NoticeRecoveryTab employees={employees} />}
+      {tab === "advance" && <SalaryAdvanceTab employees={employees} />}
+      {tab === "nps" && <NpsOptimizerTab employees={employees} />}
+      {tab === "minwage" && <MinWageCheckTab employees={employees} />}
+      {tab === "maternity" && <MaternityBenefitTab employees={employees} />}
+      {tab === "roi" && <PeopleRoiTab employees={employees} />}
 
       {showAdd && <AddEmployeeModal onClose={() => setShowAdd(false)} onAdded={load} />}
     </div>
@@ -3406,6 +3414,633 @@ function PayslipPortalTab({ employees, firmName }: { employees: EmpLite[]; firmN
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Portal links are illustrative tokens (portal.headroom.in) — wire to your hosted self-service portal before going live. Declaration status persists and syncs across devices.</p>
+    </div>
+  );
+}
+
+// ── 39. Overtime & Shift-Allowance Calculator ──────────────────────────────────
+// Factories Act §59: overtime payable at 2× ordinary wages for hours beyond the
+// statutory limit. Ordinary hourly rate computed on (basic + DA) ÷ monthly hours.
+function OvertimeShiftTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]       = useState(employees[0]?.id ?? "");
+  const [otHours, setOtHours]   = useState(10);
+  const [monthHours, setMonthHours] = useState(208); // 26 days × 8h
+  const [nightShifts, setNightShifts] = useState(4);
+  const [nightAllow, setNightAllow]   = useState(150); // per night-shift
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Timer} msg={EMPTY_HINT} />;
+
+  const emp   = employees.find(e => e.id === empId) ?? employees[0];
+  const gross = Number(emp.gross_salary);
+  const basicDa = Math.round(gross * 0.50); // basic+DA proxy = 50% of gross
+  const hourlyOrdinary = monthHours > 0 ? basicDa / monthHours : 0;
+  const otRate  = hourlyOrdinary * 2; // statutory 2×
+  const otPay   = Math.round(otRate * otHours);
+  const nightPay = nightShifts * nightAllow;
+  const totalAddl = otPay + nightPay;
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} /> Overtime & Shift-Allowance Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Factories Act §59 mandates overtime at twice ordinary wages. Ordinary hourly rate is computed on basic + DA divided by the month's working hours.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>OT hours this month</label><input type="number" min="0" value={otHours} onChange={e => setOtHours(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Standard monthly hours</label><input type="number" min="1" value={monthHours} onChange={e => setMonthHours(Math.max(1, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Night shifts worked</label><input type="number" min="0" value={nightShifts} onChange={e => setNightShifts(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Night allowance / shift (₹)</label><input type="number" min="0" value={nightAllow} onChange={e => setNightAllow(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Ordinary hourly rate", value: fc(Math.round(hourlyOrdinary)), color: "text-[var(--color-text)]" },
+          { label: "OT rate (2×)",          value: fc(Math.round(otRate)),          color: "text-blue-400" },
+          { label: "Overtime pay",          value: fc(otPay),                       color: "text-orange-400" },
+          { label: "Total additional pay",  value: fc(totalAddl),                   color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Basic + DA (proxy 50% of gross)</span><span className="tabular-nums font-semibold">{fc(basicDa)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Overtime ({otHours}h × {fc(Math.round(otRate))})</span><span className="tabular-nums text-orange-400 font-semibold">{fc(otPay)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Night-shift allowance ({nightShifts} × {fc(nightAllow)})</span><span className="tabular-nums text-blue-400 font-semibold">{fc(nightPay)}</span></div>
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Add to {emp.name}'s gross this run</span><span className="tabular-nums font-bold text-[var(--color-primary)]">{fc(totalAddl)}</span></div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Overtime under the Factories Act / state Shops &amp; Establishments Acts is statutorily 2×. Some awards prescribe higher multiples — confirm the applicable rule for your sector.</p>
+    </div>
+  );
+}
+
+// ── 40. Leave Balance & Encashment Calculator ──────────────────────────────────
+// Encashment = (basic + DA) ÷ 26 × encashable days. §10(10AA) exemption on
+// non-government employees capped at ₹25 lakh lifetime.
+function LeaveEncashmentTab({ employees }: { employees: EmpLite[] }) {
+  type LeaveRow = { earned: number; availed: number };
+  const [rows, setRows] = useFeatureState<Record<string, LeaveRow>>("payroll-leave-balances", {});
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Plane} msg={EMPTY_HINT} />;
+
+  const get = (id: string): LeaveRow => rows[id] ?? { earned: 18, availed: 6 };
+  const set = (id: string, patch: Partial<LeaveRow>) =>
+    setRows(prev => ({ ...prev, [id]: { ...get(id), ...patch } }));
+
+  const computed = employees.map(e => {
+    const r = get(e.id);
+    const balance = Math.max(0, r.earned - r.availed);
+    const gross = Number(e.gross_salary);
+    const basicDa = Math.round(gross * 0.50);
+    const perDay = basicDa / 26;
+    const encashment = Math.round(perDay * balance);
+    return { e, balance, perDay, encashment };
+  });
+  const totalDays = computed.reduce((s, c) => s + c.balance, 0);
+  const totalAmt  = computed.reduce((s, c) => s + c.encashment, 0);
+
+  const numInp = "w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Plane size={14} /> Leave Balance &amp; Encashment</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-1">Encashable balance = earned − availed. Encashment value uses (basic + DA) ÷ 26 per leave day. §10(10AA) exemption is capped at ₹25 lakh over a lifetime for non-government staff.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Employees", value: employees.length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Encashable days", value: totalDays.toString(), color: "text-blue-400" },
+          { label: "Total encashment liability", value: fc(totalAmt), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-xs min-w-[640px]">
+          <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            {["Employee", "Earned", "Availed", "Balance", "Per-day", "Encashment"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {computed.map(({ e, balance, perDay, encashment }) => {
+              const r = get(e.id);
+              return (
+                <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.earned} onChange={ev => set(e.id, { earned: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.availed} onChange={ev => set(e.id, { availed: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold text-blue-400">{balance}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(Math.round(perDay))}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold text-green-400">{fc(encashment)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
+            <tr>
+              <td className="px-3 py-2.5 font-bold" colSpan={3}>Total</td>
+              <td className="px-3 py-2.5 tabular-nums font-bold text-blue-400">{totalDays}</td>
+              <td className="px-3 py-2.5"></td>
+              <td className="px-3 py-2.5 tabular-nums font-bold text-[var(--color-primary)]">{fc(totalAmt)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Balances persist &amp; sync across devices. Provision unutilised leave as a liability (Ind AS 19). Encashment paid on separation is taxable beyond the ₹25 lakh §10(10AA) ceiling.</p>
+    </div>
+  );
+}
+
+// ── 41. Notice-Period Recovery Calculator ──────────────────────────────────────
+// Shortfall notice days recovered at (gross ÷ days-in-month) per shortfall day,
+// netted against final settlement.
+function NoticeRecoveryTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]       = useState(employees[0]?.id ?? "");
+  const [required, setRequired] = useState(60);
+  const [served, setServed]     = useState(30);
+  const [basis, setBasis]       = useState<"gross" | "basic">("gross");
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={LogOut} msg={EMPTY_HINT} />;
+
+  const emp   = employees.find(e => e.id === empId) ?? employees[0];
+  const gross = Number(emp.gross_salary);
+  const recoveryBase = basis === "gross" ? gross : Math.round(gross * 0.50);
+  const perDay  = recoveryBase / 30;
+  const shortfall = Math.max(0, required - served);
+  const recovery  = Math.round(perDay * shortfall);
+  const buyout    = recovery; // amount employee pays to waive shortfall
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><LogOut size={14} /> Notice-Period Recovery</h3>
+        <p className="text-xs text-[var(--color-muted)]">Net the shortfall notice days against the employee's full-and-final settlement. Choose the recovery basis per your appointment letter.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Required notice (days)</label><input type="number" min="0" value={required} onChange={e => setRequired(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div><label className={lbl}>Days served</label><input type="number" min="0" value={served} onChange={e => setServed(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div>
+            <label className={lbl}>Recovery basis</label>
+            <select value={basis} onChange={e => setBasis(e.target.value as "gross" | "basic")} className={`${inp} w-full`}>
+              <option value="gross">Gross salary</option>
+              <option value="basic">Basic (50%)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Shortfall days", value: shortfall.toString(), color: shortfall > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Per-day rate", value: fc(Math.round(perDay)), color: "text-[var(--color-text)]" },
+          { label: "Recovery from F&F", value: fc(recovery), color: "text-red-400" },
+          { label: "Notice buyout amount", value: fc(buyout), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">{shortfall === 0 ? "Full notice served — no recovery applies." : `${emp.name} served ${served}/${required} days; recover ${fc(recovery)} from final settlement or collect as buyout.`} Recovery on gross may be challenged — many letters limit it to basic. Confirm against the signed appointment terms.</p>
+    </div>
+  );
+}
+
+// ── 42. Salary Advance / Loan Tracker ──────────────────────────────────────────
+// Issue advances against salary, set EMI recovery, and track outstanding.
+function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
+  type Advance = { id: string; empId: string; principal: number; emi: number; paid: number; date: string };
+  const [advances, setAdvances] = useFeatureState<Advance[]>("payroll-salary-advances", []);
+  const [empId, setEmpId]       = useState(employees[0]?.id ?? "");
+  const [principal, setPrincipal] = useState("");
+  const [tenure, setTenure]       = useState(6);
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={HandCoins} msg={EMPTY_HINT} />;
+
+  const issue = () => {
+    const p = Number(principal);
+    if (!empId || !p || p <= 0) { toast.error("Select an employee and enter a valid amount"); return; }
+    const emp = employees.find(e => e.id === empId);
+    const maxAdvance = emp ? Number(emp.gross_salary) * 3 : Infinity;
+    if (p > maxAdvance) { toast.error(`Advance exceeds 3× monthly gross (${fc(maxAdvance)})`); return; }
+    const emi = Math.ceil(p / Math.max(1, tenure));
+    setAdvances(prev => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, empId, principal: p, emi, paid: 0, date: new Date().toISOString().slice(0, 10) }, ...prev]);
+    setPrincipal("");
+    toast.success(`Advance of ${fc(p)} issued · EMI ${fc(emi)} × ${tenure}`);
+  };
+  const recordEmi = (id: string) => setAdvances(prev => prev.map(a => a.id === id ? { ...a, paid: Math.min(a.principal, a.paid + a.emi) } : a));
+  const remove = (id: string) => setAdvances(prev => prev.filter(a => a.id !== id));
+
+  const nameOf = (id: string) => employees.find(e => e.id === id)?.name ?? "—";
+  const totalOutstanding = advances.reduce((s, a) => s + Math.max(0, a.principal - a.paid), 0);
+  const monthlyRecovery  = advances.filter(a => a.paid < a.principal).reduce((s, a) => s + a.emi, 0);
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} /> Salary Advance / Loan Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Issue interest-free advances against salary (capped at 3× monthly gross) and recover via EMI in subsequent runs.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Advance amount (₹)</label><input type="number" min="0" value={principal} onChange={e => setPrincipal(e.target.value)} className={`${inp} w-full`} placeholder="25000" /></div>
+          <div><label className={lbl}>Recovery tenure (months)</label><input type="number" min="1" value={tenure} onChange={e => setTenure(Math.max(1, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <button onClick={issue} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">Issue Advance</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Active advances", value: advances.filter(a => a.paid < a.principal).length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Total outstanding", value: fc(totalOutstanding), color: "text-orange-400" },
+          { label: "Monthly EMI recovery", value: fc(monthlyRecovery), color: "text-[var(--color-primary)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {advances.length === 0 ? (
+        <p className="text-sm text-[var(--color-muted)] border border-dashed border-[var(--color-border)] rounded-lg p-6 text-center">No advances issued yet.</p>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-xs min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              {["Employee", "Issued", "Principal", "EMI", "Recovered", "Outstanding", ""].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {advances.map(a => {
+                const outstanding = Math.max(0, a.principal - a.paid);
+                const cleared = outstanding === 0;
+                return (
+                  <tr key={a.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-3 py-2.5 font-medium">{nameOf(a.empId)}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{a.date}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{fc(a.principal)}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-blue-400">{fc(a.emi)}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-green-400">{fc(a.paid)}</td>
+                    <td className={`px-3 py-2.5 tabular-nums font-semibold ${cleared ? "text-green-400" : "text-orange-400"}`}>{cleared ? "Cleared" : fc(outstanding)}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {!cleared && <button onClick={() => recordEmi(a.id)} className="text-[var(--color-primary)] hover:underline">Record EMI</button>}
+                        <button onClick={() => remove(a.id)} className="text-red-400 hover:underline">Remove</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Advances persist &amp; sync across devices. Interest-free advances above ₹20,000 may attract perquisite valuation under Rule 3(7)(i) — check with your CA.</p>
+    </div>
+  );
+}
+
+// ── 43. NPS Employer-Contribution Optimizer (80CCD(2)) ─────────────────────────
+// Employer NPS up to 14% of (basic+DA) is deductible u/s 80CCD(2) in the new
+// regime (10% in old). Models the take-home/tax trade-off of routing CTC via NPS.
+function NpsOptimizerTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]   = useState(employees[0]?.id ?? "");
+  const [regime, setRegime] = useState<"new" | "old">("new");
+  const [pct, setPct]       = useState(10);
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Landmark} msg={EMPTY_HINT} />;
+
+  const emp   = employees.find(e => e.id === empId) ?? employees[0];
+  const gross = Number(emp.gross_salary);
+  const annualGross = gross * 12;
+  const basicDaAnnual = Math.round(annualGross * 0.50);
+  const cap = regime === "new" ? 0.14 : 0.10;
+  const cappedPct = Math.min(pct, cap * 100);
+  const npsAnnual = Math.round(basicDaAnnual * (cappedPct / 100));
+
+  // Marginal-rate proxy off taxable income (new regime, std deduction 75k).
+  const taxableNoNps = Math.max(0, annualGross - 75000);
+  const marginalRate =
+    taxableNoNps > 1500000 ? 0.30 :
+    taxableNoNps > 1200000 ? 0.20 :
+    taxableNoNps > 1000000 ? 0.15 :
+    taxableNoNps > 700000  ? 0.10 :
+    taxableNoNps > 300000  ? 0.05 : 0;
+  const taxSaved = Math.round(npsAnnual * marginalRate * 1.04); // incl. 4% cess
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} /> NPS Employer-Contribution Optimizer</h3>
+        <p className="text-xs text-[var(--color-muted)]">Corporate NPS u/s 80CCD(2) is deductible up to {regime === "new" ? "14%" : "10%"} of (basic + DA) — over and above the §80C limit. Route part of CTC via NPS to cut tax without raising cash cost.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Tax regime</label>
+            <select value={regime} onChange={e => setRegime(e.target.value as "new" | "old")} className={`${inp} w-full`}>
+              <option value="new">New (14% cap)</option>
+              <option value="old">Old (10% cap)</option>
+            </select>
+          </div>
+          <div><label className={lbl}>Contribution % of basic+DA</label><input type="number" min="0" max={cap * 100} value={pct} onChange={e => setPct(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Basic + DA (annual)", value: fc(basicDaAnnual), color: "text-[var(--color-text)]" },
+          { label: `Applied % (cap ${cap * 100}%)`, value: `${cappedPct}%`, color: cappedPct < pct ? "text-orange-400" : "text-blue-400" },
+          { label: "NPS employer contribution / yr", value: fc(npsAnnual), color: "text-[var(--color-primary)]" },
+          { label: "Estimated annual tax saved", value: fc(taxSaved), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Monthly employer NPS outflow: {fc(Math.round(npsAnnual / 12))}. Tax saved assumes a {Math.round(marginalRate * 100)}% marginal slab (incl. 4% cess). 80CCD(2) is independent of the ₹1.5L §80C / ₹50k §80CCD(1B) limits. Confirm scheme registration (PRAN) before deducting.</p>
+    </div>
+  );
+}
+
+// ── 44. State-wise Minimum-Wages Compliance Checker ────────────────────────────
+// Compares each employee's monthly gross against the applicable state minimum
+// wage for the chosen skill category, flagging shortfalls.
+const MIN_WAGE: Record<string, { Unskilled: number; SemiSkilled: number; Skilled: number }> = {
+  Maharashtra:   { Unskilled: 13000, SemiSkilled: 14500, Skilled: 16000 },
+  Karnataka:     { Unskilled: 14400, SemiSkilled: 15600, Skilled: 17000 },
+  Delhi:         { Unskilled: 17494, SemiSkilled: 19279, Skilled: 21215 },
+  TamilNadu:     { Unskilled: 11500, SemiSkilled: 12800, Skilled: 14200 },
+  Gujarat:       { Unskilled: 12000, SemiSkilled: 13000, Skilled: 14500 },
+  Telangana:     { Unskilled: 12500, SemiSkilled: 13800, Skilled: 15500 },
+  UttarPradesh:  { Unskilled: 10648, SemiSkilled: 11700, Skilled: 13104 },
+  WestBengal:    { Unskilled: 10200, SemiSkilled: 11200, Skilled: 12500 },
+};
+function MinWageCheckTab({ employees }: { employees: EmpLite[] }) {
+  const states = Object.keys(MIN_WAGE);
+  const [state, setState] = useState(states[0]);
+  const [skill, setSkill] = useState<"Unskilled" | "SemiSkilled" | "Skilled">("Unskilled");
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Scale} msg={EMPTY_HINT} />;
+
+  const threshold = MIN_WAGE[state][skill];
+  const rows = employees.map(e => {
+    const gross = Number(e.gross_salary);
+    const shortfall = Math.max(0, threshold - gross);
+    return { e, gross, shortfall, compliant: shortfall === 0 };
+  });
+  const breaches = rows.filter(r => !r.compliant);
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} /> Minimum-Wages Compliance Checker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Validate every salary against the state minimum-wage notification for the selected skill category. Underpayment invites prosecution under the Minimum Wages Act / Code on Wages.</p>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div>
+            <label className={lbl}>State of employment</label>
+            <select value={state} onChange={e => setState(e.target.value)} className={`${inp} w-full`}>
+              {states.map(s => <option key={s} value={s}>{s.replace(/([a-z])([A-Z])/g, "$1 $2")}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Skill category</label>
+            <select value={skill} onChange={e => setSkill(e.target.value as typeof skill)} className={`${inp} w-full`}>
+              <option value="Unskilled">Unskilled</option>
+              <option value="SemiSkilled">Semi-skilled</option>
+              <option value="Skilled">Skilled</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Applicable minimum / month", value: fc(threshold), color: "text-[var(--color-text)]" },
+          { label: "Employees checked", value: employees.length.toString(), color: "text-blue-400" },
+          { label: "Below minimum", value: breaches.length.toString(), color: breaches.length > 0 ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-xs min-w-[560px]">
+          <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            {["Employee", "Gross / month", "Minimum", "Shortfall", "Status"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {rows.map(({ e, gross, shortfall, compliant }) => (
+              <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                <td className="px-3 py-2.5 font-medium">{e.name}</td>
+                <td className="px-3 py-2.5 tabular-nums">{fc(gross)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(threshold)}</td>
+                <td className="px-3 py-2.5 tabular-nums text-red-400">{shortfall > 0 ? fc(shortfall) : "—"}</td>
+                <td className="px-3 py-2.5">
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] ${compliant ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-red-900/20 text-red-400 border-red-800/30"}`}>
+                    {compliant ? "Compliant" : "Below minimum"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates — minimum wages are revised twice yearly (basic + VDA) and vary by scheduled employment. Verify the latest gazette notification for {state.replace(/([a-z])([A-Z])/g, "$1 $2")} before relying on these figures.</p>
+    </div>
+  );
+}
+
+// ── 45. Maternity / Paternity Benefit Calculator ───────────────────────────────
+// Maternity Benefit Act 1961 (am. 2017): 26 weeks paid (12 for 3rd+ child),
+// average daily wage of the 3 months preceding leave.
+function MaternityBenefitTab({ employees }: { employees: EmpLite[] }) {
+  const [empId, setEmpId]     = useState(employees[0]?.id ?? "");
+  const [childNo, setChildNo] = useState(1);
+  const [paternity, setPaternity] = useState(false);
+  const [patDays, setPatDays] = useState(15);
+  const fc = formatCurrency;
+
+  if (employees.length === 0) return <EmptyState icon={Baby} msg={EMPTY_HINT} />;
+
+  const emp   = employees.find(e => e.id === empId) ?? employees[0];
+  const gross = Number(emp.gross_salary);
+  const avgDailyWage = Math.round((gross * 3) / 90); // avg of preceding 3 months
+  const matWeeks = childNo >= 3 ? 12 : 26;
+  const matDays  = matWeeks * 7;
+  const matBenefit = Math.round(avgDailyWage * matDays);
+  const patBenefit = paternity ? Math.round(avgDailyWage * patDays) : 0;
+  // ESI maternity benefit applies if gross <= 21000 (paid by ESIC, not employer)
+  const esiCovered = gross <= 21000;
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs text-[var(--color-muted)] block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Baby size={14} /> Maternity / Paternity Benefit</h3>
+        <p className="text-xs text-[var(--color-muted)]">Maternity Benefit Act (2017 amendment): 26 weeks paid leave (12 weeks for the third child onward), at the average daily wage of the preceding 3 months. Paternity leave is policy-driven (no central statute).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <label className={lbl}>Employee</label>
+            <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Child number</label><input type="number" min="1" value={childNo} onChange={e => setChildNo(Math.max(1, Number(e.target.value)))} className={`${inp} w-full`} /></div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+              <input type="checkbox" checked={paternity} onChange={e => setPaternity(e.target.checked)} className="accent-[var(--color-primary)]" />
+              <span>Add paternity leave</span>
+            </label>
+          </div>
+          {paternity && <div><label className={lbl}>Paternity days</label><input type="number" min="0" value={patDays} onChange={e => setPatDays(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} /></div>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Avg daily wage", value: fc(avgDailyWage), color: "text-[var(--color-text)]" },
+          { label: "Maternity entitlement", value: `${matWeeks} wks (${matDays}d)`, color: "text-blue-400" },
+          { label: "Maternity benefit payable", value: fc(matBenefit), color: "text-[var(--color-primary)]" },
+          { label: "Paternity benefit", value: paternity ? fc(patBenefit) : "—", color: "text-purple-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg px-4 py-3 text-xs border ${esiCovered ? "bg-blue-950/20 border-blue-800/30 text-blue-300" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+        {esiCovered
+          ? `${emp.name} earns ≤ ₹21,000 — maternity benefit is paid by ESIC, not the employer, provided contributions for the qualifying period are paid. Employer cash cost may be nil.`
+          : `${emp.name} is above the ESI ceiling — the employer bears the full ${fc(matBenefit)} maternity benefit as paid leave. Provision it against the run.`}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Eligibility requires ≥80 days worked in the 12 months preceding the expected delivery. A crèche facility is mandatory for establishments with 50+ employees.</p>
+    </div>
+  );
+}
+
+// ── 46. People-Cost-to-Revenue Ratio (Workforce ROI) ──────────────────────────
+// Fully-loaded people cost (gross + employer PF/ESI + gratuity provision) vs
+// monthly revenue. Healthy SMB people-cost ratio is typically 15–40%.
+function PeopleRoiTab({ employees }: { employees: EmpLite[] }) {
+  const [revenue, setRevenue] = useFeatureState<number>("payroll-monthly-revenue", 0);
+  const fc = formatCurrency;
+
+  const active = employees.filter(e => (e.status ?? "active") === "active");
+
+  const loaded = active.reduce((acc, e) => {
+    const gross = Number(e.gross_salary);
+    const pfWages = Math.min(gross, 15000);
+    const erPf = Math.round(pfWages * 0.12);
+    const erEsi = gross <= 21000 ? Math.round(gross * 0.0325) : 0;
+    const gratuity = Math.round((15 / 26) * Math.round(gross * 0.50) / 12); // monthly accrual on basic
+    return {
+      gross: acc.gross + gross,
+      statutory: acc.statutory + erPf + erEsi,
+      gratuity: acc.gratuity + gratuity,
+    };
+  }, { gross: 0, statutory: 0, gratuity: 0 });
+
+  const totalLoaded = loaded.gross + loaded.statutory + loaded.gratuity;
+  const ratio = revenue > 0 ? (totalLoaded / revenue) * 100 : 0;
+  const perHead = active.length > 0 ? Math.round(totalLoaded / active.length) : 0;
+  const revPerHead = active.length > 0 && revenue > 0 ? Math.round(revenue / active.length) : 0;
+  const band = ratio === 0 ? "—" : ratio <= 25 ? "Lean" : ratio <= 40 ? "Healthy" : ratio <= 60 ? "Elevated" : "High risk";
+  const bandColor = ratio === 0 ? "text-[var(--color-muted)]" : ratio <= 40 ? "text-green-400" : ratio <= 60 ? "text-orange-400" : "text-red-400";
+
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Target size={14} /> People-Cost-to-Revenue Ratio</h3>
+        <p className="text-xs text-[var(--color-muted)]">Fully-loaded people cost (gross + employer PF/ESI + gratuity accrual) as a share of monthly revenue. For most Indian SMBs a 15–40% ratio is healthy; above 60% squeezes margins.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label>
+          <input type="number" min="0" value={revenue || ""} onChange={e => setRevenue(Math.max(0, Number(e.target.value)))} className={`${inp} w-full`} placeholder="e.g. 1500000" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Fully-loaded people cost", value: fc(totalLoaded), color: "text-[var(--color-primary)]" },
+          { label: "Cost-to-revenue ratio", value: ratio > 0 ? `${ratio.toFixed(1)}%` : "—", color: bandColor },
+          { label: "Cost per head", value: fc(perHead), color: "text-orange-400" },
+          { label: "Revenue per head", value: revPerHead > 0 ? fc(revPerHead) : "—", color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-sm space-y-1.5">
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Gross salaries ({active.length} active)</span><span className="tabular-nums font-semibold">{fc(loaded.gross)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Employer PF + ESI</span><span className="tabular-nums text-blue-400 font-semibold">{fc(loaded.statutory)}</span></div>
+        <div className="flex justify-between"><span className="text-[var(--color-muted)]">Gratuity accrual</span><span className="tabular-nums text-purple-400 font-semibold">{fc(loaded.gratuity)}</span></div>
+        <div className="flex justify-between border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span className="font-semibold">Total monthly people cost</span><span className="tabular-nums font-bold text-[var(--color-primary)]">{fc(totalLoaded)}</span></div>
+        {ratio > 0 && <div className="flex justify-between"><span className="font-semibold">Assessment</span><span className={`font-bold ${bandColor}`}>{band}</span></div>}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Revenue persists &amp; syncs across devices. Loaded cost excludes variable pay, bonuses, and benefits — add those for a true CTC ratio. Benchmark against your sector's norm.</p>
     </div>
   );
 }

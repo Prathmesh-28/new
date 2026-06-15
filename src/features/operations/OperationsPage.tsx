@@ -9,6 +9,7 @@ import {
   Radar, Copy, TrendingUp, ArrowUpRight, UserPlus, Banknote, Download,
   Layers, CalendarClock, Wrench, Factory, Warehouse, ScanLine, Route,
   ArrowDownCircle, ArrowUpCircle,
+  PieChart, Calculator, Repeat, Percent, Ship, ClipboardCheck, Trash2, Undo2,
 } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -17,7 +18,8 @@ import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
-  | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch";
+  | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
+  | "abc" | "eoq" | "turnover" | "skumargin" | "landed" | "grn" | "scrap" | "returns";
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -170,6 +172,14 @@ export default function OperationsPage() {
           ["warehouse",     "Warehouses",    null],
           ["stocktake",     "Stock Take",    null],
           ["dispatch",      "Dispatch",      null],
+          ["abc",           "ABC Analysis",  null],
+          ["eoq",           "EOQ Calc",      null],
+          ["turnover",      "Stock Turnover", null],
+          ["skumargin",     "Margin / SKU",  null],
+          ["landed",        "Landed Cost",   null],
+          ["grn",           "GRN vs PO",     null],
+          ["scrap",         "Scrap / Wastage", null],
+          ["returns",       "Returns / RTV", null],
         ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -728,6 +738,14 @@ export default function OperationsPage() {
       {tab === "warehouse" && <WarehouseStockTab />}
       {tab === "stocktake" && <StockTakeTab />}
       {tab === "dispatch" && <DispatchPlannerTab />}
+      {tab === "abc" && <AbcAnalysisTab />}
+      {tab === "eoq" && <EoqCalculatorTab />}
+      {tab === "turnover" && <StockTurnoverTab />}
+      {tab === "skumargin" && <SkuMarginTab />}
+      {tab === "landed" && <LandedCostTab />}
+      {tab === "grn" && <GrnDiscrepancyTab />}
+      {tab === "scrap" && <ScrapWastageTab />}
+      {tab === "returns" && <ReturnsRegisterTab />}
     </div>
   );
 }
@@ -2533,6 +2551,829 @@ function DispatchPlannerTab() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Stops are grouped by area to reduce back-tracking. Tap a status chip to cycle pending → loaded → delivered.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #22 ABC inventory analysis (Pareto by value) ───────────────────────── */
+function AbcAnalysisTab() {
+  const { store } = useApp();
+  const { inventory } = store;
+
+  // Annual usage value = unit cost × quantity-on-hand (proxy for consumption value when
+  // no sales velocity exists). Rank descending, then bucket by cumulative value share.
+  const rows = useMemo(() => {
+    const valued = inventory.map(i => ({
+      id: i.id, product: i.productName, sku: i.sku, qty: i.quantity,
+      unitCost: i.unitCost, annualValue: i.quantity * i.unitCost,
+    })).sort((a, b) => b.annualValue - a.annualValue);
+    const grand = valued.reduce((s, v) => s + v.annualValue, 0) || 1;
+    let cum = 0;
+    return valued.map(v => {
+      cum += v.annualValue;
+      const cumPct = (cum / grand) * 100;
+      const cls: "A" | "B" | "C" = cumPct <= 80 ? "A" : cumPct <= 95 ? "B" : "C";
+      return { ...v, sharePct: (v.annualValue / grand) * 100, cumPct, cls };
+    });
+  }, [inventory]);
+
+  const grand = rows.reduce((s, v) => s + v.annualValue, 0);
+  const summary = (["A", "B", "C"] as const).map(c => {
+    const list = rows.filter(r => r.cls === c);
+    return { cls: c, count: list.length, value: list.reduce((s, v) => s + v.annualValue, 0) };
+  });
+  const CLS_STYLE: Record<string, string> = {
+    A: "bg-red-950/30 text-red-400 border-red-800/40",
+    B: "bg-yellow-950/30 text-yellow-400 border-yellow-800/40",
+    C: "bg-green-950/30 text-green-400 border-green-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <PieChart size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">ABC Inventory Analysis</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Pareto classification by stock value — focus controls on the vital few (A) items.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {summary.map(s => (
+          <div key={s.cls} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-[var(--color-muted)]">Class {s.cls} · {s.count} SKU{s.count === 1 ? "" : "s"}</p>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${CLS_STYLE[s.cls]}`}>{s.cls}</span>
+            </div>
+            <p className="text-lg font-bold tabular-nums">{formatCurrency(Math.round(s.value))}</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{grand > 0 ? Math.round((s.value / grand) * 100) : 0}% of value</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No inventory yet. Add SKUs in the Inventory tab and they will be auto-classified A/B/C by value.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Rank", "Product", "Qty", "Unit Cost", "Stock Value", "% of Value", "Cumulative %", "Class"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.product}{r.sku && <span className="ml-1 text-[10px] text-[var(--color-muted)] font-mono">{r.sku}</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.unitCost)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(r.annualValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.sharePct.toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.cumPct.toFixed(1)}%</td>
+                    <td className="px-4 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${CLS_STYLE[r.cls]}`}>{r.cls}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Class A ≈ top 80% of value, B the next 15%, C the final 5%. Tighten counts, security and supplier terms on A items; relax on C.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #28 Economic Order Quantity (EOQ) calculator ───────────────────────── */
+function EoqCalculatorTab() {
+  const { store } = useApp();
+  const [product, setProduct] = useState("");
+  const [annualDemand, setAnnualDemand] = useState("1200");
+  const [orderCost, setOrderCost] = useState("500");
+  const [unitCost, setUnitCost] = useState("100");
+  const [holdingPct, setHoldingPct] = useState("20");
+
+  const D = Math.max(0, parseFloat(annualDemand) || 0);
+  const S = Math.max(0, parseFloat(orderCost) || 0);
+  const C = Math.max(0, parseFloat(unitCost) || 0);
+  const Hpct = Math.max(0, parseFloat(holdingPct) || 0);
+  const H = C * (Hpct / 100); // holding cost per unit / year
+
+  const eoq = D > 0 && S > 0 && H > 0 ? Math.sqrt((2 * D * S) / H) : 0;
+  const ordersPerYear = eoq > 0 ? D / eoq : 0;
+  const cycleDays = ordersPerYear > 0 ? 365 / ordersPerYear : 0;
+  const annualOrderCost = eoq > 0 ? (D / eoq) * S : 0;
+  const annualHoldingCost = (eoq / 2) * H;
+  const totalCost = annualOrderCost + annualHoldingCost;
+
+  const onPick = (name: string) => {
+    const it = store.inventory.find(i => i.productName === name);
+    setProduct(name);
+    if (it) setUnitCost(String(it.unitCost));
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="flex items-center gap-2">
+        <Calculator size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Economic Order Quantity (EOQ)</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Find the order size that minimises combined ordering + holding cost.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Product (optional)</label>
+            <input value={product} onChange={e => onPick(e.target.value)} placeholder="Pick / type" className={inp} list="eoq-products" />
+            <datalist id="eoq-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Annual demand (units)</label><input type="number" value={annualDemand} onChange={e => setAnnualDemand(e.target.value)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Cost per order (₹)</label><input type="number" value={orderCost} onChange={e => setOrderCost(e.target.value)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Unit cost (₹)</label><input type="number" value={unitCost} onChange={e => setUnitCost(e.target.value)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Holding cost (% of unit/yr)</label><input type="number" value={holdingPct} onChange={e => setHoldingPct(e.target.value)} className={inp} /></div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5 text-center">
+        <p className="text-xs text-[var(--color-muted)] mb-1">Optimal order quantity</p>
+        <p className="text-4xl font-bold text-[var(--color-primary)] tabular-nums">{eoq > 0 ? Math.round(eoq) : "—"}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-1">units per order{eoq > 0 ? ` · ${ordersPerYear.toFixed(1)} orders/yr · every ${Math.round(cycleDays)} days` : ""}</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Holding cost / unit / yr", value: formatCurrency(Math.round(H)), color: "text-orange-400" },
+          { label: "Annual ordering cost", value: formatCurrency(Math.round(annualOrderCost)), color: "text-blue-400" },
+          { label: "Annual holding cost", value: formatCurrency(Math.round(annualHoldingCost)), color: "text-yellow-400" },
+          { label: "Total annual cost", value: formatCurrency(Math.round(totalCost)), color: "text-[var(--color-primary)]" },
+        ].map(k => (
+          <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">EOQ = √(2 · D · S / H), where D = annual demand, S = cost per order, H = holding cost per unit per year. At the EOQ, ordering cost equals holding cost.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #51 Stock-turnover ratio & days-of-inventory ───────────────────────── */
+function StockTurnoverTab() {
+  const { store } = useApp();
+  const { inventory, orders } = store;
+  const [periodDays, setPeriodDays] = useState("365");
+
+  // Units sold per product from fulfilled orders → COGS proxy via current unit cost.
+  const rows = useMemo(() => {
+    const soldUnits: Record<string, number> = {};
+    orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o =>
+      o.items.forEach(it => { soldUnits[it.productName] = (soldUnits[it.productName] ?? 0) + it.quantity; })
+    );
+    const days = Math.max(1, parseFloat(periodDays) || 365);
+    return inventory.map(i => {
+      const sold = soldUnits[i.productName] ?? 0;
+      const cogs = sold * i.unitCost;
+      const avgInvValue = i.quantity * i.unitCost; // closing as proxy for average
+      const turns = avgInvValue > 0 ? cogs / avgInvValue : 0;
+      const dio = turns > 0 ? days / turns : null; // days of inventory
+      return { id: i.id, product: i.productName, sku: i.sku, sold, cogs, avgInvValue, turns, dio };
+    }).sort((a, b) => b.turns - a.turns);
+  }, [inventory, orders, periodDays]);
+
+  const totalCogs = rows.reduce((s, r) => s + r.cogs, 0);
+  const totalInv = rows.reduce((s, r) => s + r.avgInvValue, 0);
+  const overallTurns = totalInv > 0 ? totalCogs / totalInv : 0;
+  const days = Math.max(1, parseFloat(periodDays) || 365);
+  const overallDio = overallTurns > 0 ? days / overallTurns : 0;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-20";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Repeat size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Stock Turnover &amp; Days of Inventory</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">How many times stock cycles per period — higher turns free up working capital.</p>
+          </div>
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]">Period (days)<input type="number" value={periodDays} onChange={e => setPeriodDays(e.target.value)} className={inp} /></label>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Overall Turns", value: overallTurns > 0 ? `${overallTurns.toFixed(1)}×` : "—", color: "text-[var(--color-primary)]" },
+          { label: "Avg Days of Inventory", value: overallDio > 0 ? `${Math.round(overallDio)}d` : "—", color: overallDio > 90 ? "text-red-400" : "text-green-400" },
+          { label: "Period COGS (est.)", value: formatCurrency(Math.round(totalCogs)), color: "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No inventory yet. Add SKUs and confirm orders so turnover can be computed from real sales.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Units Sold", "Stock Value", "COGS (est.)", "Turns", "Days of Inv."].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.product}{r.sku && <span className="ml-1 text-[10px] text-[var(--color-muted)] font-mono">{r.sku}</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.sold}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.avgInvValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.cogs))}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.turns >= 4 ? "text-green-400" : r.turns > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.turns > 0 ? `${r.turns.toFixed(1)}×` : "—"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${r.dio !== null && r.dio > 120 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.dio !== null ? `${Math.round(r.dio)}d` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Turns = period COGS ÷ stock value. Days of Inventory = period ÷ turns. COGS is estimated from fulfilled-order units × current unit cost.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #26/#36 Gross margin by SKU ───────────────────────── */
+function SkuMarginTab() {
+  const { store } = useApp();
+  type Override = { sellPrice: number };
+  const [overrides, setOverrides] = useFeatureState<Record<string, Override>>("ops-sku-margin-prices", {});
+
+  const rows = useMemo(() => store.inventory.map(i => {
+    const sell = overrides[i.id]?.sellPrice ?? Math.round(i.unitCost * 1.4); // default 40% markup
+    const profit = sell - i.unitCost;
+    const marginPct = sell > 0 ? (profit / sell) * 100 : 0;
+    const markupPct = i.unitCost > 0 ? (profit / i.unitCost) * 100 : 0;
+    const stockProfit = profit * i.quantity;
+    return { id: i.id, product: i.productName, sku: i.sku, qty: i.quantity, cost: i.unitCost, sell, profit, marginPct, markupPct, stockProfit };
+  }).sort((a, b) => a.marginPct - b.marginPct), [store.inventory, overrides]);
+
+  const setSell = (id: string, v: string) =>
+    setOverrides(prev => ({ ...prev, [id]: { sellPrice: Math.max(0, parseFloat(v) || 0) } }));
+
+  const totalPotential = rows.reduce((s, r) => s + r.stockProfit, 0);
+  const lowMargin = rows.filter(r => r.marginPct < 15).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Percent size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Gross Margin by SKU</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Set a selling price per SKU and see margin %, markup, and profit locked in current stock.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "SKUs Priced", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Low Margin (<15%)", value: lowMargin.toString(), color: lowMargin > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Profit in Stock", value: formatCurrency(Math.round(totalPotential)), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No inventory yet. Add SKUs in the Inventory tab, then set selling prices here to track margin.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Product", "Cost", "Sell Price", "Profit/Unit", "Margin %", "Markup %", "Profit in Stock"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.product}{r.sku && <span className="ml-1 text-[10px] text-[var(--color-muted)] font-mono">{r.sku}</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.cost)}</td>
+                    <td className="px-4 py-2.5">
+                      <input type="number" value={r.sell} onChange={e => setSell(r.id, e.target.value)}
+                        className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                    </td>
+                    <td className={`px-4 py-2.5 tabular-nums ${r.profit < 0 ? "text-red-400" : ""}`}>{formatCurrency(Math.round(r.profit))}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.marginPct >= 30 ? "text-green-400" : r.marginPct >= 15 ? "text-yellow-400" : "text-red-400"}`}>{r.marginPct.toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.markupPct.toFixed(0)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(r.stockProfit))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Margin % = profit ÷ selling price; markup % = profit ÷ cost. Selling prices default to cost + 40% and are saved per SKU. Rows sorted lowest-margin first.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #13 Landed-cost allocation calculator ───────────────────────── */
+function LandedCostTab() {
+  type Line = { id: string; item: string; qty: number; unitCost: number; weightKg: number };
+  const [lines, setLines] = useFeatureState<Line[]>("ops-landed-lines", []);
+  const [freight, setFreight] = useFeatureState<number>("ops-landed-freight", 0);
+  const [duty, setDuty] = useFeatureState<number>("ops-landed-duty", 0);
+  const [insurance, setInsurance] = useFeatureState<number>("ops-landed-insurance", 0);
+  const [basis, setBasis] = useState<"value" | "weight">("value");
+
+  const [iName, setIName] = useState("");
+  const [iQty, setIQty] = useState("");
+  const [iCost, setICost] = useState("");
+  const [iWeight, setIWeight] = useState("");
+
+  const addLine = () => {
+    if (!iName || !iCost) { toast.error("Item and unit cost required"); return; }
+    setLines(prev => [...prev, { id: generateId(), item: iName, qty: parseFloat(iQty) || 1, unitCost: parseFloat(iCost) || 0, weightKg: parseFloat(iWeight) || 0 }]);
+    setIName(""); setIQty(""); setICost(""); setIWeight("");
+  };
+
+  const overhead = (parseFloat(String(freight)) || 0) + (parseFloat(String(duty)) || 0) + (parseFloat(String(insurance)) || 0);
+  const computed = useMemo(() => {
+    const goodsValue = lines.reduce((s, l) => s + l.qty * l.unitCost, 0);
+    const totalWeight = lines.reduce((s, l) => s + l.weightKg * l.qty, 0);
+    return lines.map(l => {
+      const lineValue = l.qty * l.unitCost;
+      const lineWeight = l.weightKg * l.qty;
+      const share = basis === "weight"
+        ? (totalWeight > 0 ? lineWeight / totalWeight : 0)
+        : (goodsValue > 0 ? lineValue / goodsValue : 0);
+      const allocOverhead = overhead * share;
+      const landedTotal = lineValue + allocOverhead;
+      const landedUnit = l.qty > 0 ? landedTotal / l.qty : 0;
+      return { ...l, lineValue, allocOverhead, landedTotal, landedUnit, upliftPct: l.unitCost > 0 ? ((landedUnit - l.unitCost) / l.unitCost) * 100 : 0 };
+    });
+  }, [lines, overhead, basis]);
+
+  const goodsValue = computed.reduce((s, l) => s + l.lineValue, 0);
+  const grandLanded = goodsValue + overhead;
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+  const numField = (label: string, val: number, set: (n: number) => void) => (
+    <div>
+      <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">{label}</label>
+      <input type="number" value={val || ""} onChange={e => set(parseFloat(e.target.value) || 0)} placeholder="₹" className={inp} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Ship size={16} className="text-[var(--color-primary)]" />
+        <div>
+          <h2 className="text-sm font-semibold">Landed-Cost Calculator</h2>
+          <p className="text-[11px] text-[var(--color-muted)]">Spread freight, duty &amp; insurance across imported items by value or weight.</p>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <p className="text-sm font-semibold">Shipment Overheads</p>
+          <div className="flex bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-0.5">
+            {(["value", "weight"] as const).map(b => (
+              <button key={b} onClick={() => setBasis(b)} className={`text-xs px-3 py-1 rounded font-semibold transition-colors ${basis === b ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)]"}`}>
+                By {b}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {numField("Freight (₹)", freight, setFreight)}
+          {numField("Customs duty (₹)", duty, setDuty)}
+          {numField("Insurance (₹)", insurance, setInsurance)}
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-2">Add Item</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <input value={iName} onChange={e => setIName(e.target.value)} placeholder="Item *" className={inp} />
+          <input type="number" value={iQty} onChange={e => setIQty(e.target.value)} placeholder="Qty" className={inp} />
+          <input type="number" value={iCost} onChange={e => setICost(e.target.value)} placeholder="Unit cost ₹ *" className={inp} />
+          <input type="number" value={iWeight} onChange={e => setIWeight(e.target.value)} placeholder="Weight/unit (kg)" className={inp} />
+        </div>
+        <button onClick={addLine} className="mt-2 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add item</button>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {computed.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Add imported items and shipment overheads to allocate true landed cost.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Item", "Qty", "Goods Value", "Alloc. Overhead", "Landed Total", "Landed / Unit", "Uplift", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {computed.map(l => (
+                  <tr key={l.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium text-xs">{l.item}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{l.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(l.lineValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(l.allocOverhead))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(l.landedTotal))}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(l.landedUnit))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-yellow-400">+{l.upliftPct.toFixed(0)}%</td>
+                    <td className="px-4 py-2.5"><button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--color-accent)] font-semibold">
+                  <td className="px-4 py-2.5 text-xs" colSpan={2}>Total</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(goodsValue))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(overhead))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(grandLanded))}</td>
+                  <td className="px-4 py-2.5" colSpan={3}></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Overheads are apportioned by each item's share of total goods value (or weight). Landed unit cost = goods + allocated overhead, the true cost to value stock and price imports.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #32/#33 GRN vs PO discrepancy log (3-way match) ───────────────────────── */
+function GrnDiscrepancyTab() {
+  type Grn = { id: string; date: string; poRef: string; vendor: string; item: string; orderedQty: number; receivedQty: number; orderedRate: number; invoicedRate: number; note: string };
+  const [rows, setRows] = useFeatureState<Grn[]>("ops-grn-log", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fPo, setFPo] = useState("");
+  const [fVendor, setFVendor] = useState("");
+  const [fItem, setFItem] = useState("");
+  const [fOrdered, setFOrdered] = useState("");
+  const [fReceived, setFReceived] = useState("");
+  const [fRate, setFRate] = useState("");
+  const [fInvRate, setFInvRate] = useState("");
+  const [fNote, setFNote] = useState("");
+
+  const addRow = () => {
+    if (!fVendor || !fItem) { toast.error("Vendor and item required"); return; }
+    setRows(prev => [...prev, {
+      id: generateId(), date: fDate, poRef: fPo, vendor: fVendor, item: fItem,
+      orderedQty: parseFloat(fOrdered) || 0, receivedQty: parseFloat(fReceived) || 0,
+      orderedRate: parseFloat(fRate) || 0, invoicedRate: parseFloat(fInvRate) || (parseFloat(fRate) || 0), note: fNote,
+    }]);
+    toast.success("GRN recorded");
+    setFPo(""); setFVendor(""); setFItem(""); setFOrdered(""); setFReceived(""); setFRate(""); setFInvRate(""); setFNote(""); setShowForm(false);
+  };
+
+  const analysed = rows.map(r => {
+    const qtyDiff = r.receivedQty - r.orderedQty;
+    const rateDiff = r.invoicedRate - r.orderedRate;
+    const priceVariance = rateDiff * r.receivedQty;
+    const ok = qtyDiff === 0 && Math.abs(rateDiff) < 0.001;
+    return { ...r, qtyDiff, rateDiff, priceVariance, ok };
+  });
+  const mismatches = analysed.filter(r => !r.ok);
+  const netVariance = analysed.reduce((s, r) => s + r.priceVariance, 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <ClipboardCheck size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">GRN vs PO Discrepancy Log</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Three-way check: ordered vs received quantity and PO rate vs invoiced rate.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Record GRN
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "GRNs Logged", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "With Discrepancy", value: mismatches.length.toString(), color: mismatches.length > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Net Price Variance", value: formatCurrency(Math.round(netVariance)), color: netVariance > 0 ? "text-red-400" : netVariance < 0 ? "text-green-400" : "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <input value={fPo} onChange={e => setFPo(e.target.value)} placeholder="PO reference" className={inp} />
+            <input value={fVendor} onChange={e => setFVendor(e.target.value)} placeholder="Vendor *" className={inp} />
+            <input value={fItem} onChange={e => setFItem(e.target.value)} placeholder="Item *" className={inp} />
+            <input type="number" value={fOrdered} onChange={e => setFOrdered(e.target.value)} placeholder="Ordered qty" className={inp} />
+            <input type="number" value={fReceived} onChange={e => setFReceived(e.target.value)} placeholder="Received qty" className={inp} />
+            <input type="number" value={fRate} onChange={e => setFRate(e.target.value)} placeholder="PO rate ₹" className={inp} />
+            <input type="number" value={fInvRate} onChange={e => setFInvRate(e.target.value)} placeholder="Invoiced rate ₹" className={inp} />
+            <input value={fNote} onChange={e => setFNote(e.target.value)} placeholder="Note / quality hold" className={`${inp} md:col-span-4`} />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addRow} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {analysed.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No GRNs recorded. Log goods receipts against POs to catch short deliveries and price mismatches before paying.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Date", "PO", "Vendor", "Item", "Ord/Recd", "Qty Δ", "Rate (PO→Inv)", "Price Variance", "Status", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...analysed].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
+                  <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${!r.ok ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                    <td className="px-3 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.date}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.poRef || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.item}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-xs">{r.orderedQty} / {r.receivedQty}</td>
+                    <td className={`px-3 py-2.5 tabular-nums text-xs font-bold ${r.qtyDiff !== 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.qtyDiff > 0 ? `+${r.qtyDiff}` : r.qtyDiff}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-xs">{formatCurrency(r.orderedRate)} → {formatCurrency(r.invoicedRate)}</td>
+                    <td className={`px-3 py-2.5 tabular-nums text-xs font-semibold ${r.priceVariance > 0 ? "text-red-400" : r.priceVariance < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.priceVariance !== 0 ? formatCurrency(Math.round(r.priceVariance)) : "—"}</td>
+                    <td className="px-3 py-2.5">{r.ok ? <span className="text-[10px] font-semibold text-green-400 bg-green-950/30 px-2 py-0.5 rounded-full">Matched</span> : <span className="text-[10px] font-semibold text-red-400 bg-red-950/30 px-2 py-0.5 rounded-full">Discrepancy</span>}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Positive qty Δ = over-delivery; negative = short receipt. Positive price variance = vendor invoiced above PO rate — resolve before approving payment.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #49 Scrap / wastage tracker ───────────────────────── */
+function ScrapWastageTab() {
+  const { store } = useApp();
+  type Scrap = { id: string; date: string; product: string; qty: number; unitCost: number; reason: string };
+  const [rows, setRows] = useFeatureState<Scrap[]>("ops-scrap-log", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const REASONS = ["Damaged", "Expired", "Production loss", "Quality reject", "Spillage", "Theft / shrinkage", "Other"];
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fProduct, setFProduct] = useState("");
+  const [fQty, setFQty] = useState("");
+  const [fCost, setFCost] = useState("");
+  const [fReason, setFReason] = useState(REASONS[0]);
+
+  const onPick = (name: string) => {
+    setFProduct(name);
+    const it = store.inventory.find(i => i.productName === name);
+    if (it) setFCost(String(it.unitCost));
+  };
+
+  const addRow = () => {
+    if (!fProduct || !fQty) { toast.error("Product and quantity required"); return; }
+    setRows(prev => [...prev, { id: generateId(), date: fDate, product: fProduct, qty: parseFloat(fQty) || 0, unitCost: parseFloat(fCost) || 0, reason: fReason }]);
+    toast.success("Wastage recorded");
+    setFProduct(""); setFQty(""); setFCost(""); setFReason(REASONS[0]); setShowForm(false);
+  };
+
+  const totalLoss = rows.reduce((s, r) => s + r.qty * r.unitCost, 0);
+  const byReason = REASONS.map(reason => ({
+    reason, value: rows.filter(r => r.reason === reason).reduce((s, r) => s + r.qty * r.unitCost, 0),
+  })).filter(b => b.value > 0).sort((a, b) => b.value - a.value);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Trash2 size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Scrap / Wastage Tracker</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Log damaged, expired and production-loss stock with its cost impact.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Record wastage
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Entries", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Total Loss Value", value: formatCurrency(Math.round(totalLoss)), color: totalLoss > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Top Reason", value: byReason[0]?.reason ?? "—", color: "text-yellow-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {byReason.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-sm font-semibold mb-2">Loss by Reason</p>
+          <div className="space-y-2">
+            {byReason.map(b => (
+              <div key={b.reason} className="flex items-center gap-3">
+                <span className="text-xs w-32 shrink-0 text-[var(--color-muted)]">{b.reason}</span>
+                <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full bg-red-500/70 rounded-full" style={{ width: `${totalLoss > 0 ? (b.value / totalLoss) * 100 : 0}%` }} />
+                </div>
+                <span className="text-xs tabular-nums w-24 text-right font-semibold">{formatCurrency(Math.round(b.value))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <input value={fProduct} onChange={e => onPick(e.target.value)} placeholder="Product *" className={inp} list="scrap-products" />
+            <datalist id="scrap-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
+            <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Qty *" className={inp} />
+            <input type="number" value={fCost} onChange={e => setFCost(e.target.value)} placeholder="Unit cost ₹" className={inp} />
+            <select value={fReason} onChange={e => setFReason(e.target.value)} className={`${inp} md:col-span-2`}>
+              {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addRow} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No wastage logged. Recording scrap keeps your stock value honest and surfaces avoidable losses.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Product", "Qty", "Unit Cost", "Loss Value", "Reason", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.date}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.product}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.unitCost)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.qty * r.unitCost))}</td>
+                    <td className="px-4 py-2.5 text-xs">{r.reason}</td>
+                    <td className="px-4 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Wastage value = quantity × unit cost. Track reasons over time to attack the biggest avoidable losses first.</p>
+    </div>
+  );
+}
+
+/* ───────────────────────── #40/#41 Returns (customer & RTV) register ───────────────────────── */
+function ReturnsRegisterTab() {
+  const { store } = useApp();
+  type Ret = { id: string; date: string; kind: "customer" | "rtv"; party: string; product: string; qty: number; unitValue: number; reason: string; disposition: "restock" | "quarantine" | "scrap"; status: "open" | "closed" };
+  const [rows, setRows] = useFeatureState<Ret[]>("ops-returns-register", []);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fDate, setFDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fKind, setFKind] = useState<"customer" | "rtv">("customer");
+  const [fParty, setFParty] = useState("");
+  const [fProduct, setFProduct] = useState("");
+  const [fQty, setFQty] = useState("");
+  const [fValue, setFValue] = useState("");
+  const [fReason, setFReason] = useState("");
+  const [fDisp, setFDisp] = useState<"restock" | "quarantine" | "scrap">("restock");
+
+  const onPick = (name: string) => {
+    setFProduct(name);
+    const it = store.inventory.find(i => i.productName === name);
+    if (it) setFValue(String(it.unitCost));
+  };
+
+  const addRow = () => {
+    if (!fParty || !fProduct || !fQty) { toast.error("Party, product and qty required"); return; }
+    setRows(prev => [...prev, {
+      id: generateId(), date: fDate, kind: fKind, party: fParty, product: fProduct,
+      qty: parseFloat(fQty) || 0, unitValue: parseFloat(fValue) || 0, reason: fReason, disposition: fDisp, status: "open",
+    }]);
+    toast.success(fKind === "rtv" ? "Vendor return (RTV) logged" : "Customer return logged");
+    setFParty(""); setFProduct(""); setFQty(""); setFValue(""); setFReason(""); setFDisp("restock"); setShowForm(false);
+  };
+
+  const toggle = (id: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, status: r.status === "open" ? "closed" : "open" } : r));
+
+  const custValue = rows.filter(r => r.kind === "customer").reduce((s, r) => s + r.qty * r.unitValue, 0);
+  const rtvValue = rows.filter(r => r.kind === "rtv").reduce((s, r) => s + r.qty * r.unitValue, 0);
+  const open = rows.filter(r => r.status === "open").length;
+  const DISP_STYLE: Record<string, string> = {
+    restock: "text-green-400", quarantine: "text-yellow-400", scrap: "text-red-400",
+  };
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Undo2 size={16} className="text-[var(--color-primary)]" />
+          <div>
+            <h2 className="text-sm font-semibold">Returns &amp; RTV Register</h2>
+            <p className="text-[11px] text-[var(--color-muted)]">Track customer returns and return-to-vendor (RTV) with disposition and value.</p>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+          <Plus size={11} /> Log return
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Returns", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Open Items", value: open.toString(), color: open > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Customer Return Value", value: formatCurrency(Math.round(custValue)), color: "text-red-400" },
+          { label: "RTV Value", value: formatCurrency(Math.round(rtvValue)), color: "text-blue-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            {(["customer", "rtv"] as const).map(k => (
+              <button key={k} onClick={() => setFKind(k)} className={`text-xs px-3 py-1 rounded-lg border font-semibold transition-all ${fKind === k ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                {k === "customer" ? "Customer return" : "Return to vendor (RTV)"}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <input value={fParty} onChange={e => setFParty(e.target.value)} placeholder={fKind === "rtv" ? "Vendor *" : "Customer *"} className={inp} />
+            <input value={fProduct} onChange={e => onPick(e.target.value)} placeholder="Product *" className={inp} list="returns-products" />
+            <datalist id="returns-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
+            <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Qty *" className={inp} />
+            <input type="number" value={fValue} onChange={e => setFValue(e.target.value)} placeholder="Unit value ₹" className={inp} />
+            <input value={fReason} onChange={e => setFReason(e.target.value)} placeholder="Reason" className={inp} />
+            <select value={fDisp} onChange={e => setFDisp(e.target.value as typeof fDisp)} className={inp}>
+              <option value="restock">Restock</option>
+              <option value="quarantine">Quarantine</option>
+              <option value="scrap">Scrap</option>
+            </select>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addRow} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No returns logged. Track customer returns and vendor returns (RTV) to control reverse-logistics cost.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Type", "Party", "Product", "Qty", "Value", "Reason", "Disposition", "Status", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5">{h}</th>)}</tr></thead>
+              <tbody>
+                {[...rows].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
+                  <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                    <td className="px-3 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.date}</td>
+                    <td className="px-3 py-2.5"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.kind === "rtv" ? "bg-blue-950/30 text-blue-400" : "bg-orange-950/30 text-orange-400"}`}>{r.kind === "rtv" ? "RTV" : "Customer"}</span></td>
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.party}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.product}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{r.qty}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-xs">{formatCurrency(Math.round(r.qty * r.unitValue))}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reason || "—"}</td>
+                    <td className={`px-3 py-2.5 text-xs font-semibold ${DISP_STYLE[r.disposition]}`}>{r.disposition}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => toggle(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.status === "closed" ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{r.status}</button></td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">RTV (return-to-vendor) defective stock may need an ITC reversal / debit note under GST — consult a CA. Restock returns flow back to sellable inventory; quarantine and scrap do not.</p>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2, Package, MapPin, Filter, GitBranch, AlertTriangle, Target, Gauge } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpRight, ArrowDownRight, Minus, Layers, Activity, FileDown, Sheet as SheetIcon, Scale, Percent, BookOpen, Users, Plus, Trash2, Package, MapPin, Filter, GitBranch, AlertTriangle, Target, Gauge, Wallet, CalendarDays, Receipt, Briefcase, Tag } from "lucide-react";
 import { totalNetBookValue, totalGrossCost, totalAccumulatedDepreciation } from "@/lib/depreciation";
 import { toast } from "sonner";
 import { exportExcel, exportPdf } from "@/lib/exporters";
@@ -69,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const { store } = useApp();
   const { transactions, bankAccounts, firm } = store;
-  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags">("overview");
+  const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags" | "margin-trends" | "expense-ratios" | "ar-ageing" | "break-even" | "working-capital" | "seasonality" | "refund-impact" | "per-employee">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
   const [chartType, setChartType] = useState<"bar" | "area">("bar");
   const { hidden, toggle } = useSeriesToggle();
@@ -190,6 +190,14 @@ export default function AnalyticsPage() {
     { id: "revenue-pareto",   label: "Pareto 80/20" },
     { id: "margin-bridge",    label: "Margin Bridge" },
     { id: "churn-flags",      label: "Churn Flags" },
+    { id: "margin-trends",    label: "Margin Trends" },
+    { id: "expense-ratios",   label: "Expense Ratios" },
+    { id: "ar-ageing",        label: "AR Ageing" },
+    { id: "break-even",       label: "Break-Even" },
+    { id: "working-capital",  label: "Working Capital" },
+    { id: "seasonality",      label: "Seasonality" },
+    { id: "refund-impact",    label: "Refund Impact" },
+    { id: "per-employee",     label: "Per-Employee" },
   ] as const;
 
   const benchmarks = [
@@ -260,7 +268,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
+      <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
         {TABS.map(({ id, label }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -1074,6 +1082,14 @@ export default function AnalyticsPage() {
       {tab === "revenue-pareto" && <RevenueParetoTab />}
       {tab === "margin-bridge" && <MarginBridgeTab />}
       {tab === "churn-flags" && <ChurnFlagsTab />}
+      {tab === "margin-trends" && <MarginTrendsTab />}
+      {tab === "expense-ratios" && <ExpenseRatiosTab />}
+      {tab === "ar-ageing" && <ArAgeingTab />}
+      {tab === "break-even" && <BreakEvenTab />}
+      {tab === "working-capital" && <WorkingCapitalTab />}
+      {tab === "seasonality" && <SeasonalityTab />}
+      {tab === "refund-impact" && <RefundImpactTab />}
+      {tab === "per-employee" && <PerEmployeeTab />}
     </div>
   );
 }
@@ -2813,6 +2829,619 @@ function ChurnFlagsTab() {
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Heuristic scores from observed recency/frequency and invoice aging — not an ML model. Use as a prioritised follow-up list, not a guarantee.</p>
+    </div>
+  );
+}
+
+// Shared: build a trailing N-month window from a base date.
+function trailingMonths(n: number, base: Date) {
+  return Array.from({ length: n }, (_, i) => {
+    const d = subMonths(base, n - 1 - i);
+    return {
+      label: format(d, "MMM"),
+      full: format(d, "MMM yy"),
+      start: startOfMonth(d).toISOString().split("T")[0],
+      end: endOfMonth(d).toISOString().split("T")[0],
+    };
+  });
+}
+
+// ── #11 GROSS & NET MARGIN TRENDS ───────────────────────────────────────────────
+function MarginTrendsTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: assumed direct-cost (COGS) share of revenue used to derive gross margin.
+  const [cogsPct, setCogsPct] = useFeatureState("anl-mt-cogs-pct", 60);
+
+  const data = useMemo(() => {
+    return trailingMonths(12, now).map(m => {
+      const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end && t.category !== "transfer");
+      const revenue = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const expense = Math.abs(mTxns.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+      const cogs = revenue * (cogsPct / 100);
+      const grossPct = revenue > 0 ? Math.round(((revenue - cogs) / revenue) * 100) : 0;
+      const netPct = revenue > 0 ? Math.round(((revenue - expense) / revenue) * 100) : 0;
+      return { month: m.label, revenue, gross: grossPct, net: netPct };
+    });
+  }, [transactions, cogsPct]);
+
+  const live = data.filter(d => d.revenue > 0);
+  const avgGross = live.length ? Math.round(live.reduce((s, d) => s + d.gross, 0) / live.length) : 0;
+  const avgNet = live.length ? Math.round(live.reduce((s, d) => s + d.net, 0) / live.length) : 0;
+  const curr = data[data.length - 1];
+  const prev = data[data.length - 2];
+  const netTrend = curr && prev ? curr.net - prev.net : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <Percent size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Margin trends</p>
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          <label className="text-[var(--color-muted)]">Assumed COGS % of revenue</label>
+          <input type="number" min={0} max={100} value={cogsPct} onChange={e => setCogsPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={`${ANALYTICS_INPUT} w-20`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Avg gross margin" value={`${avgGross}%`} color={avgGross >= 40 ? "text-green-400" : "text-yellow-400"} note="12-month average" />
+        <MetricCard label="Avg net margin" value={`${avgNet}%`} color={avgNet >= 10 ? "text-green-400" : avgNet >= 0 ? "text-yellow-400" : "text-red-400"} note="After all expenses" />
+        <MetricCard label="This month net" value={`${curr?.net ?? 0}%`} color={(curr?.net ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
+        <MetricCard label="Net margin trend" value={`${netTrend >= 0 ? "+" : ""}${netTrend} pts`} color={netTrend >= 0 ? "text-green-400" : "text-red-400"} note="vs previous month" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Gross vs net margin % · 12 months</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={42} />
+            <Tooltip formatter={(v: number, n: string) => [`${v}%`, n]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+            <Line type="monotone" dataKey="gross" name="Gross margin" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+            <Line type="monotone" dataKey="net" name="Net margin" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 2 }} />
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="flex items-center gap-4 mt-3">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5 bg-green-500" /> Gross margin</div>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5" style={{ background: "var(--color-primary)" }} /> Net margin</div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Gross margin uses an assumed direct-cost (COGS) share; net margin is revenue minus all recorded expenses. A widening gross-net gap signals rising overheads. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #12 EXPENSE-RATIO TRENDS (% of revenue) ─────────────────────────────────────
+function ExpenseRatiosTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  const CATS: { key: string; label: string; color: string }[] = [
+    { key: "expense", label: "Operating", color: CATEGORY_COLORS.expense },
+    { key: "payroll", label: "Payroll", color: CATEGORY_COLORS.payroll },
+    { key: "tax", label: "Taxes", color: CATEGORY_COLORS.tax },
+    { key: "loan", label: "Loan", color: CATEGORY_COLORS.loan },
+  ];
+
+  const data = useMemo(() => {
+    return trailingMonths(12, now).map(m => {
+      const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end);
+      const revenue = mTxns.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+      const row: Record<string, number | string> = { month: m.label };
+      CATS.forEach(c => {
+        const spend = Math.abs(mTxns.filter(t => t.amount < 0 && t.category === c.key).reduce((s, t) => s + t.amount, 0));
+        row[c.key] = revenue > 0 ? Math.round((spend / revenue) * 100) : 0;
+      });
+      return row;
+    });
+  }, [transactions]);
+
+  const live = data.filter(d => CATS.some(c => (d[c.key] as number) > 0));
+  const avgFor = (k: string) => live.length ? Math.round(live.reduce((s, d) => s + (d[k] as number), 0) / live.length) : 0;
+  const totalRatio = CATS.reduce((s, c) => s + avgFor(c.key), 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {CATS.map(c => (
+          <MetricCard key={c.key} label={`${c.label} / Revenue`} value={`${avgFor(c.key)}%`} color={avgFor(c.key) <= 40 ? "text-green-400" : avgFor(c.key) <= 60 ? "text-yellow-400" : "text-red-400"} note="12-month average" />
+        ))}
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <div className="flex items-center gap-2 mb-4"><Activity size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Expense ratios · % of revenue, stacked</p></div>
+        <ResponsiveContainer width="100%" height={260}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={42} />
+            <Tooltip formatter={(v: number, n: string) => [`${v}%`, n]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+            {CATS.map(c => (
+              <Area key={c.key} type="monotone" dataKey={c.key} name={c.label} stackId="1" stroke={c.color} fill={c.color} fillOpacity={0.35} strokeWidth={1.5} />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+        <div className="flex flex-wrap items-center gap-4 mt-3">
+          {CATS.map(c => <div key={c.key} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} /> {c.label}</div>)}
+        </div>
+      </div>
+
+      <div className={`${ANALYTICS_CARD} px-4 py-2.5 text-[11px] text-[var(--color-muted)]`}>
+        Total tracked cost ≈ <span className="font-semibold text-[var(--color-text)]">{totalRatio}%</span> of revenue on average. Rising ratios mean costs growing faster than sales. Compare against the Benchmarks tab for sector reference figures.
+      </div>
+    </div>
+  );
+}
+
+// ── #13 ACCOUNTS-RECEIVABLE AGEING ──────────────────────────────────────────────
+function ArAgeingTab() {
+  const { store } = useApp();
+  const { invoices, transactions } = store;
+  const now = new Date();
+
+  const { buckets, rows, totalOpen, dso } = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const defs = [
+      { key: "0-30", label: "0–30 days", min: 0, max: 30, color: "#22c55e" },
+      { key: "31-60", label: "31–60 days", min: 31, max: 60, color: "#eab308" },
+      { key: "61-90", label: "61–90 days", min: 61, max: 90, color: "#f97316" },
+      { key: "90+", label: "90+ days", min: 91, max: Infinity, color: "#ef4444" },
+    ];
+    const b = defs.map(d => ({ ...d, amount: 0, count: 0 }));
+    const detail = open.map(inv => {
+      const due = parseISO(inv.dueDate);
+      const overdue = Math.max(0, Math.round((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)));
+      const idx = b.findIndex(x => overdue >= x.min && overdue <= x.max);
+      const slot = idx >= 0 ? idx : 0;
+      b[slot].amount += inv.amount;
+      b[slot].count += 1;
+      return { ...inv, overdue, bucket: b[slot].label, color: b[slot].color };
+    }).sort((x, y) => y.overdue - x.overdue);
+
+    const open0 = b.reduce((s, x) => s + x.amount, 0);
+    // DSO = receivables ÷ avg daily revenue (trailing ~6 months of revenue txns).
+    const winStart = startOfMonth(subMonths(now, 5)).toISOString().split("T")[0];
+    const rev = transactions.filter(t => t.amount > 0 && t.category === "revenue" && t.date >= winStart).reduce((s, t) => s + t.amount, 0);
+    const dailyRev = rev / 180;
+    return { buckets: b, rows: detail, totalOpen: open0, dso: dailyRev > 0 ? Math.round(open0 / dailyRev) : null };
+  }, [invoices, transactions]);
+
+  const overdueAmt = buckets.filter(b => b.key !== "0-30").reduce((s, b) => s + b.amount, 0);
+  const pie = buckets.filter(b => b.amount > 0).map(b => ({ name: b.label, value: Math.round(b.amount), color: b.color }));
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Total receivables" value={formatCurrency(totalOpen)} color="text-[var(--color-primary)]" note={`${rows.length} open invoices`} />
+        <MetricCard label="Overdue (>30d)" value={formatCurrency(overdueAmt)} color={overdueAmt > 0 ? "text-red-400" : "text-green-400"} note={totalOpen > 0 ? `${Math.round((overdueAmt / totalOpen) * 100)}% of AR` : ""} />
+        <MetricCard label="90+ days" value={formatCurrency(buckets[3].amount)} color={buckets[3].amount > 0 ? "text-red-400" : "text-green-400"} note="Provisioning candidate" />
+        <MetricCard label="DSO" value={dso !== null ? `${dso} days` : "—"} color={dso !== null && dso <= 45 ? "text-green-400" : dso !== null && dso <= 60 ? "text-yellow-400" : "text-red-400"} note="Target ≤ 45 days" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <div className="flex items-center gap-2 mb-4"><Receipt size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Ageing buckets</p></div>
+          {totalOpen === 0 ? <p className="text-sm text-[var(--color-muted)]">No open invoices — all receivables collected.</p> : (
+            <div className="space-y-3">
+              {buckets.map(b => {
+                const pct = totalOpen > 0 ? Math.round((b.amount / totalOpen) * 100) : 0;
+                return (
+                  <div key={b.key}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-[var(--color-muted)]">{b.label} <span className="ml-1 opacity-70">({b.count})</span></span>
+                      <span className="tabular-nums font-semibold">{formatAmount(b.amount)} · {pct}%</span>
+                    </div>
+                    <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.color }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <p className="text-sm font-semibold mb-4">Receivables split</p>
+          {pie.length === 0 ? <div className="flex items-center justify-center h-[180px] text-sm text-[var(--color-muted)]">No receivables</div> : (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={pie} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
+                  {pie.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => [formatAmount(v), ""]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Open invoices by age</p></div>
+        {rows.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No open invoices to age.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Customer", "Invoice", "Amount", "Due in / overdue", "Bucket"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.slice(0, 25).map(inv => (
+                  <tr key={inv.id} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 font-medium truncate max-w-[160px]">{inv.customer}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{inv.invoiceNumber ?? inv.id.slice(0, 6)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-400 font-semibold">{formatAmount(inv.amount)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{inv.overdue > 0 ? `${inv.overdue}d overdue` : "not due"}</td>
+                    <td className="px-4 py-2.5 text-right"><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${inv.color}22`, color: inv.color }}>{inv.bucket}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Ageing is measured from each invoice's due date to today. DSO ≈ open receivables ÷ average daily revenue (trailing 6 months). Invoices 90+ days overdue are typical provisioning candidates.</p>
+    </div>
+  );
+}
+
+// ── #14 BREAK-EVEN & CONTRIBUTION MARGIN ────────────────────────────────────────
+function BreakEvenTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: what share of operating expense is treated as fixed (rest is variable).
+  const [fixedSharePct, setFixedSharePct] = useFeatureState("anl-be-fixed-pct", 55);
+
+  const m = useMemo(() => {
+    const winStart = startOfMonth(subMonths(now, 5)).toISOString().split("T")[0];
+    const win = transactions.filter(t => t.date >= winStart && t.category !== "transfer");
+    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const totalCost = Math.abs(win.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const months = 6;
+    const monthlyRev = revenue / months;
+    const monthlyCost = totalCost / months;
+    // Payroll + a share of opex are treated as fixed; the rest variable.
+    const payroll = Math.abs(win.filter(t => t.amount < 0 && t.category === "payroll").reduce((s, t) => s + t.amount, 0)) / months;
+    const nonPayroll = monthlyCost - payroll;
+    const fixed = payroll + nonPayroll * (fixedSharePct / 100);
+    const variable = nonPayroll * (1 - fixedSharePct / 100);
+    const cmRatio = monthlyRev > 0 ? (monthlyRev - variable) / monthlyRev : 0; // contribution margin ratio
+    const breakEven = cmRatio > 0 ? fixed / cmRatio : null;
+    const marginOfSafety = breakEven !== null && monthlyRev > 0 ? Math.round(((monthlyRev - breakEven) / monthlyRev) * 100) : null;
+    return { monthlyRev, monthlyCost, fixed, variable, cmRatio, breakEven, marginOfSafety, contribution: monthlyRev - variable };
+  }, [transactions, fixedSharePct]);
+
+  const chartData = trailingMonths(6, now).map(mo => {
+    const mTxns = transactions.filter(t => t.date >= mo.start && t.date <= mo.end && t.category !== "transfer");
+    const revenue = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    return { month: mo.label, revenue: Math.round(revenue), breakEven: m.breakEven !== null ? Math.round(m.breakEven) : 0 };
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <Scale size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Cost-structure assumption</p>
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          <label className="text-[var(--color-muted)]">Fixed share of non-payroll cost</label>
+          <input type="number" min={0} max={100} value={fixedSharePct} onChange={e => setFixedSharePct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={`${ANALYTICS_INPUT} w-20`} />
+          <span className="text-[var(--color-muted)]">%</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Monthly fixed cost" value={formatCurrency(m.fixed)} color="text-orange-400" note="Payroll + fixed opex" />
+        <MetricCard label="Contribution margin" value={`${Math.round(m.cmRatio * 100)}%`} color={m.cmRatio >= 0.4 ? "text-green-400" : "text-yellow-400"} note={`${formatAmount(m.contribution)}/mo`} />
+        <MetricCard label="Break-even revenue" value={m.breakEven !== null ? formatCurrency(m.breakEven) : "—"} color="text-[var(--color-primary)]" note="Per month" />
+        <MetricCard label="Margin of safety" value={m.marginOfSafety !== null ? `${m.marginOfSafety}%` : "—"} color={m.marginOfSafety !== null && m.marginOfSafety >= 20 ? "text-green-400" : m.marginOfSafety !== null && m.marginOfSafety >= 0 ? "text-yellow-400" : "text-red-400"} note="Above break-even" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Actual revenue vs break-even line · 6 months</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <ComposedChart data={chartData} barCategoryGap="28%">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]}>
+              {chartData.map((d, i) => <Cell key={i} fill={d.revenue >= d.breakEven ? "#22c55e" : "#ef4444"} />)}
+            </Bar>
+            <Line type="monotone" dataKey="breakEven" name="Break-even" stroke="var(--color-primary)" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Green months clear break-even; red months fall short. The dashed line is the monthly break-even revenue at current cost structure.</p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Break-even = fixed cost ÷ contribution-margin ratio. Payroll is treated as fixed; the remaining opex is split fixed/variable by your assumption above. Figures are monthly averages over the trailing 6 months. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #15 WORKING-CAPITAL CYCLE (DSO / DPO / CCC) ─────────────────────────────────
+function WorkingCapitalTab() {
+  const { store } = useApp();
+  const { transactions, invoices } = store;
+  const now = new Date();
+  // Durable: assumed inventory days when no inventory turnover data exists.
+  const [invDays, setInvDays] = useFeatureState("anl-wc-inv-days", 30);
+
+  const series = useMemo(() => {
+    return trailingMonths(12, now).map(mo => {
+      const endD = parseISO(mo.end);
+      // Open receivables as at month end.
+      const recv = invoices.filter(i => i.status !== "paid" && parseISO(i.invoiceDate) <= endD).reduce((s, i) => s + i.amount, 0);
+      // Trailing 6-month revenue & expense up to month end → daily run rates.
+      const winStart = startOfMonth(subMonths(endD, 5)).toISOString().split("T")[0];
+      const rev = transactions.filter(t => t.amount > 0 && t.category === "revenue" && t.date >= winStart && t.date <= mo.end).reduce((s, t) => s + t.amount, 0);
+      const purch = Math.abs(transactions.filter(t => t.amount < 0 && t.category === "expense" && t.date >= winStart && t.date <= mo.end).reduce((s, t) => s + t.amount, 0));
+      const dailyRev = rev / 180;
+      const dailyPurch = purch / 180;
+      const payables = dailyPurch * 30; // proxy: ~30 days of purchases outstanding
+      const dso = dailyRev > 0 ? Math.round(recv / dailyRev) : 0;
+      const dpo = dailyPurch > 0 ? Math.round(payables / dailyPurch) : 0;
+      const ccc = dso + invDays - dpo;
+      return { month: mo.label, dso, dio: invDays, dpo, ccc };
+    });
+  }, [transactions, invoices, invDays]);
+
+  const curr = series[series.length - 1] ?? { dso: 0, dio: invDays, dpo: 0, ccc: 0 };
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4 flex items-center gap-2 flex-wrap`}>
+        <Wallet size={14} className="text-[var(--color-primary)]" />
+        <p className="text-sm font-semibold">Working-capital cycle</p>
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          <label className="text-[var(--color-muted)]">Assumed inventory days (DIO)</label>
+          <input type="number" min={0} max={365} value={invDays} onChange={e => setInvDays(Math.max(0, Math.min(365, parseInt(e.target.value) || 0)))} className={`${ANALYTICS_INPUT} w-20`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="DSO" value={`${curr.dso} days`} color={curr.dso <= 45 ? "text-green-400" : "text-yellow-400"} note="Days sales outstanding" />
+        <MetricCard label="DIO" value={`${curr.dio} days`} color="text-[var(--color-muted)]" note="Days inventory (assumed)" />
+        <MetricCard label="DPO" value={`${curr.dpo} days`} color="text-[var(--color-text)]" note="Days payable outstanding" />
+        <MetricCard label="Cash conversion cycle" value={`${curr.ccc} days`} color={curr.ccc <= 30 ? "text-green-400" : curr.ccc <= 60 ? "text-yellow-400" : "text-red-400"} note="DSO + DIO − DPO" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Cash conversion cycle trend · 12 months</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={series}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}d`} width={42} />
+            <Tooltip formatter={(v: number, n: string) => [`${v} days`, n]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+            <Line type="monotone" dataKey="dso" name="DSO" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+            <Line type="monotone" dataKey="dpo" name="DPO" stroke="#f97316" strokeWidth={1.5} dot={false} />
+            <Line type="monotone" dataKey="ccc" name="CCC" stroke="var(--color-primary)" strokeWidth={2.5} dot={{ r: 2 }} />
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="flex flex-wrap items-center gap-4 mt-3">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5 bg-green-500" /> DSO</div>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5 bg-orange-500" /> DPO</div>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5" style={{ background: "var(--color-primary)" }} /> Cash conversion cycle</div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A shorter cash conversion cycle frees up working capital. DSO from open invoices vs revenue run-rate; DPO proxied from purchase run-rate; DIO is your assumption. A negative CCC means suppliers fund your sales cycle. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #16 SEASONALITY & DAY-OF-WEEK SALES ─────────────────────────────────────────
+function SeasonalityTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const { dow, monthIdx, peakDay, peakMonth } = useMemo(() => {
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dowSum = new Array(7).fill(0) as number[];
+    const dowCnt = new Array(7).fill(0) as number[];
+    const monSum = new Array(12).fill(0) as number[];
+    const monCnt = new Array(12).fill(0) as number[];
+    transactions.filter(t => t.amount > 0 && t.category === "revenue").forEach(t => {
+      const d = parseISO(t.date);
+      dowSum[d.getDay()] += t.amount; dowCnt[d.getDay()] += 1;
+      monSum[d.getMonth()] += t.amount; monCnt[d.getMonth()] += 1;
+    });
+    const dowMax = Math.max(...dowSum, 1);
+    const dowRows = DOW.map((label, i) => ({ label, total: dowSum[i], count: dowCnt[i], intensity: Math.round((dowSum[i] / dowMax) * 100) }));
+    const monAvgAll = monSum.reduce((s, v) => s + v, 0) / Math.max(1, monSum.filter(v => v > 0).length);
+    const monRows = MON.map((label, i) => ({ label, total: monSum[i], count: monCnt[i], index: monAvgAll > 0 && monSum[i] > 0 ? Math.round((monSum[i] / monAvgAll) * 100) : 0 }));
+    const pDay = dowRows.reduce((a, b) => b.total > a.total ? b : a, dowRows[0]);
+    const activeMon = monRows.filter(m => m.total > 0);
+    const pMon = activeMon.length ? activeMon.reduce((a, b) => b.total > a.total ? b : a, activeMon[0]) : null;
+    return { dow: dowRows, monthIdx: monRows, peakDay: pDay, peakMonth: pMon };
+  }, [transactions]);
+
+  const heatColor = (v: number) => v >= 75 ? "#22c55e" : v >= 50 ? "#84cc16" : v >= 25 ? "#eab308" : v > 0 ? "#f97316" : "var(--color-bg)";
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Peak day" value={peakDay?.label ?? "—"} color="text-green-400" note={peakDay ? formatAmount(peakDay.total) : ""} />
+        <MetricCard label="Peak month" value={peakMonth?.label ?? "—"} color="text-green-400" note={peakMonth ? `index ${peakMonth.index}` : ""} />
+        <MetricCard label="Weekend share" value={`${(() => { const wk = dow[0].total + dow[6].total; const tot = dow.reduce((s, d) => s + d.total, 0); return tot > 0 ? Math.round((wk / tot) * 100) : 0; })()}%`} color="text-[var(--color-text)]" note="Sat + Sun revenue" />
+        <MetricCard label="Revenue days" value={dow.reduce((s, d) => s + d.count, 0).toString()} color="text-[var(--color-primary)]" note="Transactions analysed" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <div className="flex items-center gap-2 mb-4"><CalendarDays size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Revenue by day of week · heat intensity</p></div>
+        <div className="grid grid-cols-7 gap-2">
+          {dow.map(d => (
+            <div key={d.label} className="text-center">
+              <div className="h-16 rounded-lg flex items-center justify-center text-[10px] font-semibold text-[var(--color-bg)]" style={{ background: heatColor(d.intensity) }}>{d.intensity > 0 ? `${d.intensity}%` : ""}</div>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">{d.label}</p>
+              <p className="text-[10px] tabular-nums">{formatAmount(d.total)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-4">Monthly seasonality index (100 = average month)</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={monthIdx} barCategoryGap="20%">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} width={32} />
+            <Tooltip formatter={(v: number) => [`index ${v}`, "Seasonality"]} contentStyle={{ background: "var(--color-surface)", border: "0.5px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+            <Bar dataKey="index" name="Index" radius={[3, 3, 0, 0]}>
+              {monthIdx.map((m, i) => <Cell key={i} fill={m.index >= 100 ? "#22c55e" : m.index > 0 ? "#f97316" : "var(--color-border)"} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Day-of-week heat normalises against your busiest day; the monthly index compares each calendar month to your average active month (100 = average). Use peaks to plan staffing, stock and promotions.</p>
+    </div>
+  );
+}
+
+// ── #17 REFUND & DISCOUNT IMPACT ────────────────────────────────────────────────
+function RefundImpactTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  const RX = /refund|return|credit note|chargeback|reversal|discount|rebate|cashback|waiver|adjustment/i;
+
+  const data = useMemo(() => {
+    return trailingMonths(12, now).map(mo => {
+      const mTxns = transactions.filter(t => t.date >= mo.start && t.date <= mo.end);
+      const grossRev = mTxns.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+      // Refunds = negative revenue txns OR any txn whose text matches refund/discount terms.
+      const refunds = Math.abs(mTxns.filter(t => (t.category === "revenue" && t.amount < 0) || (t.amount < 0 && RX.test(`${t.description} ${t.counterparty}`))).reduce((s, t) => s + t.amount, 0));
+      const net = grossRev - refunds;
+      return { month: mo.label, gross: Math.round(grossRev), refunds: Math.round(refunds), net: Math.round(net), rate: grossRev > 0 ? Math.round((refunds / grossRev) * 100) : 0 };
+    });
+  }, [transactions]);
+
+  const flagged = useMemo(() => transactions.filter(t => (t.category === "revenue" && t.amount < 0) || (t.amount < 0 && RX.test(`${t.description} ${t.counterparty}`)))
+    .map(t => ({ ...t, abs: Math.abs(t.amount) })).sort((a, b) => b.abs - a.abs).slice(0, 15), [transactions]);
+
+  const totalGross = data.reduce((s, d) => s + d.gross, 0);
+  const totalRefund = data.reduce((s, d) => s + d.refunds, 0);
+  const rate = totalGross > 0 ? Math.round((totalRefund / totalGross) * 100) : 0;
+  const avgMonthly = totalRefund / 12;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Gross revenue (12m)" value={formatCurrency(totalGross)} color="text-green-400" />
+        <MetricCard label="Refunds & discounts" value={formatCurrency(totalRefund)} color={totalRefund > 0 ? "text-red-400" : "text-green-400"} note={`${flagged.length} items`} />
+        <MetricCard label="Leakage rate" value={`${rate}%`} color={rate <= 3 ? "text-green-400" : rate <= 8 ? "text-yellow-400" : "text-red-400"} note="Of gross revenue" />
+        <MetricCard label="Avg / month" value={formatCurrency(avgMonthly)} color="text-orange-400" />
+      </div>
+
+      <div className={`${ANALYTICS_CARD} p-5`}>
+        <div className="flex items-center gap-2 mb-4"><Tag size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Gross vs net revenue · refund impact</p></div>
+        <ResponsiveContainer width="100%" height={250}>
+          <ComposedChart data={data} barCategoryGap="24%">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="l" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => formatAmount(v)} width={55} />
+            <YAxis yAxisId="r" orientation="right" domain={[0, "auto"]} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={38} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar yAxisId="l" dataKey="net" name="Net revenue" stackId="r" fill="#22c55e" radius={[0, 0, 0, 0]} />
+            <Bar yAxisId="l" dataKey="refunds" name="Refunds & discounts" stackId="r" fill="#ef4444" radius={[3, 3, 0, 0]} />
+            <Line yAxisId="r" type="monotone" dataKey="rate" name="Leakage %" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 2 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className={`${ANALYTICS_CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Largest refunds & discounts</p></div>
+        {flagged.length === 0 ? <p className="p-6 text-sm text-[var(--color-muted)] text-center">No refunds or discounts detected in your transactions.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>{["Date", "Description", "Counterparty", "Amount"].map((h, i) => <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {flagged.map(t => (
+                  <tr key={t.id} className="hover:bg-white/2 text-xs">
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{t.date}</td>
+                    <td className="px-4 py-2.5 font-medium truncate max-w-[200px]">{t.description}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[140px]">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-red-400 font-semibold">({formatAmount(t.abs)})</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Detects negative revenue entries and outflows whose text mentions refund, return, credit note, discount, rebate or similar. A leakage rate above ~5% of gross revenue usually warrants a pricing or returns-policy review. Indicative.</p>
+    </div>
+  );
+}
+
+// ── #18 PROFIT & REVENUE PER EMPLOYEE ───────────────────────────────────────────
+function PerEmployeeTab() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const now = new Date();
+  // Durable: headcount (no HR module) and benchmark revenue/employee.
+  const [headcount, setHeadcount] = useFeatureState("anl-pe-headcount", 0);
+  const [benchmark, setBenchmark] = useFeatureState("anl-pe-benchmark", 1500000);
+
+  const annual = useMemo(() => {
+    const winStart = startOfMonth(subMonths(now, 11)).toISOString().split("T")[0];
+    const win = transactions.filter(t => t.date >= winStart && t.category !== "transfer");
+    const months = 12;
+    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const expense = Math.abs(win.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const payroll = Math.abs(win.filter(t => t.amount < 0 && t.category === "payroll").reduce((s, t) => s + t.amount, 0));
+    const profit = revenue - expense;
+    const scale = 12 / months;
+    return { revenue: revenue * scale, profit: profit * scale, payroll: payroll * scale };
+  }, [transactions]);
+
+  const hc = Math.max(0, headcount);
+  const revPer = hc > 0 ? annual.revenue / hc : null;
+  const profitPer = hc > 0 ? annual.profit / hc : null;
+  const payrollPer = hc > 0 ? annual.payroll / hc : null;
+  const ratioVsBench = revPer !== null && benchmark > 0 ? Math.round((revPer / benchmark) * 100) : null;
+  // Payroll efficiency: revenue generated per ₹1 of payroll.
+  const payrollMultiple = annual.payroll > 0 ? annual.revenue / annual.payroll : null;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ANALYTICS_CARD} p-4`}>
+        <div className="flex items-center gap-2 mb-3"><Briefcase size={14} className="text-[var(--color-primary)]" /><p className="text-sm font-semibold">Headcount &amp; benchmark</p></div>
+        <div className="grid grid-cols-2 gap-3 text-xs max-w-md">
+          <label className="block"><span className="text-[var(--color-muted)] block mb-1">Total employees</span><input type="number" min={0} value={headcount} onChange={e => setHeadcount(Math.max(0, parseInt(e.target.value) || 0))} className={`${ANALYTICS_INPUT} w-full`} /></label>
+          <label className="block"><span className="text-[var(--color-muted)] block mb-1">Benchmark revenue / employee (₹)</span><input type="number" min={0} value={benchmark} onChange={e => setBenchmark(Math.max(0, parseInt(e.target.value) || 0))} className={`${ANALYTICS_INPUT} w-full`} /></label>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">No HR module exists, so enter your headcount to compute per-employee productivity. Revenue and profit are annualised from the trailing 12 months.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Revenue / employee" value={revPer !== null ? formatCurrency(revPer) : "—"} color="text-green-400" note="Annualised" />
+        <MetricCard label="Profit / employee" value={profitPer !== null ? formatCurrency(profitPer) : "—"} color={profitPer !== null && profitPer >= 0 ? "text-green-400" : "text-red-400"} note="Annualised" />
+        <MetricCard label="Payroll / employee" value={payrollPer !== null ? formatCurrency(payrollPer) : "—"} color="text-orange-400" note="Avg cost" />
+        <MetricCard label="Revenue per ₹ payroll" value={payrollMultiple !== null ? `${payrollMultiple.toFixed(2)}x` : "—"} color={payrollMultiple !== null && payrollMultiple >= 3 ? "text-green-400" : "text-yellow-400"} note="≥ 3x is healthy" />
+      </div>
+
+      {revPer !== null && ratioVsBench !== null && (
+        <div className={`${ANALYTICS_CARD} p-5`}>
+          <p className="text-sm font-semibold mb-3">Revenue per employee vs benchmark</p>
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Your firm</span><span className="tabular-nums font-semibold text-green-400">{formatCurrency(revPer)}</span></div>
+              <div className="h-3 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full rounded-full ${ratioVsBench >= 100 ? "bg-green-500" : "bg-yellow-500"}`} style={{ width: `${Math.min(100, ratioVsBench)}%` }} /></div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1"><span className="text-[var(--color-muted)]">Benchmark</span><span className="tabular-nums font-semibold">{formatCurrency(benchmark)}</span></div>
+              <div className="h-3 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--color-border)]" style={{ width: "100%" }} /></div>
+            </div>
+          </div>
+          <p className={`text-xs mt-3 font-semibold ${ratioVsBench >= 100 ? "text-green-400" : "text-yellow-400"}`}>
+            You are at {ratioVsBench}% of the benchmark{ratioVsBench >= 100 ? " — above peer productivity." : " — room to improve output per head."}
+          </p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Per-employee metrics annualise the trailing 12 months and divide by your entered headcount. The benchmark is a reference figure you set, not live peer data. Useful for tracking productivity as you hire. Indicative.</p>
     </div>
   );
 }

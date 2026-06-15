@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Transaction } from "@/data/types";
@@ -75,7 +75,7 @@ export default function TransactionsPage() {
   const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -285,6 +285,14 @@ export default function TransactionsPage() {
           ["transfer-detect",  "Transfer Detect",  ArrowLeftRight],
           ["cost-center",      "Cost Centers",     FolderTree],
           ["cash-accrual",     "Cash / Accrual",   Scale],
+          ["journal-entry",    "Journal Entry",    NotebookPen],
+          ["trial-balance",    "Trial Balance",    Calculator],
+          ["day-book",         "Day Book",         BookOpen],
+          ["ledger-account",   "Party Ledger",     BookText],
+          ["opening-balance",  "Opening Balance",  Wallet],
+          ["write-off",        "Write-Off",        Eraser],
+          ["period-lock",      "Period Lock",      Lock],
+          ["chart-of-accounts","Chart of Accounts",ListTree],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(v => v === id ? "transactions" : id)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
@@ -302,6 +310,14 @@ export default function TransactionsPage() {
       {view === "transfer-detect" && <TransferDetection />}
       {view === "cost-center"     && <CostCenterTagging />}
       {view === "cash-accrual"    && <CashAccrualToggle />}
+      {view === "journal-entry"     && <JournalEntryComposer />}
+      {view === "trial-balance"     && <TrialBalanceView />}
+      {view === "day-book"          && <DayBook />}
+      {view === "ledger-account"    && <PartyLedger />}
+      {view === "opening-balance"   && <OpeningBalanceSetup />}
+      {view === "write-off"         && <WriteOffComposer />}
+      {view === "period-lock"       && <PeriodLockManager />}
+      {view === "chart-of-accounts" && <ChartOfAccounts />}
 
       {view === "pdc" && <PDCRegister />}
       {view === "bounce" && <BounceTracker />}
@@ -1910,6 +1926,650 @@ function CashAccrualToggle() {
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative — confirm your method with your CA.</p>
+    </div>
+  );
+}
+
+// ── #193 MANUAL JOURNAL-ENTRY COMPOSER ──────────────────────────────────────
+// Compose a balanced double-entry voucher (debits = credits) before posting.
+// Stored as durable JV records; does not touch the cash ledger.
+function JournalEntryComposer() {
+  type Leg = { id: string; account: string; debit: string; credit: string };
+  type JV = { id: string; voucherNo: string; date: string; narration: string; legs: { account: string; debit: number; credit: number }[]; total: number };
+  const [journals, setJournals] = useFeatureState<JV[]>("txn-manual-journals", []);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [narration, setNarration] = useState("");
+  const [legs, setLegs] = useState<Leg[]>([
+    { id: generateId(), account: "", debit: "", credit: "" },
+    { id: generateId(), account: "", debit: "", credit: "" },
+  ]);
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const totalDr = legs.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+  const totalCr = legs.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+  const balanced = Math.abs(totalDr - totalCr) < 0.5 && totalDr > 0;
+
+  const updateLeg = (id: string, patch: Partial<Leg>) => setLegs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
+  const addLeg = () => setLegs(prev => [...prev, { id: generateId(), account: "", debit: "", credit: "" }]);
+  const removeLeg = (id: string) => setLegs(prev => prev.length > 2 ? prev.filter(l => l.id !== id) : prev);
+
+  const post = () => {
+    if (!balanced) { toast.error("Debits must equal credits and be non-zero"); return; }
+    if (legs.some(l => !l.account.trim())) { toast.error("Every leg needs an account name"); return; }
+    const voucherNo = `JV-${String(journals.length + 1).padStart(4, "0")}`;
+    setJournals(prev => [{
+      id: generateId(), voucherNo, date, narration,
+      legs: legs.map(l => ({ account: l.account.trim(), debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 })),
+      total: totalDr,
+    }, ...prev]);
+    setLegs([{ id: generateId(), account: "", debit: "", credit: "" }, { id: generateId(), account: "", debit: "", credit: "" }]);
+    setNarration("");
+    toast.success(`${voucherNo} posted · ${fc(totalDr)}`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><NotebookPen size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Manual Journal Voucher</h3></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} /></div>
+          <input value={narration} onChange={e => setNarration(e.target.value)} placeholder="Narration / being…" className={`${inp} md:col-span-2 self-end`} />
+        </div>
+        <div className="space-y-2">
+          {legs.map(l => (
+            <div key={l.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+              <input value={l.account} onChange={e => updateLeg(l.id, { account: e.target.value })} placeholder="Account / ledger" className={`${inp} md:col-span-6`} />
+              <input type="number" value={l.debit} onChange={e => updateLeg(l.id, { debit: e.target.value, credit: "" })} placeholder="Debit ₹" className={`${inp} md:col-span-2`} />
+              <input type="number" value={l.credit} onChange={e => updateLeg(l.id, { credit: e.target.value, debit: "" })} placeholder="Credit ₹" className={`${inp} md:col-span-3`} />
+              <button onClick={() => removeLeg(l.id)} className="text-[var(--color-muted)] hover:text-red-400 md:col-span-1 justify-self-end"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          <button onClick={addLeg} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">+ Add line</button>
+          <span className="text-xs tabular-nums text-[var(--color-muted)]">Dr {fc(totalDr)} · Cr {fc(totalCr)}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${balanced ? "bg-green-950/30 text-green-400" : "bg-orange-950/30 text-orange-400"}`}>{balanced ? "✓ Balanced" : `Out by ${fc(Math.abs(totalDr - totalCr))}`}</span>
+          <button onClick={post} disabled={!balanced} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 ml-auto">Post voucher</button>
+        </div>
+      </div>
+
+      {journals.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] text-sm font-semibold">Posted Journals ({journals.length})</div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {journals.map(j => (
+              <div key={j.id} className="px-5 py-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-mono font-semibold text-[var(--color-primary)]">{j.voucherNo}</span>
+                    <span className="text-[var(--color-muted)]">{j.date}</span>
+                    {j.narration && <span className="text-[var(--color-muted)] italic truncate max-w-xs">— {j.narration}</span>}
+                  </div>
+                  <button onClick={() => setJournals(prev => prev.filter(x => x.id !== j.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                </div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    {j.legs.map((leg, i) => (
+                      <tr key={i}>
+                        <td className={`py-0.5 ${leg.credit > 0 ? "pl-8 text-[var(--color-muted)]" : "font-medium"}`}>{leg.account}</td>
+                        <td className="py-0.5 text-right tabular-nums w-28">{leg.debit > 0 ? fc(leg.debit) : ""}</td>
+                        <td className="py-0.5 text-right tabular-nums w-28">{leg.credit > 0 ? fc(leg.credit) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Manual vouchers for adjustments, depreciation, provisions, and corrections. Each must balance (debits = credits). These are kept as JV records and don't move your cash/bank ledger.</p>
+    </div>
+  );
+}
+
+// ── #194 LIVE TRIAL BALANCE ─────────────────────────────────────────────────
+// Re-foots on every posting: each category's net is shown as a debit or credit
+// so total debits always equal total credits.
+function TrialBalanceView() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+
+  // Net per category: positive = inflow (credit-natured income/liability),
+  // negative = outflow (debit-natured expense). Plus a Cash/Bank control account
+  // that absorbs the net movement so the sheet self-balances.
+  const rows = useMemo(() => {
+    const net: Record<string, number> = {};
+    let cash = 0;
+    txns.forEach(t => { net[t.category] = (net[t.category] ?? 0) + t.amount; cash += t.amount; });
+    const ledgers = Object.entries(net).map(([cat, v]) => {
+      // A positive net (net inflow) lands on the credit side, a negative net
+      // (net outflow) on the debit side, so the columns mirror the cash control.
+      return { account: cat.charAt(0).toUpperCase() + cat.slice(1), debit: Math.max(0, -v), credit: Math.max(0, v) };
+    });
+    // Cash & bank control: net of all movements (a debit balance when positive).
+    ledgers.unshift({ account: "Cash & Bank (control)", debit: Math.max(0, cash), credit: Math.max(0, -cash) });
+    return ledgers;
+  }, [txns]);
+
+  const totalDr = rows.reduce((s, r) => s + r.debit, 0);
+  const totalCr = rows.reduce((s, r) => s + r.credit, 0);
+  const balanced = Math.abs(totalDr - totalCr) < 1;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total Debits", value: fc(totalDr), color: "text-[var(--color-text)]" },
+          { label: "Total Credits", value: fc(totalCr), color: "text-[var(--color-text)]" },
+          { label: "Tie-out", value: balanced ? "✓ Balanced" : `Off ${fc(Math.abs(totalDr - totalCr))}`, color: balanced ? "text-green-400" : "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-[var(--color-border)]"><Calculator size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Trial Balance (live)</span></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Ledger account", "Debit", "Credit"].map(h => <th key={h} className={`px-5 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Ledger account" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.account} className="hover:bg-[var(--color-accent)]">
+                  <td className="px-5 py-2.5 font-medium">{r.account}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{r.debit > 0 ? fc(r.debit) : "—"}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)] font-bold">
+                <td className="px-5 py-2.5">Total</td>
+                <td className="px-5 py-2.5 text-right tabular-nums">{fc(totalDr)}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums">{fc(totalCr)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A simplified, single-entry-derived trial balance: each category nets to a debit or credit and a Cash & Bank control account absorbs the movement so the sheet ties out. For a full statutory TB, post your opening balances and manual journals first.</p>
+    </div>
+  );
+}
+
+// ── #195 DAY BOOK / CASH BOOK ───────────────────────────────────────────────
+// Chronological book of all postings for a chosen day with a running balance.
+function DayBook() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const [day, setDay] = useState(() => {
+    const dates = (store.transactions ?? []).map(t => t.date).sort();
+    return dates.length ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+  });
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  // Opening = sum of everything before the chosen day; rows = that day, ordered.
+  const opening = useMemo(() => txns.filter(t => t.date < day).reduce((s, t) => s + t.amount, 0), [txns, day]);
+  const rows = useMemo(() => txns.filter(t => t.date === day).slice().sort((a, b) => a.id.localeCompare(b.id)), [txns, day]);
+
+  let running = opening;
+  const receipts = rows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+  const payments = rows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0);
+  const closing = opening + receipts - payments;
+
+  const shift = (delta: number) => {
+    const d = new Date(day); d.setDate(d.getDate() + delta);
+    setDay(d.toISOString().slice(0, 10));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Day Book / Cash Book</span></div>
+          <button onClick={() => shift(-1)} className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"><ChevronLeft size={14} /></button>
+          <input type="date" value={day} onChange={e => setDay(e.target.value)} className={inp} />
+          <button onClick={() => shift(1)} className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"><ChevronRight size={14} /></button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Opening balance", value: fc(opening), color: opening >= 0 ? "text-[var(--color-text)]" : "text-red-400" },
+          { label: "Receipts (Dr)", value: fc(receipts), color: "text-green-400" },
+          { label: "Payments (Cr)", value: fc(payments), color: "text-red-400" },
+          { label: "Closing balance", value: fc(closing), color: closing >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No entries on {day}. Use the arrows or date picker to find a day with postings.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Particulars", "Receipt", "Payment", "Running balance"].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Particulars" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(t => {
+                  running += t.amount;
+                  return (
+                    <tr key={t.id} className="hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-2.5"><span className="font-medium">{t.description}</span>{t.counterparty && <span className="text-[var(--color-muted)] text-xs"> · {t.counterparty}</span>}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "—"}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${running >= 0 ? "" : "text-red-400"}`}>{fc(running)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A single-day book showing the opening balance carried forward, every receipt and payment, and the running balance after each line.</p>
+    </div>
+  );
+}
+
+// ── #196 PARTY LEDGER ───────────────────────────────────────────────────────
+// Per-counterparty statement of account with a running balance.
+function PartyLedger() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const [party, setParty] = useState("");
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const parties = useMemo(() => {
+    const map: Record<string, number> = {};
+    txns.forEach(t => { if (t.counterparty) map[t.counterparty] = (map[t.counterparty] ?? 0) + 1; });
+    return Object.keys(map).sort((a, b) => a.localeCompare(b));
+  }, [txns]);
+
+  const rows = useMemo(() => party ? txns.filter(t => t.counterparty === party).slice().sort((a, b) => a.date.localeCompare(b.date)) : [], [txns, party]);
+  const totalDebit = rows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0);
+  const totalCredit = rows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+  const closing = totalCredit - totalDebit;
+  let running = 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><BookText size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Party / Counterparty Ledger</h3></div>
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Select a party</label>
+        <select value={party} onChange={e => setParty(e.target.value)} className={inp}>
+          <option value="">— select counterparty —</option>
+          {parties.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+
+      {party && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total received", value: fc(totalCredit), color: "text-green-400" },
+              { label: "Total paid", value: fc(totalDebit), color: "text-red-400" },
+              { label: "Net balance", value: fc(closing), color: closing >= 0 ? "text-green-400" : "text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Particulars", "Debit", "Credit", "Balance"].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Date" || h === "Particulars" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(t => {
+                  running += t.amount;
+                  return (
+                    <tr key={t.id} className="hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums whitespace-nowrap">{t.date}</td>
+                      <td className="px-4 py-2.5"><span className="font-medium">{t.description}</span><span className={`ml-2 text-[9px] px-1 py-0.5 rounded border ${CAT_COLOR[t.category]}`}>{t.category}</span></td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "—"}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${running >= 0 ? "" : "text-red-400"}`}>{fc(running)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {!party && <p className="text-xs text-[var(--color-muted)]">Pick a counterparty to see their full statement of account with a running balance — handy for sending ledger confirmations.</p>}
+    </div>
+  );
+}
+
+// ── #197 OPENING-BALANCE SETUP ──────────────────────────────────────────────
+// Record per-bank-account opening balances at the start of the period and see
+// the implied current balance after booked transactions.
+function OpeningBalanceSetup() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const accounts = store.bankAccounts;
+  const fc = formatCurrency;
+  const [openings, setOpenings] = useFeatureState<Record<string, number>>("txn-opening-balances", {});
+  const [asOf, setAsOf] = useFeatureState<string>("txn-opening-asof", new Date().toISOString().slice(0, 10));
+
+  const setOpening = (id: string, value: string) => setOpenings(prev => ({ ...prev, [id]: parseFloat(value) || 0 }));
+
+  const movement = useMemo(() => {
+    const m: Record<string, number> = {};
+    txns.forEach(t => { if (t.date >= asOf) m[t.bankAccountId] = (m[t.bankAccountId] ?? 0) + t.amount; });
+    return m;
+  }, [txns, asOf]);
+
+  const totalOpening = accounts.reduce((s, a) => s + (openings[a.id] ?? 0), 0);
+  const totalCurrent = accounts.reduce((s, a) => s + (openings[a.id] ?? 0) + (movement[a.id] ?? 0), 0);
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Opening Balance Setup</span></div>
+          <label className="text-xs text-[var(--color-muted)] ml-auto">Opening as of</label>
+          <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {accounts.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Wallet size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No bank accounts yet. Add an account from the Dashboard, then set its opening balance here.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Account", "Opening balance (₹)", "Movement since", "Current balance"].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Account" ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {accounts.map(a => {
+                const op = openings[a.id] ?? 0;
+                const mv = movement[a.id] ?? 0;
+                const cur = op + mv;
+                return (
+                  <tr key={a.id} className="hover:bg-[var(--color-accent)]">
+                    <td className="px-4 py-2.5 font-medium">{a.name}</td>
+                    <td className="px-4 py-2.5 text-right"><input type="number" value={openings[a.id] ?? ""} onChange={e => setOpening(a.id, e.target.value)} placeholder="0" className={`${inp} text-right max-w-[160px] ml-auto`} /></td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${mv >= 0 ? "text-green-400" : "text-red-400"}`}>{mv >= 0 ? "+" : ""}{fc(mv)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${cur >= 0 ? "" : "text-red-400"}`}>{fc(cur)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)] font-bold">
+                <td className="px-4 py-2.5">Total</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fc(totalOpening)}</td>
+                <td className="px-4 py-2.5"></td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fc(totalCurrent)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Enter the balance each account held on your chosen start date (e.g. when migrating from Tally). The current balance adds every booked transaction dated on/after that date. Values are saved and synced.</p>
+    </div>
+  );
+}
+
+// ── #198 WRITE-OFF / BAD-DEBT REGISTER ──────────────────────────────────────
+// Record amounts written off (bad debts, short receipts, discounts) against a
+// party with a reason; track the cumulative impact.
+function WriteOffComposer() {
+  const { store } = useApp();
+  type Reason = "bad_debt" | "short_receipt" | "discount" | "rounding" | "other";
+  type WriteOff = { id: string; date: string; party: string; amount: number; reason: Reason; notes: string };
+  const REASONS: Record<Reason, string> = {
+    bad_debt: "Bad debt", short_receipt: "Short receipt", discount: "Discount allowed", rounding: "Rounding off", other: "Other",
+  };
+  const [records, setRecords] = useFeatureState<WriteOff[]>("txn-write-offs", []);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [party, setParty] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState<Reason>("bad_debt");
+  const [notes, setNotes] = useState("");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const parties = useMemo(() => {
+    const set = new Set<string>();
+    (store.transactions ?? []).forEach(t => { if (t.counterparty) set.add(t.counterparty); });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [store.transactions]);
+
+  const add = () => {
+    const amt = parseFloat(amount);
+    if (!party.trim() || !amt || amt <= 0) { toast.error("Party and a positive amount are required"); return; }
+    setRecords(prev => [{ id: generateId(), date, party: party.trim(), amount: amt, reason, notes: notes.trim() }, ...prev]);
+    setParty(""); setAmount(""); setNotes("");
+    toast.success(`Wrote off ${fc(amt)} · ${REASONS[reason]}`);
+  };
+
+  const total = records.reduce((s, r) => s + r.amount, 0);
+  const byReason = useMemo(() => {
+    const m: Record<string, number> = {};
+    records.forEach(r => { m[r.reason] = (m[r.reason] ?? 0) + r.amount; });
+    return m;
+  }, [records]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total written off", value: fc(total), color: "text-red-400" },
+          { label: "Bad debts", value: fc(byReason.bad_debt ?? 0), color: "text-orange-400" },
+          { label: "Entries", value: records.length.toString(), color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Eraser size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Record a Write-Off</h3></div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party *" list="writeoff-parties" className={inp} />
+          <datalist id="writeoff-parties">{parties.map(p => <option key={p} value={p} />)}</datalist>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
+          <select value={reason} onChange={e => setReason(e.target.value as Reason)} className={inp}>
+            {(Object.entries(REASONS) as [Reason, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes" className={`${inp} md:col-span-2`} />
+        </div>
+        <button onClick={add} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Write off</button>
+      </div>
+
+      {records.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Eraser size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No write-offs recorded. Use this to track irrecoverable receivables, discounts allowed, and rounding differences.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Party", "Reason", "Notes", "Amount", ""].map(h => <th key={h} className={`px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Amount" ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {records.map(r => (
+                <tr key={r.id} className="hover:bg-[var(--color-accent)]">
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{r.date}</td>
+                  <td className="px-4 py-2.5 font-medium">{r.party}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{REASONS[r.reason]}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[200px] truncate">{r.notes || "—"}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-red-400">{fc(r.amount)}</td>
+                  <td className="px-4 py-2.5 text-right"><button onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A register of amounts written off the books — bad debts, short receipts, discounts, and rounding. Discuss bad-debt deductibility and GST credit-note treatment with your CA before claiming.</p>
+    </div>
+  );
+}
+
+// ── #199 PERIOD-LOCK MANAGER ────────────────────────────────────────────────
+// Lock accounting periods up to a cut-off date; flag any transactions that fall
+// inside a locked period as needing a reversal rather than an edit.
+function PeriodLockManager() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const fc = formatCurrency;
+  const [lockedUpto, setLockedUpto] = useFeatureState<string>("txn-period-lock-upto", "");
+  const [draft, setDraft] = useState(lockedUpto);
+
+  const lockedTxns = useMemo(() => lockedUpto ? txns.filter(t => t.date <= lockedUpto) : [], [txns, lockedUpto]);
+  const openTxns = useMemo(() => lockedUpto ? txns.filter(t => t.date > lockedUpto) : txns, [txns, lockedUpto]);
+  const lockedValue = lockedTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const lock = () => {
+    if (!draft) { toast.error("Pick a lock-up-to date"); return; }
+    setLockedUpto(draft);
+    toast.success(`Period locked up to ${draft}`);
+  };
+  const unlock = () => { setLockedUpto(""); setDraft(""); toast.success("Period lock removed"); };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><Lock size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Period Lock</h3></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs text-[var(--color-muted)]">Lock all entries up to and including</label>
+          <input type="date" value={draft} onChange={e => setDraft(e.target.value)} className={inp} />
+          <button onClick={lock} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Lock period</button>
+          {lockedUpto && <button onClick={unlock} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-4 py-2 rounded-lg hover:text-[var(--color-text)]">Unlock</button>}
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border text-sm flex items-center gap-3 ${lockedUpto ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <Lock size={16} className={lockedUpto ? "text-orange-400" : "text-green-400"} />
+        {lockedUpto
+          ? <span className="text-orange-400 font-medium">Books are locked through <span className="tabular-nums">{lockedUpto}</span>. Entries on or before this date should be corrected with a reversing journal, not edited in place.</span>
+          : <span className="text-green-400 font-medium">No period lock is active — all transactions are open for editing.</span>}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Locked entries", value: lockedTxns.length.toString(), color: "text-orange-400" },
+          { label: "Value locked", value: fc(lockedValue), color: "text-[var(--color-text)]" },
+          { label: "Open entries", value: openTxns.length.toString(), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A soft lock and indicator for closed periods. It marks which entries sit inside a closed period so you and your CA treat post-close changes as reversals with an audit trail, in line with the MCA audit-trail expectation.</p>
+    </div>
+  );
+}
+
+// ── #200 CHART OF ACCOUNTS MANAGER ──────────────────────────────────────────
+// Maintain a chart of accounts grouped under the five primary heads, with live
+// usage counts mapped from the transaction categories.
+function ChartOfAccounts() {
+  const { store } = useApp();
+  const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
+  type Group = "asset" | "liability" | "equity" | "income" | "expense";
+  type Account = { id: string; code: string; name: string; group: Group };
+  const GROUPS: Record<Group, string> = { asset: "Assets", liability: "Liabilities", equity: "Equity", income: "Income", expense: "Expenses" };
+  // Seed from the transaction categories so the CoA is grounded in real data.
+  const seed: Account[] = [
+    { id: "seed-cash", code: "1000", name: "Cash & Bank", group: "asset" },
+    { id: "seed-rev", code: "4000", name: "Revenue", group: "income" },
+    { id: "seed-exp", code: "5000", name: "Expense", group: "expense" },
+    { id: "seed-pay", code: "5100", name: "Payroll", group: "expense" },
+    { id: "seed-loan", code: "2000", name: "Loan", group: "liability" },
+    { id: "seed-tax", code: "2100", name: "Tax payable", group: "liability" },
+  ];
+  const [accounts, setAccounts] = useFeatureState<Account[]>("txn-chart-of-accounts", seed);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [group, setGroup] = useState<Group>("expense");
+  const fc = formatCurrency;
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  // Map a transaction category onto its account name for usage stats.
+  const catToName: Record<string, string> = { revenue: "Revenue", expense: "Expense", payroll: "Payroll", loan: "Loan", tax: "Tax payable", transfer: "Cash & Bank" };
+  const usage = useMemo(() => {
+    const m: Record<string, { count: number; value: number }> = {};
+    txns.forEach(t => {
+      const nm = catToName[t.category] ?? t.category;
+      if (!m[nm]) m[nm] = { count: 0, value: 0 };
+      m[nm].count += 1; m[nm].value += Math.abs(t.amount);
+    });
+    return m;
+  }, [txns]);
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Account name required"); return; }
+    setAccounts(prev => [...prev, { id: generateId(), code: code.trim() || "—", name: name.trim(), group }]);
+    setCode(""); setName("");
+    toast.success(`Added "${name.trim()}" under ${GROUPS[group]}`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-3"><ListTree size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Chart of Accounts</h3></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="Code (e.g. 5200)" className={inp} />
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Account name *" className={`${inp} md:col-span-2`} />
+          <select value={group} onChange={e => setGroup(e.target.value as Group)} className={inp}>
+            {(Object.entries(GROUPS) as [Group, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <button onClick={add} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add account</button>
+      </div>
+
+      {(Object.keys(GROUPS) as Group[]).map(g => {
+        const list = accounts.filter(a => a.group === g);
+        if (list.length === 0) return null;
+        return (
+          <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="px-5 py-2.5 border-b border-[var(--color-border)] text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">{GROUPS[g]}</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {list.map(a => {
+                    const u = usage[a.name];
+                    return (
+                      <tr key={a.id} className="hover:bg-[var(--color-accent)]">
+                        <td className="px-5 py-2.5 font-mono text-xs text-[var(--color-muted)] w-20">{a.code}</td>
+                        <td className="px-5 py-2.5 font-medium">{a.name}</td>
+                        <td className="px-5 py-2.5 text-right text-xs text-[var(--color-muted)] tabular-nums">{u ? `${u.count} txns · ${fc(u.value)}` : "unused"}</td>
+                        <td className="px-5 py-2.5 text-right w-10"><button onClick={() => setAccounts(prev => prev.filter(x => x.id !== a.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-[var(--color-muted)]">A starter chart of accounts grouped under the five primary heads. Usage counts are mapped live from your transaction categories so you can see which ledgers are active. Saved and synced across devices.</p>
     </div>
   );
 }
