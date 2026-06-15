@@ -11,6 +11,7 @@ import {
   Layers, LineChart, HandCoins, Users, Scissors, Plus, Trash2, Mail,
   Gauge, ShieldAlert, CalendarClock, Percent, TrendingUp, ListChecks, Tag, Gavel,
   Activity, PieChart, Trophy, History, FlaskConical, Save,
+  Printer, Banknote, IndianRupee, UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -127,7 +128,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -249,6 +250,10 @@ export default function CollectionsPage() {
               { id: "defaulters",    label: "Defaulters",     icon: <Trophy size={10} /> },
               { id: "behavior",      label: "Behavior",       icon: <History size={10} /> },
               { id: "abtest",        label: "A/B Templates",  icon: <FlaskConical size={10} /> },
+              { id: "letters",       label: "Letter Series",  icon: <Printer size={10} /> },
+              { id: "interestinv",   label: "Interest Invoice", icon: <IndianRupee size={10} /> },
+              { id: "nach",          label: "NACH Mandates",  icon: <Banknote size={10} /> },
+              { id: "byrep",         label: "Ageing by Rep",  icon: <UserCheck size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -513,6 +518,10 @@ export default function CollectionsPage() {
       {view === "defaulters" && <TopDefaulters />}
       {view === "behavior" && <PaymentBehavior />}
       {view === "abtest" && <ReminderAbTester />}
+      {view === "letters" && <CollectionLetterSeries />}
+      {view === "interestinv" && <InterestInvoiceGenerator />}
+      {view === "nach" && <NachMandateTracker />}
+      {view === "byrep" && <AgeingBySalesperson />}
     </div>
   );
 }
@@ -3003,6 +3012,392 @@ function ReminderAbTester() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">A simple, honest A/B log: record which message you sent and whether payment followed. The paid-rate per variant tells you which tone collects better. Sample sizes are small, so treat early winners as directional.</p>
+    </div>
+  );
+}
+
+// ── #76 COLLECTION LETTER SERIES GENERATOR ──────────────────────────────────
+// Pick an overdue customer, generate the right escalation letter (reminder →
+// second notice → final demand) based on days overdue, and print/copy it.
+const LETTER_STAGES = [
+  { id: "reminder", label: "1 · Reminder",     minDays: 1,  tone: (n: string, amt: string, d: number, ref: string) => `Dear ${n},\n\nThis is a friendly reminder that invoice ${ref} for ${amt} fell due ${d} day(s) ago and remains unpaid. We would appreciate settlement at your earliest convenience.\n\nIf payment has already been made, please disregard this note.\n\nRegards,\nAccounts Team` },
+  { id: "second",   label: "2 · Second notice", minDays: 30, tone: (n: string, amt: string, d: number, ref: string) => `Dear ${n},\n\nDespite our earlier reminder, invoice ${ref} for ${amt} is now ${d} days overdue. We request that you clear this balance within 7 days to keep your account in good standing.\n\nPlease contact us immediately if there is any dispute or difficulty.\n\nRegards,\nAccounts Team` },
+  { id: "final",    label: "3 · Final demand",  minDays: 60, tone: (n: string, amt: string, d: number, ref: string) => `Dear ${n},\n\nFINAL DEMAND FOR PAYMENT\n\nInvoice ${ref} for ${amt} is ${d} days overdue. This is our final request before we escalate recovery, which may include suspension of services and referral for legal action.\n\nKindly remit the full amount within 7 days of this letter.\n\nRegards,\nAccounts Team` },
+] as const;
+
+function CollectionLetterSeries() {
+  const { store } = useApp();
+  const overdue = useMemo(() => (store.invoices ?? [])
+    .filter(i => i.status !== "paid")
+    .map(i => ({ id: i.id, ref: i.invoiceNumber ?? i.id.slice(0, 8), customer: i.customer, amount: i.amount, days: Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) }))
+    .filter(i => i.days > 0)
+    .sort((a, b) => b.days - a.days), [store.invoices]);
+
+  const [selId, setSelId] = useState("");
+  const [stage, setStage] = useState<typeof LETTER_STAGES[number]["id"]>("reminder");
+  const sel = overdue.find(o => o.id === selId) ?? null;
+  const stageDef = LETTER_STAGES.find(s => s.id === stage)!;
+  const suggested = !sel ? "reminder" : sel.days >= 60 ? "final" : sel.days >= 30 ? "second" : "reminder";
+
+  const letter = sel ? stageDef.tone(sel.customer, formatCurrency(sel.amount), sel.days, sel.ref) : "";
+
+  const copy = () => { navigator.clipboard.writeText(letter); toast.success("Letter copied"); };
+  const print = () => {
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Allow pop-ups to print"); return; }
+    w.document.write(`<pre style="font-family:Georgia,serif;font-size:14px;white-space:pre-wrap;padding:40px;line-height:1.6">${letter.replace(/</g, "&lt;")}</pre>`);
+    w.document.close(); w.print();
+    toast.success("Print dialog opened");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Printer size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Collection letter series</span>
+        </div>
+        {overdue.length === 0 ? (
+          <EmptyState icon={CheckCircle2} title="Nothing overdue" description="No overdue invoices to chase. Generate letters once invoices cross their due date." />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Overdue invoice</label>
+                <select value={selId} onChange={e => { setSelId(e.target.value); const o = overdue.find(x => x.id === e.target.value); if (o) setStage(o.days >= 60 ? "final" : o.days >= 30 ? "second" : "reminder"); }}
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
+                  <option value="">Select…</option>
+                  {overdue.map(o => <option key={o.id} value={o.id}>{o.customer} · {formatCurrency(o.amount)} · {o.days}d</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Stage</label>
+                <div className="flex gap-2">
+                  {LETTER_STAGES.map(s => (
+                    <button key={s.id} onClick={() => setStage(s.id)}
+                      className={`flex-1 text-xs px-2 py-2 rounded-lg border font-medium transition-all ${stage === s.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {sel && suggested !== stage && (
+              <p className="text-[11px] text-yellow-400">Suggested stage for {sel.days} days overdue: <span className="font-semibold">{LETTER_STAGES.find(s => s.id === suggested)!.label}</span></p>
+            )}
+            {sel && (
+              <>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+                  <pre className="text-xs text-[var(--color-text)] whitespace-pre-wrap font-sans leading-relaxed">{letter}</pre>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={print} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-4 py-2 rounded-lg text-sm hover:opacity-90"><Printer size={13} /> Print</button>
+                  <button onClick={copy} className="flex items-center gap-1.5 border border-[var(--color-border)] px-4 py-2 rounded-lg text-sm font-medium hover:border-[var(--color-primary)]/40"><Copy size={13} /> Copy</button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A staged letter series escalates pressure honestly: reminder, second notice, then final demand. The stage is pre-selected from how many days the invoice is overdue.</p>
+    </div>
+  );
+}
+
+// ── #77 INTEREST-ON-DELAYED-PAYMENT INVOICE ─────────────────────────────────
+// Compute interest on an overdue invoice (MSME Act default 18% p.a. or custom)
+// and generate a debit-note line ready to bill the customer.
+function InterestInvoiceGenerator() {
+  const { store } = useApp();
+  const overdue = useMemo(() => (store.invoices ?? [])
+    .filter(i => i.status !== "paid")
+    .map(i => ({ id: i.id, ref: i.invoiceNumber ?? i.id.slice(0, 8), customer: i.customer, amount: i.amount, days: Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) }))
+    .filter(i => i.days > 0)
+    .sort((a, b) => b.days - a.days), [store.invoices]);
+
+  const [selId, setSelId] = useState("");
+  const [rate, setRate] = useState("18");
+  const [saved, setSaved] = useFeatureState<{ id: string; customer: string; ref: string; principal: number; days: number; rate: number; interest: number; createdAt: string }[]>("col-interest-invoices", []);
+
+  const sel = overdue.find(o => o.id === selId) ?? null;
+  const ratePct = parseFloat(rate) || 0;
+  const interest = sel ? Math.round((sel.amount * (ratePct / 100) * sel.days) / 365) : 0;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const generate = () => {
+    if (!sel || interest <= 0) { toast.error("Pick an overdue invoice"); return; }
+    setSaved([{ id: crypto.randomUUID(), customer: sel.customer, ref: sel.ref, principal: sel.amount, days: sel.days, rate: ratePct, interest, createdAt: new Date().toISOString() }, ...saved]);
+    toast.success(`Interest debit note for ${formatCurrency(interest)} generated`);
+  };
+  const remove = (id: string) => setSaved(saved.filter(s => s.id !== id));
+  const totalBilled = saved.reduce((s, r) => s + r.interest, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <IndianRupee size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Interest on delayed payment</span>
+        </div>
+        {overdue.length === 0 ? (
+          <EmptyState icon={CheckCircle2} title="No overdue invoices" description="Interest accrues only on invoices past their due date." />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Overdue invoice</label>
+                <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
+                  <option value="">Select…</option>
+                  {overdue.map(o => <option key={o.id} value={o.id}>{o.customer} · {formatCurrency(o.amount)} · {o.days}d</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Annual rate (%)</label>
+                <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={inp} />
+              </div>
+            </div>
+            {sel && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)]">Principal</p><p className="text-sm font-bold">{formatCurrency(sel.amount)}</p></div>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)]">Days overdue</p><p className="text-sm font-bold">{sel.days}</p></div>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)]">Interest due</p><p className="text-sm font-bold text-[var(--color-primary)]">{formatCurrency(interest)}</p></div>
+              </div>
+            )}
+            <button onClick={generate} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-4 py-2 rounded-lg text-sm hover:opacity-90"><Plus size={13} /> Generate debit note</button>
+          </>
+        )}
+      </div>
+
+      {saved.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold">Generated interest notes</span>
+            <span className="text-xs text-[var(--color-muted)]">Total billable: <span className="font-bold text-[var(--color-primary)]">{formatCurrency(totalBilled)}</span></span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {saved.map(r => (
+              <div key={r.id} className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="text-sm font-medium">{r.customer} <span className="text-[var(--color-muted)] text-xs">· {r.ref}</span></p>
+                  <p className="text-[11px] text-[var(--color-muted)]">{formatCurrency(r.principal)} · {r.days}d @ {r.rate}% · {format(parseISO(r.createdAt), "d MMM")}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-[var(--color-primary)]">{formatCurrency(r.interest)}</span>
+                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Simple interest = principal × rate × days ÷ 365. The MSMED Act allows up to 3× the RBI bank rate; 18% p.a. is a common default. Confirm your contract terms before billing.</p>
+    </div>
+  );
+}
+
+// ── #78 NACH / AUTO-DEBIT MANDATE TRACKER ───────────────────────────────────
+// Track e-NACH mandates per customer: registration status, cap, next debit.
+type NachRow = {
+  id: string;
+  customer: string;
+  umrn: string;
+  maxAmount: number;
+  frequency: "monthly" | "as-presented" | "quarterly";
+  nextDebit: string;
+  status: "pending" | "active" | "rejected" | "cancelled";
+  createdAt: string;
+};
+
+function NachMandateTracker() {
+  const { store } = useApp();
+  const customers = Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean)));
+  const [rows, setRows] = useFeatureState<NachRow[]>("col-nach-mandates", []);
+
+  const [customer, setCustomer] = useState("");
+  const [umrn, setUmrn] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [frequency, setFrequency] = useState<NachRow["frequency"]>("monthly");
+  const [nextDebit, setNextDebit] = useState(format(addDays(new Date(), 30), "yyyy-MM-dd"));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const add = () => {
+    const amt = parseFloat(maxAmount) || 0;
+    if (!customer.trim() || amt <= 0) { toast.error("Pick a customer and a debit cap"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), umrn: umrn.trim(), maxAmount: amt, frequency, nextDebit, status: "pending", createdAt: new Date().toISOString() }, ...rows]);
+    setUmrn(""); setMaxAmount("");
+    toast.success("Mandate logged as pending registration");
+  };
+  const setStatus = (id: string, status: NachRow["status"]) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const active = rows.filter(r => r.status === "active").length;
+  const coveredValue = rows.filter(r => r.status === "active").reduce((s, r) => s + r.maxAmount, 0);
+  const STATUS_CLS: Record<NachRow["status"], string> = {
+    pending: "bg-yellow-950/30 text-yellow-400", active: "bg-green-950/30 text-green-400",
+    rejected: "bg-red-950/30 text-red-400", cancelled: "bg-[var(--color-accent)] text-[var(--color-muted)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Banknote size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Register an e-NACH / auto-debit mandate</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            {customers.length > 0 ? (
+              <select value={customer} onChange={e => setCustomer(e.target.value)} className={inp}>
+                <option value="">Select…</option>
+                {customers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer name" className={inp} />}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">UMRN / ref</label>
+            <input value={umrn} onChange={e => setUmrn(e.target.value)} placeholder="optional" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Debit cap (₹)</label>
+            <input type="number" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} placeholder="0" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={frequency} onChange={e => setFrequency(e.target.value as NachRow["frequency"])} className={inp}>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="as-presented">As presented</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Next debit</label>
+            <input type="date" value={nextDebit} onChange={e => setNextDebit(e.target.value)} className={inp} />
+          </div>
+          <div className="flex items-end">
+            <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90"><Plus size={13} /> Add mandate</button>
+          </div>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold">Mandates</span>
+            <span className="text-xs text-[var(--color-muted)]">{active} active · covering {formatCurrency(coveredValue)}/cycle</span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <div key={r.id} className="flex items-center justify-between py-2.5 gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium">{r.customer} {r.umrn && <span className="text-[var(--color-muted)] text-xs">· {r.umrn}</span>}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">{formatCurrency(r.maxAmount)} · {r.frequency} · next {format(parseISO(r.nextDebit), "d MMM yyyy")}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize ${STATUS_CLS[r.status]}`}>{r.status}</span>
+                  {r.status === "pending" && <button onClick={() => setStatus(r.id, "active")} className="text-[11px] text-green-400 hover:underline">Activate</button>}
+                  {r.status === "pending" && <button onClick={() => setStatus(r.id, "rejected")} className="text-[11px] text-red-400 hover:underline">Reject</button>}
+                  {r.status === "active" && <button onClick={() => setStatus(r.id, "cancelled")} className="text-[11px] text-[var(--color-muted)] hover:underline">Cancel</button>}
+                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Track e-NACH/auto-debit mandates so recurring AR collects itself. Status reflects bank registration; this log is your control sheet, not the NPCI register.</p>
+    </div>
+  );
+}
+
+// ── #79 AGEING BY SALESPERSON ───────────────────────────────────────────────
+// Tag each customer with an account owner, then roll open AR up by owner so you
+// can hold the right rep accountable for their book's ageing.
+function AgeingBySalesperson() {
+  const { store } = useApp();
+  const customers = useMemo(() => Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean))), [store.invoices]);
+  const [owners, setOwners] = useFeatureState<Record<string, string>>("col-customer-owners", {});
+
+  const open = useMemo(() => (store.invoices ?? [])
+    .filter(i => i.status !== "paid")
+    .map(i => ({ customer: i.customer, amount: i.amount, aging: getAging(i.dueDate) })), [store.invoices]);
+
+  type Bucket = { total: number; current: number; b1: number; b2: number; b3: number; b4: number };
+  const byRep = useMemo(() => {
+    const map: Record<string, Bucket> = {};
+    open.forEach(o => {
+      const rep = owners[o.customer] || "Unassigned";
+      if (!map[rep]) map[rep] = { total: 0, current: 0, b1: 0, b2: 0, b3: 0, b4: 0 };
+      const m = map[rep];
+      m.total += o.amount;
+      if (o.aging === "current") m.current += o.amount;
+      else if (o.aging === "1-30") m.b1 += o.amount;
+      else if (o.aging === "31-60") m.b2 += o.amount;
+      else if (o.aging === "61-90") m.b3 += o.amount;
+      else m.b4 += o.amount;
+    });
+    return Object.entries(map).map(([rep, b]) => ({ rep, ...b })).sort((a, b) => b.total - a.total);
+  }, [open, owners]);
+
+  const grand = byRep.reduce((s, r) => s + r.total, 0);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <UserCheck size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Assign account owners</span>
+        </div>
+        {customers.length === 0 ? (
+          <EmptyState icon={Users} title="No customers yet" description="Add invoices to assign account owners and age AR by rep." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {customers.map(c => (
+              <div key={c} className="flex items-center justify-between gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                <span className="text-xs truncate">{c}</span>
+                <input value={owners[c] ?? ""} onChange={e => setOwners({ ...owners, [c]: e.target.value })} placeholder="Sales rep" className={inp} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {byRep.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 overflow-x-auto">
+          <span className="text-sm font-semibold">Open AR ageing by rep</span>
+          <table className="w-full mt-3">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                {["Rep", "Current", "1–30", "31–60", "61–90", "90+", "Total"].map(h => (
+                  <th key={h} className={`text-xs font-semibold text-[var(--color-muted)] px-3 py-2 ${h === "Rep" ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {byRep.map(r => (
+                <tr key={r.rep} className="border-b border-[var(--color-border)]/50">
+                  <td className="text-xs font-medium px-3 py-2">{r.rep}</td>
+                  <td className="text-xs text-right px-3 py-2">{formatCurrency(r.current)}</td>
+                  <td className="text-xs text-right px-3 py-2 text-yellow-400">{formatCurrency(r.b1)}</td>
+                  <td className="text-xs text-right px-3 py-2 text-orange-400">{formatCurrency(r.b2)}</td>
+                  <td className="text-xs text-right px-3 py-2 text-red-400">{formatCurrency(r.b3)}</td>
+                  <td className="text-xs text-right px-3 py-2 text-red-300 font-semibold">{formatCurrency(r.b4)}</td>
+                  <td className="text-xs text-right px-3 py-2 font-bold">{formatCurrency(r.total)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="text-xs font-bold px-3 py-2">All reps</td>
+                <td colSpan={5} />
+                <td className="text-xs text-right px-3 py-2 font-bold text-[var(--color-primary)]">{formatCurrency(grand)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Tag each customer with their sales rep, then see whose book is carrying the oldest AR. Unassigned customers roll up together until you assign an owner.</p>
     </div>
   );
 }
