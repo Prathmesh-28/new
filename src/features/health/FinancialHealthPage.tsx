@@ -96,6 +96,10 @@ export default function FinancialHealthPage() {
     ["health-growth-quality",  "Growth Quality", GitCompareArrows],
     ["health-expense-discipline","Expense Discipline", Banknote],
     ["health-resilience",      "Resilience",     Anchor],
+    ["health-quick-ratio-gauge","Quick Ratio",   Gauge],
+    ["health-debt-burden",     "Debt Burden",    Scale],
+    ["health-cash-buffer",     "Cash Buffer",    PiggyBank],
+    ["health-revenue-diversification","Revenue Mix", Users],
   ] as const);
 
   return (
@@ -264,6 +268,18 @@ export default function FinancialHealthPage() {
 
       {/* #167 Overall Resilience Index */}
       <ResilienceIndex snap={snap} />
+
+      {/* #168 Quick-Ratio Gauge */}
+      <QuickRatioGauge snap={snap} />
+
+      {/* #169 Debt-Burden Index */}
+      <DebtBurdenIndex snap={snap} />
+
+      {/* #170 Cash-Buffer Months */}
+      <CashBufferMonths snap={snap} />
+
+      {/* #171 Revenue-Diversification Index */}
+      <RevenueDiversification snap={snap} />
     </div>
   );
 }
@@ -1287,6 +1303,230 @@ function ResilienceIndex({ snap }: { snap: FinancialSnapshot }) {
           ))}
         </div>
       </div>
+    </section>
+  );
+}
+
+// ── #168 QUICK-RATIO GAUGE — acid-test liquidity on a banded dial ─────────────────
+// The quick (acid-test) ratio strips inventory out of current assets to ask the
+// harshest near-term question: can you cover short-term liabilities from cash and
+// receivables alone? Plotted on a 0–2x dial with the standard 1.0x safety bar.
+function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const [showWhy, setShowWhy] = useState(false);
+  const q = snap.quickRatio;
+  const pct = q === null ? 0 : Math.max(0, Math.min(100, (q / 2) * 100));
+  const band = q === null
+    ? { label: "No liability data yet", color: "text-[var(--color-muted)]", bar: "bg-[var(--color-border)]" }
+    : q >= 1
+    ? { label: "Healthy — can settle short-term dues without selling stock", color: "text-green-400", bar: "bg-green-500" }
+    : q >= 0.7
+    ? { label: "Tight — a slow collection month could squeeze you", color: "text-yellow-400", bar: "bg-yellow-500" }
+    : { label: "Strained — liquid assets fall short of near-term claims", color: "text-red-400", bar: "bg-red-500" };
+
+  return (
+    <section id="health-quick-ratio-gauge" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-sm font-semibold flex items-center gap-2"><Gauge size={15} className="text-[var(--color-primary)]" /> Quick-Ratio Gauge</p>
+        <button onClick={() => setShowWhy(v => !v)} className="text-[10px] text-[var(--color-primary)] hover:underline">{showWhy ? "Hide" : "Why it matters"}</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">
+        The acid test: cash plus receivables versus current liabilities, with inventory excluded. Lenders read it as your ability to pay this quarter's bills under stress.
+      </p>
+      {showWhy && (
+        <p className="text-[11px] text-[var(--color-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-2.5 mb-4">
+          Inventory can take weeks to sell and may fetch less than its book value, so banks discount it entirely when judging short-term survival. A quick ratio below 1.0x means you would need to liquidate stock or borrow to clear immediate dues.
+        </p>
+      )}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] text-[var(--color-muted)]">0x</span>
+        <span className={`text-3xl font-bold tabular-nums ${band.color}`}>{q === null ? "—" : `${q.toFixed(2)}x`}</span>
+        <span className="text-[10px] text-[var(--color-muted)]">2x+</span>
+      </div>
+      <div className="relative h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-1">
+        <div className={`h-full rounded-full transition-all ${band.bar}`} style={{ width: `${pct}%` }} />
+        <div className="absolute top-0 bottom-0 w-px bg-[var(--color-text)]/60" style={{ left: "50%" }} title="1.0x safety bar" />
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] mb-3">Marker = 1.0x safety bar</p>
+      <p className={`text-xs font-medium mb-4 ${band.color}`}>{band.label}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <MetricCard label="Quick ratio" value={q === null ? "—" : `${q.toFixed(2)}x`} target="≥ 1.0x" ok={q === null || q >= 1} />
+        <MetricCard label="Current ratio" value={snap.currentRatio === null ? "—" : `${snap.currentRatio.toFixed(2)}x`} note="incl. inventory" />
+        <MetricCard label="Cash on hand" value={formatAmount(snap.cash)} />
+      </div>
+      <button onClick={() => navigate("/working-capital")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Free up working capital <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #169 DEBT-BURDEN INDEX — how heavily debt weighs on monthly cash ──────────────
+// Blends three leverage strains — debt service as a share of revenue, DSCR headroom
+// and interest coverage — into one 0–100 burden index. High score = light burden.
+function DebtBurdenIndex({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const clampS = (v: number) => Math.max(0, Math.min(100, v));
+    const dsrPct = snap.monthlyRevenue > 0 ? (snap.monthlyDebtService / snap.monthlyRevenue) * 100 : 0;
+    // Debt-service ratio: 0% = full marks, 25%+ of revenue = zero.
+    const dsrScore = snap.monthlyDebtService === 0 ? 100 : clampS(100 - dsrPct * 4);
+    // DSCR vs 1.25x bar.
+    const dscrScore = snap.dscr === null ? 100 : clampS((snap.dscr / 1.25) * 60 + 25);
+    // Interest coverage vs 3x bar.
+    const icScore = snap.interestCoverage === null ? 100 : clampS((snap.interestCoverage / 3) * 70 + 15);
+    const score = Math.round(dsrScore * 0.4 + dscrScore * 0.35 + icScore * 0.25);
+    return { score, dsrPct, dsrScore, dscrScore, icScore };
+  }, [snap]);
+
+  const band = snap.monthlyDebtService === 0
+    ? { label: "Debt-free — no servicing burden", color: "text-green-400" }
+    : m.score >= 70
+    ? { label: "Light — debt sits comfortably within cash flow", color: "text-green-400" }
+    : m.score >= 45
+    ? { label: "Moderate — manageable but watch new borrowing", color: "text-yellow-400" }
+    : { label: "Heavy — debt is crowding out operating cash", color: "text-red-400" };
+
+  const rows: { label: string; score: number; weight: number; note: string }[] = [
+    { label: "Debt service vs revenue", score: m.dsrScore, weight: 40, note: `${m.dsrPct.toFixed(0)}% of revenue` },
+    { label: "DSCR headroom", score: m.dscrScore, weight: 35, note: snap.dscr === null ? "no debt" : `${snap.dscr.toFixed(2)}x` },
+    { label: "Interest coverage", score: m.icScore, weight: 25, note: snap.interestCoverage === null ? "no debt" : `${snap.interestCoverage.toFixed(1)}x` },
+  ];
+
+  return (
+    <section id="health-debt-burden" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={15} className="text-[var(--color-primary)]" /> Debt-Burden Index</p>
+      <p className="text-xs text-[var(--color-muted)] mb-5">
+        One number for how heavily borrowing weighs on your month, blending debt service as a share of revenue with DSCR and interest-coverage headroom. A high index means debt is light relative to the cash you generate.
+      </p>
+      <div className="flex items-center gap-6 flex-wrap">
+        <div className="shrink-0 text-center">
+          <ScoreRing score={m.score} grade={m.score >= 85 ? "A+" : m.score >= 70 ? "A" : m.score >= 55 ? "B" : m.score >= 40 ? "C" : "D"} />
+          <p className={`text-xs font-semibold mt-1 max-w-[176px] ${band.color}`}>{band.label}</p>
+        </div>
+        <div className="flex-1 min-w-[240px] space-y-3">
+          {rows.map(r => (
+            <div key={r.label}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">{r.label}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-[var(--color-muted)]">{r.note} · {r.weight}%</span>
+                  <span className={`text-xs font-bold tabular-nums ${scoreColor(r.score)}`}>{Math.round(r.score)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${barColor(r.score)}`} style={{ width: `${r.score}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button onClick={() => navigate("/debt")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-4">
+        Review the debt stack <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #170 CASH-BUFFER MONTHS — survival window at current burn ──────────────────────
+// Translates runway into the metric owners and boards actually track: how many
+// months of operating expenses sit in the bank. Banded against a 3-month resilience
+// floor and a 6-month comfort target.
+function CashBufferMonths({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    const monthlyExpense = snap.monthlyExpense;
+    const cfPositive = snap.monthlyNet >= 0;
+    const months = monthlyExpense > 0 ? snap.cash / monthlyExpense : null;
+    // Burn-based months: only the net cash outflow matters; when CF positive there is no drain.
+    const burnMonths = cfPositive ? null : snap.cash / (-snap.monthlyNet);
+    return { months, burnMonths, cfPositive, monthlyExpense };
+  }, [snap]);
+
+  const score = m.months === null ? 0 : Math.max(0, Math.min(100, (m.months / 6) * 100));
+  const band = m.months === null
+    ? { label: "No expense history yet", color: "text-[var(--color-muted)]" }
+    : m.months >= 6
+    ? { label: "Comfortable — over six months of expenses covered", color: "text-green-400" }
+    : m.months >= 3
+    ? { label: "Adequate — past the three-month resilience floor", color: "text-yellow-400" }
+    : { label: "Thin — under three months of cover is fragile", color: "text-red-400" };
+
+  return (
+    <section id="health-cash-buffer" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><PiggyBank size={15} className="text-[var(--color-primary)]" /> Cash-Buffer Months</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">
+        How many months of total operating expenses your current bank balance would cover. The board-room view of runway, banded against a three-month resilience floor and a six-month comfort target.
+      </p>
+      <div className="flex items-baseline gap-3 mb-2">
+        <span className={`text-4xl font-bold tabular-nums ${band.color}`}>{m.months === null ? "—" : m.months.toFixed(1)}</span>
+        <span className="text-xs text-[var(--color-muted)]">months of expenses in the bank</span>
+      </div>
+      <div className="relative h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-1">
+        <div className={`h-full rounded-full transition-all ${score >= 50 ? "bg-green-500" : score >= 25 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${score}%` }} />
+        <div className="absolute top-0 bottom-0 w-px bg-[var(--color-text)]/40" style={{ left: "50%" }} title="3-month floor" />
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] mb-3">Marker = 3-month floor · full bar = 6 months</p>
+      <p className={`text-xs font-medium mb-4 ${band.color}`}>{band.label}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <MetricCard label="Cash on hand" value={formatAmount(snap.cash)} />
+        <MetricCard label="Monthly expenses" value={formatAmount(m.monthlyExpense)} />
+        <MetricCard label="Months covered" value={m.months === null ? "—" : `${m.months.toFixed(1)}`} target="≥ 3" ok={m.months !== null && m.months >= 3} />
+        <MetricCard label="At current burn" value={m.cfPositive ? "CF positive" : m.burnMonths !== null ? `${m.burnMonths.toFixed(1)} mo` : "—"} ok={m.cfPositive || (m.burnMonths !== null && m.burnMonths >= 3)} />
+      </div>
+      <button onClick={() => navigate("/forecast")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
+        Project the buffer forward <ArrowRight size={11} />
+      </button>
+    </section>
+  );
+}
+
+// ── #171 REVENUE-DIVERSIFICATION INDEX — concentration risk on a 0–100 scale ───────
+// Converts the customer-revenue HHI into an intuitive diversification score and
+// flags the dependency on the single largest account. Low diversification means one
+// lost customer could break the business.
+function RevenueDiversification({ snap }: { snap: FinancialSnapshot }) {
+  const navigate = useNavigate();
+  const m = useMemo(() => {
+    // HHI ranges ~1000 (well spread) to 10000 (single customer). Invert to a score.
+    const hhi = snap.customerHhi;
+    const score = hhi <= 0 ? null : Math.max(0, Math.min(100, Math.round(100 - ((hhi - 1000) / 9000) * 100)));
+    // Effective number of customers ≈ 1 / sum(share^2) = 10000 / HHI.
+    const effective = hhi > 0 ? 10000 / hhi : null;
+    return { hhi, score, effective };
+  }, [snap]);
+
+  const band = m.score === null
+    ? { label: "No customer revenue data yet", color: "text-[var(--color-muted)]" }
+    : m.score >= 70
+    ? { label: "Well spread — no single account dominates", color: "text-green-400" }
+    : m.score >= 45
+    ? { label: "Some concentration — a few accounts carry the load", color: "text-yellow-400" }
+    : { label: "Concentrated — losing one customer would hurt badly", color: "text-red-400" };
+
+  const topOk = snap.topCustomerPct <= 30;
+
+  return (
+    <section id="health-revenue-diversification" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Users size={15} className="text-[var(--color-primary)]" /> Revenue-Diversification Index</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">
+        How evenly your revenue is spread across customers, derived from the Herfindahl concentration index. A high score means no single account can sink you; a low score is a hidden single-point-of-failure risk lenders probe for.
+      </p>
+      <div className="flex items-center gap-6 flex-wrap">
+        <div className="shrink-0 text-center">
+          <ScoreRing score={m.score ?? 0} grade={m.score === null ? "—" : m.score >= 85 ? "A+" : m.score >= 70 ? "A" : m.score >= 55 ? "B" : m.score >= 40 ? "C" : "D"} />
+          <p className={`text-xs font-semibold mt-1 max-w-[176px] ${band.color}`}>{band.label}</p>
+        </div>
+        <div className="flex-1 min-w-[240px] grid grid-cols-2 gap-3">
+          <MetricCard label="Top-customer share" value={`${snap.topCustomerPct.toFixed(0)}%`} target="≤ 30%" ok={topOk} />
+          <MetricCard label="Concentration (HHI)" value={m.hhi > 0 ? `${Math.round(m.hhi)}` : "—"} note="lower is safer" />
+          <MetricCard label="Effective customers" value={m.effective !== null ? m.effective.toFixed(1) : "—"} note="equal-weight equivalent" />
+          <MetricCard label="Diversification" value={m.score === null ? "—" : `${m.score}/100`} ok={m.score !== null && m.score >= 60} />
+        </div>
+      </div>
+      <button onClick={() => navigate("/invoices")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-4">
+        See customer revenue mix <ArrowRight size={11} />
+      </button>
     </section>
   );
 }

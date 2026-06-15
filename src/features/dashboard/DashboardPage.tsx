@@ -1548,6 +1548,230 @@ function WeekdayInflowWidget() {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD WIDGETS — 3rd pass (additive, self-contained, non-duplicate).
+// Top vendors MTD, invoice-status breakdown, 6-month burn trend, AR-vs-AP
+// balance. Each computes from the live store. Do not disturb existing widgets.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Top Vendors · this month ──────────────────────────────────────────────────
+// Largest outflow counterparties for the current month, ranked — distinct from
+// the all-time payee donut.
+function TopVendorsWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const vendors = useMemo(() => {
+    const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const byVendor: Record<string, number> = {};
+    transactions
+      .filter(t => t.amount < 0 && t.date.startsWith(monthStr))
+      .forEach(t => {
+        const key = t.counterparty || t.description || t.category || "Other";
+        byVendor[key] = (byVendor[key] ?? 0) + Math.abs(t.amount);
+      });
+    return Object.entries(byVendor)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [transactions]);
+
+  if (vendors.length === 0) return null;
+  const max = Math.max(...vendors.map(v => v.value), 1);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Building2 size={13} className="text-[var(--color-primary)]" />
+          Top Vendors · this month
+        </h2>
+        <button onClick={() => navigate("/transactions")} className="text-xs text-[var(--color-primary)] hover:underline">All →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">{format(new Date(), "MMMM yyyy")} · largest payees by spend</p>
+      <div className="space-y-2.5">
+        {vendors.map(v => {
+          const pct = (v.value / max) * 100;
+          return (
+            <div key={v.name}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-medium truncate min-w-0">{v.name}</span>
+                <span className="tabular-nums text-[var(--color-muted)] shrink-0 ml-2">{formatCurrency(v.value)}</span>
+              </div>
+              <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${Math.max(3, pct)}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Invoice Status Breakdown ──────────────────────────────────────────────────
+// Receivables split by paid / due / overdue, with counts, amounts and a stacked
+// bar — distinct from the overdue-only list.
+function InvoiceStatusWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const invoices = store.invoices ?? [];
+
+  const stats = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const buckets = {
+      paid:    { label: "Paid",    count: 0, amount: 0, color: "#2EA882" },
+      due:     { label: "Due",     count: 0, amount: 0, color: "#eab308" },
+      overdue: { label: "Overdue", count: 0, amount: 0, color: "#ef4444" },
+    };
+    invoices.forEach(i => {
+      if (i.status === "paid") { buckets.paid.count++; buckets.paid.amount += i.amount; }
+      else if (i.dueDate < todayStr) { buckets.overdue.count++; buckets.overdue.amount += i.amount; }
+      else { buckets.due.count++; buckets.due.amount += i.amount; }
+    });
+    return Object.values(buckets);
+  }, [invoices]);
+
+  if (invoices.length === 0) return null;
+  const total = stats.reduce((s, b) => s + b.amount, 0);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Receipt size={13} className="text-[var(--color-primary)]" />
+          Invoice Status
+        </h2>
+        <button onClick={() => navigate("/receivables")} className="text-xs text-[var(--color-primary)] hover:underline">Open →</button>
+      </div>
+      <div className="flex h-2.5 rounded-full overflow-hidden mb-3 bg-[var(--color-bg)]">
+        {stats.map(b => total > 0 && b.amount > 0 && (
+          <div key={b.label} style={{ width: `${(b.amount / total) * 100}%`, background: b.color }} title={`${b.label}: ${formatCurrency(b.amount)}`} />
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {stats.map(b => (
+          <div key={b.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
+              <p className="text-[10px] text-[var(--color-muted)] font-medium">{b.label}</p>
+            </div>
+            <p className="text-base font-bold tabular-nums">{b.count}</p>
+            <p className="text-[10px] text-[var(--color-muted)] tabular-nums truncate">{formatCurrency(b.amount)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Monthly Burn Trend · 6 months ─────────────────────────────────────────────
+// Total outflow per month as an area trend — distinct from signed net-flow bars.
+function BurnTrendWidget() {
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const out = transactions.filter(t => t.date.startsWith(key) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      return { label: format(d, "MMM"), burn: Math.round(out / 1000), raw: out };
+    });
+  }, [transactions]);
+
+  const hasData = data.some(d => d.raw > 0);
+  if (!hasData) return null;
+
+  const latest = data[data.length - 1].raw;
+  const prev = data[data.length - 2]?.raw ?? 0;
+  const delta = prev > 0 ? ((latest - prev) / prev) * 100 : 0;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <TrendingDown size={13} className="text-red-400" />
+          Burn Trend · 6 months
+        </h2>
+        <button onClick={() => navigate("/spend")} className="text-xs text-[var(--color-primary)] hover:underline">Review →</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Total outflow per month · ₹ thousands{prev > 0 ? ` · ${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(0)}% vs prior month` : ""}</p>
+      <ResponsiveContainer width="100%" height={150}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="burnGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#7D8590" }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: "#7D8590" }} tickLine={false} axisLine={false} width={28} />
+          <Tooltip contentStyle={{ background: "#161B22", border: "1px solid #21262D", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`₹${v}K`, "Burn"]} />
+          <Area type="monotone" dataKey="burn" stroke="#ef4444" strokeWidth={2} fill="url(#burnGrad)" animationDuration={400} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── Receivables vs Payables ───────────────────────────────────────────────────
+// Money owed to you (open invoices) vs money you owe (recurring/scheduled
+// outflows due this month) — a working-capital balance snapshot.
+function ReceivablesVsPayablesWidget() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const invoices = store.invoices ?? [];
+
+  const { receivable, payable } = useMemo(() => {
+    const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const rec = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    const pay = transactions
+      .filter(t => t.amount < 0 && (t.isRecurring || t.date.startsWith(monthStr)) && ["payroll", "loan", "tax", "expense"].includes(t.category))
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    return { receivable: rec, payable: pay };
+  }, [invoices, transactions]);
+
+  if (receivable === 0 && payable === 0) return null;
+  const net = receivable - payable;
+  const max = Math.max(receivable, payable, 1);
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+      <h2 className="text-sm font-semibold flex items-center gap-1.5 mb-1">
+        <Scale size={13} className="text-[var(--color-primary)]" />
+        Receivables vs Payables
+      </h2>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Working-capital balance · what's owed to you vs your near-term commitments</p>
+      <div className="space-y-3">
+        {[
+          { label: "Receivable (open invoices)", value: receivable, color: "#2EA882" },
+          { label: "Payable (this month / recurring)", value: payable, color: "#ef4444" },
+        ].map(r => (
+          <div key={r.label}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-medium">{r.label}</span>
+              <span className="tabular-nums" style={{ color: r.color }}>{formatCurrency(r.value)}</span>
+            </div>
+            <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(3, (r.value / max) * 100)}%`, background: r.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
+        <span className="text-sm font-semibold">Net position</span>
+        <span className={`text-base font-bold tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {net >= 0 ? "+" : "−"}{formatCurrency(Math.abs(net))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
@@ -1828,6 +2052,16 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CashGaugeWidget />
             <WeekdayInflowWidget />
+          </div>
+
+          {/* ── 3rd-pass widgets: vendors, invoice status, burn trend, AR vs AP ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <TopVendorsWidget />
+            <InvoiceStatusWidget />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <BurnTrendWidget />
+            <ReceivablesVsPayablesWidget />
           </div>
 
           {/* Credit rescue CTA */}

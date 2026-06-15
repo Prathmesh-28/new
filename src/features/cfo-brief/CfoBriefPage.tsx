@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, monthlyBurn, runwayDays } from "@/lib/utils";
-import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks, Scale, LineChart, Receipt, Banknote, GitCompareArrows } from "lucide-react";
+import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks, Scale, LineChart, Receipt, Banknote, GitCompareArrows, Droplets, Rocket, Users, Coins } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
@@ -56,7 +56,7 @@ const SECTION_STYLE: Record<BriefSection["type"], string> = {
   action:  "border-green-800/30 bg-green-950/10",
 };
 
-type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager" | "ratios" | "trend" | "expense-control" | "covenant" | "what-changed";
+type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager" | "ratios" | "trend" | "expense-control" | "covenant" | "what-changed" | "liquidity" | "growth-burn" | "top-accounts" | "working-capital";
 
 export default function CfoBriefPage() {
   const [view, setView] = useState<CfoView>("ai-brief");
@@ -64,7 +64,7 @@ export default function CfoBriefPage() {
   return (
     <div className="space-y-5">
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText], ["ratios", "Financial Ratios", Scale], ["trend", "Profitability Trend", LineChart], ["expense-control", "Expense Control", Receipt], ["covenant", "Loan & Covenant", Banknote], ["what-changed", "What Changed", GitCompareArrows]] as const).map(([id, label, Icon]) => (
+        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText], ["ratios", "Financial Ratios", Scale], ["trend", "Profitability Trend", LineChart], ["expense-control", "Expense Control", Receipt], ["covenant", "Loan & Covenant", Banknote], ["what-changed", "What Changed", GitCompareArrows], ["liquidity", "Liquidity Position", Droplets], ["growth-burn", "Growth vs Burn", Rocket], ["top-accounts", "Top Accounts", Users], ["working-capital", "Working Capital", Coins]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -87,6 +87,10 @@ export default function CfoBriefPage() {
       {view === "expense-control" && <ExpenseControlScorecard />}
       {view === "covenant" && <CovenantBrief />}
       {view === "what-changed" && <WhatChangedThisWeek />}
+      {view === "liquidity" && <LiquidityPositionBrief />}
+      {view === "growth-burn" && <GrowthVsBurnBrief />}
+      {view === "top-accounts" && <TopAccountsBrief />}
+      {view === "working-capital" && <WorkingCapitalBrief />}
     </div>
   );
 }
@@ -1714,6 +1718,290 @@ function WhatChangedThisWeek() {
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
         Compares your current headline metrics against the last snapshot you captured. Re-baseline whenever you want a fresh starting point.
+      </div>
+    </div>
+  );
+}
+
+// #181 ── LIQUIDITY POSITION BRIEF ───────────────────────────────────────────────
+// Tests whether available cash covers near-term commitments: it nets total bank
+// balance against EMIs and dated obligations falling due in the next 30/60/90 days
+// to surface any liquidity shortfall before it bites.
+function LiquidityPositionBrief() {
+  const { store } = useApp();
+  const { bankAccounts, activeLoans, obligations } = store;
+
+  const data = useMemo(() => {
+    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+    const today = new Date();
+    const horizonDue = (days: number) => {
+      const cutoff = format(subMonths(today, -Math.ceil(days / 30)), "yyyy-MM-dd");
+      const obl = obligations.filter(o => o.dueDate >= format(today, "yyyy-MM-dd") && o.dueDate <= cutoff).reduce((s, o) => s + o.amount, 0);
+      const emiMonths = Math.ceil(days / 30);
+      const emi = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0) * emiMonths;
+      return obl + emi;
+    };
+    const buckets = [30, 60, 90].map(days => {
+      const due = horizonDue(days);
+      const cover = due > 0 ? balance / due : Infinity;
+      return { days, due, cover, ok: balance >= due };
+    });
+    return { balance, buckets };
+  }, [bankAccounts, activeLoans, obligations]);
+
+  const copy = () => {
+    const txt = `Liquidity Position — cash ${formatAmount(data.balance)}\n\n${data.buckets.map(b => `Next ${b.days} days: due ${formatAmount(b.due)} — ${b.ok ? "covered" : "SHORTFALL " + formatAmount(b.due - data.balance)}`).join("\n")}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Liquidity brief copied"), () => toast.error("Copy failed"));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Droplets size={18} className="text-[var(--color-primary)]" /> Liquidity Position Brief</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Can today's cash of {formatAmount(data.balance)} cover EMIs and dated obligations as they fall due?</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy brief
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {data.buckets.map(b => (
+          <div key={b.days} className={`border rounded-xl p-5 ${b.ok ? "border-green-800/30 bg-green-950/10" : "border-red-800/40 bg-red-950/20"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[var(--color-muted)]">Next {b.days} days</p>
+              {b.ok ? <CheckCircle2 size={14} className="text-green-400" /> : <AlertTriangle size={14} className="text-red-400" />}
+            </div>
+            <p className="text-2xl font-bold tabular-nums mb-1">{formatCurrency(b.due)}</p>
+            <p className={`text-xs font-medium ${b.ok ? "text-green-400" : "text-red-400"}`}>
+              {b.ok
+                ? `Covered ${Number.isFinite(b.cover) ? `(${b.cover.toFixed(1)}× cash)` : "(no commitments)"}`
+                : `Shortfall of ${formatAmount(b.due - data.balance)}`}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Nets your total bank balance against scheduled EMIs and dated obligations in each window. Inflows from receivables are excluded — this is a worst-case liquidity test.
+      </div>
+    </div>
+  );
+}
+
+// #182 ── GROWTH vs BURN BRIEF ───────────────────────────────────────────────────
+// The "burn multiple" view: how much cash is consumed for each rupee of net-new
+// revenue. Compares this month's revenue growth against net cash burned so the
+// owner can see whether growth is efficient or bought expensively.
+function GrowthVsBurnBrief() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const cur = monthBounds(0), prev = monthBounds(1);
+    const c = flowsIn(transactions, cur.start, cur.end);
+    const p = flowsIn(transactions, prev.start, prev.end);
+    const netNewRev = c.inflow - p.inflow;
+    const burned = c.net < 0 ? Math.abs(c.net) : 0;
+    const multiple = netNewRev > 0 ? burned / netNewRev : null;
+    const verdict = c.net >= 0 ? "self-funding" : multiple === null ? "burning-no-growth" : multiple < 1 ? "efficient" : multiple < 2 ? "acceptable" : "expensive";
+    return { cur, prev, c, p, netNewRev, burned, multiple, verdict, revPct: pctChange(c.inflow, p.inflow) };
+  }, [transactions]);
+
+  const VERDICT: Record<string, { label: string; cls: string }> = {
+    "self-funding": { label: "Self-funding — net cash positive", cls: "border-green-800/30 bg-green-950/10 text-green-400" },
+    "efficient": { label: "Efficient growth (<1× burn multiple)", cls: "border-green-800/30 bg-green-950/10 text-green-400" },
+    "acceptable": { label: "Acceptable growth (1–2× burn multiple)", cls: "border-yellow-800/30 bg-yellow-950/10 text-yellow-400" },
+    "expensive": { label: "Expensive growth (>2× burn multiple)", cls: "border-orange-800/40 bg-orange-950/20 text-orange-400" },
+    "burning-no-growth": { label: "Burning cash without revenue growth", cls: "border-red-800/40 bg-red-950/20 text-red-400" },
+  };
+  const v = VERDICT[data.verdict];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Rocket size={18} className="text-[var(--color-primary)]" /> Growth vs Burn Brief</h1>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How much cash you burn for each rupee of net-new revenue — {data.prev.label} vs {data.cur.label}</p>
+      </div>
+
+      <div className={`border rounded-xl p-5 ${v.cls}`}>
+        <div className="flex items-center gap-2 mb-1">
+          {data.c.net >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+          <h3 className="text-sm font-bold text-[var(--color-text)]">{v.label}</h3>
+        </div>
+        <p className="text-sm text-[var(--color-muted)] leading-relaxed">
+          Revenue moved {data.netNewRev >= 0 ? "+" : ""}{formatAmount(data.netNewRev)} MoM ({data.revPct === null ? "n/a" : `${data.revPct >= 0 ? "+" : ""}${data.revPct}%`}) while net cash flow was {formatAmount(data.c.net)}.
+          {data.multiple !== null && <> That is a burn multiple of <span className="text-[var(--color-text)] font-bold">{data.multiple.toFixed(2)}×</span> — {formatAmount(data.burned)} burned per {formatAmount(data.netNewRev)} of new revenue.</>}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Net-new revenue", value: `${data.netNewRev >= 0 ? "+" : ""}${formatAmount(data.netNewRev)}`, color: data.netNewRev >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Net cash flow", value: formatAmount(data.c.net), color: data.c.net >= 0 ? "text-green-400" : "text-orange-400" },
+          { label: "Cash burned", value: formatAmount(data.burned), color: data.burned > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Burn multiple", value: data.multiple === null ? "—" : `${data.multiple.toFixed(2)}×`, color: data.multiple !== null && data.multiple < 1 ? "text-green-400" : data.multiple !== null && data.multiple < 2 ? "text-yellow-400" : "text-orange-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Burn multiple = cash burned this month ÷ net-new revenue vs last month. Below 1× is best-in-class; above 2× means growth is costing you heavily. Self-funding months have no multiple.
+      </div>
+    </div>
+  );
+}
+
+// #183 ── TOP CUSTOMERS & VENDORS BRIEF ──────────────────────────────────────────
+// Side-by-side ranking of the counterparties that brought in the most cash and
+// took the most out this month, each as a share of its side — the relationships
+// that matter most to protect (customers) or renegotiate (vendors).
+function TopAccountsBrief() {
+  const { store } = useApp();
+  const { transactions } = store;
+
+  const data = useMemo(() => {
+    const cur = monthBounds(0);
+    const win = transactions.filter(t => t.date >= cur.start && t.date <= cur.end && t.counterparty);
+    const rank = (positive: boolean) => {
+      const map: Record<string, number> = {};
+      win.filter(t => positive ? t.amount > 0 : t.amount < 0).forEach(t => { map[t.counterparty] = (map[t.counterparty] || 0) + Math.abs(t.amount); });
+      const rows = Object.entries(map).sort((a, b) => b[1] - a[1]);
+      const total = rows.reduce((s, [, v]) => s + v, 0);
+      return { rows: rows.slice(0, 5), total };
+    };
+    return { customers: rank(true), vendors: rank(false), label: cur.label };
+  }, [transactions]);
+
+  const copy = () => {
+    const side = (title: string, d: { rows: [string, number][]; total: number }) =>
+      `${title}\n${d.rows.length ? d.rows.map(([n, v]) => `  ${n}: ${formatAmount(v)} (${d.total > 0 ? Math.round((v / d.total) * 100) : 0}%)`).join("\n") : "  none"}`;
+    const txt = `Top Accounts — ${data.label}\n\n${side("Customers (inflow)", data.customers)}\n\n${side("Vendors (outflow)", data.vendors)}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Brief copied"), () => toast.error("Copy failed"));
+  };
+
+  const Side = ({ title, d, positive }: { title: string; d: { rows: [string, number][]; total: number }; positive: boolean }) => (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5">
+      <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+        {positive ? <TrendingUp size={14} className="text-green-400" /> : <TrendingDown size={14} className="text-orange-400" />}{title}
+        <span className="ml-auto text-xs text-[var(--color-muted)] tabular-nums">{formatAmount(d.total)}</span>
+      </h3>
+      {d.rows.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No activity this month.</p> : (
+        <div className="space-y-2.5">
+          {d.rows.map(([name, v], i) => {
+            const pct = d.total > 0 ? Math.round((v / d.total) * 100) : 0;
+            return (
+              <div key={name}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="truncate"><span className="text-[var(--color-muted)] tabular-nums mr-1.5">{i + 1}.</span>{name}</span>
+                  <span className="tabular-nums font-medium shrink-0 ml-2">{formatCurrency(v)} <span className="text-[var(--color-muted)]">({pct}%)</span></span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                  <div className={`h-full ${positive ? "bg-green-400" : "bg-orange-400"}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Users size={18} className="text-[var(--color-primary)]" /> Top Customers &amp; Vendors</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The counterparties driving the most cash in and out this {data.label} — who to protect and who to renegotiate</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy brief
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Side title="Top customers (inflow)" d={data.customers} positive />
+        <Side title="Top vendors (outflow)" d={data.vendors} positive={false} />
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Ranked from this month's transactions by counterparty. A high share on the customer side flags concentration risk; on the vendor side it flags negotiating leverage.
+      </div>
+    </div>
+  );
+}
+
+// #184 ── WORKING CAPITAL BRIEF ──────────────────────────────────────────────────
+// A snapshot of net working capital from live data: receivables (with the overdue
+// slice) against near-term payables (this-month obligations + one EMI cycle), plus
+// a simple AR-days read so the owner sees how much cash is tied up in the cycle.
+function WorkingCapitalBrief() {
+  const { store } = useApp();
+  const { invoices, obligations, activeLoans, transactions } = store;
+
+  const data = useMemo(() => {
+    const openAr = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    const overdueAr = invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+    const cur = monthBounds(0);
+    const oblDue = obligations.filter(o => o.dueDate >= cur.start && o.dueDate <= cur.end).reduce((s, o) => s + o.amount, 0);
+    const emi = activeLoans.reduce((s, l) => s + l.monthlyEmi, 0);
+    const payables = oblDue + emi;
+    const netWc = openAr - payables;
+    // AR days: open receivables relative to recent daily revenue (last full month inflow).
+    const prevRev = flowsIn(transactions, monthBounds(1).start, monthBounds(1).end).inflow;
+    const arDays = prevRev > 0 ? Math.round(openAr / (prevRev / 30)) : null;
+    return { openAr, overdueAr, payables, netWc, arDays, oblDue, emi };
+  }, [invoices, obligations, activeLoans, transactions]);
+
+  const copy = () => {
+    const txt = `Working Capital Brief\n\nOpen receivables: ${formatAmount(data.openAr)} (overdue ${formatAmount(data.overdueAr)})\nNear-term payables: ${formatAmount(data.payables)}\nNet working capital: ${formatAmount(data.netWc)}\nAR days: ${data.arDays === null ? "n/a" : data.arDays + " days"}`;
+    navigator.clipboard.writeText(txt).then(() => toast.success("Working-capital brief copied"), () => toast.error("Copy failed"));
+  };
+
+  const stats = [
+    { label: "Open receivables", value: formatAmount(data.openAr), color: "text-green-400", hint: `${formatAmount(data.overdueAr)} overdue` },
+    { label: "Near-term payables", value: formatAmount(data.payables), color: "text-orange-400", hint: `${formatAmount(data.oblDue)} dues + ${formatAmount(data.emi)} EMI` },
+    { label: "Net working capital", value: formatAmount(data.netWc), color: data.netWc >= 0 ? "text-green-400" : "text-red-400", hint: data.netWc >= 0 ? "receivables cover payables" : "payables exceed receivables" },
+    { label: "AR days", value: data.arDays === null ? "—" : `${data.arDays}d`, color: data.arDays !== null && data.arDays > 60 ? "text-orange-400" : "text-[var(--color-text)]", hint: "cash tied up in collections" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Coins size={18} className="text-[var(--color-primary)]" /> Working Capital Brief</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Receivables vs near-term payables — how much cash is locked in your operating cycle right now</p>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
+          <Copy size={12} /> Copy brief
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {stats.map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums mb-0.5 ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{s.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`border rounded-xl p-5 ${data.netWc >= 0 ? "border-green-800/30 bg-green-950/10" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className="text-sm text-[var(--color-muted)] leading-relaxed">
+          {data.netWc >= 0
+            ? <>Your open receivables of <span className="text-[var(--color-text)] font-medium">{formatAmount(data.openAr)}</span> more than cover near-term payables of {formatAmount(data.payables)}, leaving {formatAmount(data.netWc)} of positive working-capital headroom.</>
+            : <>Near-term payables of <span className="text-[var(--color-text)] font-medium">{formatAmount(data.payables)}</span> exceed open receivables of {formatAmount(data.openAr)} by {formatAmount(Math.abs(data.netWc))} — prioritise collections{data.overdueAr > 0 ? `, starting with the ${formatAmount(data.overdueAr)} already overdue` : ""}.</>}
+        </p>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
+        Net working capital = open receivables − (this-month obligations + one EMI cycle). AR days estimates how long cash stays locked in receivables relative to last month's revenue.
       </div>
     </div>
   );
