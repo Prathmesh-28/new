@@ -10,6 +10,7 @@ import {
   Hash, Tags, Network, Timer, Repeat2, FolderTree, ListChecks,
   FileBarChart, Percent, Send,
   Filter, Gauge, Crown, RefreshCw, History, ShieldAlert,
+  Link2, Wallet, FileClock, CopyCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInCalendarDays, parseISO } from "date-fns";
@@ -23,7 +24,8 @@ type TabId =
   | "notifications" | "tasks" | "activity" | "webhooks" | "templates"
   | "numbering" | "categorize" | "escalation" | "sla" | "journals"
   | "routing" | "validation" | "reports" | "discounts" | "cadence"
-  | "segments" | "kpiwatch" | "tiered" | "batch" | "runlog" | "creditlimit";
+  | "segments" | "kpiwatch" | "tiered" | "batch" | "runlog" | "creditlimit"
+  | "paymatch" | "lowbalance" | "recurringinv" | "dupcheck";
 
 const TABS = [
   ["overview", "Overview", Workflow],
@@ -53,6 +55,10 @@ const TABS = [
   ["batch", "Status-Update Rules", RefreshCw],
   ["runlog", "Run History", History],
   ["creditlimit", "Credit-Limit Rules", ShieldAlert],
+  ["paymatch", "Payment Matching", Link2],
+  ["lowbalance", "Low-Balance Trigger", Wallet],
+  ["recurringinv", "Recurring Invoices", FileClock],
+  ["dupcheck", "Duplicate-Payment Check", CopyCheck],
 ] as const;
 
 export default function AutomationPage() {
@@ -106,6 +112,10 @@ export default function AutomationPage() {
       {tab === "batch" && <StatusUpdateRules />}
       {tab === "runlog" && <RunHistory />}
       {tab === "creditlimit" && <CreditLimitRules />}
+      {tab === "paymatch" && <PaymentMatchingRules />}
+      {tab === "lowbalance" && <LowBalanceTrigger />}
+      {tab === "recurringinv" && <RecurringInvoiceRules />}
+      {tab === "dupcheck" && <DuplicatePaymentCheck />}
     </div>
   );
 }
@@ -2558,6 +2568,317 @@ function CreditLimitRules() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── #27 Payment-Matching Rules ─────────────────────────────────────────────────
+// Match incoming revenue transactions to open invoices by amount (± tolerance).
+type PayMatchRule = { id: string; tolerancePct: number; windowDays: number };
+function PaymentMatchingRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<PayMatchRule[]>("auto-paymatch", []);
+  const [, pushActivity] = useActivity();
+  const [tol, setTol] = useState("2");
+  const [window, setWindow] = useState("7");
+
+  const add = () => {
+    const t = parseFloat(tol); const w = parseInt(window);
+    if (isNaN(t) || t < 0 || isNaN(w) || w < 0) { toast.error("Enter a valid tolerance and window"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), tolerancePct: t, windowDays: w }]);
+    pushActivity({ tool: "Payment Matching", kind: "create", message: `Match rule ±${t}% within ${w}d` });
+    toast.success("Payment-matching rule added");
+  };
+
+  // Candidate matches: open invoices vs revenue inflows whose amount is within
+  // tolerance and whose txn date is on/after the invoice date within the window.
+  const evalRule = (r: PayMatchRule) => {
+    const inflows = store.transactions.filter(t => t.category === "revenue" && t.amount > 0);
+    const open = store.invoices.filter(i => i.status !== "paid");
+    const out: { invoice: string; amount: number; txn: string; gap: number }[] = [];
+    open.forEach(inv => {
+      const band = (inv.amount * r.tolerancePct) / 100;
+      const hit = inflows.find(t => {
+        const gap = differenceInCalendarDays(parseISO(t.date), parseISO(inv.invoiceDate));
+        return Math.abs(t.amount - inv.amount) <= band && gap >= 0 && gap <= r.windowDays;
+      });
+      if (hit) out.push({ invoice: inv.customer, amount: inv.amount, txn: hit.counterparty || hit.description, gap: differenceInCalendarDays(parseISO(hit.date), parseISO(inv.invoiceDate)) });
+    });
+    return out;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Payment-Matching Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Auto-reconcile incoming revenue against open invoices when the amount lands within a tolerance band and arrives within a window of the invoice date. Preview lists likely matches — nothing is marked paid (no backend executor).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount tolerance (%)</label>
+            <input type="number" value={tol} onChange={e => setTol(e.target.value)} placeholder="2" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Match window (days)</label>
+            <input type="number" value={window} onChange={e => setWindow(e.target.value)} placeholder="7" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add rule
+          </button>
+        </div>
+      </div>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No payment-matching rules yet.</p>
+      ) : rules.map(r => {
+        const matches = evalRule(r);
+        return (
+          <div key={r.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm font-medium">Match within <span className="text-[var(--color-primary)]">±{r.tolerancePct}%</span> over <span className="text-[var(--color-primary)]">{r.windowDays}d</span></p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[var(--color-muted)]"><strong className="tabular-nums text-green-400">{matches.length}</strong> likely match(es)</span>
+                <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Payment Matching", kind: "delete", message: `Match rule removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+            {matches.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1.5 max-h-40 overflow-y-auto">
+                {matches.slice(0, 15).map((m, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                    <span className="font-medium truncate pr-2">{m.invoice} <span className="text-[var(--color-muted)]">↔ {m.txn}</span></span>
+                    <span className="text-[var(--color-muted)] tabular-nums shrink-0">{formatCurrency(m.amount)} · +{m.gap}d</span>
+                  </div>
+                ))}
+                {matches.length > 15 && <p className="text-[10px] text-[var(--color-muted)] px-1">+{matches.length - 15} more</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #28 Low-Balance Trigger ────────────────────────────────────────────────────
+// Fire a warning when a bank account's balance falls below a floor.
+type LowBalRule = { id: string; scope: "total" | string; floor: number };
+function LowBalanceTrigger() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<LowBalRule[]>("auto-lowbalance", []);
+  const [, pushActivity] = useActivity();
+  const [scope, setScope] = useState<"total" | string>("total");
+  const [floor, setFloor] = useState("100000");
+
+  const add = () => {
+    const f = parseFloat(floor);
+    if (isNaN(f) || f < 0) { toast.error("Enter a valid floor amount"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), scope, floor: f }]);
+    pushActivity({ tool: "Low-Balance Trigger", kind: "create", message: `Floor ${formatCurrency(f)} on ${scope}` });
+    toast.success("Low-balance trigger added");
+  };
+
+  const total = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const balanceFor = (r: LowBalRule) =>
+    r.scope === "total" ? total : (store.bankAccounts.find(a => a.id === r.scope)?.balance ?? 0);
+  const labelFor = (r: LowBalRule) =>
+    r.scope === "total" ? "All accounts" : (store.bankAccounts.find(a => a.id === r.scope)?.name ?? "Account");
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Low-Balance Trigger</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set a cash floor on a single bank account or the combined balance. The trigger evaluates your live balances right now and shows breach state — it cannot push an alert without a backend watcher.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Watch</label>
+            <select value={scope} onChange={e => setScope(e.target.value)} className={INP}>
+              <option value="total">All accounts (combined)</option>
+              {store.bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Floor (₹)</label>
+            <input type="number" value={floor} onChange={e => setFloor(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add trigger
+          </button>
+        </div>
+      </div>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No low-balance triggers yet.</p>
+      ) : rules.map(r => {
+        const bal = balanceFor(r);
+        const breached = bal < r.floor;
+        return (
+          <div key={r.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-medium">{labelFor(r)} below {formatCurrency(r.floor)}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">Current: <span className={breached ? "text-red-400" : "text-green-400"}>{formatCurrency(bal)}</span></p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${breached ? "bg-red-950/30 text-red-400" : "bg-green-950/30 text-green-400"}`}>
+                  {breached ? "Breached" : "Healthy"}
+                </span>
+                <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Low-Balance Trigger", kind: "delete", message: `Trigger removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #29 Recurring-Invoice Rules ────────────────────────────────────────────────
+// Define a template that would raise invoices on a cadence; preview the schedule.
+type RecInvRule = { id: string; customer: string; amount: number; cadence: "weekly" | "monthly" | "quarterly"; nextDate: string };
+function RecurringInvoiceRules() {
+  const [rules, setRules] = useFeatureState<RecInvRule[]>("auto-recurringinv", []);
+  const [, pushActivity] = useActivity();
+  const [customer, setCustomer] = useState("");
+  const [amount, setAmount] = useState("");
+  const [cadence, setCadence] = useState<RecInvRule["cadence"]>("monthly");
+  const [nextDate, setNextDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const a = parseFloat(amount);
+    if (!customer.trim() || isNaN(a) || a <= 0) { toast.error("Enter a customer and a positive amount"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), customer: customer.trim(), amount: a, cadence, nextDate }]);
+    pushActivity({ tool: "Recurring Invoices", kind: "create", message: `Recurring invoice for ${customer.trim()} (${cadence})` });
+    setCustomer(""); setAmount("");
+    toast.success("Recurring-invoice rule added");
+  };
+
+  const stepDays = (c: RecInvRule["cadence"]) => c === "weekly" ? 7 : c === "monthly" ? 30 : 91;
+  const schedule = (r: RecInvRule) => {
+    const out: Date[] = [];
+    let d = parseISO(r.nextDate);
+    for (let i = 0; i < 6; i++) { out.push(d); d = addDays(d, stepDays(r.cadence)); }
+    return out;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileClock size={14} className="text-[var(--color-primary)]" /> Recurring-Invoice Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Define a billing template for a customer and preview the next six raise dates. Invoices are not actually created — there is no scheduler firing these yet.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="e.g. Acme Retail" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cadence</label>
+            <select value={cadence} onChange={e => setCadence(e.target.value as RecInvRule["cadence"])} className={INP}>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First invoice on</label>
+            <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add rule
+          </button>
+        </div>
+      </div>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No recurring-invoice rules yet.</p>
+      ) : rules.map(r => (
+        <div key={r.id} className={`${CARD} p-4`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-medium">{r.customer} — {formatCurrency(r.amount)} <span className="text-[var(--color-muted)] capitalize">/ {r.cadence}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">Annualised ≈ {formatCurrency(r.amount * (r.cadence === "weekly" ? 52 : r.cadence === "monthly" ? 12 : 4))}</p>
+            </div>
+            <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Recurring Invoices", kind: "delete", message: `Recurring invoice removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+          </div>
+          <div className="mt-3 pt-3 border-t border-[var(--color-border)] flex flex-wrap gap-2">
+            {schedule(r).map((d, i) => (
+              <span key={i} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 tabular-nums">{format(d, "d MMM yyyy")}</span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── #30 Duplicate-Payment Check ────────────────────────────────────────────────
+// Flag outflows to the same counterparty with identical amount within N days.
+function DuplicatePaymentCheck() {
+  const { store } = useApp();
+  const [, pushActivity] = useActivity();
+  const [window, setWindow] = useFeatureState<number>("auto-dupcheck", 5);
+  const [windowInput, setWindowInput] = useState(String(5));
+
+  const groups = useMemo(() => {
+    const outs = store.transactions.filter(t => t.amount < 0);
+    const found: { key: string; counterparty: string; amount: number; dates: string[] }[] = [];
+    const seen = new Set<string>();
+    outs.forEach(a => {
+      const key = `${a.counterparty}|${Math.abs(a.amount)}`;
+      if (seen.has(key)) return;
+      const peers = outs.filter(b =>
+        b.counterparty === a.counterparty &&
+        Math.abs(b.amount) === Math.abs(a.amount) &&
+        Math.abs(differenceInCalendarDays(parseISO(b.date), parseISO(a.date))) <= window);
+      if (peers.length > 1) {
+        seen.add(key);
+        found.push({ key, counterparty: a.counterparty || "(unknown)", amount: Math.abs(a.amount), dates: peers.map(p => p.date).sort() });
+      }
+    });
+    return found;
+  }, [store.transactions, window]);
+
+  const apply = () => {
+    const w = parseInt(windowInput);
+    if (isNaN(w) || w < 0) { toast.error("Enter a non-negative day window"); return; }
+    setWindow(w);
+    pushActivity({ tool: "Duplicate-Payment Check", kind: "run", message: `Scanned for duplicates within ${w}d` });
+    toast.success(`Scanned outflows within ${w} day(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Check</h3>
+        <p className="text-xs text-[var(--color-muted)]">Surface outflows to the same counterparty for an identical amount within a short window — a common double-pay or re-submitted-invoice error. This is a read-only scan; it does not reverse or block anything.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Window (days between payments)</label>
+            <input type="number" value={windowInput} onChange={e => setWindowInput(e.target.value)} placeholder="5" className={INP} />
+          </div>
+          <button onClick={apply} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Play size={13} /> Scan ({groups.length})
+          </button>
+        </div>
+      </div>
+
+      {groups.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No suspected duplicate payments within {window} day(s).</p>
+      ) : groups.map(g => (
+        <div key={g.key} className={`${CARD} p-4`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5"><AlertTriangle size={13} className="text-orange-400" /> {g.counterparty}</p>
+              <p className="text-[11px] text-[var(--color-muted)]">{g.dates.length} payments of {formatCurrency(g.amount)} on {g.dates.join(", ")}</p>
+            </div>
+            <span className="text-xs font-semibold text-orange-400 tabular-nums">{formatCurrency(g.amount * (g.dates.length - 1))} at risk</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

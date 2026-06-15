@@ -9,6 +9,7 @@ import {
   CalendarClock, BarChart3, Zap, Scissors, Moon, Receipt, Users, GitMerge,
   Undo2, RefreshCw,
   FileSearch, Network, Download, KeyRound, Banknote, ScrollText,
+  CircleDollarSign, Fingerprint, ShieldQuestion, ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -22,7 +23,8 @@ type TabId =
   | "rules" | "access" | "scorecard" | "invoice" | "hygiene"
   | "weekend" | "benford" | "velocity" | "threshold" | "dormant" | "expense"
   | "sod" | "vendordedupe" | "refund" | "recurring"
-  | "gstitc" | "iplog" | "dataexport" | "keyrotation" | "cashspike" | "paniclog";
+  | "gstitc" | "iplog" | "dataexport" | "keyrotation" | "cashspike" | "paniclog"
+  | "roundamt" | "payrollbank" | "newacctlimit" | "selfassess";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -52,6 +54,10 @@ const TABS = [
   ["keyrotation", "Key Rotation", KeyRound],
   ["cashspike", "Cash Spike Monitor", Banknote],
   ["paniclog", "Sensitive-Action Log", ScrollText],
+  ["roundamt", "Round-Amount Flags", CircleDollarSign],
+  ["payrollbank", "Payroll-vs-Vendor Bank", Fingerprint],
+  ["newacctlimit", "New-Account Over Limit", ShieldQuestion],
+  ["selfassess", "Control Self-Assessment", ClipboardCheck],
 ] as const;
 
 const DISCLAIMER = "These are heuristic flags — suspects, not verdicts. Confirm with source documents and the counterparty before acting.";
@@ -204,6 +210,10 @@ export default function SecurityPage() {
       {tab === "keyrotation" && <KeyRotationReminder />}
       {tab === "cashspike" && <CashSpikeMonitor txns={txns} />}
       {tab === "paniclog" && <SensitiveActionLog />}
+      {tab === "roundamt" && <RoundAmountFlags txns={txns} />}
+      {tab === "payrollbank" && <PayrollVendorBankMatch txns={txns} />}
+      {tab === "newacctlimit" && <NewAccountOverLimit txns={txns} />}
+      {tab === "selfassess" && <ControlSelfAssessment />}
     </div>
   );
 }
@@ -2213,6 +2223,315 @@ function SensitiveActionLog() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── Round-Amount Payment Flags ───────────────────────────────────────────────────
+function RoundAmountFlags({ txns }: { txns: Txn[] }) {
+  const [step, setStep] = useState(10000);
+  const [minAmt, setMinAmt] = useState(25000);
+  const out = useMemo(() => outflows(txns), [txns]);
+
+  const flagged = useMemo(() => {
+    return out
+      .filter(t => {
+        const a = Math.round(Math.abs(t.amount));
+        return a >= minAmt && a % step === 0;
+      })
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  }, [out, step, minAmt]);
+
+  const total = flagged.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CircleDollarSign size={14} className="text-[var(--color-primary)]" /> Round-Amount Payment Flags</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Genuine invoices rarely land on perfectly round figures. Large payments that are exact multiples of a round step are worth a second look — they correlate with estimates, kickbacks and fabricated bills.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Round step: multiples of <strong className="text-[var(--color-text)]">{formatCurrency(step)}</strong></label>
+            <input type="range" min={1000} max={50000} step={1000} value={step} onChange={e => setStep(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Only payments above <strong className="text-[var(--color-text)]">{formatCurrency(minAmt)}</strong></label>
+            <input type="range" min={5000} max={500000} step={5000} value={minAmt} onChange={e => setMinAmt(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {flagged.length === 0 ? (
+        <Empty icon={CircleDollarSign} msg="No round-amount payments match these settings." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+            <p className="text-sm font-semibold">{flagged.length} round-amount payment(s) — suspects, confirm</p>
+            <p className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(total))} total</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Description"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {flagged.map(t => (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── Payroll-vs-Vendor Bank-Account Match ──────────────────────────────────────────
+type StaffBank = { id: string; name: string; account: string };
+function PayrollVendorBankMatch({ txns }: { txns: Txn[] }) {
+  const [staff, setStaff] = useFeatureState<StaffBank[]>("sec-staff-banks", []);
+  const [name, setName] = useState("");
+  const [account, setAccount] = useState("");
+
+  const knownVendors = useMemo(
+    () => [...new Set(txns.filter(t => t.amount < 0).map(t => t.counterparty).filter(Boolean))].sort(),
+    [txns],
+  );
+
+  const add = () => {
+    if (!name.trim() || !account.trim()) { toast.error("Enter an employee name and account number"); return; }
+    const acct = account.trim();
+    const clash = staff.find(s => s.account === acct);
+    if (clash) { toast.warning(`That account is already on file for ${clash.name}`); return; }
+    setStaff([...staff, { id: crypto.randomUUID(), name: name.trim(), account: acct }]);
+    setName(""); setAccount("");
+    toast.success("Employee bank account recorded");
+  };
+
+  const collisions = useMemo(() => {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const result: { staff: StaffBank; vendor: string }[] = [];
+    staff.forEach(s => {
+      const sn = norm(s.name);
+      if (!sn) return;
+      knownVendors.forEach(v => {
+        const vn = norm(v);
+        if (vn && (vn === sn || vn.includes(sn) || sn.includes(vn))) result.push({ staff: s, vendor: v });
+      });
+    });
+    return result;
+  }, [staff, knownVendors]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Payroll-vs-Vendor Bank Match</h2>
+        <p className="text-xs text-[var(--color-muted)]">Record your employees' salary bank accounts here. The tool then checks whether any vendor you pay shares an employee's name — a strong sign of a ghost vendor set up to divert funds to staff.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Employee name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Sharma" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Salary account number</label>
+            <input value={account} onChange={e => setAccount(e.target.value)} placeholder="XXXXXXXX1234" className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Add employee</button>
+        </div>
+      </div>
+
+      {collisions.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {collisions.length} vendor(s) share an employee name — suspects, confirm these are not self-payments.</p>
+          <div className="mt-2 space-y-1">
+            {collisions.map((c, i) => (
+              <p key={i} className="text-xs text-[var(--color-muted)]">Vendor <span className="text-[var(--color-text)] font-medium">{c.vendor}</span> matches employee <span className="text-[var(--color-text)] font-medium">{c.staff.name}</span></p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {staff.length === 0 ? (
+        <Empty icon={Fingerprint} msg="No employee accounts on file yet. Add them to detect ghost-vendor overlaps." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Employee", "Account", "Status", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {staff.map(s => {
+                  const flagged = collisions.some(c => c.staff.id === s.id);
+                  return (
+                    <tr key={s.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium text-xs">{s.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{s.account}</td>
+                      <td className="px-4 py-2.5">
+                        {flagged
+                          ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Name overlap</span>
+                          : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Clear</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setStaff(staff.filter(x => x.id !== s.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── Payment to New Account Over Threshold ─────────────────────────────────────────
+function NewAccountOverLimit({ txns }: { txns: Txn[] }) {
+  const [threshold, setThreshold] = useState(50000);
+  const [firstDays, setFirstDays] = useState(14);
+
+  const flagged = useMemo(() => {
+    const firstSeen = new Map<string, string>();
+    [...txns].filter(t => t.amount < 0).sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
+      const key = t.counterparty.trim().toLowerCase() || "(blank)";
+      if (!firstSeen.has(key)) firstSeen.set(key, t.date);
+    });
+    return outflows(txns)
+      .filter(t => {
+        const key = t.counterparty.trim().toLowerCase() || "(blank)";
+        const first = firstSeen.get(key);
+        if (!first) return false;
+        return Math.abs(t.amount) >= threshold && daysBetween(t.date, first) <= firstDays;
+      })
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  }, [txns, threshold, firstDays]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldQuestion size={14} className="text-[var(--color-primary)]" /> Large Payment to a Brand-New Account</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A big payment to a counterparty you have only just started paying is the highest-risk combination — exactly how invoice-redirection and advance-fee scams play out. These deserve an out-of-band check before release.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount over <strong className="text-[var(--color-text)]">{formatCurrency(threshold)}</strong></label>
+            <input type="range" min={10000} max={500000} step={10000} value={threshold} onChange={e => setThreshold(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Within <strong className="text-[var(--color-text)]">{firstDays} days</strong> of first-ever payment</label>
+            <input type="range" min={1} max={60} step={1} value={firstDays} onChange={e => setFirstDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      {flagged.length === 0 ? (
+        <Empty icon={ShieldQuestion} msg="No large early-stage payments match these settings." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} high-risk payment(s) — suspects, confirm</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "New payee", "Amount", "Description"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {flagged.map(t => (
+                  <tr key={t.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "(blank)"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── Control Self-Assessment ───────────────────────────────────────────────────────
+type CsaAnswer = "yes" | "partial" | "no";
+type CsaState = Record<string, CsaAnswer>;
+const CSA_ITEMS: { id: string; q: string }[] = [
+  { id: "dual", q: "Payments above a set limit need a second approver." },
+  { id: "bankverify", q: "Vendor bank-detail changes are verified by phone before paying." },
+  { id: "recon", q: "Bank statements are reconciled against the ledger at least monthly." },
+  { id: "access", q: "User access is reviewed and leavers are removed quarterly." },
+  { id: "segregation", q: "The person who raises a payment cannot also approve it." },
+  { id: "backups", q: "Financial data is backed up and a restore has been tested." },
+  { id: "mfa", q: "Banking and accounting logins are protected with 2-factor auth." },
+  { id: "petty", q: "Petty cash and reimbursements require supporting receipts." },
+];
+function ControlSelfAssessment() {
+  const [answers, setAnswers] = useFeatureState<CsaState>("sec-control-csa", {});
+
+  const set = (id: string, val: CsaAnswer) => setAnswers({ ...answers, [id]: val });
+
+  const score = useMemo(() => {
+    let pts = 0;
+    CSA_ITEMS.forEach(it => {
+      const a = answers[it.id];
+      pts += a === "yes" ? 1 : a === "partial" ? 0.5 : 0;
+    });
+    return Math.round((pts / CSA_ITEMS.length) * 100);
+  }, [answers]);
+
+  const gaps = CSA_ITEMS.filter(it => answers[it.id] !== "yes");
+  const band = score >= 80 ? "Strong" : score >= 50 ? "Developing" : "Weak";
+  const color = band === "Strong" ? "text-green-400" : band === "Developing" ? "text-yellow-400" : "text-red-400";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Control Self-Assessment</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A quick honesty check on the basic financial controls every SMB should have. Answer each one — the maturity score and gap list update live and stay on this device.</p>
+        <div className="flex items-end gap-4 flex-wrap">
+          <div>
+            <p className={`text-5xl font-bold tabular-nums ${color}`}>{score}</p>
+            <p className="text-xs text-[var(--color-muted)]">/ 100 control maturity</p>
+          </div>
+          <span className={`text-sm font-bold px-3 py-1 rounded-full border ${band === "Strong" ? "bg-green-950/30 text-green-400 border-green-800/40" : band === "Developing" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-red-950/30 text-red-400 border-red-800/40"}`}>{band}</span>
+        </div>
+        <div className="w-full h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden mt-4">
+          <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: band === "Strong" ? "#22c55e" : band === "Developing" ? "#eab308" : "#ef4444" }} />
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5 space-y-2`}>
+        {CSA_ITEMS.map(it => (
+          <div key={it.id} className="flex items-center justify-between gap-3 text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+            <span className="text-xs">{it.q}</span>
+            <div className="flex gap-1 shrink-0">
+              {(["yes", "partial", "no"] as CsaAnswer[]).map(opt => (
+                <button key={opt} onClick={() => set(it.id, opt)}
+                  className={`text-[10px] px-2 py-1 rounded-full border font-medium capitalize ${answers[it.id] === opt
+                    ? opt === "yes" ? "bg-green-900/30 text-green-400 border-green-800/40" : opt === "partial" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"
+                    : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {gaps.length > 0 && (
+        <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-yellow-400 flex items-center gap-2 mb-2"><AlertTriangle size={14} /> {gaps.length} control(s) not fully in place</p>
+          <ul className="space-y-1">
+            {gaps.map(g => <li key={g.id} className="text-xs text-[var(--color-muted)]">• {g.q}</li>)}
+          </ul>
         </div>
       )}
       <Note />

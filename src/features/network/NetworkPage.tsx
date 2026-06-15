@@ -9,6 +9,7 @@ import {
   ClipboardList, Handshake, FileSpreadsheet, History, UserPlus, Tags,
   ClipboardCheck, Users, Send, ShieldAlert, CalendarClock, Scale,
   Award, Timer, Megaphone, ArrowLeftRight, TrendingUp, Smile,
+  LineChart, Split, CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -23,7 +24,8 @@ type TabId =
   | "onboarding" | "terms" | "joint-recon" | "pay-timeline" | "referrals"
   | "price-list" | "sla" | "group-buy" | "intro" | "watchlist" | "meeting-log"
   | "netting" | "tiers" | "terms-bench" | "co-market" | "intros-ledger"
-  | "forecast-share" | "partner-nps";
+  | "forecast-share" | "partner-nps"
+  | "spend-share-trend" | "jv-split" | "pay-reliability";
 
 const TABS = [
   ["overview", "Overview", Network],
@@ -55,6 +57,9 @@ const TABS = [
   ["intros-ledger", "Introductions Ledger", ArrowLeftRight],
   ["forecast-share", "Collaborative Forecast", TrendingUp],
   ["partner-nps", "Partner NPS", Smile],
+  ["spend-share-trend", "Spend-Share Trend", LineChart],
+  ["jv-split", "Joint-Venture P&L Split", Split],
+  ["pay-reliability", "Payment Reliability", CheckCheck],
 ] as const;
 
 // Validate the structure of an Indian GSTIN (15 chars): 2-digit state + 10-char PAN + entity + Z + checksum.
@@ -139,6 +144,9 @@ export default function NetworkPage() {
       {tab === "intros-ledger" && <IntroductionsLedger />}
       {tab === "forecast-share" && <CollaborativeForecast live={liveCounterparties} />}
       {tab === "partner-nps" && <PartnerNPS live={liveCounterparties} />}
+      {tab === "spend-share-trend" && <SpendShareTrend />}
+      {tab === "jv-split" && <JointVentureSplit live={liveCounterparties} />}
+      {tab === "pay-reliability" && <PaymentReliability />}
     </div>
   );
 }
@@ -2835,6 +2843,266 @@ function PartnerNPS({ live }: { live: Live[] }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── #30 Partner Spend-Share Trend ────────────────────────────────────────────
+// Tracks how each supplier's share of total monthly spend moves over time, so you
+// can spot a partner you're leaning on more (or less) every month — built purely
+// from outflow transactions already in the books.
+function SpendShareTrend() {
+  const { store } = useApp();
+  const [party, setParty] = useState("");
+
+  const monthly = useMemo(() => {
+    const months = new Map<string, { total: number; byParty: Map<string, number> }>();
+    for (const t of store.transactions) {
+      if (t.amount >= 0) continue; // spend only
+      const name = (t.counterparty || "").trim();
+      if (!name || !t.date) continue;
+      const m = t.date.slice(0, 7);
+      const e = months.get(m) ?? { total: 0, byParty: new Map<string, number>() };
+      const amt = Math.abs(t.amount);
+      e.total += amt;
+      e.byParty.set(name, (e.byParty.get(name) ?? 0) + amt);
+      months.set(m, e);
+    }
+    return [...months.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-12);
+  }, [store.transactions]);
+
+  const suppliers = useMemo(() => {
+    const set = new Set<string>();
+    for (const [, e] of monthly) for (const n of e.byParty.keys()) set.add(n);
+    return [...set].sort();
+  }, [monthly]);
+
+  const series = useMemo(() => {
+    if (!party) return [] as { month: string; share: number; spend: number }[];
+    return monthly.map(([month, e]) => {
+      const spend = e.byParty.get(party) ?? 0;
+      return { month, spend, share: e.total > 0 ? (spend / e.total) * 100 : 0 };
+    });
+  }, [party, monthly]);
+
+  const latest = series.length ? series[series.length - 1] : null;
+  const prev = series.length > 1 ? series[series.length - 2] : null;
+  const delta = latest && prev ? latest.share - prev.share : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Partner Spend-Share Trend</h3>
+        <p className="text-xs text-[var(--color-muted)]">See what share of your monthly spend goes to one supplier and how that share is trending — a rising line means growing dependence on a single partner.</p>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier</label>
+          <input list="net-sst-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Select or type" className={`${INP} max-w-md`} />
+          <datalist id="net-sst-parties">{suppliers.map(s => <option key={s} value={s} />)}</datalist>
+        </div>
+      </div>
+
+      {!party ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Select a supplier to chart their spend-share over the last 12 months.</p>
+      ) : series.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No outflow transactions found for {party}.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Latest share", value: latest ? `${latest.share.toFixed(1)}%` : "—", color: latest && latest.share > 30 ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Month-on-month", value: `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pp`, color: delta > 0 ? "text-red-400" : delta < 0 ? "text-green-400" : "text-[var(--color-muted)]" },
+              { label: "Latest spend", value: latest ? formatAmount(latest.spend) : "—", color: "text-[var(--color-text)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} p-4 space-y-2`}>
+            {series.map(s => (
+              <div key={s.month}>
+                <div className="flex items-center justify-between text-xs mb-0.5">
+                  <span className="text-[var(--color-muted)] tabular-nums">{s.month}</span>
+                  <span className="tabular-nums">{formatAmount(s.spend)} · {s.share.toFixed(0)}%</span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, s.share)}%`, background: s.share > 30 ? "#ef4444" : s.share > 15 ? "#f59e0b" : "var(--color-primary)" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Share is this supplier's spend divided by your total spend that month. A steadily rising share signals concentration risk worth diversifying.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #31 Joint-Venture P&L Split ──────────────────────────────────────────────
+// Splits a shared venture's revenue, cost and profit between you and a partner by
+// an agreed ownership percentage, with a per-deal settlement breakdown.
+type JvDeal = { id: string; partner: string; revenue: number; cost: number; mySharePct: number; note: string };
+function JointVentureSplit({ live }: { live: Live[] }) {
+  const [deals, setDeals] = useFeatureState<JvDeal[]>("net-jv-split", []);
+  const [partner, setPartner] = useState("");
+  const [revenue, setRevenue] = useState("");
+  const [cost, setCost] = useState("");
+  const [mySharePct, setMySharePct] = useState("50");
+  const [note, setNote] = useState("");
+
+  const options = useMemo(() => live.map(l => l.name), [live]);
+
+  const add = () => {
+    if (!partner.trim()) { toast.error("Enter the JV partner"); return; }
+    setDeals([...deals, {
+      id: crypto.randomUUID(), partner: partner.trim(),
+      revenue: Math.max(0, parseFloat(revenue) || 0),
+      cost: Math.max(0, parseFloat(cost) || 0),
+      mySharePct: Math.min(100, Math.max(0, parseFloat(mySharePct) || 0)),
+      note: note.trim(),
+    }]);
+    setPartner(""); setRevenue(""); setCost(""); setMySharePct("50"); setNote("");
+    toast.success("Joint venture recorded");
+  };
+  const remove = (id: string) => setDeals(deals.filter(d => d.id !== id));
+
+  const split = (d: JvDeal) => {
+    const profit = d.revenue - d.cost;
+    const mine = profit * (d.mySharePct / 100);
+    return { profit, mine, theirs: profit - mine };
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Split size={14} className="text-[var(--color-primary)]" /> Joint-Venture P&L Split</h3>
+        <p className="text-xs text-[var(--color-muted)]">For a shared deal or co-owned venture, enter the revenue, cost and your ownership share — Headroom splits the profit between you and the partner so settlement is unambiguous.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">JV partner</label>
+            <input list="net-jv-parties" value={partner} onChange={e => setPartner(e.target.value)} placeholder="Partner name" className={INP} />
+            <datalist id="net-jv-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Revenue (₹)</label><input type="number" value={revenue} onChange={e => setRevenue(e.target.value)} placeholder="800000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Cost (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="500000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">My share %</label><input type="number" value={mySharePct} onChange={e => setMySharePct(e.target.value)} className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
+      </div>
+
+      {deals.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No joint ventures recorded yet. Add one above to split its P&L.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Partner", "Revenue", "Cost", "Profit", "My share", "My P&L", "Their P&L", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {deals.map(d => {
+                  const s = split(d);
+                  return (
+                    <tr key={d.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{d.partner}{d.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{d.note}</span>}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.revenue)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.cost)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-medium ${s.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(s.profit)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{d.mySharePct}%</td>
+                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(s.mine)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(s.theirs)}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #32 Partner Payment-Reliability ──────────────────────────────────────────
+// Scores how reliably each buyer pays vs their invoice due dates, using paid +
+// overdue invoice data already in the books. Distinct from the per-buyer grade in
+// Payment-Behaviour Rating: this ranks reliability as an on-time percentage.
+function PaymentReliability() {
+  const { store } = useApp();
+  const today = new Date();
+
+  const rows = useMemo(() => {
+    const byParty = new Map<string, { name: string; paid: number; overdue: number; pending: number; total: number; overdueDays: number }>();
+    for (const inv of store.invoices) {
+      const name = (inv.customer || "").trim();
+      if (!name) continue;
+      const e = byParty.get(name) ?? { name, paid: 0, overdue: 0, pending: 0, total: 0, overdueDays: 0 };
+      e.total += 1;
+      if (inv.status === "paid") e.paid += 1;
+      else if (inv.status === "overdue") {
+        e.overdue += 1;
+        if (inv.dueDate) e.overdueDays += Math.max(0, differenceInCalendarDays(today, parseISO(inv.dueDate)));
+      } else e.pending += 1;
+      byParty.set(name, e);
+    }
+    return [...byParty.values()].map(e => {
+      const settled = e.paid + e.overdue;
+      const onTimePct = settled > 0 ? (e.paid / settled) * 100 : 100;
+      const avgLate = e.overdue > 0 ? Math.round(e.overdueDays / e.overdue) : 0;
+      const reliable = onTimePct >= 80 && avgLate <= 7;
+      return { ...e, onTimePct, avgLate, reliable };
+    }).sort((a, b) => a.onTimePct - b.onTimePct);
+  }, [store.invoices, today]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CheckCheck size={14} className="text-[var(--color-primary)]" /> Partner Payment-Reliability</h3>
+        <p className="text-xs text-[var(--color-muted)]">Ranks each buyer by the share of settled invoices they cleared on time and their average lateness — a quick read on who you can trust on open credit.</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No invoice history yet. Raise and track invoices to measure how reliably each buyer pays.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Buyer", "On-time %", "Reliability", "Avg days late", "Paid", "Overdue", "Open"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.name} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-20 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${r.onTimePct}%`, background: r.onTimePct >= 80 ? "#22c55e" : r.onTimePct >= 50 ? "#f59e0b" : "#ef4444" }} />
+                        </div>
+                        <span className="tabular-nums text-xs">{r.onTimePct.toFixed(0)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.reliable ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                        {r.reliable ? <CheckCheck size={10} /> : <AlertTriangle size={10} />} {r.reliable ? "Reliable" : "Watch"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.avgLate > 0 ? `${r.avgLate}d` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.pending}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">On-time % counts cleared (paid) invoices against all settled ones (paid + overdue). Reliable = 80%+ on time and 7 days or less average lateness.</p>
     </div>
   );
 }
