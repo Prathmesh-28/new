@@ -8,6 +8,7 @@ import {
   Plus, Trash2, Building2, ShieldCheck, Link2, Copy,
   ClipboardList, Handshake, FileSpreadsheet, History, UserPlus, Tags,
   ClipboardCheck, Users, Send, ShieldAlert, CalendarClock, Scale,
+  Award, Timer, Megaphone, ArrowLeftRight, TrendingUp, Smile,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -21,7 +22,8 @@ type TabId =
   | "discovery" | "disputes" | "concentration" | "rating" | "balance-confirm"
   | "onboarding" | "terms" | "joint-recon" | "pay-timeline" | "referrals"
   | "price-list" | "sla" | "group-buy" | "intro" | "watchlist" | "meeting-log"
-  | "netting";
+  | "netting" | "tiers" | "terms-bench" | "co-market" | "intros-ledger"
+  | "forecast-share" | "partner-nps";
 
 const TABS = [
   ["overview", "Overview", Network],
@@ -47,6 +49,12 @@ const TABS = [
   ["watchlist", "Risk Watchlist", ShieldAlert],
   ["meeting-log", "Meeting Log", CalendarClock],
   ["netting", "Mutual-Credit Netting", Scale],
+  ["tiers", "Partner-Tier Scheme", Award],
+  ["terms-bench", "Payment-Terms Benchmark", Timer],
+  ["co-market", "Co-Marketing Planner", Megaphone],
+  ["intros-ledger", "Introductions Ledger", ArrowLeftRight],
+  ["forecast-share", "Collaborative Forecast", TrendingUp],
+  ["partner-nps", "Partner NPS", Smile],
 ] as const;
 
 // Validate the structure of an Indian GSTIN (15 chars): 2-digit state + 10-char PAN + entity + Z + checksum.
@@ -125,6 +133,12 @@ export default function NetworkPage() {
       {tab === "watchlist" && <RiskWatchlist live={liveCounterparties} />}
       {tab === "meeting-log" && <MeetingLog live={liveCounterparties} />}
       {tab === "netting" && <MutualNetting />}
+      {tab === "tiers" && <PartnerTierScheme live={liveCounterparties} />}
+      {tab === "terms-bench" && <PaymentTermsBenchmark />}
+      {tab === "co-market" && <CoMarketingPlanner live={liveCounterparties} />}
+      {tab === "intros-ledger" && <IntroductionsLedger />}
+      {tab === "forecast-share" && <CollaborativeForecast live={liveCounterparties} />}
+      {tab === "partner-nps" && <PartnerNPS live={liveCounterparties} />}
     </div>
   );
 }
@@ -2263,6 +2277,563 @@ function MutualNetting() {
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── #24 Partner-Tier Scheme ──────────────────────────────────────────────────
+// Volume-based tier bands (Bronze/Silver/Gold/Platinum) with editable thresholds and
+// per-tier perks. Each live counterparty is assigned a tier from its total trade value.
+type TierBand = { id: string; name: string; minVolume: number; perk: string };
+const DEFAULT_TIERS: TierBand[] = [
+  { id: "bronze", name: "Bronze", minVolume: 0, perk: "Standard terms" },
+  { id: "silver", name: "Silver", minVolume: 500000, perk: "Net-15 terms" },
+  { id: "gold", name: "Gold", minVolume: 2000000, perk: "Net-30 + 1% rebate" },
+  { id: "platinum", name: "Platinum", minVolume: 5000000, perk: "Net-45 + 2% rebate, priority stock" },
+];
+function PartnerTierScheme({ live }: { live: Live[] }) {
+  const [tiers, setTiers] = useFeatureState<TierBand[]>("net-tier-scheme", DEFAULT_TIERS);
+
+  const sorted = useMemo(() => [...tiers].sort((a, b) => a.minVolume - b.minVolume), [tiers]);
+  const tierFor = (vol: number): TierBand => {
+    let chosen = sorted[0];
+    for (const t of sorted) { if (vol >= t.minVolume) chosen = t; }
+    return chosen;
+  };
+
+  const ranked = useMemo(() => {
+    return live.map(l => {
+      const vol = l.inflow + l.outflow + l.invoiced;
+      return { name: l.name, vol, tier: tierFor(vol) };
+    }).sort((a, b) => b.vol - a.vol);
+  }, [live, sorted]);
+
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of ranked) m.set(r.tier.id, (m.get(r.tier.id) ?? 0) + 1);
+    return m;
+  }, [ranked]);
+
+  const setMin = (id: string, v: string) =>
+    setTiers(tiers.map(t => t.id === id ? { ...t, minVolume: Math.max(0, parseFloat(v) || 0) } : t));
+  const setPerk = (id: string, v: string) =>
+    setTiers(tiers.map(t => t.id === id ? { ...t, perk: v } : t));
+
+  const tierColor = (id: string) =>
+    id === "platinum" ? "text-cyan-400" : id === "gold" ? "text-yellow-400" : id === "silver" ? "text-slate-300" : "text-amber-600";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Partner-Tier Scheme</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set volume bands and the perk each tier earns. Headroom places every counterparty from your books into a tier by their total trade value — use it to reward your best partners with better terms.</p>
+        <div className="space-y-2">
+          {sorted.map(t => (
+            <div key={t.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+              <p className={`md:col-span-2 text-sm font-semibold ${tierColor(t.id)}`}>{t.name}</p>
+              <div className="md:col-span-3">
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1">Min trade volume (₹)</label>
+                <input type="number" value={t.minVolume} onChange={e => setMin(t.id, e.target.value)} className={INP} />
+              </div>
+              <div className="md:col-span-6">
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1">Perk</label>
+                <input value={t.perk} onChange={e => setPerk(t.id, e.target.value)} className={INP} />
+              </div>
+              <p className="md:col-span-1 text-xs text-[var(--color-muted)] text-right tabular-nums">{counts.get(t.id) ?? 0}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {ranked.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No counterparties yet — import transactions or invoices and partners will be tiered automatically.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Partners by tier</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Partner", "Trade volume", "Tier", "Perk earned"].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {ranked.slice(0, 20).map(r => (
+                  <tr key={r.name} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.vol)}</td>
+                    <td className={`px-4 py-2.5 font-semibold ${tierColor(r.tier.id)}`}>{r.tier.name}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.tier.perk}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #25 Network Payment-Terms Benchmark ──────────────────────────────────────
+// Log the agreed days-to-pay per partner, then see where each sits against your own
+// network average and a sector reference, so you can renegotiate outliers (feature #79/#82).
+type TermsEntry = { id: string; party: string; agreedDays: number; actualDays: number };
+function PaymentTermsBenchmark() {
+  const [entries, setEntries] = useFeatureState<TermsEntry[]>("net-terms-bench", []);
+  const [party, setParty] = useState("");
+  const [agreedDays, setAgreedDays] = useState("");
+  const [actualDays, setActualDays] = useState("");
+  const [sector, setSector] = useState("45");
+
+  const add = () => {
+    if (!party.trim()) { toast.error("Enter a partner name"); return; }
+    setEntries([...entries, {
+      id: crypto.randomUUID(), party: party.trim(),
+      agreedDays: Math.max(0, Math.round(parseFloat(agreedDays) || 0)),
+      actualDays: Math.max(0, Math.round(parseFloat(actualDays) || 0)),
+    }]);
+    setParty(""); setAgreedDays(""); setActualDays("");
+    toast.success("Partner term logged");
+  };
+  const remove = (id: string) => setEntries(entries.filter(e => e.id !== id));
+
+  const sectorRef = Math.max(0, Math.round(parseFloat(sector) || 0));
+  const stats = useMemo(() => {
+    if (entries.length === 0) return { avgAgreed: 0, avgActual: 0, slippage: 0 };
+    const avgAgreed = Math.round(entries.reduce((s, e) => s + e.agreedDays, 0) / entries.length);
+    const avgActual = Math.round(entries.reduce((s, e) => s + e.actualDays, 0) / entries.length);
+    return { avgAgreed, avgActual, slippage: avgActual - avgAgreed };
+  }, [entries]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Payment-Terms Benchmark</h3>
+        <p className="text-xs text-[var(--color-muted)]">Log the agreed and actual days-to-pay for each partner and benchmark them against your network average and a sector reference. Outliers paying far slower than agreed are renegotiation candidates.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label><input value={party} onChange={e => setParty(e.target.value)} placeholder="Buyer / supplier" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Agreed days</label><input type="number" value={agreedDays} onChange={e => setAgreedDays(e.target.value)} placeholder="30" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Actual days</label><input type="number" value={actualDays} onChange={e => setActualDays(e.target.value)} placeholder="42" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Sector ref (days)</label><input type="number" value={sector} onChange={e => setSector(e.target.value)} className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Log</button>
+        </div>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No terms logged yet. Add a partner's agreed and actual days-to-pay to start benchmarking.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Avg agreed", value: `${stats.avgAgreed} d`, color: "text-[var(--color-text)]" },
+              { label: "Avg actual", value: `${stats.avgActual} d`, color: "text-[var(--color-text)]" },
+              { label: "Avg slippage", value: `${stats.slippage >= 0 ? "+" : ""}${stats.slippage} d`, color: stats.slippage > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Sector reference", value: `${sectorRef} d`, color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Partner", "Agreed", "Actual", "Slippage", "vs sector", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {[...entries].sort((a, b) => (b.actualDays - b.agreedDays) - (a.actualDays - a.agreedDays)).map(e => {
+                    const slip = e.actualDays - e.agreedDays;
+                    const vsSector = e.actualDays - sectorRef;
+                    return (
+                      <tr key={e.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{e.party}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{e.agreedDays} d</td>
+                        <td className="px-4 py-2.5 tabular-nums">{e.actualDays} d</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-medium ${slip > 0 ? "text-red-400" : "text-green-400"}`}>{slip >= 0 ? "+" : ""}{slip} d</td>
+                        <td className={`px-4 py-2.5 tabular-nums ${vsSector > 0 ? "text-red-400" : "text-green-400"}`}>{vsSector >= 0 ? "+" : ""}{vsSector} d</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #26 Co-Marketing / Joint-Campaign Planner ────────────────────────────────
+type Campaign = { id: string; partner: string; title: string; channel: string; myBudget: number; theirBudget: number; date: string; status: "planned" | "live" | "done" };
+function CoMarketingPlanner({ live }: { live: Live[] }) {
+  const [items, setItems] = useFeatureState<Campaign[]>("net-co-market", []);
+  const [partner, setPartner] = useState("");
+  const [title, setTitle] = useState("");
+  const [channel, setChannel] = useState("WhatsApp");
+  const [myBudget, setMyBudget] = useState("");
+  const [theirBudget, setTheirBudget] = useState("");
+  const [date, setDate] = useState("");
+
+  const add = () => {
+    if (!partner.trim() || !title.trim()) { toast.error("Enter a partner and campaign title"); return; }
+    setItems([...items, {
+      id: crypto.randomUUID(), partner: partner.trim(), title: title.trim(), channel,
+      myBudget: Math.max(0, parseFloat(myBudget) || 0), theirBudget: Math.max(0, parseFloat(theirBudget) || 0),
+      date: date || format(new Date(), "yyyy-MM-dd"), status: "planned",
+    }]);
+    setPartner(""); setTitle(""); setMyBudget(""); setTheirBudget(""); setDate("");
+    toast.success("Joint campaign added");
+  };
+  const cycle = (id: string) => setItems(items.map(c => c.id === id
+    ? { ...c, status: c.status === "planned" ? "live" : c.status === "live" ? "done" : "planned" } : c));
+  const remove = (id: string) => setItems(items.filter(c => c.id !== id));
+
+  const totalMine = items.reduce((s, c) => s + c.myBudget, 0);
+  const totalTheirs = items.reduce((s, c) => s + c.theirBudget, 0);
+  const partyOptions = [...new Set(live.map(l => l.name))];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Megaphone size={14} className="text-[var(--color-primary)]" /> Co-Marketing / Joint-Campaign Planner</h3>
+        <p className="text-xs text-[var(--color-muted)]">Plan joint promotions with a trade partner — split the spend, pick a channel and date, and track each campaign from planned to live to done. Shared budgets let small firms market like big ones.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
+            <input list="net-comarket-parties" value={partner} onChange={e => setPartner(e.target.value)} placeholder="Co-brand partner" className={INP} />
+            <datalist id="net-comarket-parties">{partyOptions.map(p => <option key={p} value={p} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Title</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="Diwali bundle" className={INP} /></div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value)} className={INP}>
+              {["WhatsApp", "Email", "ONDC", "In-store", "Social", "Event"].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">My budget (₹)</label><input type="number" value={myBudget} onChange={e => setMyBudget(e.target.value)} placeholder="20000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Their budget (₹)</label><input type="number" value={theirBudget} onChange={e => setTheirBudget(e.target.value)} placeholder="20000" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add campaign</button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No joint campaigns yet. Plan one with a partner above.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Campaigns", value: String(items.length), color: "text-[var(--color-text)]", sub: `${items.filter(c => c.status === "live").length} live` },
+              { label: "My committed spend", value: formatAmount(totalMine), color: "text-[var(--color-text)]", sub: "" },
+              { label: "Partner committed", value: formatAmount(totalTheirs), color: "text-[var(--color-primary)]", sub: `${formatAmount(totalMine + totalTheirs)} combined` },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>{k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {items.map(c => (
+              <div key={c.id} className={`${CARD} p-4`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{c.title}</p>
+                    <p className="text-[11px] text-[var(--color-muted)]">with {c.partner} · {c.channel} · {c.date}</p>
+                  </div>
+                  <button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-[11px] text-[var(--color-muted)]">Mine <span className="text-[var(--color-text)] tabular-nums">{formatAmount(c.myBudget)}</span> · Theirs <span className="text-[var(--color-text)] tabular-nums">{formatAmount(c.theirBudget)}</span></p>
+                  <button onClick={() => cycle(c.id)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize ${
+                      c.status === "done" ? "bg-green-900/30 text-green-400 border-green-800/40" :
+                      c.status === "live" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" :
+                      "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                    {c.status}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #27 Introductions Given / Received Ledger ────────────────────────────────
+// Track warm introductions you make and receive across the network — reciprocity at a
+// glance, so relationships stay balanced (feature #52, distinct from referral incentives).
+type Intro = { id: string; date: string; direction: "given" | "received"; partner: string; toWhom: string; outcome: "pending" | "deal" | "dropped"; note: string };
+function IntroductionsLedger() {
+  const [intros, setIntros] = useFeatureState<Intro[]>("net-intros-ledger", []);
+  const [direction, setDirection] = useState<Intro["direction"]>("given");
+  const [partner, setPartner] = useState("");
+  const [toWhom, setToWhom] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    if (!partner.trim() || !toWhom.trim()) { toast.error("Enter both parties"); return; }
+    setIntros([{ id: crypto.randomUUID(), date: format(new Date(), "yyyy-MM-dd"), direction, partner: partner.trim(), toWhom: toWhom.trim(), outcome: "pending", note: note.trim() }, ...intros]);
+    setPartner(""); setToWhom(""); setNote("");
+    toast.success(direction === "given" ? "Introduction given logged" : "Introduction received logged");
+  };
+  const setOutcome = (id: string, outcome: Intro["outcome"]) => setIntros(intros.map(i => i.id === id ? { ...i, outcome } : i));
+  const remove = (id: string) => setIntros(intros.filter(i => i.id !== id));
+
+  const given = intros.filter(i => i.direction === "given").length;
+  const received = intros.filter(i => i.direction === "received").length;
+  const deals = intros.filter(i => i.outcome === "deal").length;
+  const balance = given - received;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Introductions Ledger</h3>
+        <p className="text-xs text-[var(--color-muted)]">Track the warm introductions you give and receive across your network. Keeping the give/receive balance visible keeps relationships reciprocal — the quiet engine of a referral network.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Direction</label>
+            <select value={direction} onChange={e => setDirection(e.target.value as Intro["direction"])} className={INP}>
+              <option value="given">I introduced</option>
+              <option value="received">I was introduced</option>
+            </select>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">{direction === "given" ? "Connector / me" : "Connector"}</label><input value={partner} onChange={e => setPartner(e.target.value)} placeholder="Who connected" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">To whom</label><input value={toWhom} onChange={e => setToWhom(e.target.value)} placeholder="New contact" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Note</label><input value={note} onChange={e => setNote(e.target.value)} placeholder="Context (optional)" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Log</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Given", value: String(given), color: "text-green-400" },
+          { label: "Received", value: String(received), color: "text-blue-400" },
+          { label: "Reciprocity", value: balance === 0 ? "Balanced" : balance > 0 ? `+${balance} given` : `${-balance} owed back`, color: balance >= 0 ? "text-green-400" : "text-yellow-400" },
+          { label: "Turned into deals", value: String(deals), color: "text-[var(--color-primary)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {intros.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No introductions logged yet.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Date", "Direction", "Connector", "To whom", "Outcome", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {intros.map(i => (
+                  <tr key={i.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.date}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${i.direction === "given" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-blue-900/30 text-blue-400 border-blue-800/40"}`}>
+                        {i.direction === "given" ? "Given" : "Received"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 font-medium">{i.partner}</td>
+                    <td className="px-4 py-2.5">{i.toWhom}{i.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{i.note}</span>}</td>
+                    <td className="px-4 py-2.5">
+                      <select value={i.outcome} onChange={e => setOutcome(i.id, e.target.value as Intro["outcome"])} className="bg-transparent text-xs outline-none cursor-pointer">
+                        <option value="pending">Pending</option>
+                        <option value="deal">Became a deal</option>
+                        <option value="dropped">Dropped</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #28 Collaborative-Forecast Sharing ───────────────────────────────────────
+// Share a forward demand forecast with a supplier so they can plan production — reduces
+// the bullwhip effect (feature #78). Tracks forecast vs the last actual you commit.
+type ForecastRow = { id: string; partner: string; month: string; forecastQty: number; lastActual: number };
+function CollaborativeForecast({ live }: { live: Live[] }) {
+  const [rows, setRows] = useFeatureState<ForecastRow[]>("net-forecast-share", []);
+  const [partner, setPartner] = useState("");
+  const [month, setMonth] = useState("");
+  const [forecastQty, setForecastQty] = useState("");
+  const [lastActual, setLastActual] = useState("");
+
+  const add = () => {
+    if (!partner.trim() || !month.trim()) { toast.error("Enter a partner and month"); return; }
+    setRows([...rows, {
+      id: crypto.randomUUID(), partner: partner.trim(), month: month.trim(),
+      forecastQty: Math.max(0, parseFloat(forecastQty) || 0), lastActual: Math.max(0, parseFloat(lastActual) || 0),
+    }]);
+    setPartner(""); setMonth(""); setForecastQty(""); setLastActual("");
+    toast.success("Forecast shared");
+  };
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const totalForecast = rows.reduce((s, r) => s + r.forecastQty, 0);
+  const partyOptions = [...new Set(live.map(l => l.name))];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Collaborative-Forecast Sharing</h3>
+        <p className="text-xs text-[var(--color-muted)]">Share a forward demand forecast with a supplier so they can plan production and hold the right stock. Comparing your forecast against the last actual exposes bias and tames the bullwhip effect.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Supplier</label>
+            <input list="net-forecast-parties" value={partner} onChange={e => setPartner(e.target.value)} placeholder="Supplier" className={INP} />
+            <datalist id="net-forecast-parties">{partyOptions.map(p => <option key={p} value={p} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Month</label><input value={month} onChange={e => setMonth(e.target.value)} placeholder="2026-07" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Forecast qty</label><input type="number" value={forecastQty} onChange={e => setForecastQty(e.target.value)} placeholder="1200" className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Last actual</label><input type="number" value={lastActual} onChange={e => setLastActual(e.target.value)} placeholder="1000" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Share</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No forecasts shared yet. Give a supplier a forward view of your demand.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Forecasts shared", value: String(rows.length), color: "text-[var(--color-text)]" },
+              { label: "Total forecast qty", value: formatAmount(totalForecast), color: "text-[var(--color-primary)]" },
+              { label: "Suppliers covered", value: String(new Set(rows.map(r => r.partner)).size), color: "text-[var(--color-text)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Supplier", "Month", "Forecast", "Last actual", "Change", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const pct = r.lastActual > 0 ? Math.round(((r.forecastQty - r.lastActual) / r.lastActual) * 100) : 0;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.partner}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.month}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.forecastQty)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastActual > 0 ? formatAmount(r.lastActual) : "—"}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-medium ${pct > 0 ? "text-green-400" : pct < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.lastActual > 0 ? `${pct >= 0 ? "+" : ""}${pct}%` : "—"}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #29 Partner NPS ──────────────────────────────────────────────────────────
+// Capture a 0–10 "how likely to recommend" score per partner, compute Net Promoter Score
+// (promoters − detractors), and flag detractors that need attention.
+type NPSEntry = { id: string; partner: string; score: number; comment: string };
+function PartnerNPS({ live }: { live: Live[] }) {
+  const [entries, setEntries] = useFeatureState<NPSEntry[]>("net-partner-nps", []);
+  const [partner, setPartner] = useState("");
+  const [score, setScore] = useState("8");
+  const [comment, setComment] = useState("");
+
+  const add = () => {
+    if (!partner.trim()) { toast.error("Enter a partner name"); return; }
+    const s = Math.min(10, Math.max(0, Math.round(parseFloat(score) || 0)));
+    setEntries([{ id: crypto.randomUUID(), partner: partner.trim(), score: s, comment: comment.trim() }, ...entries]);
+    setPartner(""); setComment(""); setScore("8");
+    toast.success("Partner score recorded");
+  };
+  const remove = (id: string) => setEntries(entries.filter(e => e.id !== id));
+
+  const nps = useMemo(() => {
+    if (entries.length === 0) return { value: 0, promoters: 0, passives: 0, detractors: 0 };
+    const promoters = entries.filter(e => e.score >= 9).length;
+    const detractors = entries.filter(e => e.score <= 6).length;
+    const passives = entries.length - promoters - detractors;
+    const value = Math.round(((promoters - detractors) / entries.length) * 100);
+    return { value, promoters, passives, detractors };
+  }, [entries]);
+
+  const partyOptions = [...new Set(live.map(l => l.name))];
+  const cat = (s: number) => s >= 9 ? "Promoter" : s <= 6 ? "Detractor" : "Passive";
+  const catColor = (s: number) => s >= 9 ? "text-green-400" : s <= 6 ? "text-red-400" : "text-yellow-400";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Smile size={14} className="text-[var(--color-primary)]" /> Partner NPS</h3>
+        <p className="text-xs text-[var(--color-muted)]">Record how likely each partner is to recommend working with you (0–10) and Headroom computes a Net Promoter Score. Detractors are the relationships to repair before they churn.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
+            <input list="net-nps-parties" value={partner} onChange={e => setPartner(e.target.value)} placeholder="Buyer / supplier" className={INP} />
+            <datalist id="net-nps-parties">{partyOptions.map(p => <option key={p} value={p} />)}</datalist>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Score (0–10)</label><input type="number" min={0} max={10} value={score} onChange={e => setScore(e.target.value)} className={INP} /></div>
+          <div className="md:col-span-2"><label className="text-[10px] text-[var(--color-muted)] block mb-1">Comment</label><input value={comment} onChange={e => setComment(e.target.value)} placeholder="What they said (optional)" className={INP} /></div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Record</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Net Promoter Score", value: String(nps.value), color: nps.value >= 50 ? "text-green-400" : nps.value >= 0 ? "text-yellow-400" : "text-red-400" },
+          { label: "Promoters (9–10)", value: String(nps.promoters), color: "text-green-400" },
+          { label: "Passives (7–8)", value: String(nps.passives), color: "text-yellow-400" },
+          { label: "Detractors (0–6)", value: String(nps.detractors), color: "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
+        ))}
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No partner scores yet. Record one above to compute your NPS.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Partner", "Score", "Category", "Comment", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {entries.map(e => (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{e.partner}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold">{e.score}/10</td>
+                    <td className={`px-4 py-2.5 font-medium ${catColor(e.score)}`}>{cat(e.score)}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.comment || "—"}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

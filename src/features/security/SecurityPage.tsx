@@ -8,6 +8,7 @@ import {
   CheckCircle2, Search, TrendingUp,
   CalendarClock, BarChart3, Zap, Scissors, Moon, Receipt, Users, GitMerge,
   Undo2, RefreshCw,
+  FileSearch, Network, Download, KeyRound, Banknote, ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -20,7 +21,8 @@ type TabId =
   | "overview" | "anomaly" | "duplicate" | "roundtrip" | "newpayee" | "bankchange"
   | "rules" | "access" | "scorecard" | "invoice" | "hygiene"
   | "weekend" | "benford" | "velocity" | "threshold" | "dormant" | "expense"
-  | "sod" | "vendordedupe" | "refund" | "recurring";
+  | "sod" | "vendordedupe" | "refund" | "recurring"
+  | "gstitc" | "iplog" | "dataexport" | "keyrotation" | "cashspike" | "paniclog";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -44,6 +46,12 @@ const TABS = [
   ["vendordedupe", "Vendor Dedupe", GitMerge],
   ["refund", "Refund Anomalies", Undo2],
   ["recurring", "Recurring-Charge Watch", RefreshCw],
+  ["gstitc", "Fake-ITC Risk", FileSearch],
+  ["iplog", "IP / Device Allowlist", Network],
+  ["dataexport", "Data-Export Audit", Download],
+  ["keyrotation", "Key Rotation", KeyRound],
+  ["cashspike", "Cash Spike Monitor", Banknote],
+  ["paniclog", "Sensitive-Action Log", ScrollText],
 ] as const;
 
 const DISCLAIMER = "These are heuristic flags — suspects, not verdicts. Confirm with source documents and the counterparty before acting.";
@@ -190,6 +198,12 @@ export default function SecurityPage() {
       {tab === "vendordedupe" && <VendorDedupe txns={txns} />}
       {tab === "refund" && <RefundAnomalies txns={txns} />}
       {tab === "recurring" && <RecurringChargeWatch txns={txns} />}
+      {tab === "gstitc" && <FakeItcRisk txns={txns} />}
+      {tab === "iplog" && <IpAllowlistRegister />}
+      {tab === "dataexport" && <DataExportAudit />}
+      {tab === "keyrotation" && <KeyRotationReminder />}
+      {tab === "cashspike" && <CashSpikeMonitor txns={txns} />}
+      {tab === "paniclog" && <SensitiveActionLog />}
     </div>
   );
 }
@@ -1661,6 +1675,539 @@ function RecurringChargeWatch({ txns }: { txns: Txn[] }) {
                     <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.latest))}</td>
                     <td className={`px-4 py-2.5 tabular-nums text-xs ${r.changePct >= 15 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{r.changePct > 0 ? "+" : ""}{r.changePct}%</td>
                     <td className="px-4 py-2.5">{r.isNew && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">New</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #21 GST Fake-ITC Risk Flags ───────────────────────────────────────────────────
+// A valid GSTIN is 15 chars: 2-digit state code + 10-char PAN + 1 entity + 'Z' + 1 checksum.
+const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+function FakeItcRisk({ txns }: { txns: Txn[] }) {
+  type Rec = { id: string; vendor: string; gstin: string };
+  const [recs, setRecs] = useFeatureState<Rec[]>("sec-vendor-gstins", []);
+  const [vendor, setVendor] = useState("");
+  const [gstin, setGstin] = useState("");
+
+  const knownVendors = useMemo(
+    () => [...new Set(outflows(txns).map(t => t.counterparty).filter(Boolean))].sort(),
+    [txns],
+  );
+
+  const add = () => {
+    const g = gstin.trim().toUpperCase();
+    if (!vendor.trim() || !g) { toast.error("Enter a vendor and a GSTIN"); return; }
+    setRecs([...recs, { id: crypto.randomUUID(), vendor: vendor.trim(), gstin: g }]);
+    setVendor(""); setGstin("");
+    toast.success("Supplier GSTIN recorded");
+  };
+
+  const analysed = useMemo(() => {
+    const byGstin = new Map<string, Set<string>>();
+    recs.forEach(r => {
+      const set = byGstin.get(r.gstin) ?? new Set<string>();
+      set.add(r.vendor.trim().toLowerCase());
+      byGstin.set(r.gstin, set);
+    });
+    return recs.map(r => {
+      const reasons: string[] = [];
+      if (!GSTIN_RE.test(r.gstin)) reasons.push("Malformed GSTIN");
+      const stateCode = parseInt(r.gstin.slice(0, 2), 10);
+      if (GSTIN_RE.test(r.gstin) && (isNaN(stateCode) || stateCode < 1 || stateCode > 38)) reasons.push("Invalid state code");
+      if ((byGstin.get(r.gstin)?.size ?? 0) > 1) reasons.push("Same GSTIN, multiple vendors");
+      return { rec: r, reasons };
+    }).sort((a, b) => b.reasons.length - a.reasons.length);
+  }, [recs]);
+
+  const risky = analysed.filter(a => a.reasons.length > 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> GST Fake-ITC Risk Flags</h2>
+        <p className="text-xs text-[var(--color-muted)]">Record each supplier's GSTIN, then screen for the structural tells of bogus-firm ITC fraud: malformed GSTINs, impossible state codes, and one GSTIN reused across several "independent" vendors. These are leads to verify on the GST portal — never proof on their own.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier</label>
+            <input list="sec-itc-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Supplier name" className={INP} />
+            <datalist id="sec-itc-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN</label>
+            <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="27AAPFU0939F1ZV" className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Add supplier</button>
+        </div>
+      </div>
+
+      {risky.length > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {risky.length} supplier GSTIN(s) carry risk markers — verify validity and 2B match before claiming ITC.</p>
+        </div>
+      )}
+
+      {recs.length === 0 ? (
+        <Empty icon={FileSearch} msg="No supplier GSTINs recorded yet. Add them to screen for fake-ITC risk." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Supplier", "GSTIN", "Risk markers", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {analysed.map(a => (
+                  <tr key={a.rec.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{a.rec.vendor}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{a.rec.gstin}</td>
+                    <td className="px-4 py-2.5">
+                      {a.reasons.length === 0
+                        ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Looks valid</span>
+                        : <div className="flex flex-wrap gap-1">{a.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRecs(recs.filter(x => x.id !== a.rec.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #22 IP / Device Allowlist Register ────────────────────────────────────────────
+function IpAllowlistRegister() {
+  type Entry = { id: string; label: string; kind: "ip" | "device"; value: string; addedAt: string; trusted: boolean };
+  const [entries, setEntries] = useFeatureState<Entry[]>("sec-ip-allowlist", []);
+  const [label, setLabel] = useState("");
+  const [kind, setKind] = useState<"ip" | "device">("ip");
+  const [value, setValue] = useState("");
+
+  const IPV4 = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+  const add = () => {
+    if (!label.trim() || !value.trim()) { toast.error("Enter a label and a value"); return; }
+    if (kind === "ip" && !IPV4.test(value.trim())) { toast.error("Enter a valid IPv4 address or CIDR (e.g. 203.0.113.5)"); return; }
+    setEntries([...entries, { id: crypto.randomUUID(), label: label.trim(), kind, value: value.trim(), addedAt: new Date().toISOString().slice(0, 10), trusted: true }]);
+    setLabel(""); setValue("");
+    toast.success(`${kind === "ip" ? "IP" : "Device"} added to allowlist`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> IP / Device Allowlist Register</h2>
+        <p className="text-xs text-[var(--color-muted)]">Maintain the office IPs and known devices that should ever touch banking and payment functions. A short, deliberate allowlist shrinks the attack surface — anything outside it is worth a step-up check before it moves money.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Label</label>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Head office, Priya's laptop" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={kind} onChange={e => setKind(e.target.value as "ip" | "device")} className={INP}>
+              <option value="ip">IP / CIDR</option>
+              <option value="device">Device</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{kind === "ip" ? "IPv4 / CIDR" : "Device ID / name"}</label>
+            <input value={value} onChange={e => setValue(e.target.value)} placeholder={kind === "ip" ? "203.0.113.0/24" : "MacBook-Pro-Finance"} className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Add to allowlist</button>
+        </div>
+      </div>
+
+      {entries.length === 0 ? (
+        <Empty icon={Network} msg="No allowlisted IPs or devices yet." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Label", "Type", "Value", "Added", "Status", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {entries.map(e => (
+                  <tr key={e.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{e.label}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.kind === "ip" ? "IP / CIDR" : "Device"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{e.value}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(e.addedAt)}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => setEntries(entries.map(x => x.id === e.id ? { ...x, trusted: !x.trusted } : x))}
+                        className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${e.trusted ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                        {e.trusted ? "Trusted" : "Revoked"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #23 Data-Export Audit Log ──────────────────────────────────────────────────────
+function DataExportAudit() {
+  type Export = { id: string; at: string; who: string; what: string; rows: number; reason: string; containsPii: boolean };
+  const [logs, setLogs] = useFeatureState<Export[]>("sec-export-audit", []);
+  const [who, setWho] = useState("");
+  const [what, setWhat] = useState("Transactions");
+  const [rows, setRows] = useState("");
+  const [reason, setReason] = useState("");
+  const [pii, setPii] = useState(false);
+
+  const add = () => {
+    if (!who.trim() || !reason.trim()) { toast.error("Enter who exported and why"); return; }
+    setLogs([{ id: crypto.randomUUID(), at: new Date().toISOString(), who: who.trim(), what, rows: Math.max(0, parseInt(rows, 10) || 0), reason: reason.trim(), containsPii: pii }, ...logs]);
+    setWho(""); setRows(""); setReason(""); setPii(false);
+    toast.success("Export logged");
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const piiCount = logs.filter(l => l.containsPii).length;
+  const last30 = logs.filter(l => daysBetween(l.at.slice(0, 10), today) <= 30).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Download size={14} className="text-[var(--color-primary)]" /> Data-Export Audit Log</h2>
+        <p className="text-xs text-[var(--color-muted)]">Record every bulk export of financial or customer data — who pulled it, what, and why. A standing export log is the cheapest deterrent against insider data exfiltration and the evidence trail a DPDP audit expects.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Exported by</label>
+            <input value={who} onChange={e => setWho(e.target.value)} placeholder="e.g. Rohit" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Dataset</label>
+            <select value={what} onChange={e => setWhat(e.target.value)} className={INP}>
+              {["Transactions", "Invoices", "Customers", "Vendors", "Payroll", "Full backup"].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rows</label>
+            <input value={rows} onChange={e => setRows(e.target.value)} placeholder="e.g. 1200" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reason</label>
+            <input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. CA audit pack" className={INP} />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] cursor-pointer">
+              <input type="checkbox" checked={pii} onChange={e => setPii(e.target.checked)} className="accent-[var(--color-primary)]" /> Has PII
+            </label>
+            <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Log</button>
+          </div>
+        </div>
+      </div>
+
+      {logs.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Exports logged", value: String(logs.length), color: "text-[var(--color-text)]" },
+            { label: "Last 30 days", value: String(last30), color: last30 > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Containing PII", value: String(piiCount), color: piiCount > 0 ? "text-orange-400" : "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {logs.length === 0 ? (
+        <Empty icon={Download} msg="No exports logged yet." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["When", "By", "Dataset", "Rows", "Reason", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {logs.map(l => (
+                  <tr key={l.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{l.who}</td>
+                    <td className="px-4 py-2.5 text-xs">{l.what}{l.containsPii && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">PII</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{l.rows || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{l.reason}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #24 API-Key / Credential Rotation Reminder ─────────────────────────────────────
+function KeyRotationReminder() {
+  type Cred = { id: string; name: string; lastRotated: string; intervalDays: number };
+  const [creds, setCreds] = useFeatureState<Cred[]>("sec-key-rotation", []);
+  const [name, setName] = useState("");
+  const [lastRotated, setLastRotated] = useState(new Date().toISOString().slice(0, 10));
+  const [intervalDays, setIntervalDays] = useState(90);
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Name the credential"); return; }
+    setCreds([...creds, { id: crypto.randomUUID(), name: name.trim(), lastRotated, intervalDays }]);
+    setName("");
+    toast.success("Credential added to rotation tracker");
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = useMemo(() => creds.map(c => {
+    const age = daysBetween(c.lastRotated, today);
+    const dueIn = c.intervalDays - age;
+    const state: "overdue" | "soon" | "ok" = dueIn < 0 ? "overdue" : dueIn <= 14 ? "soon" : "ok";
+    return { c, age, dueIn, state };
+  }).sort((a, b) => a.dueIn - b.dueIn), [creds, today]);
+
+  const overdue = rows.filter(r => r.state === "overdue").length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><KeyRound size={14} className="text-[var(--color-primary)]" /> API-Key / Credential Rotation</h2>
+        <p className="text-xs text-[var(--color-muted)]">Track every API key, bank token and shared password against a rotation schedule. Stale, never-rotated credentials are a quiet liability — this tracker tells you what is overdue before an attacker does.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Credential</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Razorpay API key" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last rotated</label>
+            <input type="date" value={lastRotated} max={today} onChange={e => setLastRotated(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rotate every (days)</label>
+            <input type="number" value={intervalDays} onChange={e => setIntervalDays(Math.max(1, Number(e.target.value)))} className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Track</button>
+        </div>
+      </div>
+
+      {overdue > 0 && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {overdue} credential(s) overdue for rotation — rotate them now and revoke the old values.</p>
+        </div>
+      )}
+
+      {creds.length === 0 ? (
+        <Empty icon={KeyRound} msg="No credentials tracked yet. Add your keys and tokens to schedule rotation." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["Credential", "Last rotated", "Age", "Due", "Status", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.c.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.c.name}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.c.lastRotated)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.age}d</td>
+                    <td className={`px-4 py-2.5 tabular-nums text-xs ${r.state === "overdue" ? "text-red-400 font-semibold" : r.state === "soon" ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.dueIn < 0 ? `${-r.dueIn}d overdue` : `in ${r.dueIn}d`}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${r.state === "overdue" ? "bg-red-950/30 text-red-400 border-red-800/40" : r.state === "soon" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{r.state === "overdue" ? "Overdue" : r.state === "soon" ? "Due soon" : "OK"}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right space-x-2">
+                      <button onClick={() => setCreds(creds.map(x => x.id === r.c.id ? { ...x, lastRotated: today } : x))} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark rotated</button>
+                      <button onClick={() => setCreds(creds.filter(x => x.id !== r.c.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #25 Cash Transaction Spike Monitor ─────────────────────────────────────────────
+function CashSpikeMonitor({ txns }: { txns: Txn[] }) {
+  const [threshold, setThreshold] = useFeatureState<number>("sec-cash-threshold", 200000);
+
+  const result = useMemo(() => {
+    const cashRe = /\bcash\b|atm|withdrawal|deposit/i;
+    const cash = txns.filter(t => cashRe.test(t.description) || cashRe.test(t.category));
+    const byMonth = new Map<string, { total: number; count: number }>();
+    cash.forEach(t => {
+      const m = t.date.slice(0, 7);
+      const cur = byMonth.get(m) ?? { total: 0, count: 0 };
+      cur.total += Math.abs(t.amount); cur.count += 1;
+      byMonth.set(m, cur);
+    });
+    const months = [...byMonth.entries()].map(([m, v]) => ({ month: m, ...v })).sort((a, b) => a.month.localeCompare(b.month));
+    const vals = months.map(m => m.total);
+    const mean = vals.length ? vals.reduce((s, n) => s + n, 0) / vals.length : 0;
+    const spikeMonths = months.filter(m => mean > 0 && m.total > mean * 1.5);
+    const bigSingles = cash.filter(t => Math.abs(t.amount) >= threshold).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+    return { months, mean, spikeMonths, bigSingles, totalCash: vals.reduce((s, n) => s + n, 0) };
+  }, [txns, threshold]);
+
+  const maxMonth = Math.max(1, ...result.months.map(m => m.total));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Cash Transaction Spike Monitor</h2>
+        <p className="text-xs text-[var(--color-muted)]">Cash-heavy months and large single cash movements draw AML scrutiny and mask skimming. This tracks cash entries by month, flags months running 50%+ above your average, and lists single cash transactions above your reporting threshold.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Large-cash threshold (₹)</label>
+          <input type="number" value={threshold} onChange={e => setThreshold(Math.max(0, Number(e.target.value)))} className={INP} />
+        </div>
+      </div>
+
+      {result.months.length === 0 ? (
+        <Empty icon={Banknote} msg="No cash-tagged transactions found in the ledger." />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total cash moved", value: formatCurrency(Math.round(result.totalCash)), color: "text-[var(--color-text)]" },
+              { label: "Avg / month", value: formatCurrency(Math.round(result.mean)), color: "text-[var(--color-text)]" },
+              { label: "Spike months", value: String(result.spikeMonths.length), color: result.spikeMonths.length > 0 ? "text-orange-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${CARD} p-5`}>
+            <p className="text-sm font-semibold mb-3">Cash movement by month</p>
+            <div className="space-y-2">
+              {result.months.map(m => {
+                const spike = result.mean > 0 && m.total > result.mean * 1.5;
+                return (
+                  <div key={m.month} className="flex items-center gap-3 text-xs">
+                    <span className="w-16 tabular-nums text-[var(--color-muted)]">{m.month}</span>
+                    <div className="flex-1 h-3 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${(m.total / maxMonth) * 100}%`, background: spike ? "#eab308" : "var(--color-primary)" }} />
+                    </div>
+                    <span className={`w-28 text-right tabular-nums ${spike ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}`}>{formatCurrency(Math.round(m.total))}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {result.bigSingles.length > 0 && (
+            <div className={`${CARD} overflow-hidden`}>
+              <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{result.bigSingles.length} single cash transaction(s) ≥ {formatCurrency(threshold)}</p></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Counterparty", "Amount", "Description"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {result.bigSingles.map(t => (
+                      <tr key={t.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                        <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <Note />
+    </div>
+  );
+}
+
+// ── #26 Sensitive / Privileged-Action Log ──────────────────────────────────────────
+function SensitiveActionLog() {
+  type Action = { id: string; at: string; actor: string; action: string; detail: string };
+  const ACTIONS = ["Changed approval limit", "Edited vendor bank details", "Granted access", "Revoked access", "Rotated key / password", "Exported data", "Deleted records", "Other"] as const;
+  const [logs, setLogs] = useFeatureState<Action[]>("sec-action-log", []);
+  const [actor, setActor] = useState("");
+  const [action, setAction] = useState<string>(ACTIONS[0]);
+  const [detail, setDetail] = useState("");
+
+  const add = () => {
+    if (!actor.trim()) { toast.error("Enter who performed the action"); return; }
+    setLogs([{ id: crypto.randomUUID(), at: new Date().toISOString(), actor: actor.trim(), action, detail: detail.trim() }, ...logs]);
+    setActor(""); setDetail("");
+    toast.success("Sensitive action logged");
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const last7 = logs.filter(l => daysBetween(l.at.slice(0, 10), today) <= 7).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Sensitive-Action Log</h2>
+        <p className="text-xs text-[var(--color-muted)]">An append-style record of the privileged actions that move money or change controls — limit changes, bank-detail edits, access grants, key rotations. Logging them as they happen makes privilege abuse visible and gives auditors a clean trail.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Performed by</label>
+            <input value={actor} onChange={e => setActor(e.target.value)} placeholder="e.g. Owner" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Action</label>
+            <select value={action} onChange={e => setAction(e.target.value)} className={INP}>
+              {ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Detail</label>
+            <input value={detail} onChange={e => setDetail(e.target.value)} placeholder="e.g. raised to ₹2,00,000" className={INP} />
+          </div>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">Log action</button>
+        </div>
+      </div>
+
+      {logs.length > 0 && (
+        <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)]"><strong className="text-[var(--color-text)]">{logs.length}</strong> privileged action(s) on record · <strong className="text-[var(--color-text)]">{last7}</strong> in the last 7 days.</p>
+        </div>
+      )}
+
+      {logs.length === 0 ? (
+        <Empty icon={ScrollText} msg="No sensitive actions logged yet." />
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]"><tr>{["When", "By", "Action", "Detail", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {logs.map(l => (
+                  <tr key={l.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{l.actor}</td>
+                    <td className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-[var(--color-text)] border border-[var(--color-border)]">{l.action}</span></td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{l.detail || "—"}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>

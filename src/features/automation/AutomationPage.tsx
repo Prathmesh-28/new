@@ -9,6 +9,7 @@ import {
   CheckCircle2, AlertTriangle, Trash2, Clock, ArrowRight,
   Hash, Tags, Network, Timer, Repeat2, FolderTree, ListChecks,
   FileBarChart, Percent, Send,
+  Filter, Gauge, Crown, RefreshCw, History, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInCalendarDays, parseISO } from "date-fns";
@@ -21,7 +22,8 @@ type TabId =
   | "overview" | "rules" | "scheduler" | "approvals" | "recipes" | "bulk"
   | "notifications" | "tasks" | "activity" | "webhooks" | "templates"
   | "numbering" | "categorize" | "escalation" | "sla" | "journals"
-  | "routing" | "validation" | "reports" | "discounts" | "cadence";
+  | "routing" | "validation" | "reports" | "discounts" | "cadence"
+  | "segments" | "kpiwatch" | "tiered" | "batch" | "runlog" | "creditlimit";
 
 const TABS = [
   ["overview", "Overview", Workflow],
@@ -45,6 +47,12 @@ const TABS = [
   ["reports", "Scheduled Reports", FileBarChart],
   ["discounts", "Discount Rules", Percent],
   ["cadence", "Reminder Cadences", Send],
+  ["segments", "Segment Builder", Filter],
+  ["kpiwatch", "KPI Watch", Gauge],
+  ["tiered", "Tier Reminder Policy", Crown],
+  ["batch", "Status-Update Rules", RefreshCw],
+  ["runlog", "Run History", History],
+  ["creditlimit", "Credit-Limit Rules", ShieldAlert],
 ] as const;
 
 export default function AutomationPage() {
@@ -92,6 +100,12 @@ export default function AutomationPage() {
       {tab === "reports" && <ScheduledReports />}
       {tab === "discounts" && <DiscountRules />}
       {tab === "cadence" && <ReminderCadences />}
+      {tab === "segments" && <SegmentBuilder />}
+      {tab === "kpiwatch" && <KpiWatch />}
+      {tab === "tiered" && <TierReminderPolicy />}
+      {tab === "batch" && <StatusUpdateRules />}
+      {tab === "runlog" && <RunHistory />}
+      {tab === "creditlimit" && <CreditLimitRules />}
     </div>
   );
 }
@@ -1908,6 +1922,637 @@ function ReminderCadences() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #22 Saved-Filter / Segment Builder ─────────────────────────────────────────
+type SegSubject = "transaction" | "invoice";
+type SegCond = { id: string; field: string; op: ">" | "<" | "==" | "contains"; value: string };
+type Segment = { id: string; name: string; subject: SegSubject; logic: "all" | "any"; conds: SegCond[] };
+const SEG_FIELDS: Record<SegSubject, { id: string; label: string; numeric: boolean }[]> = {
+  transaction: [
+    { id: "amount", label: "Amount (abs ₹)", numeric: true },
+    { id: "category", label: "Category", numeric: false },
+    { id: "counterparty", label: "Counterparty", numeric: false },
+    { id: "description", label: "Description", numeric: false },
+  ],
+  invoice: [
+    { id: "amount", label: "Amount (₹)", numeric: true },
+    { id: "status", label: "Status", numeric: false },
+    { id: "customer", label: "Customer", numeric: false },
+  ],
+};
+function SegmentBuilder() {
+  const { store } = useApp();
+  const [segments, setSegments] = useFeatureState<Segment[]>("auto-segments", []);
+  const [, pushActivity] = useActivity();
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState<SegSubject>("transaction");
+  const [logic, setLogic] = useState<Segment["logic"]>("all");
+  const [conds, setConds] = useState<SegCond[]>([]);
+  const [field, setField] = useState("amount");
+  const [op, setOp] = useState<SegCond["op"]>(">");
+  const [value, setValue] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const fieldMeta = SEG_FIELDS[subject].find(f => f.id === field) ?? SEG_FIELDS[subject][0];
+
+  const addCond = () => {
+    if (!value.trim()) { toast.error("Enter a value for the condition"); return; }
+    setConds(prev => [...prev, { id: crypto.randomUUID(), field, op, value: value.trim() }]);
+    setValue("");
+  };
+  const save = () => {
+    if (!name.trim() || conds.length === 0) { toast.error("Name and at least one condition required"); return; }
+    setSegments(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), subject, logic, conds }]);
+    pushActivity({ tool: "Segment Builder", kind: "create", message: `Segment "${name.trim()}" saved (${conds.length} filter)` });
+    setName(""); setConds([]);
+    toast.success("Segment saved");
+  };
+
+  // "amount" is the only numeric field; everything else is text contains / equals.
+  const matchOne = (c: SegCond, num: number, hayText: string): boolean => {
+    if (c.field === "amount") {
+      const v = parseFloat(c.value);
+      if (isNaN(v)) return false;
+      return c.op === ">" ? num > v : c.op === "<" ? num < v : num === v;
+    }
+    return c.op === "==" ? hayText.toLowerCase() === c.value.toLowerCase() : hayText.toLowerCase().includes(c.value.toLowerCase());
+  };
+
+  const evaluate = (s: Segment): { label: string; sub: string }[] => {
+    const test = (num: number, fields: Record<string, string>): boolean => {
+      const results = s.conds.map(c => matchOne(c, num, fields[c.field] ?? ""));
+      return s.logic === "all" ? results.every(Boolean) : results.some(Boolean);
+    };
+    if (s.subject === "transaction") {
+      return store.transactions.filter(t => test(Math.abs(t.amount), {
+        amount: String(Math.abs(t.amount)), category: t.category, counterparty: t.counterparty, description: t.description,
+      })).map(t => ({ label: t.description || t.counterparty, sub: `${t.category} · ${formatCurrency(Math.abs(t.amount))}` }));
+    }
+    return store.invoices.filter(inv => test(inv.amount, {
+      amount: String(inv.amount), status: inv.status, customer: inv.customer,
+    })).map(inv => ({ label: inv.customer, sub: `${inv.status} · ${formatCurrency(inv.amount)}` }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Filter size={14} className="text-[var(--color-primary)]" /> Saved-Filter / Segment Builder</h3>
+        <p className="text-xs text-[var(--color-muted)]">Compose a reusable multi-condition segment over your live records (AND / OR). Saved segments can later feed bulk actions and reminder policies — preview counts are computed against current data.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Segment name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. High-value vendors" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Over</label>
+            <select value={subject} onChange={e => { setSubject(e.target.value as SegSubject); setField("amount"); setConds([]); }} className={INP}>
+              <option value="transaction">Transactions</option>
+              <option value="invoice">Invoices</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Match</label>
+            <select value={logic} onChange={e => setLogic(e.target.value as Segment["logic"])} className={INP}>
+              <option value="all">All conditions (AND)</option>
+              <option value="any">Any condition (OR)</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Field</label>
+            <select value={field} onChange={e => { setField(e.target.value); setOp(SEG_FIELDS[subject].find(f => f.id === e.target.value)?.numeric ? ">" : "contains"); }} className={INP}>
+              {SEG_FIELDS[subject].map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Op</label>
+            <select value={op} onChange={e => setOp(e.target.value as SegCond["op"])} className={INP}>
+              {fieldMeta.numeric
+                ? (<>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value="==">=</option>
+                  </>)
+                : (<>
+                    <option value="contains">contains</option>
+                    <option value="==">equals</option>
+                  </>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Value</label>
+            <input value={value} onChange={e => setValue(e.target.value)} placeholder={fieldMeta.numeric ? "50000" : "e.g. pending"} className={INP} />
+          </div>
+          <button onClick={addCond} className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]">
+            <Plus size={13} /> Add filter
+          </button>
+        </div>
+        {conds.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {conds.map(c => (
+              <span key={c.id} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 font-mono">
+                {c.field} {c.op} {c.value}
+                <button onClick={() => setConds(prev => prev.filter(x => x.id !== c.id))} className="ml-1.5 text-[var(--color-muted)] hover:text-red-400">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <button onClick={save} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <CheckCircle2 size={13} /> Save segment
+        </button>
+      </div>
+
+      {segments.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No segments saved yet.</p>
+      ) : segments.map(s => {
+        const matches = evaluate(s);
+        const open = openId === s.id;
+        return (
+          <div key={s.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-medium">{s.name}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">{s.subject}s · match {s.logic === "all" ? "ALL" : "ANY"} · {s.conds.map(c => `${c.field}${c.op}${c.value}`).join(s.logic === "all" ? " & " : " | ")}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold tabular-nums ${matches.length > 0 ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>{matches.length} match{matches.length === 1 ? "" : "es"}</span>
+                <button onClick={() => setOpenId(open ? null : s.id)} className="flex items-center gap-1 text-[10px] text-[var(--color-primary)] hover:underline"><Play size={10} /> {open ? "Hide" : "Preview"}</button>
+                <button onClick={() => { setSegments(prev => prev.filter(x => x.id !== s.id)); pushActivity({ tool: "Segment Builder", kind: "delete", message: `Segment "${s.name}" removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+            {open && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                {matches.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No live records match this segment.</p> : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {matches.slice(0, 25).map((m, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                        <span className="font-medium truncate pr-2">{m.label}</span>
+                        <span className="text-[var(--color-muted)] tabular-nums shrink-0">{m.sub}</span>
+                      </div>
+                    ))}
+                    {matches.length > 25 && <p className="text-[10px] text-[var(--color-muted)] px-1">+{matches.length - 25} more</p>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #23 KPI-Watch Rules (notify on threshold) ──────────────────────────────────
+type KpiMetric = "cash-balance" | "overdue-ar" | "open-ar" | "obligations-due-30" | "month-outflow";
+type KpiRow = { id: string; metric: KpiMetric; op: ">" | "<"; threshold: number; notify: string };
+function KpiWatch() {
+  const { store } = useApp();
+  const [rows, setRows] = useFeatureState<KpiRow[]>("auto-kpiwatch", []);
+  const [, pushActivity] = useActivity();
+  const [metric, setMetric] = useState<KpiMetric>("cash-balance");
+  const [op, setOp] = useState<KpiRow["op"]>("<");
+  const [threshold, setThreshold] = useState("500000");
+  const [notify, setNotify] = useState("");
+  const today = new Date();
+
+  const METRICS: { id: KpiMetric; label: string }[] = [
+    { id: "cash-balance", label: "Total cash balance" },
+    { id: "overdue-ar", label: "Overdue receivables" },
+    { id: "open-ar", label: "Open receivables" },
+    { id: "obligations-due-30", label: "Obligations due ≤ 30d" },
+    { id: "month-outflow", label: "Outflows this month" },
+  ];
+
+  const value = useMemo(() => {
+    const m: Record<KpiMetric, number> = {
+      "cash-balance": store.bankAccounts.reduce((s, a) => s + a.balance, 0),
+      "overdue-ar": store.invoices.filter(i => i.status !== "paid" && differenceInCalendarDays(today, parseISO(i.dueDate)) > 0).reduce((s, i) => s + i.amount, 0),
+      "open-ar": store.invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0),
+      "obligations-due-30": store.obligations.filter(o => { const d = differenceInCalendarDays(parseISO(o.dueDate), today); return d >= 0 && d <= 30; }).reduce((s, o) => s + o.amount, 0),
+      "month-outflow": store.transactions.filter(t => t.amount < 0 && parseISO(t.date).getMonth() === today.getMonth() && parseISO(t.date).getFullYear() === today.getFullYear()).reduce((s, t) => s + Math.abs(t.amount), 0),
+    };
+    return m;
+  }, [store.bankAccounts, store.invoices, store.obligations, store.transactions]);
+
+  const add = () => {
+    const t = parseFloat(threshold);
+    if (isNaN(t)) { toast.error("Enter a numeric threshold"); return; }
+    if (!notify.trim()) { toast.error("Enter who to notify"); return; }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), metric, op, threshold: t, notify: notify.trim() }]);
+    pushActivity({ tool: "KPI Watch", kind: "create", message: `Watch ${METRICS.find(m => m.id === metric)?.label} ${op} ${formatCurrency(t)}` });
+    setNotify("");
+    toast.success("KPI watch added");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> KPI-Watch Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Define a threshold on a live finance metric and who should be alerted when it breaches. Current values are computed from your data; breaches are flagged below — no alert is actually sent.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">When metric</label>
+            <select value={metric} onChange={e => setMetric(e.target.value as KpiMetric)} className={INP}>
+              {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Is</label>
+            <select value={op} onChange={e => setOp(e.target.value as KpiRow["op"])} className={INP}>
+              <option value="<">below</option>
+              <option value=">">above</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Threshold (₹)</label>
+            <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Notify (name/role)</label>
+            <input value={notify} onChange={e => setNotify(e.target.value)} placeholder="e.g. Owner" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add watch
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No KPI watches defined.</p>
+      ) : rows.map(r => {
+        const current = value[r.metric];
+        const breached = r.op === "<" ? current < r.threshold : current > r.threshold;
+        return (
+          <div key={r.id} className={`${CARD} p-4 flex items-center justify-between gap-3 flex-wrap`}>
+            <div>
+              <p className="text-sm font-medium">{METRICS.find(m => m.id === r.metric)?.label} {r.op === "<" ? "below" : "above"} {formatCurrency(r.threshold)}</p>
+              <p className="text-[11px] text-[var(--color-muted)]">Notify {r.notify} · current <strong className="text-[var(--color-text)]">{formatCurrency(current)}</strong></p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${breached ? "bg-red-950/30 text-red-400" : "bg-green-950/30 text-green-400"}`}>{breached ? "Breached now" : "Within range"}</span>
+              <button onClick={() => { setRows(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "KPI Watch", kind: "delete", message: `Watch removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #24 Customer-Tier Reminder Policy ──────────────────────────────────────────
+type Tier = "platinum" | "gold" | "standard";
+type TierPolicy = { id: string; tier: Tier; minOutstanding: number; firstOffset: number; channel: "whatsapp" | "email" | "call" };
+function TierReminderPolicy() {
+  const { store } = useApp();
+  const [policies, setPolicies] = useFeatureState<TierPolicy[]>("auto-tier-policy", []);
+  const [, pushActivity] = useActivity();
+  const [tier, setTier] = useState<Tier>("platinum");
+  const [minOutstanding, setMinOutstanding] = useState("200000");
+  const [firstOffset, setFirstOffset] = useState("7");
+  const [channel, setChannel] = useState<TierPolicy["channel"]>("call");
+
+  const add = () => {
+    const m = parseFloat(minOutstanding), o = parseInt(firstOffset);
+    if (isNaN(m) || isNaN(o)) { toast.error("Enter a numeric outstanding floor and offset"); return; }
+    setPolicies(prev => [...prev.filter(p => p.tier !== tier), { id: crypto.randomUUID(), tier, minOutstanding: m, firstOffset: o, channel }].sort((a, b) => b.minOutstanding - a.minOutstanding));
+    pushActivity({ tool: "Tier Reminder Policy", kind: "create", message: `Policy set for ${tier} tier` });
+    toast.success("Tier policy saved");
+  };
+
+  // Group open invoices by customer, total their outstanding, then classify into the matching tier.
+  const customers = useMemo(() => {
+    const map = new Map<string, number>();
+    store.invoices.filter(i => i.status !== "paid").forEach(i => map.set(i.customer, (map.get(i.customer) ?? 0) + i.amount));
+    return [...map.entries()].map(([customer, outstanding]) => ({ customer, outstanding }));
+  }, [store.invoices]);
+
+  const tierFor = (outstanding: number): TierPolicy | undefined =>
+    [...policies].sort((a, b) => b.minOutstanding - a.minOutstanding).find(p => outstanding >= p.minOutstanding);
+
+  const TIER_COLOR: Record<Tier, string> = { platinum: "text-cyan-400", gold: "text-yellow-400", standard: "text-[var(--color-muted)]" };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Crown size={14} className="text-[var(--color-primary)]" /> Customer-Tier Reminder Policy</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set a different first-nudge timing and channel per customer tier (tier derived from total open outstanding). The table classifies your live customers — sending requires a backend scheduler (preview only).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier</label>
+            <select value={tier} onChange={e => setTier(e.target.value as Tier)} className={INP}>
+              <option value="platinum">Platinum</option>
+              <option value="gold">Gold</option>
+              <option value="standard">Standard</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Outstanding ≥ (₹)</label>
+            <input type="number" value={minOutstanding} onChange={e => setMinOutstanding(e.target.value)} placeholder="200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First nudge (days overdue)</label>
+            <input type="number" value={firstOffset} onChange={e => setFirstOffset(e.target.value)} placeholder="7" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as TierPolicy["channel"])} className={INP}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+              <option value="call">Call task</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <Plus size={13} /> Save tier policy (replaces same tier)
+        </button>
+      </div>
+
+      {policies.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {policies.map(p => (
+            <div key={p.id} className={`${CARD} px-3 py-2 flex items-center gap-2`}>
+              <span className={`text-xs font-semibold capitalize ${TIER_COLOR[p.tier]}`}>{p.tier}</span>
+              <span className="text-[11px] text-[var(--color-muted)]">≥ {formatCurrency(p.minOutstanding)} · +{p.firstOffset}d · {p.channel}</span>
+              <button onClick={() => { setPolicies(prev => prev.filter(x => x.id !== p.id)); pushActivity({ tool: "Tier Reminder Policy", kind: "delete", message: `${p.tier} policy removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {customers.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No open customer balances to classify.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Customer", "Open outstanding", "Tier", "First nudge", "Channel"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {[...customers].sort((a, b) => b.outstanding - a.outstanding).slice(0, 40).map(c => {
+                const p = tierFor(c.outstanding);
+                return (
+                  <tr key={c.customer} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{c.customer}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(c.outstanding)}</td>
+                    <td className="px-4 py-2.5 capitalize">{p ? <span className={TIER_COLOR[p.tier]}>{p.tier}</span> : <span className="text-[var(--color-muted)]">unclassified</span>}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{p ? `+${p.firstOffset}d` : "—"}</td>
+                    <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{p?.channel ?? "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #25 Batch Status-Update Rules ──────────────────────────────────────────────
+type StatusRule = { id: string; whenDaysOverdue: number; setStatus: "overdue"; onlyFrom: "pending" };
+function StatusUpdateRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<StatusRule[]>("auto-status-rules", []);
+  const [, pushActivity] = useActivity();
+  const [days, setDays] = useState("0");
+  const today = new Date();
+
+  const add = () => {
+    const d = parseInt(days);
+    if (isNaN(d) || d < 0) { toast.error("Enter a non-negative day count"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), whenDaysOverdue: d, setStatus: "overdue", onlyFrom: "pending" }]);
+    pushActivity({ tool: "Status-Update Rules", kind: "create", message: `Auto-mark overdue after ${d} day(s)` });
+    toast.success("Status-update rule added");
+  };
+
+  // Pending invoices whose due date is past by more than the rule's day count → would flip to overdue.
+  const affected = (r: StatusRule) => store.invoices.filter(i =>
+    i.status === "pending" && differenceInCalendarDays(today, parseISO(i.dueDate)) > r.whenDaysOverdue);
+
+  const run = (r: StatusRule) => {
+    const rows = affected(r);
+    pushActivity({ tool: "Status-Update Rules", kind: "run", message: `Previewed flip of ${rows.length} invoice(s) pending → overdue` });
+    toast.success(`Preview: ${rows.length} invoice(s) would move pending → overdue`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Batch Status-Update Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Auto-transition pending invoices to overdue once they age past their due date by N days. Preview lists exactly which invoices would flip — this is a dry-run and mutates nothing.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Mark pending → overdue once past due by (days)</label>
+            <input type="number" value={days} onChange={e => setDays(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add rule
+          </button>
+        </div>
+      </div>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No status-update rules defined.</p>
+      ) : rules.map(r => {
+        const rows = affected(r);
+        return (
+          <div key={r.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm font-medium">Pending → <span className="text-orange-400">overdue</span> after due + {r.whenDaysOverdue}d</p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[var(--color-muted)]"><strong className="tabular-nums text-orange-400">{rows.length}</strong> invoice(s) would flip</span>
+                <button onClick={() => run(r)} className="flex items-center gap-1 text-[10px] text-[var(--color-primary)] hover:underline"><Play size={10} /> Preview run</button>
+                <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Status-Update Rules", kind: "delete", message: `Status rule removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+            {rows.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1.5 max-h-40 overflow-y-auto">
+                {rows.slice(0, 15).map(i => (
+                  <div key={i.id} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                    <span className="font-medium truncate pr-2">{i.customer}</span>
+                    <span className="text-[var(--color-muted)] tabular-nums shrink-0">{formatCurrency(i.amount)} · due {i.dueDate}</span>
+                  </div>
+                ))}
+                {rows.length > 15 && <p className="text-[10px] text-[var(--color-muted)] px-1">+{rows.length - 15} more</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #26 Workflow Run-History Log ───────────────────────────────────────────────
+function RunHistory() {
+  const [log] = useFeatureState<ActivityEvent[]>("auto-activity", []);
+  const runs = useMemo(() => log.filter(e => e.kind === "run"), [log]);
+
+  const byTool = useMemo(() => {
+    const map = new Map<string, { count: number; last: string }>();
+    runs.forEach(r => {
+      const cur = map.get(r.tool);
+      if (!cur) map.set(r.tool, { count: 1, last: r.ts });
+      else map.set(r.tool, { count: cur.count + 1, last: cur.last > r.ts ? cur.last : r.ts });
+    });
+    return [...map.entries()].map(([tool, v]) => ({ tool, ...v })).sort((a, b) => b.count - a.count);
+  }, [runs]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Workflow Run-History Log</h3>
+        <p className="text-xs text-[var(--color-muted)] mt-1">A focused view of every preview / dry-run you have executed (bulk runs, validation sweeps, status flips). This is a local execution history — there is no backend executor firing these on a schedule.</p>
+      </div>
+
+      {byTool.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {byTool.map(b => (
+            <div key={b.tool} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1 truncate">{b.tool}</p>
+              <p className="text-2xl font-bold tabular-nums">{b.count}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">last {format(parseISO(b.last), "d MMM, HH:mm")}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {runs.length === 0 ? (
+        <div className={`${CARD} p-10 text-center`}>
+          <History size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
+          <p className="text-sm font-medium mb-1">No runs recorded yet</p>
+          <p className="text-xs text-[var(--color-muted)]">Use a Preview run in the Bulk Runner, Data Validation or Status-Update Rules and it will appear here.</p>
+        </div>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {runs.map(e => (
+            <div key={e.id} className="flex items-center gap-3 px-4 py-3">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase text-blue-400 bg-blue-950/30 border-blue-800/30">run</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm">{e.message}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{e.tool}</p>
+              </div>
+              <span className="text-[10px] text-[var(--color-muted)] tabular-nums shrink-0">{format(parseISO(e.ts), "d MMM, HH:mm")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #27 Customer Credit-Limit Rules ────────────────────────────────────────────
+type CreditLimitRule = { id: string; scope: "all" | "customer"; customer: string; limit: number; thenWhat: "flag" | "block" };
+function CreditLimitRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<CreditLimitRule[]>("auto-credit-limit", []);
+  const [, pushActivity] = useActivity();
+  const [scope, setScope] = useState<CreditLimitRule["scope"]>("all");
+  const [customer, setCustomer] = useState("");
+  const [limit, setLimit] = useState("500000");
+  const [thenWhat, setThenWhat] = useState<CreditLimitRule["thenWhat"]>("flag");
+
+  const customerNames = useMemo(() => [...new Set(store.invoices.map(i => i.customer))].sort(), [store.invoices]);
+
+  const add = () => {
+    const l = parseFloat(limit);
+    if (isNaN(l) || l <= 0) { toast.error("Enter a positive credit limit"); return; }
+    if (scope === "customer" && !customer) { toast.error("Pick a customer for a per-customer rule"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), scope, customer: scope === "customer" ? customer : "", limit: l, thenWhat }]);
+    pushActivity({ tool: "Credit-Limit Rules", kind: "create", message: `Credit limit ${formatCurrency(l)} (${scope === "all" ? "all customers" : customer})` });
+    toast.success("Credit-limit rule added");
+  };
+
+  // Outstanding per customer (unpaid invoices).
+  const outstandingByCustomer = useMemo(() => {
+    const map = new Map<string, number>();
+    store.invoices.filter(i => i.status !== "paid").forEach(i => map.set(i.customer, (map.get(i.customer) ?? 0) + i.amount));
+    return map;
+  }, [store.invoices]);
+
+  const breaches = (r: CreditLimitRule) => {
+    const entries = [...outstandingByCustomer.entries()];
+    const scoped = r.scope === "customer" ? entries.filter(([c]) => c === r.customer) : entries;
+    return scoped.filter(([, amt]) => amt > r.limit).map(([c, amt]) => ({ customer: c, outstanding: amt }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Customer Credit-Limit Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Cap how much open credit a customer may carry. The preview lists customers whose live outstanding already exceeds the limit — nothing is auto-blocked; this surfaces the risk for review.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Applies to</label>
+            <select value={scope} onChange={e => setScope(e.target.value as CreditLimitRule["scope"])} className={INP}>
+              <option value="all">All customers</option>
+              <option value="customer">One customer</option>
+            </select>
+          </div>
+          {scope === "customer" && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+              <select value={customer} onChange={e => setCustomer(e.target.value)} className={INP}>
+                <option value="">Select…</option>
+                {customerNames.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Credit limit (₹)</label>
+            <input type="number" value={limit} onChange={e => setLimit(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">On breach</label>
+            <select value={thenWhat} onChange={e => setThenWhat(e.target.value as CreditLimitRule["thenWhat"])} className={INP}>
+              <option value="flag">Flag for review</option>
+              <option value="block">Block new orders</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <Plus size={13} /> Add credit-limit rule
+        </button>
+      </div>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No credit-limit rules defined.</p>
+      ) : rules.map(r => {
+        const over = breaches(r);
+        return (
+          <div key={r.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-medium">{r.scope === "all" ? "All customers" : r.customer} · limit {formatCurrency(r.limit)}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">On breach: {r.thenWhat === "flag" ? "flag for review" : "block new orders"}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold tabular-nums ${over.length > 0 ? "text-red-400" : "text-green-400"}`}>{over.length} over limit</span>
+                <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Credit-Limit Rules", kind: "delete", message: `Credit-limit rule removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+            {over.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1.5 max-h-40 overflow-y-auto">
+                {over.slice(0, 15).map(o => (
+                  <div key={o.customer} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                    <span className="font-medium truncate pr-2">{o.customer}</span>
+                    <span className="text-red-400 tabular-nums shrink-0">{formatCurrency(o.outstanding)} <span className="text-[var(--color-muted)]">/ {formatCurrency(r.limit)}</span></span>
+                  </div>
+                ))}
+                {over.length > 15 && <p className="text-[10px] text-[var(--color-muted)] px-1">+{over.length - 15} more</p>}
               </div>
             )}
           </div>

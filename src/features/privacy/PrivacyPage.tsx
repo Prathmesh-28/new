@@ -8,6 +8,7 @@ import {
   RefreshCw, Ban, ChevronRight, ScrollText,
   FileText, Cookie, FileCheck, UserCheck, BarChart3, Layers,
   GraduationCap, Calculator, MapPin, Megaphone, Timer, Copy,
+  ClipboardList, Workflow, Receipt, FileSearch, Globe, ShieldAlert, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, addDays, parseISO } from "date-fns";
@@ -23,7 +24,8 @@ type TabId =
   | "third-party" | "expiry" | "hygiene" | "data-map" | "breach"
   | "policy-gen" | "cookie" | "dpa-check" | "grievance" | "consent-rate"
   | "classify" | "training" | "penalty" | "localization" | "marketing-consent"
-  | "sar-timer";
+  | "sar-timer" | "ropa" | "data-flow" | "consent-receipt" | "dpia"
+  | "x-border" | "vendor-risk";
 
 const TABS = [
   ["overview", "Overview", ShieldCheck],
@@ -48,6 +50,12 @@ const TABS = [
   ["localization", "Localization", MapPin],
   ["marketing-consent", "Marketing Opt-in", Megaphone],
   ["sar-timer", "SAR SLA Timer", Timer],
+  ["ropa", "RoPA Register", ClipboardList],
+  ["data-flow", "Data-Flow Map", Workflow],
+  ["consent-receipt", "Consent Receipt", Receipt],
+  ["dpia", "DPIA Wizard", FileSearch],
+  ["x-border", "Cross-Border Log", Globe],
+  ["vendor-risk", "Vendor Risk", ShieldAlert],
 ] as const;
 
 export default function PrivacyPage() {
@@ -96,6 +104,12 @@ export default function PrivacyPage() {
       {tab === "localization" && <LocalizationChecklist />}
       {tab === "marketing-consent" && <MarketingConsentRegister />}
       {tab === "sar-timer" && <SarSlaTimer />}
+      {tab === "ropa" && <RopaRegister />}
+      {tab === "data-flow" && <DataFlowMap />}
+      {tab === "consent-receipt" && <ConsentReceiptGenerator />}
+      {tab === "dpia" && <DpiaWizard />}
+      {tab === "x-border" && <CrossBorderLog />}
+      {tab === "vendor-risk" && <VendorRiskScorecard />}
     </div>
   );
 }
@@ -1824,6 +1838,567 @@ function SarSlaTimer() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Update statuses in the Access / Erasure tab — fulfilled and rejected requests drop off this timer automatically.</p>
+    </div>
+  );
+}
+
+// ── RoPA — Record of Processing Activities ───────────────────────────────────────
+interface RopaRow {
+  id: string; activity: string; categories: string; subjects: string;
+  lawfulBasis: string; recipients: string; retention: string;
+}
+const ROPA_BASES = ["Consent", "Contract", "Legal obligation", "Legitimate use (s.7 DPDP)"] as const;
+function RopaRegister() {
+  const [rows, setRows] = useFeatureState<RopaRow[]>("priv-ropa", []);
+  const [activity, setActivity] = useState("");
+  const [categories, setCategories] = useState("");
+  const [subjects, setSubjects] = useState("Customers");
+  const [lawfulBasis, setLawfulBasis] = useState<string>(ROPA_BASES[0]);
+  const [recipients, setRecipients] = useState("");
+  const [retention, setRetention] = useState("");
+
+  const add = () => {
+    if (!activity.trim() || !categories.trim()) { toast.error("Enter the processing activity and the data categories"); return; }
+    setRows([{ id: uid(), activity: activity.trim(), categories: categories.trim(), subjects: subjects.trim() || "Customers", lawfulBasis, recipients: recipients.trim() || "—", retention: retention.trim() || "Per retention policy" }, ...rows]);
+    setActivity(""); setCategories(""); setRecipients(""); setRetention("");
+    toast.success("Processing activity recorded in your RoPA");
+  };
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const exportCsv = () => {
+    if (rows.length === 0) { toast.error("Nothing to export yet"); return; }
+    const head = ["Activity", "Data categories", "Subjects", "Lawful basis", "Recipients", "Retention"];
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const body = rows.map(r => [r.activity, r.categories, r.subjects, r.lawfulBasis, r.recipients, r.retention].map(esc).join(","));
+    const blob = new Blob([[head.join(","), ...body].join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ropa-${today()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("RoPA exported as CSV");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Record of Processing Activities (RoPA)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A single register of every way your business processes personal data — the activity, the data categories, whose data, your lawful basis, who receives it, and how long it is kept. The defensible document a Data Protection Board audit will ask for first.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Processing activity</label>
+            <input value={activity} onChange={e => setActivity(e.target.value)} placeholder="e.g. Customer billing" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data categories</label>
+            <input value={categories} onChange={e => setCategories(e.target.value)} placeholder="Name, GSTIN, bank details" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data subjects</label>
+            <input value={subjects} onChange={e => setSubjects(e.target.value)} placeholder="Customers / employees" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lawful basis</label>
+            <select value={lawfulBasis} onChange={e => setLawfulBasis(e.target.value)} className={INP}>
+              {ROPA_BASES.map(b => <option key={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Recipients</label>
+            <input value={recipients} onChange={e => setRecipients(e.target.value)} placeholder="Payment gateway, CA" className={INP} />
+          </div>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Retention</label>
+              <input value={retention} onChange={e => setRetention(e.target.value)} placeholder="8 years" className={INP} />
+            </div>
+            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+          </div>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No processing activities recorded. Add one for each distinct purpose you handle personal data for.</p>
+      ) : (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportCsv} className="inline-flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-3 py-1.5"><Download size={12} /> Export RoPA (CSV)</button>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[820px]">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Activity", "Data categories", "Subjects", "Lawful basis", "Recipients", "Retention", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3 font-medium">{r.activity}</td>
+                      <td className="px-4 py-3 text-xs">{r.categories}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.subjects}</td>
+                      <td className="px-4 py-3 text-xs">{r.lawfulBasis}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.recipients}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{r.retention}</td>
+                      <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Data-Flow Map ────────────────────────────────────────────────────────────────
+type FlowKind = "internal" | "processor" | "external";
+interface FlowRow { id: string; source: string; target: string; kind: FlowKind; data: string; encrypted: boolean }
+const FLOW_PILL: Record<FlowKind, string> = {
+  internal: "bg-blue-950/30 text-blue-400 border-blue-800/40",
+  processor: "bg-yellow-950/30 text-yellow-400 border-yellow-800/40",
+  external: "bg-red-950/30 text-red-400 border-red-800/40",
+};
+const FLOW_LABEL: Record<FlowKind, string> = { internal: "Internal", processor: "Processor", external: "External / 3rd-party" };
+function DataFlowMap() {
+  const [rows, setRows] = useFeatureState<FlowRow[]>("priv-dataflow", []);
+  const [source, setSource] = useState("");
+  const [target, setTarget] = useState("");
+  const [kind, setKind] = useState<FlowKind>("processor");
+  const [data, setData] = useState("");
+  const [encrypted, setEncrypted] = useState(true);
+
+  const add = () => {
+    if (!source.trim() || !target.trim()) { toast.error("Enter where the data flows from and to"); return; }
+    setRows([{ id: uid(), source: source.trim(), target: target.trim(), kind, data: data.trim() || "Personal data", encrypted }, ...rows]);
+    setSource(""); setTarget(""); setData("");
+    toast.success("Data flow mapped");
+  };
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const unencryptedExternal = rows.filter(r => r.kind === "external" && !r.encrypted).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Workflow size={14} className="text-[var(--color-primary)]" /> Data-Flow Map</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Trace each hop personal data takes — from a source system to a destination, whether the leg stays internal, goes to a processor, or leaves to an external party, and whether it is encrypted in transit. The picture that powers a DPIA and a breach blast-radius assessment.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">From</label>
+            <input value={source} onChange={e => setSource(e.target.value)} placeholder="Billing app" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">To</label>
+            <input value={target} onChange={e => setTarget(e.target.value)} placeholder="Payment gateway" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Leg type</label>
+            <select value={kind} onChange={e => setKind(e.target.value as FlowKind)} className={INP}>
+              {(Object.keys(FLOW_LABEL) as FlowKind[]).map(k => <option key={k} value={k}>{FLOW_LABEL[k]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data carried</label>
+            <input value={data} onChange={e => setData(e.target.value)} placeholder="Name, card token" className={INP} />
+          </div>
+          <div className="flex gap-2 items-end">
+            <label className="flex items-center gap-2 text-xs cursor-pointer h-[38px] flex-1">
+              <input type="checkbox" checked={encrypted} onChange={e => setEncrypted(e.target.checked)} className="accent-[var(--color-primary)]" /> Encrypted
+            </label>
+            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+          </div>
+        </div>
+      </div>
+
+      {unencryptedExternal > 0 && (
+        <div className="rounded-lg p-3.5 border border-red-800/40 bg-red-950/20 flex items-center gap-2.5">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <p className="text-xs text-red-300">{unencryptedExternal} external data flow(s) marked unencrypted — personal data leaving your perimeter in clear is a high-severity exposure.</p>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No flows mapped yet. Add each hop personal data takes between systems and parties.</p>
+      ) : (
+        <div className={`${CARD}`}>
+          <div className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <div key={r.id} className="flex items-center gap-3 px-5 py-3.5">
+                <div className="flex items-center gap-2 flex-1 min-w-0 text-sm">
+                  <span className="font-medium truncate">{r.source}</span>
+                  <ChevronRight size={13} className="text-[var(--color-muted)] shrink-0" />
+                  <span className="font-medium truncate">{r.target}</span>
+                </div>
+                <span className="text-[11px] text-[var(--color-muted)] truncate max-w-[140px] hidden sm:block">{r.data}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${FLOW_PILL[r.kind]}`}>{FLOW_LABEL[r.kind]}</span>
+                <span className={`text-[10px] font-semibold shrink-0 ${r.encrypted ? "text-green-400" : "text-red-400"}`}>{r.encrypted ? "Encrypted" : "Cleartext"}</span>
+                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Consent-Receipt Generator ────────────────────────────────────────────────────
+function ConsentReceiptGenerator() {
+  const { store } = useApp();
+  const [subject, setSubject] = useState("");
+  const [purpose, setPurpose] = useState("Order fulfilment & support");
+  const [dataItems, setDataItems] = useState("Name, phone, email, billing address");
+  const [basis, setBasis] = useState("Consent");
+  const [receipt, setReceipt] = useState<string | null>(null);
+
+  const fiduciary = store?.firm?.name || "Your business";
+
+  const generate = () => {
+    if (!subject.trim()) { toast.error("Enter the data subject's name"); return; }
+    const id = `CR-${Date.now().toString(36).toUpperCase()}`;
+    const text = [
+      `CONSENT RECEIPT`,
+      `Receipt ID: ${id}`,
+      `Issued: ${new Date().toISOString()}`,
+      ``,
+      `Data Fiduciary: ${fiduciary}`,
+      `Data Principal: ${subject.trim()}`,
+      ``,
+      `Purpose: ${purpose.trim()}`,
+      `Personal data covered: ${dataItems.trim()}`,
+      `Lawful basis: ${basis}`,
+      ``,
+      `Your rights under the DPDP Act 2023:`,
+      `- Withdraw this consent at any time, as easily as it was given`,
+      `- Access, correct, complete, update and erase your personal data`,
+      `- Nominate another person to exercise these rights`,
+      `- Grievance redressal via our Grievance Officer, then the Data Protection Board`,
+      ``,
+      `This receipt is a record that the above consent was sought and recorded.`,
+    ].join("\n");
+    setReceipt(text);
+    toast.success("Consent receipt generated");
+  };
+
+  const copy = () => {
+    if (!receipt) return;
+    navigator.clipboard.writeText(receipt).then(() => toast.success("Receipt copied to clipboard"), () => toast.error("Could not copy"));
+  };
+  const download = () => {
+    if (!receipt) return;
+    const blob = new Blob([receipt], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `consent-receipt-${today()}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Receipt downloaded");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Receipt size={14} className="text-[var(--color-primary)]" /> Consent-Receipt Generator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Issue a plain-language, machine-readable receipt to a customer for every data grant — what they consented to, the purpose, the lawful basis and their rights. Giving people proof of their consent is a hallmark of DPDP good faith.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data subject</label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Customer name" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+            <input value={purpose} onChange={e => setPurpose(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lawful basis</label>
+            <select value={basis} onChange={e => setBasis(e.target.value)} className={INP}>
+              {["Consent", "Contract", "Legal obligation", "Legitimate use (s.7 DPDP)"].map(b => <option key={b}>{b}</option>)}
+            </select>
+          </div>
+          <button onClick={generate} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Receipt size={13} /> Generate</button>
+        </div>
+        <div className="mt-2">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Personal data covered</label>
+          <input value={dataItems} onChange={e => setDataItems(e.target.value)} className={INP} />
+        </div>
+      </div>
+
+      {receipt && (
+        <div className={`${CARD} p-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold">Receipt preview</h3>
+            <div className="flex gap-2">
+              <button onClick={copy} className="inline-flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-3 py-1.5"><Copy size={12} /> Copy</button>
+              <button onClick={download} className="inline-flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-3 py-1.5"><Download size={12} /> Download</button>
+            </div>
+          </div>
+          <pre className="text-[11px] whitespace-pre-wrap font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed">{receipt}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── DPIA Wizard ──────────────────────────────────────────────────────────────────
+const DPIA_QUESTIONS = [
+  { id: "q1", text: "Does this processing involve large-scale or systematic monitoring?", weight: 2 },
+  { id: "q2", text: "Does it involve sensitive data (financial, Aadhaar, biometric, health)?", weight: 3 },
+  { id: "q3", text: "Does it involve data of children (under 18)?", weight: 3 },
+  { id: "q4", text: "Is data shared with, or transferred to, third parties or offshore?", weight: 2 },
+  { id: "q5", text: "Are automated decisions made that significantly affect individuals?", weight: 2 },
+  { id: "q6", text: "Is data combined or matched across multiple sources?", weight: 1 },
+  { id: "q7", text: "Is the processing novel, or using a new technology?", weight: 1 },
+  { id: "q8", text: "Could a breach of this data cause real harm to individuals?", weight: 2 },
+] as const;
+interface DpiaRecord { id: string; project: string; score: number; max: number; level: string; on: string }
+function DpiaWizard() {
+  const [answers, setAnswers] = useState<Record<string, boolean>>({});
+  const [project, setProject] = useState("");
+  const [saved, setSaved] = useFeatureState<DpiaRecord[]>("priv-dpia", []);
+
+  const max = DPIA_QUESTIONS.reduce((s, q) => s + q.weight, 0);
+  const score = DPIA_QUESTIONS.reduce((s, q) => s + (answers[q.id] ? q.weight : 0), 0);
+  const pct = Math.round((score / max) * 100);
+  const level = score >= 8 ? "High risk — full DPIA required" : score >= 4 ? "Medium risk — document mitigations" : "Low risk — proceed with care";
+  const levelColor = score >= 8 ? "text-red-400" : score >= 4 ? "text-yellow-400" : "text-green-400";
+  const toggle = (id: string) => setAnswers({ ...answers, [id]: !answers[id] });
+
+  const save = () => {
+    if (!project.trim()) { toast.error("Name the project / feature being assessed"); return; }
+    setSaved([{ id: uid(), project: project.trim(), score, max, level, on: today() }, ...saved]);
+    setProject(""); setAnswers({});
+    toast.success("DPIA outcome saved to your register");
+  };
+  const remove = (id: string) => setSaved(saved.filter(r => r.id !== id));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileSearch size={14} className="text-[var(--color-primary)]" /> Data-Protection Impact Assessment (DPIA) Wizard</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before launching a new feature, data flow or vendor, answer these screening questions. A high score means you should run and file a full DPIA before going live — the kind of due diligence that protects you if the Data Protection Board ever asks.</p>
+        <div className="flex gap-2 items-end max-w-md">
+          <div className="flex-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Project / feature</label>
+            <input value={project} onChange={e => setProject(e.target.value)} placeholder="e.g. AA-powered credit scoring" className={INP} />
+          </div>
+          <button onClick={save} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Save outcome</button>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-[var(--color-muted)]">Screening questions — tick any that apply</p>
+          <div className="text-right">
+            <p className={`text-lg font-bold tabular-nums ${levelColor}`}>{score}/{max}</p>
+            <p className={`text-[10px] font-medium ${levelColor}`}>{level}</p>
+          </div>
+        </div>
+        <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-4">
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: score >= 8 ? "#ef4444" : score >= 4 ? "#eab308" : "#22c55e" }} />
+        </div>
+        <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+          {DPIA_QUESTIONS.map(q => (
+            <button key={q.id} onClick={() => toggle(q.id)} className="w-full flex items-center gap-3 py-3 text-left hover:bg-white/2">
+              {answers[q.id]
+                ? <CheckCircle2 size={16} className="text-[var(--color-primary)] shrink-0" />
+                : <div className="w-4 h-4 rounded border-2 border-[var(--color-border)] shrink-0" />}
+              <span className="text-sm flex-1">{q.text}</span>
+              <span className="text-[9px] font-semibold text-[var(--color-muted)] shrink-0">+{q.weight}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {saved.length > 0 && (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Project", "Assessed", "Score", "Outcome", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {saved.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-medium">{r.project}</td>
+                  <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.on}</td>
+                  <td className="px-4 py-3 text-xs tabular-nums">{r.score}/{r.max}</td>
+                  <td className={`px-4 py-3 text-xs ${r.score >= 8 ? "text-red-400" : r.score >= 4 ? "text-yellow-400" : "text-green-400"}`}>{r.level}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cross-Border Transfer Log ────────────────────────────────────────────────────
+interface XBorderRow { id: string; recipient: string; country: string; dataShared: string; safeguard: string; loggedOn: string }
+const XBORDER_SAFEGUARDS = ["Standard contractual clauses", "Intra-group agreement", "Explicit consent", "None / under review"] as const;
+function CrossBorderLog() {
+  const [rows, setRows] = useFeatureState<XBorderRow[]>("priv-xborder", []);
+  const [recipient, setRecipient] = useState("");
+  const [country, setCountry] = useState("");
+  const [dataShared, setDataShared] = useState("");
+  const [safeguard, setSafeguard] = useState<string>(XBORDER_SAFEGUARDS[0]);
+
+  const add = () => {
+    if (!recipient.trim() || !country.trim()) { toast.error("Enter the overseas recipient and destination country"); return; }
+    setRows([{ id: uid(), recipient: recipient.trim(), country: country.trim(), dataShared: dataShared.trim() || "Personal data", safeguard, loggedOn: today() }, ...rows]);
+    setRecipient(""); setCountry(""); setDataShared("");
+    toast.success("Cross-border transfer logged");
+  };
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const unsafeguarded = rows.filter(r => r.safeguard === "None / under review").length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Globe size={14} className="text-[var(--color-primary)]" /> Cross-Border Transfer Log</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">The DPDP Act lets the government restrict personal-data transfers to certain countries. Record every time Indian personal data leaves the country — who receives it, where, what data, and the safeguard in place — so you can prove a lawful basis for each transfer.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Overseas recipient</label>
+            <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="e.g. AWS us-east-1" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Country</label>
+            <input value={country} onChange={e => setCountry(e.target.value)} placeholder="USA" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Data transferred</label>
+            <input value={dataShared} onChange={e => setDataShared(e.target.value)} placeholder="Backups, logs" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Safeguard</label>
+            <select value={safeguard} onChange={e => setSafeguard(e.target.value)} className={INP}>
+              {XBORDER_SAFEGUARDS.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+        </div>
+      </div>
+
+      {unsafeguarded > 0 && (
+        <div className="rounded-lg p-3.5 border border-yellow-800/40 bg-yellow-950/20 flex items-center gap-2.5">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+          <p className="text-xs text-yellow-300">{unsafeguarded} transfer(s) have no safeguard recorded — put contractual clauses or explicit consent in place before relying on these.</p>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No cross-border transfers logged. Many SaaS tools and clouds store data abroad — record each one.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Recipient", "Country", "Data", "Safeguard", "Logged", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium">{r.recipient}</td>
+                    <td className="px-4 py-3 text-xs">{r.country}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.dataShared}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.safeguard === "None / under review" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>{r.safeguard}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.loggedOn}</td>
+                    <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Vendor Privacy-Risk Scorecard ────────────────────────────────────────────────
+const VENDOR_CRITERIA = [
+  { id: "v1", text: "Signed DPA / processing agreement on file" },
+  { id: "v2", text: "Stores Indian personal data on Indian soil" },
+  { id: "v3", text: "Holds a recognised security certification (ISO 27001, SOC 2)" },
+  { id: "v4", text: "Supports data deletion / export on request" },
+  { id: "v5", text: "Has not had a known breach in the last 24 months" },
+  { id: "v6", text: "Limits access to the minimum data the purpose needs" },
+] as const;
+interface VendorRow { id: string; name: string; checks: Record<string, boolean> }
+function VendorRiskScorecard() {
+  const [rows, setRows] = useFeatureState<VendorRow[]>("priv-vendor-risk", []);
+  const [name, setName] = useState("");
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Enter a vendor name"); return; }
+    setRows([{ id: uid(), name: name.trim(), checks: {} }, ...rows]);
+    setName("");
+  };
+  const toggle = (id: string, cid: string) =>
+    setRows(rows.map(r => r.id === id ? { ...r, checks: { ...r.checks, [cid]: !r.checks[cid] } } : r));
+  const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
+
+  const scoreOf = (r: VendorRow) => VENDOR_CRITERIA.filter(c => r.checks[c.id]).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Vendor Privacy-Risk Scorecard</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before you entrust any vendor with personal data, score them against the controls that matter under DPDP. A low score is a flag to push for a DPA, localisation or a safer alternative — you remain accountable for what your processors do.</p>
+        <div className="flex gap-2 items-end max-w-md">
+          <div className="flex-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor / processor</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Mailchimp, Razorpay" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No vendors scored yet. Add each tool or partner that handles personal data on your behalf.</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(r => {
+            const score = scoreOf(r);
+            const pct = Math.round((score / VENDOR_CRITERIA.length) * 100);
+            const color = score >= 5 ? "text-green-400" : score >= 3 ? "text-yellow-400" : "text-red-400";
+            return (
+              <div key={r.id} className={`${CARD} p-4`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold">{r.name}</p>
+                    <p className={`text-[11px] font-medium ${color}`}>{score}/{VENDOR_CRITERIA.length} controls · {score >= 5 ? "Low risk" : score >= 3 ? "Medium risk" : "High risk"}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <p className={`text-xl font-bold tabular-nums ${color}`}>{pct}%</p>
+                    <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {VENDOR_CRITERIA.map(c => (
+                    <button key={c.id} onClick={() => toggle(r.id, c.id)} className="flex items-center gap-2 text-left px-2 py-1.5 rounded hover:bg-white/2">
+                      {r.checks[c.id]
+                        ? <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+                        : <XCircle size={14} className="text-[var(--color-muted)] shrink-0" />}
+                      <span className={`text-xs ${r.checks[c.id] ? "" : "text-[var(--color-muted)]"}`}>{c.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

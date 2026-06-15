@@ -8,6 +8,7 @@ import {
   Banknote, Coins, Clock,
   ShieldCheck, Repeat, FileText, Percent, ListChecks, UserCheck,
   Split, Gauge, PiggyBank, CalendarClock,
+  ClipboardCheck, Globe, CopyCheck, ArrowLeftRight, Award, FolderCheck, Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -20,7 +21,9 @@ type Tab =
   | "overview" | "balances" | "reconcile" | "cash-position" | "sweep"
   | "virtual-accounts" | "fees" | "rail" | "cheques" | "charge-recovery" | "idle-alert"
   | "positive-pay" | "mandates" | "guarantees" | "od-interest" | "statement-import"
-  | "beneficiaries" | "transfer-planner" | "min-balance" | "savings-interest" | "payment-date";
+  | "beneficiaries" | "transfer-planner" | "min-balance" | "savings-interest" | "payment-date"
+  | "balance-confirmation" | "forex-tracker" | "duplicate-payment" | "netting"
+  | "interest-cert" | "doc-checklist" | "runway";
 
 export default function BankingPage() {
   const { store } = useApp();
@@ -65,6 +68,13 @@ export default function BankingPage() {
             ["min-balance", "Min-Balance Check", Gauge],
             ["savings-interest", "Savings Interest", PiggyBank],
             ["payment-date", "Payment Date", CalendarClock],
+            ["balance-confirmation", "Balance Confirmation", ClipboardCheck],
+            ["forex-tracker", "Forex Spread", Globe],
+            ["duplicate-payment", "Duplicate Payments", CopyCheck],
+            ["netting", "Counterparty Netting", ArrowLeftRight],
+            ["interest-cert", "Interest Certificates", Award],
+            ["doc-checklist", "A/C Opening Docs", FolderCheck],
+            ["runway", "Cash Runway", Activity],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -165,6 +175,13 @@ export default function BankingPage() {
       {tab === "min-balance" && <MinBalanceChecker />}
       {tab === "savings-interest" && <SavingsInterestEstimator />}
       {tab === "payment-date" && <PaymentDatePicker />}
+      {tab === "balance-confirmation" && <BalanceConfirmationGenerator />}
+      {tab === "forex-tracker" && <ForexSpreadTracker />}
+      {tab === "duplicate-payment" && <DuplicatePaymentDetector />}
+      {tab === "netting" && <CounterpartyNetting />}
+      {tab === "interest-cert" && <InterestCertificateTracker />}
+      {tab === "doc-checklist" && <AccountOpeningChecklist />}
+      {tab === "runway" && <CashRunwayMeter />}
     </div>
   );
 }
@@ -1981,6 +1998,601 @@ function PaymentDatePicker() {
           <p className="text-[10px] text-[var(--color-muted)]">Holiday list is the common national set; state-specific RBI holidays vary by location — add them in the extra-dates field. Verify with your bank&apos;s holiday calendar.</p>
         </>
       )}
+    </div>
+  );
+}
+
+// ── 21. Bank balance-confirmation (BRS) letter generator ─────────────────────────
+function BalanceConfirmationGenerator() {
+  const { store } = useApp();
+  const accounts = store.bankAccounts;
+  const [acctId, setAcctId] = useState(accounts[0]?.id ?? "");
+  const [entity, setEntity] = useState("");
+  const [asOn, setAsOn] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const acct = accounts.find(a => a.id === acctId) ?? accounts[0] ?? null;
+
+  const letter = useMemo(() => {
+    if (!acct) return "";
+    const dateStr = (() => { const d = parseISO(asOn); return isNaN(d.getTime()) ? asOn : format(d, "dd MMMM yyyy"); })();
+    return [
+      `To,`,
+      `The Branch Manager`,
+      `${acct.provider} Bank`,
+      ``,
+      `Date: ${format(new Date(), "dd MMMM yyyy")}`,
+      ``,
+      `Subject: Confirmation of bank balance as on ${dateStr}`,
+      ``,
+      `Dear Sir/Madam,`,
+      ``,
+      `For the purpose of our statutory audit, we request you to kindly confirm directly to our auditors the balance held in the following account as on ${dateStr}:`,
+      ``,
+      `   Account holder : ${entity.trim() || "[Entity name]"}`,
+      `   Account name   : ${acct.name}`,
+      `   Bank / provider: ${acct.provider}`,
+      `   Balance per our books: ${formatCurrency(acct.balance)}`,
+      ``,
+      `Please also confirm any fixed deposits, overdraft/cash-credit limits, lien-marked amounts, and bank guarantees outstanding as on the above date.`,
+      ``,
+      `Thanking you,`,
+      `For ${entity.trim() || "[Entity name]"}`,
+      ``,
+      `Authorised Signatory`,
+    ].join("\n");
+  }, [acct, entity, asOn]);
+
+  if (accounts.length === 0) return <EmptyHint text="Link a bank account to generate a balance-confirmation request for your statutory audit." />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Balance-Confirmation Letter</h3>
+        <p className="text-xs text-[var(--color-muted)]">Auditors ask for an independent balance confirmation from each bank every year. Pick an account and date; we draft the request letter with the book balance pre-filled.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Account</label>
+            <select value={acctId} onChange={e => setAcctId(e.target.value)} className={INP}>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Entity / account holder</label>
+            <input value={entity} onChange={e => setEntity(e.target.value)} placeholder="Acme Industries Pvt Ltd" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Balance as on</label>
+            <input type="date" value={asOn} onChange={e => setAsOn(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <p className="text-sm font-semibold">Draft letter</p>
+          <button onClick={() => { navigator.clipboard?.writeText(letter); toast.success("Letter copied to clipboard"); }}
+            className="text-[10px] text-[var(--color-primary)] hover:underline">Copy</button>
+        </div>
+        <pre className="px-5 py-4 text-xs font-mono whitespace-pre-wrap text-[var(--color-text)]">{letter}</pre>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">The bank confirms the balance directly to your auditor; the book balance shown is from your linked feed and may differ from the bank&apos;s record until reconciled.</p>
+    </div>
+  );
+}
+
+// ── 22. Forex conversion-cost / spread tracker ───────────────────────────────────
+type FxDeal = { id: string; ccy: string; foreign: number; inrReceived: number; refRate: number; date: string };
+function ForexSpreadTracker() {
+  const [deals, setDeals] = useFeatureState<FxDeal[]>("bank-fx-deals", []);
+  const [ccy, setCcy] = useState("USD");
+  const [foreign, setForeign] = useState("");
+  const [inrReceived, setInrReceived] = useState("");
+  const [refRate, setRefRate] = useState("");
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const add = () => {
+    const f = parseFloat(foreign), inr = parseFloat(inrReceived), r = parseFloat(refRate);
+    if (!ccy.trim() || isNaN(f) || f <= 0 || isNaN(inr) || inr <= 0 || isNaN(r) || r <= 0) {
+      toast.error("Enter currency, foreign amount, INR received and a reference rate"); return;
+    }
+    setDeals([...deals, { id: crypto.randomUUID(), ccy: ccy.trim().toUpperCase(), foreign: f, inrReceived: inr, refRate: r, date }]);
+    setForeign(""); setInrReceived(""); setRefRate("");
+    toast.success("FX deal logged");
+  };
+
+  const rows = useMemo(() => deals.map(d => {
+    const bankRate = d.inrReceived / d.foreign;
+    const spreadPaise = (d.refRate - bankRate) * 100; // paise per unit of foreign ccy
+    const spreadPct = d.refRate > 0 ? ((d.refRate - bankRate) / d.refRate) * 100 : 0;
+    const cost = (d.refRate - bankRate) * d.foreign; // INR lost vs reference
+    return { ...d, bankRate, spreadPaise, spreadPct, cost };
+  }), [deals]);
+  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> Forex Conversion-Cost Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Log each inward/outward FX conversion with the foreign amount, INR you actually got, and the interbank/reference rate that day. We compute the bank&apos;s effective rate and the spread you paid.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Currency</label>
+            <input value={ccy} onChange={e => setCcy(e.target.value)} placeholder="USD" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Foreign amt</label>
+            <input type="number" value={foreign} onChange={e => setForeign(e.target.value)} placeholder="10000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">INR received</label>
+            <input type="number" value={inrReceived} onChange={e => setInrReceived(e.target.value)} placeholder="825000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Ref rate (₹/unit)</label>
+            <input type="number" value={refRate} onChange={e => setRefRate(e.target.value)} placeholder="83.10" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Conversions logged", value: `${rows.length}`, color: "text-blue-400" },
+              { label: "Total spread cost", value: formatCurrency(Math.round(totalCost)), color: totalCost > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Avg spread", value: `${(rows.reduce((s, r) => s + r.spreadPct, 0) / rows.length).toFixed(2)}%`, color: "text-[var(--color-text)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Ccy", "Foreign", "Bank rate", "Ref rate", "Spread", "Cost", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.date}</td>
+                      <td className="px-4 py-2.5 font-medium">{r.ccy}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.foreign)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.bankRate.toFixed(4)}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.refRate.toFixed(4)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.spreadPct > 1 ? "text-red-400 font-semibold" : ""}`}>{r.spreadPaise.toFixed(1)}p ({r.spreadPct.toFixed(2)}%)</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.cost > 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.round(r.cost))}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setDeals(deals.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">A spread above ~0.5–1% over the interbank rate is high for business volumes — negotiate a finer card/TT rate or compare banks before your next remittance.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 23. Duplicate-payment detector (scans store transactions) ────────────────────
+function DuplicatePaymentDetector() {
+  const { store } = useApp();
+  const [windowDays, setWindowDays] = useState(7);
+
+  const groups = useMemo(() => {
+    const debits = store.transactions.filter(t => t.amount < 0);
+    const byKey = new Map<string, typeof debits>();
+    for (const t of debits) {
+      const key = `${Math.round(Math.abs(t.amount))}|${(t.counterparty || "").trim().toLowerCase()}`;
+      const arr = byKey.get(key) ?? [];
+      arr.push(t);
+      byKey.set(key, arr);
+    }
+    const suspects: { key: string; counterparty: string; amount: number; txns: typeof debits }[] = [];
+    for (const [key, arr] of byKey.entries()) {
+      if (arr.length < 2) continue;
+      const sorted = [...arr].sort((a, b) => a.date.localeCompare(b.date));
+      let close = false;
+      for (let i = 1; i < sorted.length; i++) {
+        const d0 = parseISO(sorted[i - 1].date), d1 = parseISO(sorted[i].date);
+        if (!isNaN(d0.getTime()) && !isNaN(d1.getTime()) && Math.abs(differenceInCalendarDays(d1, d0)) <= windowDays) { close = true; break; }
+      }
+      if (close) suspects.push({ key, counterparty: arr[0].counterparty || "—", amount: Math.abs(arr[0].amount), txns: sorted });
+    }
+    return suspects.sort((a, b) => b.amount - a.amount);
+  }, [store.transactions, windowDays]);
+
+  const exposure = groups.reduce((s, g) => s + g.amount * (g.txns.length - 1), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Detector</h3>
+        <p className="text-xs text-[var(--color-muted)]">Flags debits with the same amount to the same counterparty within a short window — the classic signature of an invoice paid twice across banks or rails.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Match window: same amount &amp; payee within <strong className="text-[var(--color-text)]">{windowDays}</strong> day(s)</label>
+          <input type="range" min={1} max={30} step={1} value={windowDays} onChange={e => setWindowDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "Suspected duplicate groups", value: `${groups.length}`, color: groups.length ? "text-red-400" : "text-green-400" },
+          { label: "Potential over-payment", value: formatCurrency(Math.round(exposure)), color: exposure > 0 ? "text-red-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {groups.length === 0 ? (
+        <EmptyHint text="No suspected duplicate payments in the current window. Widen the window or import more transactions to scan." />
+      ) : (
+        <div className="space-y-3">
+          {groups.map(g => (
+            <div key={g.key} className={`${CARD} overflow-hidden`}>
+              <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+                <p className="text-sm font-semibold">{g.counterparty} · {formatCurrency(g.amount)} <span className="text-[var(--color-muted)] font-normal">× {g.txns.length}</span></p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/40 font-medium">possible duplicate</span>
+              </div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {g.txns.map(t => (
+                  <div key={t.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0"><p className="text-xs font-medium truncate">{t.description}</p><p className="text-[10px] text-[var(--color-muted)]">{t.date}</p></div>
+                    <span className="text-xs tabular-nums font-semibold text-red-400">{formatCurrency(t.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Some repeats are legitimate (EMIs, identical recurring vendor bills). Confirm each group against the invoice/UTR before treating it as a double payment.</p>
+    </div>
+  );
+}
+
+// ── 24. Counterparty payable-receivable netting ──────────────────────────────────
+type NetParty = { id: string; name: string; receivable: number; payable: number };
+function CounterpartyNetting() {
+  const [parties, setParties] = useFeatureState<NetParty[]>("bank-netting-parties", []);
+  const [name, setName] = useState("");
+  const [receivable, setReceivable] = useState("");
+  const [payable, setPayable] = useState("");
+
+  const add = () => {
+    const r = parseFloat(receivable) || 0, p = parseFloat(payable) || 0;
+    if (!name.trim() || (r <= 0 && p <= 0)) { toast.error("Enter a name and at least one amount"); return; }
+    setParties([...parties, { id: crypto.randomUUID(), name: name.trim(), receivable: r, payable: p }]);
+    setName(""); setReceivable(""); setPayable("");
+    toast.success("Counterparty added");
+  };
+
+  const rows = useMemo(() => parties.map(p => ({ ...p, net: p.receivable - p.payable })), [parties]);
+  const grossSettle = parties.reduce((s, p) => s + p.receivable + p.payable, 0);
+  const netSettle = rows.reduce((s, r) => s + Math.abs(r.net), 0);
+  const saved = grossSettle - netSettle;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Counterparty Netting</h3>
+        <p className="text-xs text-[var(--color-muted)]">When a party is both your customer and your vendor, settle only the net difference instead of moving cash both ways. Enter what you owe and are owed per party.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Acme Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">They owe you (₹)</label>
+            <input type="number" value={receivable} onChange={e => setReceivable(e.target.value)} placeholder="120000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">You owe them (₹)</label>
+            <input type="number" value={payable} onChange={e => setPayable(e.target.value)} placeholder="80000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Gross to settle", value: formatCurrency(Math.round(grossSettle)), color: "text-[var(--color-text)]" },
+              { label: "Net to settle", value: formatCurrency(Math.round(netSettle)), color: "text-blue-400" },
+              { label: "Cash movement saved", value: formatCurrency(Math.round(saved)), color: saved > 0 ? "text-green-400" : "text-[var(--color-muted)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Counterparty", "They owe", "You owe", "Net position", "Action", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.receivable)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.payable)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(r.net)}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.net > 0 ? "Collect net" : r.net < 0 ? "Pay net" : "Square-off"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setParties(parties.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {saved > 0 && (
+            <Callout tone="ok" icon={CheckCircle2}>
+              Netting cuts cash movement by {formatCurrency(Math.round(saved))} — fewer transfers, lower fees and float retained. Agree a netting statement with each party before adjusting their ledger.
+            </Callout>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 25. Interest-certificate tracker (FD/loan interest certificates) ─────────────
+type IntCert = { id: string; bank: string; type: "fd" | "loan" | "savings" | "od"; fy: string; amount: number; received: boolean };
+function InterestCertificateTracker() {
+  const [certs, setCerts] = useFeatureState<IntCert[]>("bank-interest-certs", []);
+  const [bank, setBank] = useState("");
+  const [type, setType] = useState<IntCert["type"]>("fd");
+  const [fy, setFy] = useState("2025-26");
+  const [amount, setAmount] = useState("");
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!bank.trim()) { toast.error("Enter the bank name"); return; }
+    setCerts([...certs, { id: crypto.randomUUID(), bank: bank.trim(), type, fy: fy.trim(), amount: amt, received: false }]);
+    setBank(""); setAmount("");
+    toast.success("Certificate tracked");
+  };
+
+  const pending = certs.filter(c => !c.received);
+  const interestIncome = certs.filter(c => c.type === "fd" || c.type === "savings").reduce((s, c) => s + c.amount, 0);
+  const interestPaid = certs.filter(c => c.type === "loan" || c.type === "od").reduce((s, c) => s + c.amount, 0);
+  const TYPE_LABEL: Record<IntCert["type"], string> = { fd: "FD interest earned", savings: "Savings interest earned", loan: "Loan interest paid", od: "OD/CC interest paid" };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Interest-Certificate Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">At year-end you need interest certificates from every bank — FD/savings interest (taxable income, TDS credit) and loan/OD interest (deductible). Track which are still pending.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
+            <input value={bank} onChange={e => setBank(e.target.value)} placeholder="HDFC Bank" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as IntCert["type"])} className={INP}>
+              <option value="fd">FD interest</option>
+              <option value="savings">Savings interest</option>
+              <option value="loan">Loan interest</option>
+              <option value="od">OD/CC interest</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">FY</label>
+            <input value={fy} onChange={e => setFy(e.target.value)} placeholder="2025-26" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="45000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+        </div>
+      </div>
+
+      {certs.length > 0 && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Pending certificates", value: `${pending.length}`, color: pending.length ? "text-yellow-400" : "text-green-400" },
+              { label: "Interest income (taxable)", value: formatAmount(interestIncome), color: "text-green-400" },
+              { label: "Interest paid (deductible)", value: formatAmount(interestPaid), color: "text-red-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Bank", "Type", "FY", "Amount", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {certs.map(c => (
+                    <tr key={c.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{c.bank}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{TYPE_LABEL[c.type]}</td>
+                      <td className="px-4 py-2.5 text-xs">{c.fy}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${c.type === "loan" || c.type === "od" ? "text-red-400" : "text-green-400"}`}>{formatCurrency(c.amount)}</td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => setCerts(certs.map(x => x.id === c.id ? { ...x, received: !x.received } : x))}
+                          className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${c.received ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>
+                          {c.received ? "Received" : "Pending"}
+                        </button>
+                      </td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setCerts(certs.filter(x => x.id !== c.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {pending.length > 0 && (
+            <Callout tone="warn" icon={AlertTriangle}>
+              {pending.length} interest certificate(s) still to collect. Request them before filing — FD/savings interest must be declared and the TDS claimed; loan/OD interest reduces your taxable profit.
+            </Callout>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 26. Current-account opening document checklist ────────────────────────────────
+type DocItem = { key: string; label: string; note: string };
+const ENTITY_DOCS: Record<string, DocItem[]> = {
+  proprietorship: [
+    { key: "pan", label: "Proprietor PAN card", note: "Mandatory KYC" },
+    { key: "aadhaar", label: "Proprietor Aadhaar / address proof", note: "Officially valid document" },
+    { key: "gst", label: "GST registration certificate", note: "Proof of business" },
+    { key: "shop-act", label: "Shop & Establishment / Udyam (MSME) certificate", note: "Activity proof #2" },
+    { key: "photo", label: "Passport-size photographs", note: "Of the proprietor" },
+    { key: "address", label: "Business address proof (utility bill / rent agreement)", note: "Not older than 2 months" },
+  ],
+  partnership: [
+    { key: "deed", label: "Partnership deed", note: "Registered/notarised" },
+    { key: "firm-pan", label: "Firm PAN card", note: "Mandatory KYC" },
+    { key: "partner-kyc", label: "PAN + Aadhaar of all partners", note: "KYC of each partner" },
+    { key: "gst", label: "GST registration certificate", note: "Proof of business" },
+    { key: "resolution", label: "Authorisation letter / resolution to open account", note: "Signed by all partners" },
+    { key: "address", label: "Business address proof", note: "Utility bill / rent agreement" },
+  ],
+  company: [
+    { key: "coi", label: "Certificate of Incorporation", note: "From MCA" },
+    { key: "moa", label: "MoA & AoA", note: "Charter documents" },
+    { key: "company-pan", label: "Company PAN card", note: "Mandatory KYC" },
+    { key: "board-res", label: "Board resolution to open account", note: "Naming signatories" },
+    { key: "director-kyc", label: "PAN + Aadhaar of directors & signatories", note: "KYC of each" },
+    { key: "gst", label: "GST registration certificate", note: "Proof of business" },
+    { key: "address", label: "Registered-office address proof", note: "Utility bill / rent agreement" },
+  ],
+};
+function AccountOpeningChecklist() {
+  const [entityType, setEntityType] = useState<keyof typeof ENTITY_DOCS>("proprietorship");
+  const [done, setDone] = useFeatureState<Record<string, boolean>>("bank-acopen-checklist", {});
+
+  const docs = ENTITY_DOCS[entityType];
+  const completed = docs.filter(d => done[`${entityType}:${d.key}`]).length;
+  const pct = docs.length ? Math.round((completed / docs.length) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FolderCheck size={14} className="text-[var(--color-primary)]" /> Current-Account Opening Checklist</h3>
+        <p className="text-xs text-[var(--color-muted)]">Banks reject account-opening forms over missing KYC. Pick your entity type and tick documents as you gather them — the list follows RBI KYC norms for business accounts.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Entity type</label>
+          <select value={entityType} onChange={e => setEntityType(e.target.value as keyof typeof ENTITY_DOCS)} className={INP}>
+            <option value="proprietorship">Sole proprietorship</option>
+            <option value="partnership">Partnership / LLP</option>
+            <option value="company">Private / Public company</option>
+          </select>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold">{completed} of {docs.length} documents ready</p>
+          <span className={`text-sm font-bold tabular-nums ${pct === 100 ? "text-green-400" : "text-yellow-400"}`}>{pct}%</span>
+        </div>
+        <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-4"><div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} /></div>
+        <div className="divide-y divide-[var(--color-border)]">
+          {docs.map(d => {
+            const id = `${entityType}:${d.key}`;
+            const checked = !!done[id];
+            return (
+              <label key={d.key} className="flex items-start gap-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={checked} onChange={() => setDone({ ...done, [id]: !checked })} className="mt-0.5 accent-[var(--color-primary)]" />
+                <div className="min-w-0">
+                  <p className={`text-sm font-medium ${checked ? "line-through text-[var(--color-muted)]" : ""}`}>{d.label}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{d.note}</p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {pct === 100 ? (
+        <Callout tone="ok" icon={CheckCircle2}>All documents ready — book a branch appointment or start the online onboarding. Carry originals for verification.</Callout>
+      ) : (
+        <p className="text-[10px] text-[var(--color-muted)]">Requirements vary slightly by bank; some also ask for a cancelled cheque of an existing account or trade licences specific to your activity.</p>
+      )}
+    </div>
+  );
+}
+
+// ── 27. Cash runway / burn-rate meter (live transactions) ─────────────────────────
+function CashRunwayMeter() {
+  const { store } = useApp();
+  const cash = store.bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const [months, setMonths] = useState(3);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+    const recent = store.transactions.filter(t => {
+      const d = parseISO(t.date);
+      return !isNaN(d.getTime()) && d >= cutoff && d <= now;
+    });
+    const inflow = recent.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const outflow = recent.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const netBurn = (outflow - inflow) / months; // positive = burning cash
+    const grossBurn = outflow / months;
+    return { inflow, outflow, netBurn, grossBurn, count: recent.length };
+  }, [store.transactions, months]);
+
+  const runwayMonths = stats.netBurn > 0 ? cash / stats.netBurn : Infinity;
+  const runwayDays = runwayMonths === Infinity ? Infinity : Math.round(runwayMonths * 30);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Cash Runway &amp; Burn Rate</h3>
+        <p className="text-xs text-[var(--color-muted)]">How long does your cash last at the current pace? We take net burn (outflows minus inflows) over a recent window and divide your bank balance by it.</p>
+        <div className="max-w-xs">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Burn measured over the last <strong className="text-[var(--color-text)]">{months}</strong> month(s)</label>
+          <input type="range" min={1} max={12} step={1} value={months} onChange={e => setMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Cash on hand", value: formatCurrency(cash), color: "text-[var(--color-text)]" },
+          { label: "Net monthly burn", value: stats.netBurn > 0 ? formatCurrency(Math.round(stats.netBurn)) : "Cash-positive", color: stats.netBurn > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Gross monthly spend", value: formatCurrency(Math.round(stats.grossBurn)), color: "text-[var(--color-muted)]" },
+          { label: "Runway", value: runwayMonths === Infinity ? "∞" : `${runwayMonths.toFixed(1)} mo`, color: runwayMonths === Infinity ? "text-green-400" : runwayMonths < 3 ? "text-red-400" : runwayMonths < 6 ? "text-yellow-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {stats.count === 0 ? (
+        <EmptyHint text="No transactions in the selected window to compute burn. Widen the window or import recent transactions." />
+      ) : runwayMonths === Infinity ? (
+        <Callout tone="ok" icon={CheckCircle2}>You are cash-flow positive over this window — inflows cover outflows, so your runway is not shrinking. Consider sweeping the surplus to earn yield.</Callout>
+      ) : (
+        <Callout tone={runwayMonths < 3 ? "warn" : "ok"} icon={runwayMonths < 3 ? AlertTriangle : CheckCircle2}>
+          At the current net burn of {formatCurrency(Math.round(stats.netBurn))}/month, your cash lasts about {runwayMonths.toFixed(1)} months ({runwayDays === Infinity ? "—" : `${runwayDays} days`}).
+          {runwayMonths < 3 ? " That is tight — accelerate collections, trim discretionary spend or arrange a line of credit now." : " Keep an eye on large upcoming debits that could shorten this."}
+        </Callout>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Burn is an average over the window and treats one-off items the same as recurring ones; exclude exceptional inflows/outflows for a truer picture.</p>
     </div>
   );
 }
