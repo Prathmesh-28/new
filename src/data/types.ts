@@ -20,23 +20,49 @@ export interface AuthUser {
 }
 
 // ── Subscription plans / entitlements ──────────────────────────────────────────
-export type PlanTier = "free" | "growth" | "pro";
+export type PlanTier = "free" | "starter" | "growth" | "pro";
 
-export const PLAN_RANK: Record<PlanTier, number> = { free: 0, growth: 1, pro: 2 };
+export const PLAN_RANK: Record<PlanTier, number> = { free: 0, starter: 1, growth: 2, pro: 3 };
 
-export const PLAN_LABEL: Record<PlanTier, string> = { free: "Free", growth: "Growth", pro: "Pro" };
+export const PLAN_LABEL: Record<PlanTier, string> = { free: "Free", starter: "Starter", growth: "Growth", pro: "Pro" };
 
-// Which plan a premium feature needs, keyed by the route slug (path's first
-// segment). Tabs not listed here are available on every plan — core daily-use
-// surfaces and role-landing pages (advisor/investor) stay open; only high-leverage
-// analysis modules are gated, so a scoped team member is never locked out of their
-// own home. super_admin bypasses all gates (see RouteGuard).
+// Which plan a module needs, keyed by route slug. Aligned to the marketing plans:
+//   Free    — invoicing, GST basics, transactions, dashboard, docs (core daily use)
+//   Starter — get-paid-faster: collections + receivables
+//   Growth  — payroll, cash forecast, working capital, analytics & AI CFO
+//   Pro     — credit/lending, treasury, valuation/cap-table, API/connectors, advanced
+// Tabs not listed stay open on every plan (core surfaces + role-landing pages).
+// super_admin bypasses ALL gates (see RouteGuard).
 export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
-  benchmarks:  "growth",
-  valuation:   "growth",
-  "term-sheet": "growth",
-  scenarios:   "growth",
-  capital:     "pro",
+  // Starter — "get paid faster"
+  collections:  "starter",
+  receivables:  "starter",
+  // Growth — payroll, cash & intelligence
+  payroll:          "growth",
+  "working-capital": "growth",
+  forecast:         "growth",
+  analytics:        "growth",
+  "cfo-brief":      "growth",
+  predict:          "growth",
+  benchmarks:       "growth",
+  scenarios:        "growth",
+  health:           "growth",
+  spend:            "growth",
+  // Pro — capital, treasury, multi-entity, API
+  credit:       "pro",
+  capital:      "pro",
+  treasury:     "pro",
+  valuation:    "pro",
+  "term-sheet": "pro",
+  lenders:      "pro",
+  investor:     "pro",
+  connectors:   "pro",
+  automation:   "pro",
+  network:      "pro",
+  marketplace:  "pro",
+  global:       "pro",
+  tokens:       "pro",
+  frontier:     "pro",
 };
 
 // Human-facing pitch for each gated feature — shown on the upsell screen.
@@ -46,6 +72,25 @@ export const FEATURE_PITCH: Record<string, { title: string; blurb: string; perks
   "term-sheet": { title: "Term Sheet Builder", blurb: "Model dilution and build investor-ready term sheets in minutes.", perks: ["Pre/post-money & dilution math", "Multiple round modelling", "Export to PDF for investors"] },
   scenarios:    { title: "Scenario Planning", blurb: "Stress-test hiring, big contracts, and loan draws against your cash.", perks: ["What-if cash forecasting", "Stack multiple scenarios", "See the runway impact instantly"] },
   capital:      { title: "Capital Raising", blurb: "Raise from the people who believe in your business — built into Headroom.", perks: ["Revenue-based financing, angel & SME-IPO tracks", "Live investor portal & cap table", "Compliance handled for you"] },
+  collections:  { title: "Collections Suite", blurb: "Get paid faster — automated WhatsApp & UPI reminders that chase every overdue invoice for you.", perks: ["WhatsApp / UPI / email reminder ladders", "DSO & promise-to-pay tracking", "Customer statements in one tap"] },
+  receivables:  { title: "Receivables Intelligence", blurb: "See exactly who owes you, who's slipping, and where your cash is stuck.", perks: ["Ageing buckets & overdue heatmap", "Customer risk scoring", "Collection forecast"] },
+  payroll:      { title: "Payroll", blurb: "Run compliant Indian payroll — PF, ESI, PT, TDS and payslips — without a separate tool.", perks: ["Full statutory payroll (PF/ESI/PT/TDS)", "Salary slips & Form 16", "Direct salary payouts"] },
+  "working-capital": { title: "Working Capital", blurb: "Optimise your cash-conversion cycle and unlock the cash trapped in your business.", perks: ["CCC dashboard & drawing power", "Discount-vs-borrow decisions", "Funding-gap sizing"] },
+  forecast:     { title: "Cash-Flow Forecast", blurb: "Know your runway and never be surprised by a cash crunch again.", perks: ["13-week & 90-day rolling forecasts", "Best / base / worst scenarios", "Zero-cash early warning"] },
+  analytics:    { title: "Analytics", blurb: "Turn your numbers into decisions — profitability, cohorts and unit economics.", perks: ["Profit by product / customer / region", "Margin & expense trends", "Cohorts & unit economics"] },
+  "cfo-brief":  { title: "AI CFO Brief", blurb: "Your always-on CFO — a daily brief on cash, risk and what to do next.", perks: ["Daily cash & risk snapshot", "Plain-English variance commentary", "Board-ready summaries"] },
+  predict:      { title: "Predictive Intelligence", blurb: "Forecast cash, payments and churn before they happen.", perks: ["Cash-balance projection", "Invoice pay-date prediction", "Early-warning signals"] },
+  health:       { title: "Financial Health", blurb: "A live fitness score for your business — liquidity, solvency and distress risk.", perks: ["Altman Z-score & ratios", "Liquidity stress test", "Health trend over time"] },
+  spend:        { title: "Spend Intelligence", blurb: "See where every rupee goes and stop the leaks.", perks: ["Category & vendor concentration", "Duplicate / anomaly detection", "Budget-vs-actual"] },
+  credit:       { title: "Credit & Lending", blurb: "Unlock working-capital loans underwritten on your real cash flows — not collateral.", perks: ["AA-data underwriting & eligibility", "Invoice discounting & BNPL", "Loan management"] },
+  treasury:     { title: "Treasury", blurb: "Put idle cash to work — sweeps, FD ladders and yield, managed in-app.", perks: ["Idle-cash sweep & FD laddering", "Yield & post-tax return", "Liquidity tiering"] },
+  lenders:      { title: "Lenders", blurb: "Manage every lender relationship, covenant and drawdown in one place.", perks: ["Covenant dashboard", "Borrowing-base certificate", "Lender MIS pack"] },
+  investor:     { title: "Investor Relations", blurb: "Keep investors updated and your cap table clean — automatically.", perks: ["Auto investor updates", "Board-deck generator", "Cap-table waterfall"] },
+  connectors:   { title: "Connectors & API", blurb: "Plug Headroom into your bank, gateway, POS and accounting stack.", perks: ["Bank / UPI / gateway feeds", "Tally & e-commerce sync", "API access"] },
+  automation:   { title: "Automation", blurb: "Put your finance ops on autopilot with no-code rules.", perks: ["IF-THEN rule builder", "Approval chains & SLAs", "Scheduled reports"] },
+  network:      { title: "B2B Network", blurb: "Reconcile and transact with your buyers and suppliers on a shared graph.", perks: ["Two-sided invoice confirmation", "Counterparty reconciliation", "Mutual-credit netting"] },
+  marketplace:  { title: "Marketplace Finance", blurb: "Reconcile every Amazon/Flipkart/ONDC settlement and protect your margin.", perks: ["Settlement & fee reconciliation", "GSTR-8 / TCS-52", "SKU P&L"] },
+  global:       { title: "Cross-Border", blurb: "Bill, get paid and stay FEMA-compliant across currencies.", perks: ["Multi-currency P&L & FX", "Export invoices & LUT", "FIRC / BRC tracking"] },
 };
 
 // ── Role config ───────────────────────────────────────────────────────────────

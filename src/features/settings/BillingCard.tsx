@@ -5,8 +5,9 @@ import { PLAN_LABEL, PLAN_RANK, type PlanTier } from "@/data/types";
 import { fetchBilling, upgradePlan, regionCurrency, type BillingState } from "@/lib/billing";
 
 const PLANS: { id: Exclude<PlanTier, "free">; inr: string; usd: string; tagline: string }[] = [
-  { id: "growth", inr: "₹999",   usd: "$39", tagline: "Full visibility, benchmarks, scenarios & credit" },
-  { id: "pro",    inr: "₹2,999", usd: "$99", tagline: "Capital raising, valuation & term sheets" },
+  { id: "starter", inr: "₹799",   usd: "$9",  tagline: "Unlimited invoicing + WhatsApp/UPI collections & GST prep" },
+  { id: "growth",  inr: "₹2,499", usd: "$29", tagline: "Payroll, cash forecast, analytics & your AI CFO" },
+  { id: "pro",     inr: "₹5,999", usd: "$69", tagline: "Credit, treasury, valuation/cap-table & API" },
 ];
 
 export default function BillingCard() {

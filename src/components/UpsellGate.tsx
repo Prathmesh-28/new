@@ -5,8 +5,9 @@ import { FEATURE_PITCH, PLAN_LABEL, type PlanTier } from "@/data/types";
 import { upgradePlan, regionCurrency } from "@/lib/billing";
 
 const PRICE: Record<Exclude<PlanTier, "free">, { inr: string; usd: string }> = {
-  growth: { inr: "₹999", usd: "$39" },
-  pro:    { inr: "₹2,999", usd: "$99" },
+  starter: { inr: "₹799",   usd: "$9" },
+  growth:  { inr: "₹2,499", usd: "$29" },
+  pro:     { inr: "₹5,999", usd: "$69" },
 };
 
 /* Full-screen upsell shown by RouteGuard when the tenant's plan can't reach a

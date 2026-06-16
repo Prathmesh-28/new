@@ -3,13 +3,14 @@ const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const razorpay = require("../lib/razorpay");
 
-const VALID_PLANS = ["growth", "pro"];
+const VALID_PLANS = ["starter", "growth", "pro"];
 
 // Plan pricing in the smallest currency unit (paise for INR). Must match the
-// amounts shown on the landing page / billing card.
+// amounts shown on the landing page / billing card (ex-GST; Razorpay test mode).
 const PLAN_PRICING = {
-  growth: { inr: 99900 },  // ₹999 / month
-  pro:    { inr: 299900 }, // ₹2,999 / month
+  starter: { inr: 79900 },  // ₹799 / month
+  growth:  { inr: 249900 }, // ₹2,499 / month
+  pro:     { inr: 599900 }, // ₹5,999 / month
 };
 
 // Persist a plan to a tenant: updates the billing record AND every user in the

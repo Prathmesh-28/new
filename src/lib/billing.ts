@@ -85,7 +85,7 @@ export async function startRazorpayCheckout(
       description: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan`,
       order_id: order.order_id,
       prefill: { email: opts.email || undefined, name: opts.name || undefined },
-      theme: { color: "#C9A227" },
+      theme: { color: "#5FBE7C" },
       handler: async (resp: RazorpaySuccess) => {
         try {
           const v = await api.post<{ ok: boolean }>("/api/billing/razorpay/verify", {
