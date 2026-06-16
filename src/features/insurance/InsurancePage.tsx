@@ -9,6 +9,7 @@ import {
   CalendarDays, Trophy, Award, SlidersHorizontal, PauseCircle, Ship,
   Briefcase, Bug, Truck, HardHat, Receipt,
   Layers, Stethoscope, Activity, GitMerge, Coins, PiggyBank, Users,
+  Scale, Combine, Boxes, UserPlus, Scale3d,
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
@@ -20,7 +21,8 @@ type Tab =
   | "marinecover" | "piestimator" | "cyberscore" | "fleettracker" | "wcestimator"
   | "premiumemi" | "itcchecker"
   | "tophealth" | "opdwellness" | "lifestage" | "riders" | "tco" | "surrender" | "groupvsindiv"
-  | "renewplanner" | "inflationidx" | "spendbudget" | "claimprep";
+  | "renewplanner" | "inflationidx" | "spendbudget" | "claimprep"
+  | "underinsurance" | "overlap" | "pkgrec" | "empgap" | "liability";
 
 // shared styles (reused from Tax/Debt pattern)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -76,6 +78,11 @@ export default function InsurancePage() {
             ["inflationidx", "SI Inflation Indexer", TrendingDown],
             ["spendbudget", "Spend Budget", Coins],
             ["claimprep", "Claim Readiness", FileWarning],
+            ["underinsurance", "Under-Insurance", Scale],
+            ["overlap", "Overlap Finder", Combine],
+            ["pkgrec", "Package by Sector", Boxes],
+            ["empgap", "Employee Gap", UserPlus],
+            ["liability", "Liability Adequacy", Scale3d],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -119,6 +126,11 @@ export default function InsurancePage() {
       {tab === "inflationidx" && <SumInsuredInflationIndexer />}
       {tab === "spendbudget" && <InsuranceSpendBudget />}
       {tab === "claimprep" && <ClaimReadinessChecklist />}
+      {tab === "underinsurance" && <UnderInsuranceChecker />}
+      {tab === "overlap" && <PolicyOverlapFinder />}
+      {tab === "pkgrec" && <BusinessPackageRecommender />}
+      {tab === "empgap" && <EmployeeCoverageGap />}
+      {tab === "liability" && <LiabilityLimitAdequacy />}
     </div>
   );
 }
@@ -3164,6 +3176,398 @@ function ClaimReadinessChecklist() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Exact documents vary by claim type and insurer — always check your policy wording and the insurer's claim form. The single biggest avoidable cause of repudiation is delayed intimation; notify first, gather documents next.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Under-Insurance / Average-Clause Checker
+// ─────────────────────────────────────────────────────────────────────────────
+function UnderInsuranceChecker() {
+  const [sumInsured, setSumInsured] = useState("");
+  const [actualValue, setActualValue] = useState("");
+  const [lossAmount, setLossAmount] = useState("");
+
+  const si = parseFloat(sumInsured) || 0;
+  const av = parseFloat(actualValue) || 0;
+  const loss = parseFloat(lossAmount) || 0;
+
+  const result = useMemo(() => {
+    if (si <= 0 || av <= 0) return null;
+    const ratio = si / av; // adequacy ratio
+    const underinsured = si < av;
+    const coverGap = Math.max(0, av - si);
+    // Average clause: payout = loss * (SI / actual value), capped at SI.
+    const cappedLoss = Math.min(loss, si);
+    const payout = underinsured ? Math.min(loss * ratio, si) : cappedLoss;
+    const shortfall = Math.max(0, loss - payout);
+    return { ratio, underinsured, coverGap, payout, shortfall };
+  }, [si, av, loss]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Under-Insurance / Average-Clause Checker</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          If your sum insured is below the asset's true (reinstatement) value, the average clause reduces every claim in the same proportion — even a partial loss is underpaid. Check your exposure before a loss happens.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sum insured (₹)</label>
+            <input type="number" value={sumInsured} onChange={e => setSumInsured(e.target.value)} placeholder="4000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Actual / reinstatement value (₹)</label>
+            <input type="number" value={actualValue} onChange={e => setActualValue(e.target.value)} placeholder="5000000" className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Hypothetical loss to test (₹)</label>
+            <input type="number" value={lossAmount} onChange={e => setLossAmount(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Adequacy ratio", value: `${(result.ratio * 100).toFixed(0)}%`, color: result.underinsured ? "text-red-400" : "text-green-400" },
+              { label: "Cover gap", value: formatAmount(Math.round(result.coverGap)), color: result.coverGap > 0 ? "text-yellow-400" : "text-green-400" },
+              { label: "Claim payout", value: loss > 0 ? formatAmount(Math.round(result.payout)) : "—", color: "text-[var(--color-text)]" },
+              { label: "You bear (shortfall)", value: loss > 0 ? formatAmount(Math.round(result.shortfall)) : "—", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${result.underinsured ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+            <p className={`text-sm font-medium flex items-center gap-2 ${result.underinsured ? "text-red-400" : "text-green-400"}`}>
+              {result.underinsured ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {result.underinsured
+                ? `Under-insured by ${(100 - result.ratio * 100).toFixed(0)}% — the average clause will scale down every claim to ${(result.ratio * 100).toFixed(0)}% of the loss.`
+                : "Cover is at or above value — the average clause does not bite. Re-index the sum insured each year for inflation."}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">The average (under-insurance) condition applies to most fire, burglary and property policies in India. Payout = loss × (sum insured ÷ actual value), capped at the sum insured. Insure at reinstatement value and re-index annually to stay protected.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Policy-Overlap Finder
+// ─────────────────────────────────────────────────────────────────────────────
+const OVERLAP_GROUPS: { key: string; label: string; types: PolicyType[]; note: string }[] = [
+  { key: "property", label: "Property / fire & theft", types: ["Fire & Allied Perils", "Burglary / Theft", "Equipment Breakdown"], note: "Premises, plant and stock may be covered under more than one section — check for double-insurance on the same asset." },
+  { key: "liability", label: "Liability", types: ["Public Liability", "Product Liability", "Professional Indemnity", "Directors & Officers"], note: "Overlapping liability wordings can leave you paying twice for the same third-party exposure." },
+  { key: "people", label: "Employee benefits", types: ["Group Health (Mediclaim)", "Group Term Life", "Personal Accident"], note: "PA and life sections sometimes duplicate accidental-death benefit." },
+  { key: "transit", label: "Goods movement", types: ["Marine / Transit", "Motor (Commercial)"], note: "Goods-in-transit may be insured under both marine and motor carrier sections." },
+  { key: "income", label: "Income protection", types: ["Business Interruption", "Trade-Credit"], note: "Both protect cash flow — confirm the perils don't overlap." },
+];
+
+function PolicyOverlapFinder() {
+  const [policies] = useFeatureState<Policy[]>("ins-policies", []);
+
+  const findings = useMemo(() => {
+    return OVERLAP_GROUPS.map(g => {
+      const matched = policies.filter(p => g.types.includes(p.type));
+      const overlapPremium = matched.reduce((s, p) => s + p.premium, 0);
+      return { ...g, matched, overlapPremium };
+    }).filter(g => g.matched.length >= 2);
+  }, [policies]);
+
+  const totalOverlapPremium = findings.reduce((s, g) => s + g.overlapPremium, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Combine size={14} className="text-[var(--color-primary)]" /> Policy-Overlap Finder</h3>
+        <p className="text-xs text-[var(--color-muted)]">Scans your register for policies whose cover may overlap. Double-insurance means you pay two premiums but most policies have a contribution clause, so you can never recover more than the loss — overlap is wasted spend, not extra protection.</p>
+      </div>
+
+      {policies.length === 0 ? (
+        <div className={`${CARD} border-dashed p-10 text-center`}>
+          <Combine size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
+          <p className="text-sm font-medium mb-1">No policies to compare</p>
+          <p className="text-xs text-[var(--color-muted)]">Add policies in the register and this tool will flag overlapping cover.</p>
+        </div>
+      ) : findings.length === 0 ? (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No obvious overlaps — each risk area is held by at most one policy in your register.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Overlapping areas", value: `${findings.length}`, color: "text-yellow-400" },
+              { label: "Policies involved", value: `${findings.reduce((s, g) => s + g.matched.length, 0)}`, color: "text-[var(--color-text)]" },
+              { label: "Premium in overlap", value: formatAmount(Math.round(totalOverlapPremium)), color: "text-orange-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            {findings.map(g => (
+              <div key={g.key} className={`${CARD} p-4`}>
+                <p className="text-sm font-medium flex items-center gap-2"><GitMerge size={13} className="text-yellow-400" /> {g.label} <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-900/40 text-yellow-300">{g.matched.length} policies</span></p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-1 mb-2">{g.note}</p>
+                <div className="flex flex-wrap gap-2">
+                  {g.matched.map(p => (
+                    <span key={p.id} className="inline-flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-full px-2.5 py-1">
+                      {p.insurer} · {p.type}{p.premium > 0 ? ` · ${formatAmount(p.premium)}` : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">An overlap flag does not always mean waste — sections can genuinely complement each other (e.g. PA top-up over group life). Review the wordings with your broker and consolidate where the cover is truly duplicated.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Business-Package Recommender (by sector)
+// ─────────────────────────────────────────────────────────────────────────────
+const SECTOR_PACKS: { key: string; label: string; core: PolicyType[]; recommended: PolicyType[] }[] = [
+  { key: "retail", label: "Retail / kirana / shop", core: ["Fire & Allied Perils", "Burglary / Theft", "Public Liability"], recommended: ["Group Health (Mediclaim)", "Personal Accident"] },
+  { key: "manufacturing", label: "Manufacturing / factory", core: ["Fire & Allied Perils", "Equipment Breakdown", "Product Liability", "Public Liability"], recommended: ["Business Interruption", "Group Health (Mediclaim)", "Marine / Transit"] },
+  { key: "trading", label: "Trading / distribution / wholesale", core: ["Fire & Allied Perils", "Marine / Transit", "Trade-Credit"], recommended: ["Burglary / Theft", "Business Interruption"] },
+  { key: "services", label: "Professional services / consulting", core: ["Professional Indemnity", "Public Liability", "Cyber"], recommended: ["Group Health (Mediclaim)", "Directors & Officers"] },
+  { key: "logistics", label: "Logistics / transport / fleet", core: ["Motor (Commercial)", "Marine / Transit", "Public Liability"], recommended: ["Personal Accident", "Group Health (Mediclaim)"] },
+  { key: "hospitality", label: "Hospitality / F&B / restaurant", core: ["Fire & Allied Perils", "Public Liability", "Burglary / Theft"], recommended: ["Product Liability", "Group Health (Mediclaim)", "Personal Accident"] },
+];
+
+function BusinessPackageRecommender() {
+  const [policies] = useFeatureState<Policy[]>("ins-policies", []);
+  const [sector, setSector] = useState(SECTOR_PACKS[0].key);
+  const held = useMemo(() => new Set(policies.map(p => p.type)), [policies]);
+
+  const pack = SECTOR_PACKS.find(s => s.key === sector) ?? SECTOR_PACKS[0];
+  const line = (type: PolicyType, tier: "core" | "rec") => ({ type, tier, have: held.has(type) });
+  const rows = [...pack.core.map(t => line(t, "core")), ...pack.recommended.map(t => line(t, "rec"))];
+  const missingCore = rows.filter(r => r.tier === "core" && !r.have).length;
+  const haveCount = rows.filter(r => r.have).length;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Business-Package Recommender</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick your sector to see the standard cover package — core lines every business in that trade should carry, plus recommended add-ons. We mark what you already hold from your register.</p>
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Sector</label>
+        <select value={sector} onChange={e => setSector(e.target.value)} className={INP}>
+          {SECTOR_PACKS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Cover lines suggested", value: `${rows.length}`, color: "text-[var(--color-text)]" },
+          { label: "Already held", value: `${haveCount}`, color: "text-green-400" },
+          { label: "Core gaps", value: `${missingCore}`, color: missingCore > 0 ? "text-red-400" : "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        {rows.map(r => (
+          <div key={r.type} className="flex items-center justify-between gap-3 p-3.5">
+            <div className="flex items-center gap-2.5">
+              {r.have
+                ? <CheckCircle2 size={15} className="text-green-400 shrink-0" />
+                : <AlertTriangle size={15} className={`shrink-0 ${r.tier === "core" ? "text-red-400" : "text-yellow-400"}`} />}
+              <span className="text-sm">{r.type}</span>
+            </div>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${r.tier === "core" ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "bg-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {r.tier === "core" ? "CORE" : "RECOMMENDED"}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative sector templates only — your actual needs depend on premises, staff, exposure and contracts. Many insurers offer a single "business package / shopkeeper" policy bundling several of these sections at a discount. Bind through an IRDAI-licensed insurer/broker.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Employee-Coverage Gap
+// ─────────────────────────────────────────────────────────────────────────────
+function EmployeeCoverageGap() {
+  const { store } = useApp();
+  const hasPayroll = store.transactions.some(t => t.category === "payroll");
+
+  const [headcount, setHeadcount] = useState("");
+  const [health, setHealth] = useState("");
+  const [pa, setPa] = useState("");
+  const [life, setLife] = useState("");
+
+  const total = parseInt(headcount) || 0;
+  const benefits = [
+    { key: "health", label: "Group health (mediclaim)", covered: parseInt(health) || 0, why: "Hospitalisation cover — top retention driver for small teams." },
+    { key: "pa", label: "Personal accident", covered: parseInt(pa) || 0, why: "Mandatory-grade cover for blue-collar / field staff." },
+    { key: "life", label: "Group term life", covered: parseInt(life) || 0, why: "Pays the family if an employee dies in service." },
+  ];
+
+  const result = useMemo(() => {
+    if (total <= 0) return null;
+    return benefits.map(b => {
+      const capped = Math.min(b.covered, total);
+      const gap = Math.max(0, total - capped);
+      return { ...b, capped, gap, pct: (capped / total) * 100 };
+    });
+  }, [total, health, pa, life]);
+
+  const totalGap = result ? result.reduce((s, b) => s + b.gap, 0) : 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> Employee-Coverage Gap</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          Enter your headcount and how many people each benefit actually covers — this surfaces staff with no protection. {hasPayroll ? "Payroll activity detected on your books, so you likely have employees to cover." : "No payroll detected yet, but you can still model coverage here."}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total employees</label>
+            <input type="number" min={0} value={headcount} onChange={e => setHeadcount(e.target.value)} placeholder="10" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Covered by health</label>
+            <input type="number" min={0} value={health} onChange={e => setHealth(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Covered by PA</label>
+            <input type="number" min={0} value={pa} onChange={e => setPa(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Covered by term life</label>
+            <input type="number" min={0} value={life} onChange={e => setLife(e.target.value)} placeholder="0" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <div className={`rounded-lg p-4 border ${totalGap > 0 ? "border-yellow-800/40 bg-yellow-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+            <p className={`text-sm font-medium flex items-center gap-2 ${totalGap > 0 ? "text-yellow-400" : "text-green-400"}`}>
+              {totalGap > 0 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {totalGap > 0 ? `${totalGap} uncovered benefit-slots across your team — close these to protect staff and aid retention.` : "Every employee is covered on all three core benefits."}
+            </p>
+          </div>
+          <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+            {result.map(b => (
+              <div key={b.key} className="p-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-medium">{b.label}</span>
+                  <span className={`text-xs tabular-nums ${b.gap > 0 ? "text-yellow-400" : "text-green-400"}`}>{b.capped}/{total} covered{b.gap > 0 ? ` · ${b.gap} gap` : ""}</span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${b.pct}%`, background: b.gap > 0 ? "var(--color-primary)" : "var(--color-success, #22c55e)" }} />
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)] mt-1.5">{b.why}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Group cover is available for teams as small as two and is far cheaper per head than individual policies. PA cover for workmen and field staff is often required under contracts and labour norms. Use the Group-Health Estimator to price the shortfall.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Liability-Limit Adequacy
+// ─────────────────────────────────────────────────────────────────────────────
+function LiabilityLimitAdequacy() {
+  const { store } = useApp();
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+
+  const [turnover, setTurnover] = useState("");
+  const [footfall, setFootfall] = useState("medium");
+  const [currentLimit, setCurrentLimit] = useState("");
+
+  const t = parseFloat(turnover) || autoRevenue;
+  const limit = parseFloat(currentLimit) || 0;
+  const footfallFactor: Record<string, number> = { low: 0.10, medium: 0.20, high: 0.35 };
+
+  const result = useMemo(() => {
+    if (t <= 0) return null;
+    // Suggested aggregate liability limit ~ a fraction of turnover scaled by public exposure,
+    // floored at ₹10L. Per-event (AOA) limit ~ 25% of aggregate (AOY).
+    const factor = footfallFactor[footfall] ?? 0.20;
+    const suggestedAOY = Math.max(1000000, Math.round(t * factor));
+    const suggestedAOA = Math.round(suggestedAOY * 0.25);
+    const adequate = limit >= suggestedAOY;
+    const shortfall = Math.max(0, suggestedAOY - limit);
+    return { suggestedAOY, suggestedAOA, adequate, shortfall };
+  }, [t, footfall, limit]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale3d size={14} className="text-[var(--color-primary)]" /> Liability-Limit Adequacy</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          Public/product liability limits are quoted as AOA (any one accident) and AOY (aggregate per year). A single serious third-party injury can exceed a thin limit — size it against your turnover and footfall.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual turnover (₹){autoRevenue > 0 ? " · auto" : ""}</label>
+            <input type="number" value={turnover} onChange={e => setTurnover(e.target.value)} placeholder={autoRevenue > 0 ? String(autoRevenue) : "10000000"} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Public exposure / footfall</label>
+            <select value={footfall} onChange={e => setFootfall(e.target.value)} className={INP}>
+              <option value="low">Low — back-office, B2B, no visitors</option>
+              <option value="medium">Medium — office/shop with visitors</option>
+              <option value="high">High — heavy footfall, factory, public-facing</option>
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Current liability limit / AOY (₹)</label>
+            <input type="number" value={currentLimit} onChange={e => setCurrentLimit(e.target.value)} placeholder="optional — leave blank if none" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Suggested AOY (aggregate)", value: formatAmount(result.suggestedAOY), color: "text-[var(--color-primary)]" },
+              { label: "Suggested AOA (per event)", value: formatAmount(result.suggestedAOA), color: "text-blue-400" },
+              { label: "Shortfall vs current", value: result.shortfall > 0 ? formatAmount(result.shortfall) : "—", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${result.adequate ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+            <p className={`text-sm font-medium flex items-center gap-2 ${result.adequate ? "text-green-400" : "text-red-400"}`}>
+              {result.adequate ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {limit <= 0
+                ? `No limit entered — you appear to carry no liability cover. A ${formatCurrency(result.suggestedAOY)} aggregate limit is a sensible starting point for your profile.`
+                : result.adequate
+                  ? "Your limit meets the suggested aggregate for your turnover and footfall."
+                  : `Your limit looks thin — consider raising the aggregate to about ${formatCurrency(result.suggestedAOY)}.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Rule-of-thumb sizing only — real liability limits depend on contracts (landlords/clients often mandate a minimum), industry hazard and legal-cost exposure. Liability claims include defence costs; confirm whether those erode your limit. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }
