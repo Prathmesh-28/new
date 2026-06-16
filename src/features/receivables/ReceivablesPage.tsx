@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers, CalendarCheck, FileWarning, TicketPercent, Ban, Eraser, History, Hourglass, Trophy, Coins, Target } from "lucide-react";
+import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers, CalendarCheck, FileWarning, TicketPercent, Ban, Eraser, History, Hourglass, Trophy, Coins, Target, Wallet, Calculator, CalendarRange, Siren, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { Invoice } from "@/data/types";
 
@@ -183,7 +183,7 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
   );
 }
 
-type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel" | "promise-to-pay" | "disputes" | "early-discount" | "credit-hold" | "write-off" | "pay-timeline" | "days-beyond-terms" | "reliability-rank" | "interest-accrual" | "collection-target";
+type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel" | "promise-to-pay" | "disputes" | "early-discount" | "credit-hold" | "write-off" | "pay-timeline" | "days-beyond-terms" | "reliability-rank" | "interest-accrual" | "collection-target" | "partial-pay" | "recovery-roi" | "payment-plan" | "stress-test" | "statement";
 
 export default function ReceivablesPage() {
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
@@ -250,7 +250,7 @@ export default function ReceivablesPage() {
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers], ["promise-to-pay", "Promise-to-Pay", CalendarCheck], ["disputes", "Dispute Tracker", FileWarning], ["early-discount", "Early-Pay Discount", TicketPercent], ["credit-hold", "Credit-Hold List", Ban], ["write-off", "Write-Off Policy", Eraser], ["pay-timeline", "Payment Timeline", History], ["days-beyond-terms", "Days Beyond Terms", Hourglass], ["reliability-rank", "Reliability Ranking", Trophy], ["interest-accrual", "Overdue Interest", Coins], ["collection-target", "Collection Target", Target]] as const).map(([id, label, Icon]) => (
+        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers], ["promise-to-pay", "Promise-to-Pay", CalendarCheck], ["disputes", "Dispute Tracker", FileWarning], ["early-discount", "Early-Pay Discount", TicketPercent], ["credit-hold", "Credit-Hold List", Ban], ["write-off", "Write-Off Policy", Eraser], ["pay-timeline", "Payment Timeline", History], ["days-beyond-terms", "Days Beyond Terms", Hourglass], ["reliability-rank", "Reliability Ranking", Trophy], ["interest-accrual", "Overdue Interest", Coins], ["collection-target", "Collection Target", Target], ["partial-pay", "Partial Payments", Wallet], ["recovery-roi", "Recovery ROI", Calculator], ["payment-plan", "Payment Plan", CalendarRange], ["stress-test", "Concentration Stress Test", Siren], ["statement", "Statement Generator", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -280,6 +280,11 @@ export default function ReceivablesPage() {
       {tab === "reliability-rank" && <ReliabilityRanking />}
       {tab === "interest-accrual" && <OverdueInterestAccrual />}
       {tab === "collection-target" && <CollectionTargetTracker />}
+      {tab === "partial-pay" && <PartialPaymentTracker />}
+      {tab === "recovery-roi" && <RecoveryROICalculator />}
+      {tab === "payment-plan" && <PaymentPlanBuilder />}
+      {tab === "stress-test" && <ConcentrationStressTest />}
+      {tab === "statement" && <CustomerStatementGenerator />}
 
       {tab === "overview" && <>
       {/* Aging summary */}
@@ -2483,6 +2488,539 @@ function OverdueInterestAccrual() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Simple interest = principal × rate × (overdue days − grace) ÷ 365. Many B2B contracts and the MSMED Act allow charging interest on late payment; use this to quantify and, where applicable, invoice it.</p>
+    </div>
+  );
+}
+
+/* ── Partial Payment Tracker ─────────────────────────────────── */
+function PartialPaymentTracker() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid").sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()), [invoices]);
+  // invoiceId -> array of recorded part-payments
+  const [pays, setPays] = useFeatureState<Record<string, { id: string; amount: number; date: string }[]>>("rec-partial-payments", {});
+  const [sel, setSel] = useState("");
+  const [amt, setAmt] = useState("");
+
+  const rows = useMemo(() => open.map(i => {
+    const list = pays[i.id] ?? [];
+    const paid = list.reduce((s, p) => s + p.amount, 0);
+    const outstanding = Math.max(0, i.amount - paid);
+    const pct = i.amount > 0 ? Math.min(100, Math.round((paid / i.amount) * 100)) : 0;
+    return { inv: i, list, paid, outstanding, pct };
+  }), [open, pays]);
+
+  const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
+  const totalCollected = rows.reduce((s, r) => s + r.paid, 0);
+
+  const record = () => {
+    const v = parseFloat(amt);
+    if (!sel || isNaN(v) || v <= 0) { toast.error("Pick an invoice and enter an amount"); return; }
+    setPays(prev => ({ ...prev, [sel]: [...(prev[sel] ?? []), { id: generateId(), amount: v, date: new Date().toISOString().split("T")[0] }] }));
+    setAmt("");
+    toast.success(`Recorded ${formatCurrency(v)} part-payment`);
+  };
+  const removePay = (invId: string, payId: string) => {
+    setPays(prev => ({ ...prev, [invId]: (prev[invId] ?? []).filter(p => p.id !== payId) }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Wallet size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Partial Payment Tracker</h3>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
+            <select value={sel} onChange={e => setSel(e.target.value)} className={INP}>
+              <option value="">Select an open invoice</option>
+              {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received</label>
+            <input value={amt} onChange={e => setAmt(e.target.value)} className={`${INP} w-32`} inputMode="decimal" placeholder="10000" />
+          </div>
+          <button onClick={record} className="px-4 py-2 text-xs rounded bg-[var(--color-primary)] text-[var(--color-bg)] font-medium">Record</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Collected via part-payments</p>
+          <p className="text-lg font-bold tabular-nums text-green-400">{formatCurrency(Math.round(totalCollected))}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Remaining outstanding</p>
+          <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalOutstanding))}</p>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Wallet size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No open invoices. Add invoices on the Overview tab to record installments here.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">
+            {rows.map(r => (
+              <div key={r.inv.id} className="px-4 py-3">
+                <div className="flex items-center gap-3 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{r.inv.customer} · {r.inv.invoiceNumber ?? r.inv.id}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{formatCurrency(r.paid)} of {formatCurrency(r.inv.amount)} · {formatCurrency(r.outstanding)} left</p>
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${r.pct >= 100 ? "text-green-400" : "text-[var(--color-primary)]"}`}>{r.pct}%</span>
+                </div>
+                <div className="h-2 bg-[var(--color-bg)] rounded overflow-hidden">
+                  <div className="h-full rounded transition-all" style={{ width: `${r.pct}%`, background: r.pct >= 100 ? "#22c55e" : "#1A6B55" }} />
+                </div>
+                {r.list.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {r.list.map(p => (
+                      <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-0.5">
+                        {format(parseISO(p.date), "d MMM")} · {formatCurrency(p.amount)}
+                        <button onClick={() => removePay(r.inv.id, p.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={10} /></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Log installments against each open invoice to see what is truly outstanding. Records persist locally; once an invoice is fully covered, mark it paid on the Overview tab.</p>
+    </div>
+  );
+}
+
+/* ── Recovery ROI Calculator ─────────────────────────────────── */
+function RecoveryROICalculator() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid").sort((a, b) => b.amount - a.amount), [invoices]);
+  const [sel, setSel] = useState("");
+  const [recoveryPct, setRecoveryPct] = useFeatureState<string>("rec-roi-recovery-pct", "60");
+  const [agencyPct, setAgencyPct] = useFeatureState<string>("rec-roi-agency-pct", "20");
+  const [legalCost, setLegalCost] = useFeatureState<string>("rec-roi-legal-cost", "15000");
+  const [ownHours, setOwnHours] = useState("8");
+  const [hourlyCost, setHourlyCost] = useState("500");
+
+  const inv = open.find(i => i.id === sel);
+  const data = useMemo(() => {
+    const face = inv?.amount ?? 0;
+    const recRate = (parseFloat(recoveryPct) || 0) / 100;
+    const agency = (parseFloat(agencyPct) || 0) / 100;
+    const legal = parseFloat(legalCost) || 0;
+    const hours = parseFloat(ownHours) || 0;
+    const rate = parseFloat(hourlyCost) || 0;
+    const expectedGross = face * recRate;
+    const agencyFee = expectedGross * agency;
+    const internalCost = hours * rate;
+    const totalCost = agencyFee + legal + internalCost;
+    const netRecovery = expectedGross - totalCost;
+    const roi = totalCost > 0 ? (netRecovery / totalCost) * 100 : 0;
+    return { face, expectedGross, agencyFee, legal, internalCost, totalCost, netRecovery, roi };
+  }, [inv, recoveryPct, agencyPct, legalCost, ownHours, hourlyCost]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Calculator size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Recovery ROI Calculator</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Account to pursue</label>
+          <select value={sel} onChange={e => setSel(e.target.value)} className={INP}>
+            <option value="">Select an open invoice</option>
+            {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Expected recovery %</label>
+            <input value={recoveryPct} onChange={e => setRecoveryPct(e.target.value)} className={INP} inputMode="decimal" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Agency fee %</label>
+            <input value={agencyPct} onChange={e => setAgencyPct(e.target.value)} className={INP} inputMode="decimal" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Legal cost (₹)</label>
+            <input value={legalCost} onChange={e => setLegalCost(e.target.value)} className={INP} inputMode="numeric" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Your hours</label>
+            <input value={ownHours} onChange={e => setOwnHours(e.target.value)} className={INP} inputMode="numeric" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cost / hour (₹)</label>
+            <input value={hourlyCost} onChange={e => setHourlyCost(e.target.value)} className={INP} inputMode="numeric" />
+          </div>
+        </div>
+      </div>
+      {!inv ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Calculator size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">Pick an overdue account to estimate whether pursuit is worth the cost.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Expected gross recovery</p>
+              <p className="text-lg font-bold tabular-nums">{formatCurrency(Math.round(data.expectedGross))}</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Total recovery cost</p>
+              <p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(Math.round(data.totalCost))}</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Net recovery</p>
+              <p className={`text-lg font-bold tabular-nums ${data.netRecovery >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(data.netRecovery))}</p>
+            </div>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[360px]">
+              <tbody>
+                {[
+                  { label: "Face value", val: Math.round(data.face) },
+                  { label: `Agency fee (${agencyPct}% of recovery)`, val: -Math.round(data.agencyFee) },
+                  { label: "Legal / filing cost", val: -Math.round(data.legal) },
+                  { label: "Your time cost", val: -Math.round(data.internalCost) },
+                  { label: "Net recovery", val: Math.round(data.netRecovery), bold: true },
+                ].map(r => (
+                  <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
+                    <td className="px-4 py-2.5">{r.label}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-right">{r.val < 0 ? `(${formatCurrency(Math.abs(r.val))})` : formatCurrency(r.val)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className={`rounded-lg p-4 text-sm font-medium ${data.netRecovery >= 0 ? "bg-green-950/20 text-green-400" : "bg-red-950/20 text-red-400"}`}>
+            {data.netRecovery >= 0
+              ? `Worth pursuing — ROI ≈ ${data.roi.toFixed(0)}% on ${formatCurrency(Math.round(data.totalCost))} spent.`
+              : `Pursuit likely loses money — costs exceed expected net recovery by ${formatCurrency(Math.round(-data.netRecovery))}. Consider settlement or write-off.`}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Compares expected recovery against agency, legal and internal time costs so you don't throw good money after bad. Tune the recovery % down for older or higher-risk debtors.</p>
+    </div>
+  );
+}
+
+/* ── Payment Plan Builder ────────────────────────────────────── */
+function PaymentPlanBuilder() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const open = useMemo(() => invoices.filter(i => i.status !== "paid").sort((a, b) => b.amount - a.amount), [invoices]);
+  const [sel, setSel] = useState("");
+  const [installments, setInstallments] = useState("3");
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [freq, setFreq] = useState<"weekly" | "fortnightly" | "monthly">("monthly");
+  const [downPct, setDownPct] = useState("0");
+
+  const inv = open.find(i => i.id === sel);
+  const schedule = useMemo(() => {
+    if (!inv) return [] as { n: number; date: string; amount: number }[];
+    const n = Math.max(1, Math.min(36, parseInt(installments) || 1));
+    const down = Math.max(0, Math.min(100, parseFloat(downPct) || 0)) / 100;
+    const downAmt = inv.amount * down;
+    const remaining = inv.amount - downAmt;
+    const step = freq === "weekly" ? 7 : freq === "fortnightly" ? 14 : 30;
+    const base = parseISO(startDate);
+    const out: { n: number; date: string; amount: number }[] = [];
+    if (downAmt > 0) out.push({ n: 0, date: startDate, amount: Math.round(downAmt) });
+    const per = remaining / n;
+    let allocated = 0;
+    for (let k = 0; k < n; k++) {
+      const d = new Date(base);
+      d.setDate(d.getDate() + step * (k + (downAmt > 0 ? 1 : 0)));
+      // last installment absorbs rounding remainder
+      const amount = k === n - 1 ? Math.round(remaining - allocated) : Math.round(per);
+      allocated += amount;
+      out.push({ n: k + 1, date: d.toISOString().split("T")[0], amount });
+    }
+    return out;
+  }, [inv, installments, downPct, freq, startDate]);
+
+  const copyPlan = () => {
+    if (!inv) return;
+    const lines = schedule.map(s => `${s.n === 0 ? "Down payment" : `Installment ${s.n}`}: ${formatCurrency(s.amount)} on ${format(parseISO(s.date), "d MMM yyyy")}`);
+    const text = `Payment plan for ${inv.customer} (${inv.invoiceNumber ?? inv.id}), total ${formatCurrency(inv.amount)}:\n${lines.join("\n")}`;
+    navigator.clipboard?.writeText(text);
+    toast.success("Payment plan copied to clipboard");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarRange size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Payment Plan Builder</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice to schedule</label>
+          <select value={sel} onChange={e => setSel(e.target.value)} className={INP}>
+            <option value="">Select an open invoice</option>
+            {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Installments</label>
+            <input value={installments} onChange={e => setInstallments(e.target.value)} className={INP} inputMode="numeric" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Down payment %</label>
+            <input value={downPct} onChange={e => setDownPct(e.target.value)} className={INP} inputMode="decimal" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Frequency</label>
+            <select value={freq} onChange={e => setFreq(e.target.value as typeof freq)} className={INP}>
+              <option value="weekly">Weekly</option>
+              <option value="fortnightly">Fortnightly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First payment</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+      {!inv ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CalendarRange size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">Select an invoice to break it into an installment schedule a debtor can agree to.</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+              <h3 className="text-sm font-semibold">{schedule.length} payment{schedule.length !== 1 ? "s" : ""} · total {formatCurrency(inv.amount)}</h3>
+              <button onClick={copyPlan} className="text-xs text-[var(--color-primary)] font-medium hover:underline">Copy plan</button>
+            </div>
+            <div className="divide-y divide-[var(--color-border)] max-h-80 overflow-y-auto">
+              {schedule.map(s => (
+                <div key={s.n} className="px-4 py-2.5 flex items-center gap-3">
+                  <span className="text-xs text-[var(--color-muted)] w-24 shrink-0">{s.n === 0 ? "Down payment" : `Installment ${s.n}`}</span>
+                  <span className="text-xs text-[var(--color-muted)] flex-1">{format(parseISO(s.date), "EEE d MMM yyyy")}</span>
+                  <span className="text-sm font-semibold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(s.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Splits an overdue balance into an agreed installment schedule (optional down-payment first). The final installment absorbs rounding so the plan sums exactly to the invoice. Copy it into a WhatsApp/email to the debtor.</p>
+    </div>
+  );
+}
+
+/* ── AR Concentration Stress Test ────────────────────────────── */
+function ConcentrationStressTest() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const [topN, setTopN] = useFeatureState<string>("rec-stress-topn", "3");
+  const [delayDays, setDelayDays] = useFeatureState<string>("rec-stress-delay", "60");
+  const [lossPct, setLossPct] = useFeatureState<string>("rec-stress-loss", "100");
+
+  const data = useMemo(() => {
+    const open = invoices.filter(i => i.status !== "paid");
+    const map: Record<string, number> = {};
+    open.forEach(i => { map[i.customer] = (map[i.customer] ?? 0) + i.amount; });
+    const ranked = Object.entries(map).map(([name, exposure]) => ({ name, exposure })).sort((a, b) => b.exposure - a.exposure);
+    const total = ranked.reduce((s, c) => s + c.exposure, 0);
+    const n = Math.max(1, parseInt(topN) || 1);
+    const top = ranked.slice(0, n);
+    const topExposure = top.reduce((s, c) => s + c.exposure, 0);
+    const loss = (parseFloat(lossPct) || 0) / 100;
+    const impact = topExposure * loss;
+    const concPct = total > 0 ? (topExposure / total) * 100 : 0;
+    return { ranked, total, top, topExposure, impact, concPct, delay: parseInt(delayDays) || 0, n };
+  }, [invoices, topN, lossPct, delayDays]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <Siren size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">AR Concentration Stress Test</h3>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Top N customers</label>
+          <input value={topN} onChange={e => setTopN(e.target.value)} className={`${INP} w-20`} inputMode="numeric" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Delay (days)</label>
+          <input value={delayDays} onChange={e => setDelayDays(e.target.value)} className={`${INP} w-24`} inputMode="numeric" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Loss severity %</label>
+          <input value={lossPct} onChange={e => setLossPct(e.target.value)} className={`${INP} w-24`} inputMode="decimal" />
+        </div>
+      </div>
+      {data.ranked.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Siren size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">No open receivables to stress-test. Add invoices on the Overview tab.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Top {data.n} exposure</p>
+              <p className="text-lg font-bold tabular-nums">{formatCurrency(Math.round(data.topExposure))}</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Share of open AR</p>
+              <p className={`text-lg font-bold tabular-nums ${data.concPct >= 50 ? "text-red-400" : data.concPct >= 30 ? "text-yellow-400" : "text-green-400"}`}>{data.concPct.toFixed(0)}%</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Cash at risk in scenario</p>
+              <p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(Math.round(data.impact))}</p>
+            </div>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Stressed customers</h3></div>
+            <div className="divide-y divide-[var(--color-border)]">
+              {data.top.map((c, i) => (
+                <div key={c.name} className="px-4 py-3 flex items-center gap-3">
+                  <span className="text-xs text-[var(--color-muted)] w-4 shrink-0">{i + 1}</span>
+                  <p className="text-xs font-medium truncate flex-1">{c.name}</p>
+                  <span className="text-xs text-[var(--color-muted)] shrink-0">{data.total > 0 ? Math.round((c.exposure / data.total) * 100) : 0}% of AR</span>
+                  <span className="text-sm font-semibold tabular-nums shrink-0 text-[var(--color-primary)]">{formatCurrency(c.exposure)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className={`rounded-lg p-4 text-sm font-medium ${data.concPct >= 40 ? "bg-red-950/20 text-red-400" : "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+            If your top {data.n} customer{data.n !== 1 ? "s" : ""} delay {data.delay} days at {lossPct}% severity, {formatCurrency(Math.round(data.impact))} of collections is exposed — {data.concPct >= 40 ? "dangerously concentrated. Diversify the book or tighten their terms." : "within a comfortable range."}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Simulates the cash hit if your largest debtors default or delay together. High concentration means one buyer's slip can sink your month — use it to justify diversifying sales or insuring top accounts.</p>
+    </div>
+  );
+}
+
+/* ── Customer Statement Generator ────────────────────────────── */
+function CustomerStatementGenerator() {
+  const { store } = useApp();
+  const invoices = store.invoices ?? [];
+  const customers = useMemo(() => Array.from(new Set(invoices.map(i => i.customer))).sort(), [invoices]);
+  const [sel, setSel] = useState("");
+  const [includePaid, setIncludePaid] = useState(true);
+
+  const statement = useMemo(() => {
+    if (!sel) return null;
+    const list = invoices
+      .filter(i => i.customer === sel && (includePaid || i.status !== "paid"))
+      .sort((a, b) => parseISO(a.invoiceDate).getTime() - parseISO(b.invoiceDate).getTime());
+    let running = 0;
+    const lines = list.map(i => {
+      const charge = i.amount;
+      const credit = i.status === "paid" ? i.amount : 0;
+      running += charge - credit;
+      return { inv: i, charge, credit, balance: running };
+    });
+    const outstanding = list.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+    const billed = list.reduce((s, i) => s + i.amount, 0);
+    return { lines, outstanding, billed };
+  }, [sel, invoices, includePaid]);
+
+  const copyStatement = () => {
+    if (!statement || !sel) return;
+    const header = `Statement of account — ${sel} (as of ${format(new Date(), "d MMM yyyy")})`;
+    const body = statement.lines.map(l =>
+      `${format(parseISO(l.inv.invoiceDate), "d MMM yyyy")} · ${l.inv.invoiceNumber ?? l.inv.id} · ${l.inv.status === "paid" ? "PAID" : "DUE"} · ${formatCurrency(l.inv.amount)} · bal ${formatCurrency(l.balance)}`
+    ).join("\n");
+    const footer = `Total outstanding: ${formatCurrency(statement.outstanding)}`;
+    navigator.clipboard?.writeText(`${header}\n${body}\n${footer}`);
+    toast.success("Statement copied to clipboard");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 mr-auto">
+          <FileText size={14} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Customer Statement Generator</h3>
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+          <select value={sel} onChange={e => setSel(e.target.value)} className={INP}>
+            <option value="">Select a customer</option>
+            {customers.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] pb-2">
+          <input type="checkbox" checked={includePaid} onChange={e => setIncludePaid(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Include paid invoices
+        </label>
+      </div>
+      {!statement ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <FileText size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <p className="text-sm text-[var(--color-muted)]">Select a customer to generate a running-balance statement of account.</p>
+        </div>
+      ) : statement.lines.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <p className="text-sm text-[var(--color-muted)]">No invoices match for {sel}.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Total billed</p>
+              <p className="text-lg font-bold tabular-nums">{formatCurrency(statement.billed)}</p>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">Outstanding balance</p>
+              <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(statement.outstanding)}</p>
+            </div>
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Statement — {sel}</h3>
+              <button onClick={copyStatement} className="text-xs text-[var(--color-primary)] font-medium hover:underline">Copy statement</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[480px]">
+                <thead>
+                  <tr className="text-[var(--color-muted)] border-b border-[var(--color-border)]">
+                    <th className="px-4 py-2 text-left font-medium">Date</th>
+                    <th className="px-4 py-2 text-left font-medium">Invoice</th>
+                    <th className="px-4 py-2 text-right font-medium">Charge</th>
+                    <th className="px-4 py-2 text-right font-medium">Credit</th>
+                    <th className="px-4 py-2 text-right font-medium">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {statement.lines.map(l => (
+                    <tr key={l.inv.id}>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{format(parseISO(l.inv.invoiceDate), "d MMM yy")}</td>
+                      <td className="px-4 py-2.5">
+                        {l.inv.invoiceNumber ?? l.inv.id}
+                        <span className={`ml-2 text-[10px] font-semibold ${l.inv.status === "paid" ? "text-green-400" : l.inv.status === "overdue" ? "text-red-400" : "text-yellow-400"}`}>{l.inv.status === "paid" ? "PAID" : l.inv.status === "overdue" ? "OVERDUE" : "DUE"}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(l.charge)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{l.credit > 0 ? formatCurrency(l.credit) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatCurrency(l.balance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Builds a chronological statement of account with a running balance (charges from invoices, credits when paid). Copy it to WhatsApp or email the customer their full ledger in one tap.</p>
     </div>
   );
 }
