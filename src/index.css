@@ -1,31 +1,32 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 @theme {
-  /* App dashboard — professional finance palette */
-  --color-primary:       #1A6B55;
-  --color-primary-light: #22875F;
-  --color-accent:        #1A2A24;
-  --color-bg:            #0D1117;
-  --color-surface:       #161B22;
-  --color-border:        #21262D;
-  --color-text:          #E6EDF3;
-  --color-muted:         #7D8590;
+  /* App dashboard — navy + green finance palette (dark) */
+  --color-primary:       #5FBE7C;
+  --color-primary-light: #7BD194;
+  --color-accent:        #1C2942;
+  --color-bg:            #101830;
+  --color-surface:       #18233F;
+  --color-border:        #2A3654;
+  --color-text:          #E8EDF6;
+  --color-muted:         #9AA6BE;
 
-  /* Olive marketing palette (homepage only) */
-  --ol-deepest: #1C2209;
-  --ol-deep:    #2E3A10;
-  --ol-mid:     #4A5E1A;
-  --ol-bright:  #6B8526;
-  --ol-light:   #96B83D;
-  --ol-pale:    #C4D97A;
-  --ol-wash:    #E8F0C2;
-  --ol-cream:   #F4F1E4;
-  --ol-gold:    #C9A227;
-  --ol-gold-l:  #E8C84A;
-  --ol-cream-w: #FDFAF0;
-  --ol-txt:     #1A1F0A;
-  --ol-txt-mid: #3D4A1E;
-  --ol-txt-mut: #6B7A3D;
+  /* Navy/green marketing palette (homepage) */
+  --ol-deepest: #101830;
+  --ol-deep:    #18233F;
+  --ol-mid:     #2A3654;
+  --ol-bright:  #3D9A60;
+  --ol-light:   #5FBE7C;
+  --ol-pale:    #A9D9BC;
+  --ol-wash:    #E8F5EE;
+  --ol-cream:   #F7F8FB;
+  --ol-gold:    #3D9A60;
+  --ol-gold-l:  #5FBE7C;
+  --ol-cream-w: #FFFFFF;
+  --ol-txt:     #1C2535;
+  --ol-txt-mid: #3A4661;
+  --ol-txt-mut: #6B7384;
 }
 
 * { box-sizing: border-box; }
@@ -38,6 +39,9 @@ body {
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "kern" 1;
 }
+
+/* Display font for headings — Space Grotesk (matches brand) */
+h1, h2, h3, h4 { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; letter-spacing: -0.01em; }
 
 /* Never let a stray wide element create horizontal scroll / widen the webview
    layout (which on iOS makes the page think it's a desktop). */

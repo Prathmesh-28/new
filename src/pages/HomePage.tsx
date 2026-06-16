@@ -10,11 +10,11 @@ import Logo from "@/components/Logo";
 
 /* ─── Colour tokens ─── */
 const C = {
-  deepest: "#1C2209", deep: "#2E3A10", mid: "#4A5E1A",
-  bright: "#6B8526", light: "#96B83D", pale: "#C4D97A",
-  wash: "#E8F0C2", cream: "#F4F1E4", creamW: "#FDFAF0",
-  gold: "#C9A227", goldL: "#E8C84A",
-  txt: "#1A1F0A", txtMid: "#3D4A1E", txtMut: "#6B7A3D",
+  deepest: "#101830", deep: "#18233F", mid: "#2A3654",
+  bright: "#3D9A60", light: "#5FBE7C", pale: "#A9D9BC",
+  wash: "#E8F5EE", cream: "#F7F8FB", creamW: "#FFFFFF",
+  gold: "#3D9A60", goldL: "#5FBE7C",
+  txt: "#1C2535", txtMid: "#3A4661", txtMut: "#6B7384",
 };
 const serif = "Georgia,'Times New Roman',serif";
 const sans  = "system-ui,-apple-system,'Segoe UI',sans-serif";
@@ -62,10 +62,10 @@ const BARS = [82,78,85,75,70,62,55,48,40,35,42,50,58,65,70,68,72,78,80,76];
 
 function DashMockup({ inr }: { inr: boolean }) {
   return (
-    <div style={{ background: C.deep, border: `1px solid rgba(196,217,122,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+    <div style={{ background: C.deep, border: `1px solid rgba(169,217,188,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
       <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-        {["#E24B4A","#EF9F27","#6B8526"].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c, opacity: 0.8 }} />)}
-        <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.45)", marginLeft: 6 }}>Headroom — 90-day forecast</span>
+        {["#E24B4A","#EF9F27","#3D9A60"].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c, opacity: 0.8 }} />)}
+        <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.45)", marginLeft: 6 }}>Headroom — 90-day forecast</span>
       </div>
       <div style={{ padding: 18 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
@@ -74,23 +74,23 @@ function DashMockup({ inr }: { inr: boolean }) {
             { label: "Runway",          val: "68 days", sub: "at current burn",   subC: C.light },
             { label: "Low Point",       val: "Day 41",  sub: inr ? "₹80K warning" : "$10K warning", subC: C.gold  },
           ].map(s => (
-            <div key={s.label} style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "11px 12px" }}>
-              <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(196,217,122,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>{s.label}</div>
+            <div key={s.label} style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(169,217,188,0.08)", borderRadius: 8, padding: "11px 12px" }}>
+              <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>{s.label}</div>
               <div style={{ fontFamily: sans, fontSize: 19, fontWeight: 600, color: C.pale }}>{s.val}</div>
               <div style={{ fontFamily: sans, fontSize: 9, color: s.subC, marginTop: 2 }}>{s.sub}</div>
             </div>
           ))}
         </div>
-        <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(196,217,122,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position — next 90 days</div>
+        <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(169,217,188,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position — next 90 days</div>
           <div data-h3d="cashbars" style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
             {BARS.map((h, i) => (
               <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7, height: `${Math.round(h * 0.72)}%`, background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright, opacity: i < 10 ? 0.5 : 0.85 }} />
             ))}
           </div>
         </div>
-        <div style={{ background: "rgba(201,162,39,0.1)", border: "1px solid rgba(201,162,39,0.22)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(201,162,39,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.gold, flexShrink: 0, marginTop: 1 }}>!</div>
+        <div style={{ background: "rgba(61,154,96,0.1)", border: "1px solid rgba(61,154,96,0.22)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(61,154,96,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.gold, flexShrink: 0, marginTop: 1 }}>!</div>
           <div style={{ fontFamily: sans, fontSize: 11, color: C.goldL, lineHeight: 1.45 }}>
             You go below your safety threshold in <strong>41 days</strong>. A {inr ? "₹1.5L" : "$18K"} revenue advance would keep you positive through October. <span style={{ textDecoration: "underline" }}>See options →</span>
           </div>
@@ -133,12 +133,12 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
   const r = Math.round(size * 0.3);
   const style: React.CSSProperties = dark
     ? {
-        background: "linear-gradient(150deg, rgba(150,184,61,0.22), rgba(201,162,39,0.10))",
-        border: "1px solid rgba(196,217,122,0.22)",
+        background: "linear-gradient(150deg, rgba(95,190,124,0.22), rgba(61,154,96,0.10))",
+        border: "1px solid rgba(169,217,188,0.22)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px rgba(0,0,0,0.35)",
       }
     : {
-        background: "linear-gradient(150deg, #FCFDF6 0%, rgba(150,184,61,0.16) 100%)",
+        background: "linear-gradient(150deg, #FCFDF6 0%, rgba(95,190,124,0.16) 100%)",
         border: "1px solid rgba(74,94,26,0.14)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8), 0 4px 14px rgba(74,94,26,0.10)",
       };
@@ -228,14 +228,14 @@ export default function HomePage() {
       `}</style>
 
       {/* ═══ NAV ══════════════════════════════════════════════════════════════ */}
-      <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(196,217,122,0.1)` : "none" }}>
+      <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(169,217,188,0.1)` : "none" }}>
         <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, cursor: "pointer", display: "flex", alignItems: "center" }} aria-label="Headroom home">
           <Logo variant="horizontal" size={22} />
         </div>
         <ul style={{ display: "flex", gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden lg:flex">
           {[["Features","#features"],["Credit","#credit"],["Capital","#capital"],["Advisors","#advisors"],["Pricing","#pricing"]].map(([l,h]) => (
-            <li key={l}><a href={h} style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.7)", textDecoration: "none" }}
-              onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(196,217,122,0.7)")}>{l}</a></li>
+            <li key={l}><a href={h} style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.7)", textDecoration: "none" }}
+              onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(169,217,188,0.7)")}>{l}</a></li>
           ))}
         </ul>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -249,7 +249,7 @@ export default function HomePage() {
         <div style={{ position: "absolute", top: 0, right: 0, width: "50%", height: "100%", background: C.deep, clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0% 100%)", zIndex: 0 }} />
         <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
           <div className="animate-fade-up">
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.15)", border: "1px solid rgba(201,162,39,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 28 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(61,154,96,0.15)", border: "1px solid rgba(61,154,96,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 28 }}>
               <span className="hr-blink" style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />
               <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: C.goldL }}>[ 10-layer cash flow intelligence ]</span>
             </div>
@@ -268,14 +268,14 @@ export default function HomePage() {
             </div>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               {["Free for first 90 days","No credit card","Setup in 3 minutes"].map(t => (
-                <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)" }}>
+                <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.5)" }}>
                   <CheckCircle2 size={12} style={{ color: C.light }} />{t}
                 </span>
               ))}
             </div>
           </div>
           <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(196,217,122,0.55)", marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(169,217,188,0.55)", marginBottom: 8 }}>
               <span>CASH_CORE v2.4.1</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="hr-blink" style={{ width: 5, height: 5, borderRadius: "50%", background: C.light, display: "inline-block" }} />SIGNAL: ACTIVE · 10/10</span>
             </div>
@@ -285,12 +285,12 @@ export default function HomePage() {
       </section>
 
       {/* ═══ TICKER ═══════════════════════════════════════════════════════════ */}
-      <div style={{ background: C.deep, borderTop: "1px solid rgba(196,217,122,0.12)", borderBottom: "1px solid rgba(196,217,122,0.12)", overflow: "hidden", padding: "12px 0" }}>
+      <div style={{ background: C.deep, borderTop: "1px solid rgba(169,217,188,0.12)", borderBottom: "1px solid rgba(169,217,188,0.12)", overflow: "hidden", padding: "12px 0" }}>
         <div className="hr-ticker">
           {[0, 1].map(dup => (
             <div key={dup} style={{ display: "flex", gap: 56, paddingLeft: 56 }} aria-hidden={dup === 1}>
               {["Free for 90 days","No credit card required","Setup in 3 minutes","10-layer cash intelligence","91% forecast accuracy at 30 days","Capital access network"].map((t, i) => (
-                <span key={i} style={{ fontFamily: mono, fontSize: 11, color: "rgba(196,217,122,0.6)", whiteSpace: "nowrap", letterSpacing: 2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 12 }}>
+                <span key={i} style={{ fontFamily: mono, fontSize: 11, color: "rgba(169,217,188,0.6)", whiteSpace: "nowrap", letterSpacing: 2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ color: C.gold, fontSize: 13 }}>◆</span>{t}
                 </span>
               ))}
@@ -307,9 +307,9 @@ export default function HomePage() {
           { n:"91%",      d:"Forecast accuracy at 30 days" },
           { n:"4.8 days", d:"Avg time to first insight"    },
         ].map(({ n, d }, i) => (
-          <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.15)" : "none" }}>
+          <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.15)" : "none" }}>
             <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}>{n}</div>
-            <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.55)", marginTop: 3 }}>{d}</div>
+            <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.55)", marginTop: 3 }}>{d}</div>
           </div>
         ))}
       </div>
@@ -343,7 +343,7 @@ export default function HomePage() {
           ].map(({ n, t, d }, i) => (
             <Reveal key={n} delay={i * 40}>
               <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "20px 18px", height: "100%", transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s" }}
-                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.4)"; el.style.boxShadow = "0 8px 24px rgba(44,58,16,0.07)"; }}
+                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(61,154,96,0.4)"; el.style.boxShadow = "0 8px 24px rgba(44,58,16,0.07)"; }}
                 onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.boxShadow = "none"; }}>
                 <div style={{ fontFamily: sans, fontSize: 10, color: C.bright, fontWeight: 700, letterSpacing: "0.5px", marginBottom: 10 }}>{n}</div>
                 <h4 style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.txt, marginBottom: 8, lineHeight: 1.3 }}>{t}</h4>
@@ -356,17 +356,17 @@ export default function HomePage() {
         {/* signal → action bar */}
         <Reveal>
           <div data-h3d-deco="orbs" style={{ maxWidth: 1100, margin: "52px auto 0", background: C.deepest, borderRadius: 16, padding: "36px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", position: "relative" }}>
-            <div style={{ position: "absolute", top: "50%", left: "12.5%", right: "12.5%", height: 1, background: "rgba(196,217,122,0.1)" }} />
+            <div style={{ position: "absolute", top: "50%", left: "12.5%", right: "12.5%", height: 1, background: "rgba(169,217,188,0.1)" }} />
             {[
               { step:"Detect",   icon:Radar,      desc:"Live signals from bank + books" },
               { step:"Forecast", icon:LineChart,  desc:"90-day P10/P50/P90 model runs" },
               { step:"Alert",    icon:Bell,       desc:"Plain-language warning, 45 days early" },
               { step:"Act",      icon:Zap,        desc:"Credit or capital options, in context" },
             ].map(({ step, icon: Icon, desc }, i) => (
-              <div key={step} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(196,217,122,0.08)" : "none", position: "relative", zIndex: 1 }}>
+              <div key={step} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.08)" : "none", position: "relative", zIndex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "center", margin: "0 auto 14px" }}><IconTile icon={Icon} size={48} dark /></div>
                 <div style={{ fontFamily: sans, fontSize: 12, fontWeight: 700, color: C.pale, marginBottom: 6 }}>{step}</div>
-                <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.4)", lineHeight: 1.5 }}>{desc}</div>
+                <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.4)", lineHeight: 1.5 }}>{desc}</div>
               </div>
             ))}
           </div>
@@ -450,7 +450,7 @@ export default function HomePage() {
             <h2 style={{ fontFamily: serif, fontSize: 40, color: C.creamW, letterSpacing: -1, marginBottom: 14 }}>
               Raise from the people who already<br />believe in your business.
             </h2>
-            <p style={{ fontFamily: sans, fontSize: 15, color: "rgba(196,217,122,0.55)", maxWidth: 520, lineHeight: 1.7 }}>
+            <p style={{ fontFamily: sans, fontSize: 15, color: "rgba(169,217,188,0.55)", maxWidth: 520, lineHeight: 1.7 }}>
               Headroom extends cash flow intelligence into capital formation — with live operating data, repayment progress, and raise readiness built in from day one.
             </p>
           </div>
@@ -503,22 +503,22 @@ export default function HomePage() {
             },
           ]).map(({ track, badge, title, range, best, features, featured }, i) => (
             <Reveal key={track} delay={i * 80}>
-              <div data-h3d-tilt style={{ background: featured ? C.deep : "rgba(255,255,255,0.04)", border: `1px solid ${featured ? "rgba(196,217,122,0.2)" : "rgba(196,217,122,0.08)"}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column" }}>
+              <div data-h3d-tilt style={{ background: featured ? C.deep : "rgba(255,255,255,0.04)", border: `1px solid ${featured ? "rgba(169,217,188,0.2)" : "rgba(169,217,188,0.08)"}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <span style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, color: C.bright, letterSpacing: "0.8px", textTransform: "uppercase" }}>{track}</span>
-                  <span style={{ fontFamily: sans, fontSize: 10, background: "rgba(196,217,122,0.08)", border: "1px solid rgba(196,217,122,0.14)", color: C.pale, padding: "2px 10px", borderRadius: 12 }}>{badge}</span>
+                  <span style={{ fontFamily: sans, fontSize: 10, background: "rgba(169,217,188,0.08)", border: "1px solid rgba(169,217,188,0.14)", color: C.pale, padding: "2px 10px", borderRadius: 12 }}>{badge}</span>
                 </div>
                 <h3 style={{ fontFamily: serif, fontSize: 20, color: C.creamW, marginBottom: 6 }}>{title}</h3>
                 <div style={{ fontFamily: serif, fontSize: 28, color: C.gold, letterSpacing: -1, marginBottom: 10 }}>{range}</div>
-                <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.45)", lineHeight: 1.6, marginBottom: 20, flex: 1 }}>Best for: {best}</p>
+                <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.45)", lineHeight: 1.6, marginBottom: 20, flex: 1 }}>Best for: {best}</p>
                 <ul style={{ listStyle: "none", margin: "0 0 24px" }}>
                   {features.map(f => (
-                    <li key={f} style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.6)", padding: "5px 0", borderBottom: "1px solid rgba(196,217,122,0.06)", display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 13, height: 13, borderRadius: "50%", background: "rgba(107,133,38,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: C.pale, flexShrink: 0 }}>✓</span>{f}
+                    <li key={f} style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.6)", padding: "5px 0", borderBottom: "1px solid rgba(169,217,188,0.06)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 13, height: 13, borderRadius: "50%", background: "rgba(61,154,96,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: C.pale, flexShrink: 0 }}>✓</span>{f}
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: "11px 0", borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(196,217,122,0.2)"}`, color: featured ? C.deepest : C.pale }}>
+                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: "11px 0", borderRadius: 8, fontFamily: sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: featured ? C.gold : "transparent", border: `1px solid ${featured ? C.gold : "rgba(169,217,188,0.2)"}`, color: featured ? C.deepest : C.pale }}>
                   Explore {track}
                 </button>
               </div>
@@ -527,10 +527,10 @@ export default function HomePage() {
         </div>
 
         <Reveal>
-          <div style={{ maxWidth: 1100, margin: "40px auto 0", background: C.deep, border: "1px solid rgba(196,217,122,0.1)", borderRadius: 12, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
+          <div style={{ maxWidth: 1100, margin: "40px auto 0", background: C.deep, border: "1px solid rgba(169,217,188,0.1)", borderRadius: 12, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.pale, marginBottom: 4 }}>Compliance first.</div>
-              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. {inr ? "Revenue-based financing, private placement, and SME IPO frameworks (SEBI / Companies Act)" : "Revenue-share, Reg CF, and Reg A+ frameworks"} are handled by Headroom — you focus on the raise.</p>
+              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. {inr ? "Revenue-based financing, private placement, and SME IPO frameworks (SEBI / Companies Act)" : "Revenue-share, Reg CF, and Reg A+ frameworks"} are handled by Headroom — you focus on the raise.</p>
             </div>
             <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>See launch requirements →</button>
           </div>
@@ -560,7 +560,7 @@ export default function HomePage() {
           ].map(({ role, emoji: Icon, tagline, perks }, i) => (
             <Reveal key={role} delay={i * 80}>
               <div data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: 24, height: "100%", transition: "border-color 0.2s, box-shadow 0.2s" }}
-                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(107,133,38,0.35)"; el.style.boxShadow = "0 8px 28px rgba(44,58,16,0.07)"; }}
+                onMouseOver={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(61,154,96,0.35)"; el.style.boxShadow = "0 8px 28px rgba(44,58,16,0.07)"; }}
                 onMouseOut={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = "rgba(74,94,26,0.12)"; el.style.boxShadow = "none"; }}>
                 <div style={{ marginBottom: 14 }}><IconTile icon={Icon} size={46} /></div>
                 <h4 style={{ fontFamily: sans, fontSize: 14, fontWeight: 700, color: C.txt, marginBottom: 6 }}>{role}</h4>
@@ -619,7 +619,7 @@ export default function HomePage() {
             { initials:"VS", name:"Vikram Shah",  biz:"Shah Construction, Pune",             quote:"The credit feature saved us during the monsoon gap. Headroom offered us options before it hit, and we got through it clean." },
           ].map(({ initials, name, biz, quote }, i) => (
             <Reveal key={name} delay={i * 80}>
-              <div data-h3d-tilt style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(196,217,122,0.1)", borderRadius: 14, padding: 24 }}>
+              <div data-h3d-tilt style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(169,217,188,0.1)", borderRadius: 14, padding: 24 }}>
                 <div style={{ display: "flex", gap: 3, marginBottom: 12 }}>
                   {Array.from({length:5}).map((_,s) => <span key={s} style={{ width: 11, height: 11, background: C.gold, clipPath: "polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)", display: "inline-block" }} />)}
                 </div>
@@ -628,7 +628,7 @@ export default function HomePage() {
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.mid, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.pale, flexShrink: 0 }}>{initials}</div>
                   <div>
                     <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale }}>{name}</div>
-                    <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.4)" }}>{biz}</div>
+                    <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.4)" }}>{biz}</div>
                   </div>
                 </div>
               </div>
@@ -645,7 +645,7 @@ export default function HomePage() {
             <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>
               Choose the operating layer<br />your cash flow needs.
             </h2>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(201,162,39,0.08)", border: "1px solid rgba(201,162,39,0.2)", borderRadius: 20, padding: "5px 14px", marginBottom: 12 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(61,154,96,0.08)", border: "1px solid rgba(61,154,96,0.2)", borderRadius: 20, padding: "5px 14px", marginBottom: 12 }}>
               <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for 90 days · no card · 🔥 founding price locked for the first 1,000 SMBs</span>
             </div>
             <div style={{ fontFamily: sans, fontSize: 11, color: C.txtMut, marginBottom: 52 }}>
@@ -690,14 +690,14 @@ export default function HomePage() {
                 <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 600, color: featured ? C.pale : C.txt, marginBottom: 6 }}>{name}</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 2, margin: "12px 0 4px" }}>
                   <span style={{ fontFamily: serif, fontSize: 36, color: featured ? C.gold : C.mid, letterSpacing: -1 }}>{price}</span>
-                  <span style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.45)" : C.txtMut }}>{period}</span>
+                  <span style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(169,217,188,0.45)" : C.txtMut }}>{period}</span>
                 </div>
-                <div style={{ fontFamily: sans, fontSize: 12, color: featured ? "rgba(196,217,122,0.4)" : C.txtMut, marginBottom: 8 }}>{note}</div>
-                <div style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.55)" : C.txtMut, marginBottom: 24, lineHeight: 1.5 }}>{desc}</div>
+                <div style={{ fontFamily: sans, fontSize: 12, color: featured ? "rgba(169,217,188,0.4)" : C.txtMut, marginBottom: 8 }}>{note}</div>
+                <div style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(169,217,188,0.55)" : C.txtMut, marginBottom: 24, lineHeight: 1.5 }}>{desc}</div>
                 <ul style={{ listStyle: "none", marginBottom: 28, flex: 1 }}>
                   {features.map(f => (
-                    <li key={f} style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(196,217,122,0.7)" : C.txtMut, padding: "6px 0", borderBottom: `1px solid ${featured ? "rgba(196,217,122,0.08)" : "rgba(74,94,26,0.06)"}`, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 14, height: 14, borderRadius: "50%", background: featured ? "rgba(107,133,38,0.3)" : C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 9, color: featured ? C.pale : C.mid }}>✓</span>{f}
+                    <li key={f} style={{ fontFamily: sans, fontSize: 13, color: featured ? "rgba(169,217,188,0.7)" : C.txtMut, padding: "6px 0", borderBottom: `1px solid ${featured ? "rgba(169,217,188,0.08)" : "rgba(74,94,26,0.06)"}`, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 14, height: 14, borderRadius: "50%", background: featured ? "rgba(61,154,96,0.3)" : C.wash, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 9, color: featured ? C.pale : C.mid }}>✓</span>{f}
                     </li>
                   ))}
                   {disabled.map(f => (
@@ -716,13 +716,13 @@ export default function HomePage() {
 
         {/* Capital add-on card */}
         <Reveal>
-          <div style={{ maxWidth: 940, margin: "20px auto 0", background: C.deepest, border: "1px solid rgba(196,217,122,0.12)", borderRadius: 14, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20, textAlign: "left" }}>
+          <div style={{ maxWidth: 940, margin: "20px auto 0", background: C.deepest, border: "1px solid rgba(169,217,188,0.12)", borderRadius: 14, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20, textAlign: "left" }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: C.bright, marginBottom: 6 }}>Capital raise add-on</div>
-              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>{inr ? "₹4,999" : "$299"} <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.4)" }}>/ mo while your raise is live</span></div>
-              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(196,217,122,0.45)", maxWidth: 460 }}>Add a community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
+              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>{inr ? "₹4,999" : "$299"} <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.4)" }}>/ mo while your raise is live</span></div>
+              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.45)", maxWidth: 460 }}>Add a community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
             </div>
-            <button onClick={() => navigate("/signup")} style={{ background: "transparent", border: `1px solid rgba(196,217,122,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
+            <button onClick={() => navigate("/signup")} style={{ background: "transparent", border: `1px solid rgba(169,217,188,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
               Explore capital raise →
             </button>
           </div>
@@ -751,28 +751,28 @@ export default function HomePage() {
 
       {/* ═══ CTA ══════════════════════════════════════════════════════════════ */}
       <section data-h3d-deco="wire" style={{ background: C.deepest, padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(107,133,38,0.25) 0%, transparent 65%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(61,154,96,0.25) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ fontFamily: serif, fontSize: 44, color: C.creamW, letterSpacing: -1.5, marginBottom: 16 }}>Get your first Headroom forecast.</h2>
-          <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(196,217,122,0.55)", marginBottom: 40 }}>Free for 90 days. No credit card. Connect your bank in under 3 minutes.</p>
+          <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(169,217,188,0.55)", marginBottom: 40 }}>Free for 90 days. No credit card. Connect your bank in under 3 minutes.</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-            <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(196,217,122,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
+            <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(169,217,188,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
             <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
           </div>
-          <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.25)", marginTop: 20 }}>
+          <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.25)", marginTop: 20 }}>
             Trusted by 12,000+ SMBs &nbsp;·&nbsp; Free for 90 days &nbsp;·&nbsp; No credit card required
           </p>
         </div>
       </section>
 
       {/* ═══ FOOTER ═══════════════════════════════════════════════════════════ */}
-      <footer style={{ background: C.deepest, borderTop: "1px solid rgba(196,217,122,0.08)" }}>
+      <footer style={{ background: C.deepest, borderTop: "1px solid rgba(169,217,188,0.08)" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 48px 0", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, paddingBottom: 48 }}>
           <div>
             <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, marginBottom: 10, cursor: "pointer", display: "inline-flex" }} aria-label="Headroom home">
               <Logo variant="horizontal" size={20} />
             </div>
-            <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.35)", lineHeight: 1.6, maxWidth: 200 }}>A 10-layer cash flow intelligence platform for modern SMB operators.</p>
+            <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.35)", lineHeight: 1.6, maxWidth: 200 }}>A 10-layer cash flow intelligence platform for modern SMB operators.</p>
           </div>
           {[
             { h:"Platform",    links:["Features","Forecasting","Credit rescue","Community capital","Scenario planner"] },
@@ -780,19 +780,19 @@ export default function HomePage() {
             { h:"Company",     links:["Pricing","About","Blog","Careers","Contact"] },
           ].map(({ h, links }) => (
             <div key={h}>
-              <h5 style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(196,217,122,0.4)", marginBottom: 16 }}>{h}</h5>
+              <h5 style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(169,217,188,0.4)", marginBottom: 16 }}>{h}</h5>
               {links.map(l => (
-                <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/signup"); }} style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(196,217,122,0.5)", textDecoration: "none", marginBottom: 10 }}
-                  onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(196,217,122,0.5)")}>{l}</a>
+                <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/signup"); }} style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.5)", textDecoration: "none", marginBottom: 10 }}
+                  onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(169,217,188,0.5)")}>{l}</a>
               ))}
             </div>
           ))}
         </div>
-        <div style={{ borderTop: "1px solid rgba(196,217,122,0.06)", padding: "18px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
-          <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
+        <div style={{ borderTop: "1px solid rgba(169,217,188,0.06)", padding: "18px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
+          <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
           <div style={{ display: "flex", gap: 24 }}>
             {["Privacy","Terms","Security"].map(l => (
-              <a key={l} href="#" style={{ fontFamily: sans, fontSize: 11, color: "rgba(196,217,122,0.25)", textDecoration: "none" }}>{l}</a>
+              <a key={l} href="#" style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
             ))}
           </div>
         </div>

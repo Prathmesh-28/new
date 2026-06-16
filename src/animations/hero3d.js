@@ -18,10 +18,10 @@
 const THREE_CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
 
 // Exact palette supplied for the animations (independent of the page's own tokens)
-const ACCENT = "#C8D44E"; // primary lime
-const ACCENT_HEX = 0xc8d44e;
-const SURFACE = "#2A3015"; // surface olive
-const SURFACE_HEX = 0x2a3015;
+const ACCENT = "#5FBE7C"; // primary lime
+const ACCENT_HEX = 0x5fbe7c;
+const SURFACE = "#1E2B4E"; // surface olive
+const SURFACE_HEX = 0x1e2b4e;
 const WARN_RGB = "200, 81, 42"; // #C8512A warning red-orange
 
 let threePromise = null;
@@ -255,7 +255,7 @@ function initStatsBars(THREE, add, isDisposed) {
   const bars = heights.map((h, i) => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1.5, 1, 1.5),
-      new THREE.MeshStandardMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0.92, emissive: 0x2a3410, emissiveIntensity: 0.45, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0.92, emissive: 0x1e2b4e, emissiveIntensity: 0.45, roughness: 0.5 }),
     );
     mesh.position.x = -5.4 + i * 3.6;
     mesh.scale.y = 0.0001;
@@ -333,7 +333,7 @@ function mountOrbs(anchor, add, count = 3) {
   anchor.querySelectorAll('[data-h3d-layer="deco-orbs"]').forEach(n => n.remove());
   const layer = document.createElement("div");
   layer.setAttribute("data-h3d-layer", "deco-orbs");
-  const palette = ["#C8D44E", "#8A9E2A", "#2A3015"];
+  const palette = ["#5FBE7C", "#3D9A60", "#1E2B4E"];
   const orbs = Array.from({ length: count }, (_, i) => ({
     c: palette[i % palette.length],
     size: 280 + (i * 97) % 220, x: (i * 43 + 12) % 86, y: (i * 57 + 10) % 76,
@@ -370,7 +370,7 @@ function mountShapes(anchor, add, tone = "light", count = 7) {
   const layer = document.createElement("div");
   layer.setAttribute("data-h3d-layer", "deco-shapes");
   layer.style.perspective = "700px";
-  const colors = ["#8A9E2A", "#C8D44E"];
+  const colors = ["#3D9A60", "#5FBE7C"];
   const alpha = tone === "dark" ? 0.5 : 0.3;
   const shapes = Array.from({ length: count }, (_, i) => {
     const kind = i % 3; // 0 square · 1 diamond · 2 ring

@@ -18,16 +18,16 @@ const config: CapacitorConfig = {
   server: devServerUrl
     ? { url: devServerUrl, cleartext: true }
     : { androidScheme: "https" },
-  backgroundColor: "#0D1117",
+  backgroundColor: "#101830",
   ios: {
     contentInset: "always",
-    backgroundColor: "#0D1117",
+    backgroundColor: "#101830",
     // Force the phone (device-width) layout — otherwise WKWebView can lay the
     // page out at a desktop width, breaking responsive breakpoints / overflowing.
     preferredContentMode: "mobile",
   },
   android: {
-    backgroundColor: "#0D1117",
+    backgroundColor: "#101830",
   },
   plugins: {
     // Route fetch/XHR through native networking on device so requests to the
@@ -37,7 +37,7 @@ const config: CapacitorConfig = {
     },
     SplashScreen: {
       launchShowDuration: 600,
-      backgroundColor: "#0D1117",
+      backgroundColor: "#101830",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
       splashFullScreen: true,
@@ -46,7 +46,7 @@ const config: CapacitorConfig = {
     StatusBar: {
       // Dark UI background → light (white) status-bar text/icons.
       style: "DARK",
-      backgroundColor: "#0D1117",
+      backgroundColor: "#101830",
       overlaysWebView: false,
     },
     Keyboard: {
