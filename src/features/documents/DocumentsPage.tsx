@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp, BadgeCheck, Inbox, Wand2, CalendarDays, Layers, HardDrive, KeyRound, Stamp, PackageCheck } from "lucide-react";
+import { FolderOpen, Upload, FileText, FileImage, File, Search, Tag, Trash2, Download, Eye, Plus, Lock, CheckCircle2, AlertTriangle, X, ScanLine, PenTool, CalendarClock, FileSpreadsheet, History, Camera, Send, Clock, Receipt, ListChecks, Files, Link2, UserCheck, CalendarRange, Archive, ClipboardCheck, Copy, ShieldCheck, XCircle, ThumbsUp, BadgeCheck, Inbox, Wand2, CalendarDays, Layers, HardDrive, KeyRound, Stamp, PackageCheck, GitBranch, Signature, EyeOff, CalendarX, ListTodo } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -232,7 +232,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack";
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker";
 
 export default function DocumentsPage() {
   const [docTab, setDocTab]       = useState<DocTab>("vault");
@@ -334,7 +334,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck]] as const).map(([id, label, Icon]) => (
+        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -363,6 +363,11 @@ export default function DocumentsPage() {
       {docTab === "access-matrix"  && <AccessPermissionMatrix />}
       {docTab === "watermark"      && <WatermarkNoteGenerator />}
       {docTab === "statutory-pack" && <StatutoryDocumentPack />}
+      {docTab === "version-log"        && <VersionLog />}
+      {docTab === "signatory-register" && <SignatoryRegister />}
+      {docTab === "redaction-log"      && <RedactionChecklist />}
+      {docTab === "retention-policy"   && <RetentionPolicy />}
+      {docTab === "obligation-tracker" && <ObligationTracker />}
 
       {docTab === "vault" && <>
 
@@ -2547,6 +2552,440 @@ function StatutoryDocumentPack() {
         {pct === 100 && <p className="mt-3 text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={12} /> Pack complete — ready to submit.</p>}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Checklists are standard guidance — exact requirements vary by state, entity type and the reviewing officer. Confirm against the official portal or your CA before filing.</p>
+    </div>
+  );
+}
+
+// ── #179 Document Version Log ────────────────────────────────────────────────────
+type DocVersion = {
+  id: string;
+  docName: string;
+  version: string;
+  changedBy: string;
+  note: string;
+  loggedAt: string;
+};
+
+function VersionLog() {
+  const [entries, setEntries] = useFeatureState<DocVersion[]>("doc-version-log", []);
+  const [docName, setDocName] = useState("");
+  const [version, setVersion] = useState("");
+  const [changedBy, setChangedBy] = useState("");
+  const [note, setNote] = useState("");
+
+  const add = () => {
+    if (!docName.trim() || !version.trim()) { toast.error("Enter a document name and version"); return; }
+    setEntries(prev => [{
+      id: crypto.randomUUID(),
+      docName: docName.trim(),
+      version: version.trim(),
+      changedBy: changedBy.trim() || "—",
+      note: note.trim(),
+      loggedAt: new Date().toISOString(),
+    }, ...prev]);
+    setVersion(""); setNote("");
+    toast.success("Version logged");
+  };
+
+  // Group entries by document so the latest revision of each is easy to read.
+  const grouped = entries.reduce<Record<string, DocVersion[]>>((acc, e) => {
+    (acc[e.docName] = acc[e.docName] || []).push(e);
+    return acc;
+  }, {});
+  const docNames = Object.keys(grouped);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> Document Version Log</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Keep a running history of revisions for important documents — contracts, policies, templates — so you always know which version is current and what changed between them.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
+          <input value={version} onChange={e => setVersion(e.target.value)} placeholder="Version (e.g. v2.1) *" className={INP} />
+          <input value={changedBy} onChange={e => setChangedBy(e.target.value)} placeholder="Changed by" className={INP} />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="What changed" className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Log version</button>
+      </div>
+
+      {docNames.length === 0 ? (
+        <EmptyState icon={GitBranch} title="No versions logged yet" description="Log a revision above to start a version history per document — the most recent entry for each is shown as the current version." />
+      ) : (
+        <div className="space-y-4">
+          {docNames.map(dn => {
+            const versions = grouped[dn];
+            const current = versions[0];
+            return (
+              <div key={dn} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold flex items-center gap-2"><FileText size={13} className="text-[var(--color-muted)]" /> {dn}</p>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">Current: {current.version}</span>
+                </div>
+                <ol className="space-y-2 border-l border-[var(--color-border)] pl-4">
+                  {versions.map(v => (
+                    <li key={v.id} className="relative">
+                      <span className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-[var(--color-primary)]" />
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium tabular-nums">{v.version}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[var(--color-muted)]">{v.changedBy} · {format(new Date(v.loggedAt), "d MMM yyyy")}</span>
+                          <button onClick={() => setEntries(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                        </div>
+                      </div>
+                      {v.note && <p className="text-xs text-[var(--color-muted)] mt-0.5">{v.note}</p>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">This is a manual revision register, not file storage — keep each version's actual file in the Vault. Use it to record what changed and who approved it.</p>
+    </div>
+  );
+}
+
+// ── #180 Signatory Register ──────────────────────────────────────────────────────
+type Signatory = {
+  id: string;
+  name: string;
+  designation: string;
+  authority: string;
+  limit: number;
+  signatureOnFile: boolean;
+};
+const SIGN_AUTHORITIES = ["Banking & cheques", "Contracts & agreements", "GST & tax filings", "ROC / statutory", "HR & payroll", "General"] as const;
+
+function SignatoryRegister() {
+  const [people, setPeople] = useFeatureState<Signatory[]>("doc-signatory-register", []);
+  const [name, setName] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [authority, setAuthority] = useState<string>(SIGN_AUTHORITIES[0]);
+  const [limit, setLimit] = useState("");
+  const fc = formatCurrency;
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Enter the signatory's name"); return; }
+    setPeople(prev => [...prev, {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      designation: designation.trim() || "—",
+      authority,
+      limit: parseFloat(limit) || 0,
+      signatureOnFile: false,
+    }]);
+    setName(""); setDesignation(""); setLimit("");
+    toast.success("Signatory added");
+  };
+
+  const toggleFile = (id: string) => setPeople(prev => prev.map(p => p.id === id ? { ...p, signatureOnFile: !p.signatureOnFile } : p));
+  const onFile = people.filter(p => p.signatureOnFile).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Signature size={14} className="text-[var(--color-primary)]" /> Signatory Register</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Record who is authorised to sign on behalf of the business — for banking, contracts or filings — along with any approval limit and whether their specimen signature is on file.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name *" className={INP} />
+          <input value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Designation" className={INP} />
+          <select value={authority} onChange={e => setAuthority(e.target.value)} className={INP}>
+            {SIGN_AUTHORITIES.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <input type="number" value={limit} onChange={e => setLimit(e.target.value)} placeholder="Approval limit (₹)" className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Add signatory</button>
+      </div>
+
+      {people.length === 0 ? (
+        <EmptyState icon={Signature} title="No signatories recorded" description="Add the people authorised to sign for the business so the register is ready for audits, bank mandates and delegation checks." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Authorised signatories", value: String(people.length), color: "text-[var(--color-text)]" },
+              { label: "Specimen signature on file", value: `${onFile}/${people.length}`, color: onFile === people.length ? "text-green-400" : "text-yellow-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Name", "Designation", "Authority", "Limit", "On file", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {people.map(p => (
+                  <tr key={p.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{p.name}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.designation}</td>
+                    <td className="px-3 py-2.5 text-xs">{p.authority}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{p.limit > 0 ? fc(p.limit) : "No limit"}</td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => toggleFile(p.id)} className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${p.signatureOnFile ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+                        {p.signatureOnFile ? "On file" : "Pending"}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => setPeople(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Keep this register aligned with your board resolution and bank mandate. Approval limits here document intent — enforce them in your approval workflow and banking controls.</p>
+    </div>
+  );
+}
+
+// ── #181 Redaction Checklist ─────────────────────────────────────────────────────
+type RedactItem = {
+  id: string;
+  docName: string;
+  sharedWith: string;
+  fields: Record<string, boolean>;
+  loggedAt: string;
+};
+const REDACT_FIELDS = ["Aadhaar number", "PAN number", "Bank account number", "Phone / email", "Signature", "Salary figures"] as const;
+
+function RedactionChecklist() {
+  const [items, setItems] = useFeatureState<RedactItem[]>("doc-redaction-log", []);
+  const [docName, setDocName] = useState("");
+  const [sharedWith, setSharedWith] = useState("");
+  const [fields, setFields] = useState<Record<string, boolean>>({});
+
+  const toggleField = (f: string) => setFields(prev => ({ ...prev, [f]: !prev[f] }));
+
+  const add = () => {
+    if (!docName.trim()) { toast.error("Enter the document name"); return; }
+    setItems(prev => [{
+      id: crypto.randomUUID(),
+      docName: docName.trim(),
+      sharedWith: sharedWith.trim() || "—",
+      fields: { ...fields },
+      loggedAt: new Date().toISOString(),
+    }, ...prev]);
+    setDocName(""); setSharedWith(""); setFields({});
+    toast.success("Redaction logged");
+  };
+
+  const redactedCount = (f: Record<string, boolean>) => REDACT_FIELDS.filter(k => f[k]).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><EyeOff size={14} className="text-[var(--color-primary)]" /> Redaction Checklist</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before sharing a document externally, tick off the personal fields you have masked — Aadhaar, PAN, bank numbers — and log who received it, so your DPDP data-minimisation trail is auditable.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
+          <input value={sharedWith} onChange={e => setSharedWith(e.target.value)} placeholder="Shared with (party / purpose)" className={INP} />
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-2">Mask before sharing:</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {REDACT_FIELDS.map(f => (
+            <button key={f} type="button" onClick={() => toggleField(f)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors flex items-center gap-1.5 ${fields[f] ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {fields[f] ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {f}
+            </button>
+          ))}
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Log redaction</button>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState icon={EyeOff} title="No redactions logged" description="Record each external share with the PII fields you masked, building a DPDP-friendly trail of what left the building and to whom." />
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Shared with", "Fields masked", "Logged", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {items.map(it => {
+                const n = redactedCount(it.fields);
+                return (
+                  <tr key={it.id} className="hover:bg-white/2 align-top">
+                    <td className="px-3 py-2.5 text-xs font-medium">{it.docName}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{it.sharedWith}</td>
+                    <td className="px-3 py-2.5 text-xs">
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${n > 0 ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{n} masked</span>
+                      <span className="block text-[10px] text-[var(--color-muted)] mt-1">{REDACT_FIELDS.filter(k => it.fields[k]).join(", ") || "none"}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs">{format(new Date(it.loggedAt), "d MMM yyyy")}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">This is a self-attested log — it records the masking you performed, it does not redact files for you. Verify the shared copy visually before it leaves your control.</p>
+    </div>
+  );
+}
+
+// ── #182 Retention Policy by Category ────────────────────────────────────────────
+const RETENTION_DEFAULTS: Record<DocCategory, number> = {
+  gst: 6,
+  banking: 8,
+  legal: 8,
+  tax: 8,
+  payroll: 8,
+  other: 3,
+};
+
+function RetentionPolicy() {
+  const [years, setYears] = useFeatureState<Record<string, number>>("doc-retention-years", RETENTION_DEFAULTS);
+
+  const get = (id: DocCategory) => years[id] ?? RETENTION_DEFAULTS[id];
+  const setFor = (id: DocCategory, val: string) => {
+    const n = Math.max(0, Math.min(99, parseInt(val) || 0));
+    setYears(prev => ({ ...prev, [id]: n }));
+  };
+
+  // Project the earliest safe-to-purge date assuming the document was filed today.
+  const purgeDate = (y: number) => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + y);
+    return d;
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarX size={14} className="text-[var(--color-primary)]" /> Retention Policy by Category</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set how many years to keep documents in each category before they can be archived or purged. The earliest safe-to-purge date is projected for anything filed today.</p>
+        <div className="space-y-2">
+          {CATEGORIES.map(c => {
+            const y = get(c.id);
+            return (
+              <div key={c.id} className="flex items-center gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5">
+                <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${c.bg} ${c.color} shrink-0`}>{c.label}</span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="text-xs text-[var(--color-muted)]">Keep for</span>
+                  <input type="number" value={y} onChange={e => setFor(c.id, e.target.value)} className="w-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums" />
+                  <span className="text-xs text-[var(--color-muted)]">years · purge after</span>
+                  <span className="text-xs font-medium tabular-nums">{format(purgeDate(y), "MMM yyyy")}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={() => { setYears(() => ({ ...RETENTION_DEFAULTS })); toast.success("Reset to suggested retention periods"); }}
+          className="mt-4 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
+          <History size={12} /> Reset to suggested defaults
+        </button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Suggested defaults are a general guide — Indian tax records are commonly kept 6–8 years. Statutory retention varies by law and ongoing litigation; confirm with your CA before purging anything.</p>
+    </div>
+  );
+}
+
+// ── #183 Contract Obligation Tracker ─────────────────────────────────────────────
+type Obligation = {
+  id: string;
+  contract: string;
+  obligation: string;
+  owner: string;
+  dueDate: string;
+  done: boolean;
+};
+
+function ObligationTracker() {
+  const [items, setItems] = useFeatureState<Obligation[]>("doc-obligation-tracker", []);
+  const [contract, setContract] = useState("");
+  const [obligation, setObligation] = useState("");
+  const [owner, setOwner] = useState("");
+  const [dueDate, setDueDate] = useState("");
+
+  const add = () => {
+    if (!contract.trim() || !obligation.trim()) { toast.error("Enter a contract and obligation"); return; }
+    setItems(prev => [...prev, {
+      id: crypto.randomUUID(),
+      contract: contract.trim(),
+      obligation: obligation.trim(),
+      owner: owner.trim() || "—",
+      dueDate,
+      done: false,
+    }]);
+    setObligation(""); setOwner(""); setDueDate("");
+    toast.success("Obligation added");
+  };
+
+  const toggle = (id: string) => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
+
+  const enriched = items
+    .map(i => ({ ...i, days: i.dueDate ? differenceInCalendarDays(new Date(i.dueDate), new Date()) : null }))
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.days === null) return 1;
+      if (b.days === null) return -1;
+      return a.days - b.days;
+    });
+  const open = items.filter(i => !i.done).length;
+  const overdue = enriched.filter(i => !i.done && i.days !== null && i.days < 0).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> Contract Obligation Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Turn the commitments buried in your contracts — deliverables, reporting, payments, milestones — into a tracked list with an owner and a due date, so nothing slips through.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <input value={contract} onChange={e => setContract(e.target.value)} placeholder="Contract / party *" className={INP} />
+          <input value={obligation} onChange={e => setObligation(e.target.value)} placeholder="Obligation *" className={INP} />
+          <input value={owner} onChange={e => setOwner(e.target.value)} placeholder="Owner" className={INP} />
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Add obligation</button>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState icon={ListTodo} title="No obligations tracked" description="Pull the deliverables and deadlines out of your contracts into one list so commitments are owned and met on time." />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Open obligations", value: String(open), color: "text-[var(--color-text)]" },
+              { label: "Overdue", value: String(overdue), color: overdue > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Completed", value: String(items.length - open), color: "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+            {enriched.map(i => {
+              const tone = i.done ? "text-[var(--color-muted)]"
+                : i.days === null ? "text-[var(--color-muted)]"
+                : i.days < 0 ? "text-red-400"
+                : i.days <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]";
+              return (
+                <div key={i.id} className="flex items-center gap-3 px-4 py-3">
+                  <button onClick={() => toggle(i.id)} className="shrink-0">
+                    {i.done ? <CheckCircle2 size={16} className="text-green-400" /> : <XCircle size={16} className="text-[var(--color-muted)]" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${i.done ? "line-through text-[var(--color-muted)]" : "font-medium"}`}>{i.obligation}</p>
+                    <p className="text-xs text-[var(--color-muted)]">{i.contract} · {i.owner}</p>
+                  </div>
+                  {i.dueDate && (
+                    <span className={`text-xs tabular-nums shrink-0 ${tone}`}>
+                      {format(new Date(i.dueDate), "d MMM yyyy")}
+                      {!i.done && i.days !== null && (i.days < 0 ? ` · ${Math.abs(i.days)}d overdue` : i.days === 0 ? " · today" : ` · in ${i.days}d`)}
+                    </span>
+                  )}
+                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs shrink-0">✕</button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Obligations are entered manually — read the contract carefully to capture every deliverable, reporting duty and penalty trigger. This list reminds you; it does not amend the contract.</p>
     </div>
   );
 }
