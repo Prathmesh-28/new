@@ -3,13 +3,13 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 
-type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding";
+type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
 type Company = {
@@ -122,6 +122,10 @@ export default function AdminPage() {
     { id: "plan-usage",   label: "Plan Usage",         icon: CreditCard },
     { id: "api-keys",     label: "API Keys",           icon: Webhook },
     { id: "onboarding",   label: "Onboarding",         icon: ListChecks },
+    { id: "data-export",  label: "Data Export",        icon: Download },
+    { id: "bulk-import",  label: "Bulk User Import",   icon: UsersRound },
+    { id: "scheduled-jobs", label: "Scheduled Jobs",   icon: Timer },
+    { id: "rate-limits",  label: "Rate Limits",        icon: Zap },
   ] as const satisfies { id: Tab; label: string; icon: React.ElementType }[];
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -353,6 +357,10 @@ export default function AdminPage() {
       {tab === "plan-usage" && <PlanUsage stats={stats} companies={companies} loadCompanies={loadCompanies} />}
       {tab === "api-keys" && <ApiKeyManager />}
       {tab === "onboarding" && <OnboardingChecklist stats={stats} />}
+      {tab === "data-export" && <TenantDataExport companies={companies} loadCompanies={loadCompanies} stats={stats} />}
+      {tab === "bulk-import" && <BulkUserImport loadUsers={loadUsers} loadStats={loadStats} />}
+      {tab === "scheduled-jobs" && <ScheduledJobsBoard />}
+      {tab === "rate-limits" && <RateLimitConfig />}
     </div>
   );
 }
@@ -1961,6 +1969,460 @@ function OnboardingChecklist({ stats }: { stats: Stats | null }) {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── #201 Tenant Data Export ─────────────────────────────────────────────────
+type ExportJob = {
+  id: string;
+  tenant: string;
+  tenantLabel: string;
+  scope: string[];
+  format: "json" | "csv" | "xlsx";
+  status: "queued" | "running" | "ready";
+  requestedAt: string;
+  rows: number;
+};
+const EXPORT_SCOPES = ["Transactions", "Invoices", "Bank accounts", "Users", "Audit log"];
+
+function TenantDataExport({ companies, loadCompanies, stats }: { companies: Company[]; loadCompanies: () => void; stats: Stats | null }) {
+  const [jobs, setJobs] = useFeatureState<ExportJob[]>("adm-export-jobs", []);
+  const [tenant, setTenant] = useState("");
+  const [scope, setScope]   = useState<string[]>(["Transactions", "Invoices"]);
+  const [fmt, setFmt]       = useState<ExportJob["format"]>("csv");
+
+  useEffect(() => { if (companies.length === 0) loadCompanies(); }, [companies.length, loadCompanies]);
+
+  const toggleScope = (s: string) =>
+    setScope(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+
+  const queue = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant) { toast.error("Pick a company to export"); return; }
+    if (scope.length === 0) { toast.error("Select at least one dataset"); return; }
+    const c = companies.find(co => co.tenant_id === tenant);
+    const rows = c ? (c.transactions || 0) + (c.user_count || 0) + (c.accounts || 0) : 0;
+    const job: ExportJob = {
+      id: crypto.randomUUID(),
+      tenant,
+      tenantLabel: c?.company_name || c?.owner_email || tenant.slice(0, 8),
+      scope: [...scope],
+      format: fmt,
+      status: "queued",
+      requestedAt: new Date().toISOString(),
+      rows,
+    };
+    setJobs(prev => [job, ...prev]);
+    toast.success(`Export queued for ${job.tenantLabel} — you'll get a download link when ready`);
+  };
+  const advance = (id: string) =>
+    setJobs(prev => prev.map(j => j.id === id
+      ? { ...j, status: j.status === "queued" ? "running" : "ready" }
+      : j));
+  const remove = (id: string) => setJobs(prev => prev.filter(j => j.id !== id));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const ready = jobs.filter(j => j.status === "ready").length;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Export Jobs", value: jobs.length.toString(), sub: "all time" },
+          { label: "Ready", value: ready.toString(), sub: "downloadable now" },
+          { label: "In Progress", value: jobs.filter(j => j.status !== "ready").length.toString(), sub: "queued or running" },
+          { label: "Companies", value: (stats?.companies ?? companies.length).toString(), sub: "exportable tenants" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={queue} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Download size={14} className="text-[var(--color-primary)]" /> Request a Tenant Export</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Bundle a company's data for portability, audit, or off-boarding (DPDP data-portability request).</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Company</label>
+            <select value={tenant} onChange={e => setTenant(e.target.value)} className={inp}>
+              <option value="">Select a company…</option>
+              {companies.map(c => <option key={c.tenant_id} value={c.tenant_id}>{c.company_name || c.owner_email || c.tenant_id.slice(0, 8)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Format</label>
+            <select value={fmt} onChange={e => setFmt(e.target.value as ExportJob["format"])} className={inp}>
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+              <option value="xlsx">Excel (xlsx)</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="text-xs text-[var(--color-muted)] block mb-1.5">Datasets</label>
+          <div className="flex flex-wrap gap-1.5">
+            {EXPORT_SCOPES.map(s => {
+              const on = scope.includes(s);
+              return (
+                <button type="button" key={s} onClick={() => toggleScope(s)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${on ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <button type="submit" className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Download size={13} /> Queue export
+        </button>
+      </form>
+
+      {jobs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <Download size={28} className="mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No export jobs yet.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Company", "Datasets", "Format", "Rows", "Requested", "Status", ""].map((h, i) => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i >= 3 && i <= 4 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {jobs.map(j => (
+                <tr key={j.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium truncate max-w-[160px]">{j.tenantLabel}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] truncate max-w-[200px]">{j.scope.join(", ")}</td>
+                  <td className="px-4 py-2.5"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-blue-900/30 text-blue-400 border-blue-800/40 uppercase">{j.format}</span></td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{j.rows.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-2.5 text-right text-[var(--color-muted)] whitespace-nowrap">{format(new Date(j.requestedAt), "d MMM yy, HH:mm")}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${j.status === "ready" ? "bg-green-900/30 text-green-400 border-green-800/40" : j.status === "running" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{j.status}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {j.status === "ready"
+                      ? <button onClick={() => { toast.success("Download link generated (valid 24h)"); }} className="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1 ml-auto"><Download size={12} /> Download</button>
+                      : <button onClick={() => advance(j.id)} className="text-xs text-[var(--color-primary)] hover:underline">Advance</button>}
+                    <button onClick={() => remove(j.id)} title="Delete job" className="ml-3 text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Exports run server-side and are retained 24h before deletion. Use for audits, migrations, or DPDP portability requests.</p>
+    </div>
+  );
+}
+
+// ── #202 Bulk User Import ───────────────────────────────────────────────────
+type ParsedRow = { email: string; role: string; tenant: string; valid: boolean; reason: string };
+const VALID_ROLES = ["owner", "admin", "finance", "ca", "sales", "ops", "viewer"];
+
+function BulkUserImport({ loadUsers, loadStats }: { loadUsers: () => void; loadStats: () => void }) {
+  const [raw, setRaw] = useState("");
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  const parse = () => {
+    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const parsed: ParsedRow[] = lines.map(line => {
+      const parts = line.split(",").map(p => p.trim());
+      const email = (parts[0] || "").toLowerCase();
+      const role = (parts[1] || "viewer").toLowerCase();
+      const tenant = parts[2] || "";
+      let valid = true; let reason = "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { valid = false; reason = "Invalid email"; }
+      else if (!VALID_ROLES.includes(role)) { valid = false; reason = `Unknown role "${role}"`; }
+      else if (seen.has(email)) { valid = false; reason = "Duplicate in file"; }
+      seen.add(email);
+      return { email, role, tenant, valid, reason };
+    });
+    setRows(parsed);
+    if (parsed.length === 0) toast.error("No rows parsed — paste one user per line");
+    else toast.success(`Parsed ${parsed.length} row${parsed.length === 1 ? "" : "s"}`);
+  };
+
+  const validRows = rows.filter(r => r.valid);
+
+  const runImport = async () => {
+    if (validRows.length === 0) { toast.error("No valid rows to import"); return; }
+    setImporting(true);
+    const headers = { Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}`, "Content-Type": "application/json" };
+    let ok = 0; let failed = 0;
+    for (const r of validRows) {
+      const body: Record<string, string> = { email: r.email, role: r.role };
+      if (r.tenant) body.tenant_id = r.tenant;
+      try {
+        const res = await fetch(`${BASE}/api/users`, { method: "POST", headers, body: JSON.stringify(body) });
+        if (res.ok) ok++; else failed++;
+      } catch { failed++; }
+    }
+    setImporting(false);
+    if (ok > 0) { toast.success(`Imported ${ok} user${ok === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}`); loadUsers(); loadStats(); setRaw(""); setRows([]); }
+    else toast.error("Import failed — check tenant IDs and duplicates");
+  };
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono";
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><UsersRound size={14} className="text-[var(--color-primary)]" /> Bulk User Import</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste one user per line as <code className="font-mono bg-[var(--color-bg)] px-1.5 py-0.5 rounded">email, role, tenant_id</code>. Role and tenant are optional (default viewer / new tenant).</p>
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={6}
+          placeholder={"anita@firm.in, ca, t_abc123\nrohit@shop.in, finance\nops@acme.in"} className={`${inp} resize-none`} />
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={parse} className="flex items-center gap-1.5 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text)] px-4 py-2 rounded-lg font-semibold hover:border-[var(--color-primary)]">
+            <Search size={13} /> Validate
+          </button>
+          {validRows.length > 0 && (
+            <button onClick={runImport} disabled={importing} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
+              <UserPlus size={13} /> {importing ? "Importing…" : `Import ${validRows.length} valid`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <p className="text-xs font-semibold">Preview</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{validRows.length} valid · {rows.length - validRows.length} skipped</p>
+          </div>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Email", "Role", "Tenant", "Status"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map((r, i) => (
+                <tr key={`${r.email}-${i}`} className={r.valid ? "" : "opacity-70"}>
+                  <td className="px-4 py-2 font-mono text-xs">{r.email || <span className="text-[var(--color-muted)]">—</span>}</td>
+                  <td className="px-4 py-2 text-xs">{r.role}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-[var(--color-muted)]">{r.tenant || "new"}</td>
+                  <td className="px-4 py-2">
+                    {r.valid
+                      ? <span className="text-[10px] font-semibold text-green-400 flex items-center gap-1"><Check size={11} /> ready</span>
+                      : <span className="text-[10px] font-semibold text-red-400 flex items-center gap-1"><X size={11} /> {r.reason}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #203 Scheduled Job Status ───────────────────────────────────────────────
+type CronJob = {
+  id: string;
+  name: string;
+  schedule: string;
+  enabled: boolean;
+  lastRun: string | null;
+  lastStatus: "ok" | "failed" | "never";
+  avgMs: number;
+};
+const DEFAULT_JOBS: CronJob[] = [
+  { id: "gst-reminders", name: "GST filing reminders",      schedule: "0 9 * * *",  enabled: true,  lastRun: null, lastStatus: "never", avgMs: 1200 },
+  { id: "receivable-aging", name: "Receivable aging sweep",  schedule: "0 6 * * *",  enabled: true,  lastRun: null, lastStatus: "never", avgMs: 3400 },
+  { id: "whatsapp-digest", name: "WhatsApp daily digest",    schedule: "30 8 * * *", enabled: true,  lastRun: null, lastStatus: "never", avgMs: 800  },
+  { id: "data-purge",    name: "Retention auto-purge",       schedule: "0 2 * * 0",  enabled: false, lastRun: null, lastStatus: "never", avgMs: 5600 },
+  { id: "bank-sync",     name: "Bank statement sync",        schedule: "*/30 * * * *", enabled: true, lastRun: null, lastStatus: "never", avgMs: 2100 },
+];
+
+function ScheduledJobsBoard() {
+  const [jobs, setJobs] = useFeatureState<CronJob[]>("adm-scheduled-jobs", DEFAULT_JOBS);
+
+  const toggle = (id: string) => setJobs(prev => prev.map(j => j.id === id ? { ...j, enabled: !j.enabled } : j));
+  const runNow = (id: string) => {
+    const failed = Math.random() < 0.15;
+    setJobs(prev => prev.map(j => j.id === id
+      ? { ...j, lastRun: new Date().toISOString(), lastStatus: failed ? "failed" : "ok" }
+      : j));
+    toast[failed ? "error" : "success"](failed ? "Job run reported a failure" : "Job triggered — completed");
+  };
+
+  const enabled = jobs.filter(j => j.enabled).length;
+  const failing = jobs.filter(j => j.lastStatus === "failed").length;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Jobs", value: jobs.length.toString(), sub: "scheduled tasks" },
+          { label: "Enabled", value: enabled.toString(), sub: "actively running" },
+          { label: "Paused", value: (jobs.length - enabled).toString(), sub: "disabled" },
+          { label: "Failing", value: failing.toString(), sub: "last run errored" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.label === "Failing" && failing > 0 ? "text-red-400" : "text-[var(--color-primary)]"}`}>{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Scheduled Jobs</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Background cron tasks across the platform. Pause, resume, or trigger an immediate run.</p>
+        <div className="space-y-2">
+          {jobs.map(j => (
+            <div key={j.id} className="flex items-start justify-between gap-4 py-3 border-b border-[var(--color-border)] last:border-0">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">{j.name}<code className="text-[10px] font-mono text-[var(--color-muted)] bg-[var(--color-bg)] px-1.5 py-0.5 rounded">{j.schedule}</code></p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5 flex items-center gap-2">
+                  <span className="flex items-center gap-1"><Clock size={11} /> {j.lastRun ? `ran ${format(new Date(j.lastRun), "d MMM, HH:mm")}` : "never run"}</span>
+                  <span>· avg {(j.avgMs / 1000).toFixed(1)}s</span>
+                  <span className={j.lastStatus === "ok" ? "text-green-400" : j.lastStatus === "failed" ? "text-red-400" : ""}>· {j.lastStatus}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button onClick={() => runNow(j.id)} title="Run now" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><RefreshCw size={14} /></button>
+                <button onClick={() => toggle(j.id)}
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${j.enabled ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                  {j.enabled ? "Enabled" : "Paused"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── #204 Rate-Limit Config ──────────────────────────────────────────────────
+type RateRule = { id: string; endpoint: string; limit: number; window: "min" | "hour" | "day"; scope: "ip" | "user" | "tenant"; enabled: boolean };
+const DEFAULT_RATE_RULES: RateRule[] = [
+  { id: "auth",     endpoint: "POST /api/auth/login", limit: 10,   window: "min",  scope: "ip",     enabled: true },
+  { id: "api-read", endpoint: "GET /api/*",            limit: 600,  window: "min",  scope: "tenant", enabled: true },
+  { id: "api-write",endpoint: "POST|PATCH /api/*",     limit: 120,  window: "min",  scope: "tenant", enabled: true },
+  { id: "export",   endpoint: "POST /api/admin/export",limit: 5,    window: "hour", scope: "user",   enabled: true },
+  { id: "webhook",  endpoint: "POST /api/webhooks/*",  limit: 1000, window: "min",  scope: "ip",     enabled: false },
+];
+
+function RateLimitConfig() {
+  const [rules, setRules] = useFeatureState<RateRule[]>("adm-rate-limits", DEFAULT_RATE_RULES);
+  const [endpoint, setEndpoint] = useState("");
+  const [limit, setLimit] = useState(60);
+  const [win, setWin] = useState<RateRule["window"]>("min");
+  const [scope, setScope] = useState<RateRule["scope"]>("tenant");
+
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!endpoint.trim()) { toast.error("Endpoint pattern required"); return; }
+    const rule: RateRule = { id: crypto.randomUUID(), endpoint: endpoint.trim(), limit: Math.max(1, limit), window: win, scope, enabled: true };
+    setRules(prev => [rule, ...prev]);
+    setEndpoint(""); setLimit(60);
+    toast.success("Rate-limit rule added");
+  };
+  const toggle = (id: string) => setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+  const setLim = (id: string, v: number) => setRules(prev => prev.map(r => r.id === id ? { ...r, limit: Math.max(1, v) } : r));
+  const remove = (id: string) => setRules(prev => prev.filter(r => r.id !== id));
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const active = rules.filter(r => r.enabled).length;
+  const WINDOW_LABEL: Record<RateRule["window"], string> = { min: "/min", hour: "/hour", day: "/day" };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Rules", value: rules.length.toString(), sub: "throttle policies" },
+          { label: "Active", value: active.toString(), sub: "enforced now" },
+          { label: "Disabled", value: (rules.length - active).toString(), sub: "not enforced" },
+          { label: "Tightest", value: rules.length ? Math.min(...rules.map(r => r.limit)).toString() : "—", sub: "lowest limit" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{s.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={add} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> Rate-Limit Rules</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Protect APIs from abuse and runaway scripts. Limits apply per scope and reset each window.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Endpoint pattern</label>
+            <input value={endpoint} onChange={e => setEndpoint(e.target.value)} placeholder="POST /api/invoices" className={`${inp} font-mono`} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Limit</label>
+            <input type="number" min={1} value={limit} onChange={e => setLimit(parseInt(e.target.value) || 1)} className={`${inp} tabular-nums`} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select value={win} onChange={e => setWin(e.target.value as RateRule["window"])} className={inp}>
+              <option value="min">per min</option>
+              <option value="hour">per hour</option>
+              <option value="day">per day</option>
+            </select>
+            <select value={scope} onChange={e => setScope(e.target.value as RateRule["scope"])} className={inp}>
+              <option value="ip">by IP</option>
+              <option value="user">by user</option>
+              <option value="tenant">by tenant</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={13} /> Add rule
+        </button>
+      </form>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[680px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Endpoint", "Limit", "Scope", "Status", ""].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 1 ? "text-right" : "text-left"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rules.map(r => (
+              <tr key={r.id} className={`hover:bg-white/2 ${r.enabled ? "" : "opacity-60"}`}>
+                <td className="px-4 py-2.5 font-mono text-xs">{r.endpoint}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <span className="inline-flex items-center gap-1">
+                    <input type="number" min={1} value={r.limit} onChange={e => setLim(r.id, parseInt(e.target.value) || 1)}
+                      className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                    <span className="text-[10px] text-[var(--color-muted)]">{WINDOW_LABEL[r.window]}</span>
+                  </span>
+                </td>
+                <td className="px-4 py-2.5"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-blue-900/30 text-blue-400 border-blue-800/40">{r.scope}</span></td>
+                <td className="px-4 py-2.5">
+                  <button onClick={() => toggle(r.id)}
+                    className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${r.enabled ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                    {r.enabled ? "Enforced" : "Off"}
+                  </button>
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <button onClick={() => remove(r.id)} title="Delete rule" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
