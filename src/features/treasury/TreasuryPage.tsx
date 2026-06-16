@@ -9,6 +9,7 @@ import {
   Coins, CreditCard, Gift, Receipt, Scale3d, LineChart, Waves,
   Gem, Building, Activity, ShieldAlert, FileText, Clock, ArrowLeftRight,
   Timer, Banknote, Sparkles, Hourglass,
+  Scissors, HandCoins, PiggyBank, Flame, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
@@ -23,7 +24,8 @@ type Tab =
   | "sip" | "debteq" | "emergency" | "sweepfd" | "corpfd" | "smallsave"
   | "swod" | "income" | "capgain" | "rebalance" | "xirr" | "waterfall"
   | "gold" | "reit" | "mtm" | "dicgc" | "policy" | "accrued" | "almatch"
-  | "incfcast" | "liqtier" | "ylq" | "oppcost";
+  | "incfcast" | "liqtier" | "ylq" | "oppcost"
+  | "fdbreak" | "loanvssurplus" | "ppfnps" | "realyield" | "fdrenew";
 
 export default function TreasuryPage() {
   const { store } = useApp();
@@ -80,6 +82,11 @@ export default function TreasuryPage() {
             ["liqtier", "Liquidity Tiers", Hourglass],
             ["ylq", "Yield vs Liquidity", Sparkles],
             ["oppcost", "Idle-Cash Opportunity Cost", Timer],
+            ["fdbreak", "FD Break Cost", Scissors],
+            ["loanvssurplus", "Prepay vs Invest", HandCoins],
+            ["ppfnps", "PPF / NPS Top-Up", PiggyBank],
+            ["realyield", "Real Yield (Inflation)", Flame],
+            ["fdrenew", "FD Renewal Optimizer", RefreshCw],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -123,6 +130,11 @@ export default function TreasuryPage() {
       {tab === "liqtier" && <LiquidityTierAllocator totalBalance={totalBalance} />}
       {tab === "ylq" && <YieldLiquidityTradeoff />}
       {tab === "oppcost" && <IdleCashOpportunityCost totalBalance={totalBalance} />}
+      {tab === "fdbreak" && <FdBreakCostCalculator />}
+      {tab === "loanvssurplus" && <PrepayVsInvestOptimizer />}
+      {tab === "ppfnps" && <PpfNpsTopUpPlanner />}
+      {tab === "realyield" && <RealYieldCalculator />}
+      {tab === "fdrenew" && <FdRenewalOptimizer />}
     </div>
   );
 }
@@ -3039,6 +3051,425 @@ function IdleCashOpportunityCost({ totalBalance }: { totalBalance: number }) {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Both rates compound annually here and are pre-tax. Achievable yields are market-linked and not guaranteed. Always keep committed payables and a runway buffer liquid before deploying — opportunity cost is only real on truly idle cash.</p>
+    </div>
+  );
+}
+
+// ── Premature FD-Break Cost Calculator ──────────────────────────────────────────
+function FdBreakCostCalculator() {
+  const [principal, setPrincipal] = useState("");
+  const [contractRate, setContractRate] = useState("7.25");
+  const [tenureMonths, setTenureMonths] = useState("24");
+  const [elapsedMonths, setElapsedMonths] = useState("8");
+  const [penaltyPct, setPenaltyPct] = useState("1");
+
+  const P = parseFloat(principal) || 0;
+  const cr = (parseFloat(contractRate) || 0) / 100;
+  const elapsed = Math.max(0, parseFloat(elapsedMonths) || 0);
+  const tenure = Math.max(elapsed, parseFloat(tenureMonths) || 0);
+  const pen = (parseFloat(penaltyPct) || 0) / 100;
+  const elapsedYears = elapsed / 12;
+
+  // Banks pay interest for the period actually run, at the (lower) rate for that
+  // shorter slab minus a penalty. Model: effective rate = contract rate − penalty.
+  const effRate = Math.max(0, cr - pen);
+  const payout = P * Math.pow(1 + effRate / 4, 4 * elapsedYears);
+  const earnedOnBreak = payout - P;
+  // What you would have earned if interest accrued at the full contract rate so far.
+  const wouldHaveEarned = P * Math.pow(1 + cr / 4, 4 * elapsedYears) - P;
+  const penaltyCost = Math.max(0, wouldHaveEarned - earnedOnBreak);
+  const ready = P > 0 && elapsed > 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Premature FD-Break Cost</h3>
+        <p className="text-xs text-[var(--color-muted)]">Need the cash early? Banks re-price a broken FD to the rate for the period actually run, then dock a penalty. See what you'll actually get back before you break it.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">FD principal (₹)</label>
+            <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Contracted rate (% p.a.)</label>
+            <input type="number" value={contractRate} onChange={e => setContractRate(e.target.value)} placeholder="7.25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Break penalty (% pts)</label>
+            <input type="number" value={penaltyPct} onChange={e => setPenaltyPct(e.target.value)} placeholder="1" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Original tenure (months)</label>
+            <input type="number" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="24" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months elapsed</label>
+            <input type="number" value={elapsedMonths} onChange={e => setElapsedMonths(e.target.value)} placeholder="8" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Payout if broken now", value: formatCurrency(Math.round(payout)), color: "text-[var(--color-text)]", sub: `after ${elapsed} mo` },
+              { label: "Interest you keep", value: formatCurrency(Math.round(earnedOnBreak)), color: "text-green-400", sub: `@ ${(effRate * 100).toFixed(2)}% net` },
+              { label: "Penalty cost", value: formatCurrency(Math.round(penaltyCost)), color: "text-red-400", sub: `vs full ${contractRate || 0}%` },
+              { label: "Months still locked", value: `${Math.max(0, Math.round(tenure - elapsed))}`, color: "text-yellow-400", sub: "if you wait instead" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2">
+              <AlertTriangle size={14} /> Breaking now returns {formatCurrency(Math.round(payout))} and costs you about {formatCurrency(Math.round(penaltyCost))} in lost interest. If the shortfall is small, a sweep-FD slice or loan-against-deposit may be cheaper than a full break.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Most banks apply a 0.5–1% penalty and re-rate to the slab for the run period; exact rules vary by bank and deposit. This is an estimate — confirm the applicable penalty and re-rated slab with your bank before breaking.</p>
+    </div>
+  );
+}
+
+// ── Prepay-Debt vs Invest-Surplus Optimizer ─────────────────────────────────────
+function PrepayVsInvestOptimizer() {
+  const [surplus, setSurplus] = useState("");
+  const [loanRate, setLoanRate] = useState("12");
+  const [investRate, setInvestRate] = useState("7");
+  const [slab, setSlab] = useState("30");
+  const [years, setYears] = useState("3");
+  const [deductible, setDeductible] = useState(false);
+
+  const S = parseFloat(surplus) || 0;
+  const lr = (parseFloat(loanRate) || 0) / 100;
+  const ir = (parseFloat(investRate) || 0) / 100;
+  const slabRate = (parseFloat(slab) || 0) / 100;
+  const t = parseFloat(years) || 0;
+
+  // Prepaying saves loan interest. If the loan interest is tax-deductible (e.g. a
+  // business loan), the effective cost of carrying it is reduced by the slab.
+  const effLoanRate = deductible ? lr * (1 - slabRate) : lr;
+  // Investing earns post-tax (interest/debt-fund gains taxed at slab).
+  const effInvestRate = ir * (1 - slabRate);
+
+  const interestSaved = S * (Math.pow(1 + effLoanRate, t) - 1);
+  const investGain = S * (Math.pow(1 + effInvestRate, t) - 1);
+  const ready = S > 0 && t > 0;
+  const prepayWins = interestSaved >= investGain;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Prepay Debt vs Invest Surplus</h3>
+        <p className="text-xs text-[var(--color-muted)]">Got spare cash and an outstanding loan? Paying down 12% debt usually beats parking at 7%. This compares guaranteed interest saved against post-tax investment gain.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Surplus available (₹)</label>
+            <input type="number" value={surplus} onChange={e => setSurplus(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Loan rate (% p.a.)</label>
+            <input type="number" value={loanRate} onChange={e => setLoanRate(e.target.value)} placeholder="12" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invest yield (% p.a.)</label>
+            <input type="number" value={investRate} onChange={e => setInvestRate(e.target.value)} placeholder="7" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tax slab (%)</label>
+            <input type="number" value={slab} onChange={e => setSlab(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Horizon (years)</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="3" className={INP} />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] cursor-pointer mt-5">
+            <input type="checkbox" checked={deductible} onChange={e => setDeductible(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Loan interest is tax-deductible
+          </label>
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { name: "Prepay the loan", val: interestSaved, rate: effLoanRate, sub: deductible ? "interest saved, post-tax-shield" : "guaranteed interest saved", win: prepayWins },
+              { name: "Invest the surplus", val: investGain, rate: effInvestRate, sub: "post-tax gain (not guaranteed)", win: !prepayWins },
+            ].map(c => (
+              <div key={c.name} className={`${CARD} p-4 ${c.win ? "border-green-700/50" : ""}`}>
+                <p className="text-sm font-semibold flex items-center gap-1.5">{c.name}{c.win && <span className="text-[9px] text-green-400 font-bold">BETTER</span>}</p>
+                <p className={`text-xl font-bold tabular-nums mt-2 ${c.win ? "text-green-400" : "text-[var(--color-text)]"}`}>{formatCurrency(Math.round(c.val))}</p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">eff. {(c.rate * 100).toFixed(2)}% · {c.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${prepayWins ? "border-green-800/40 bg-green-950/20" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${prepayWins ? "text-green-400" : "text-[var(--color-text)]"}`}>
+              <CheckCircle2 size={14} /> {prepayWins ? "Prepay" : "Invest"} — it's ahead by about {formatCurrency(Math.round(Math.abs(interestSaved - investGain)))} over {years} years. Prepaying is a guaranteed, risk-free return; investment yields are not.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Prepayment return is risk-free; investing carries market and reinvestment risk, so a small edge for investing rarely justifies the risk. Check loan prepayment charges and keep your liquidity buffer intact before prepaying. Not advice.</p>
+    </div>
+  );
+}
+
+// ── PPF / NPS Year-End Top-Up Planner ───────────────────────────────────────────
+function PpfNpsTopUpPlanner() {
+  const [scheme, setScheme] = useState<"ppf" | "nps">("ppf");
+  const [contributed, setContributed] = useState("0");
+  const [years, setYears] = useState("15");
+  const [rate, setRate] = useState("7.1");
+  const [slab, setSlab] = useState("30");
+
+  const PPF_LIMIT = 150000;   // Sec 80C ceiling for PPF
+  const NPS_LIMIT = 200000;   // 80C (1.5L) + 80CCD(1B) (0.5L)
+  const limit = scheme === "ppf" ? PPF_LIMIT : NPS_LIMIT;
+  const def = scheme === "ppf" ? "7.1" : "10";
+
+  const done = Math.min(limit, Math.max(0, parseFloat(contributed) || 0));
+  const topUp = Math.max(0, limit - done);
+  const slabRate = (parseFloat(slab) || 0) / 100;
+  const taxSaved = Math.round(topUp * slabRate);
+  const r = (parseFloat(rate) || 0) / 100;
+  const t = Math.max(0, parseFloat(years) || 0);
+  // Future value if the top-up amount is invested annually until the horizon.
+  const fvOneShot = topUp * Math.pow(1 + r, t);
+  const pct = Math.round((done / limit) * 100);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> PPF / NPS Year-End Top-Up</h3>
+        <p className="text-xs text-[var(--color-muted)]">Don't leave the 80C / 80CCD(1B) deduction on the table. See how much headroom is left before 31 March, the tax it saves, and what the top-up could grow to.</p>
+        <div className="flex gap-2">
+          {(["ppf", "nps"] as const).map(s => (
+            <button key={s} onClick={() => { setScheme(s); setRate(s === "ppf" ? "7.1" : "10"); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg border uppercase transition-all ${scheme === s ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {s === "ppf" ? "PPF (₹1.5L · 80C)" : "NPS (₹2L · 80C+1B)"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Contributed this FY (₹)</label>
+            <input type="number" value={contributed} onChange={e => setContributed(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tax slab (%)</label>
+            <input type="number" value={slab} onChange={e => setSlab(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Assumed return (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder={def} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Years to grow</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="15" className={INP} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-[var(--color-muted)]">{formatCurrency(done)} of {formatCurrency(limit)} used</span>
+            <span className="font-semibold tabular-nums">{pct}%</span>
+          </div>
+          <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Top-up headroom", value: formatCurrency(topUp), color: topUp > 0 ? "text-yellow-400" : "text-green-400", sub: "before 31 Mar" },
+          { label: "Tax saved if topped up", value: formatCurrency(taxSaved), color: "text-green-400", sub: `@ ${slab || 0}% slab` },
+          { label: "Top-up grows to", value: formatCurrency(Math.round(fvOneShot)), color: "text-[var(--color-text)]", sub: `in ${years || 0} yrs @ ${rate || 0}%` },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {topUp <= 0 ? (
+        <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Limit fully used for this year — nothing more to top up.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)]">
+          <p className="text-sm text-[var(--color-muted)]">Add {formatCurrency(topUp)} before the financial year closes to capture the full deduction and save {formatCurrency(taxSaved)} in tax. Fund it from year-end surplus rather than scrambling in March.</p>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Deductions apply only under the old tax regime. PPF returns are government-set (currently ~7.1%) and tax-free; NPS returns are market-linked and partly taxable at withdrawal. Limits: PPF ₹1.5L (80C), NPS extra ₹50k (80CCD(1B)). Confirm eligibility with your CA.</p>
+    </div>
+  );
+}
+
+// ── Real (Inflation-Adjusted) Yield Calculator ──────────────────────────────────
+function RealYieldCalculator() {
+  const [amount, setAmount] = useState("");
+  const [nominalRate, setNominalRate] = useState("7.25");
+  const [inflation, setInflation] = useState("5");
+  const [slab, setSlab] = useState("30");
+  const [years, setYears] = useState("5");
+
+  const P = parseFloat(amount) || 0;
+  const nom = (parseFloat(nominalRate) || 0) / 100;
+  const inf = (parseFloat(inflation) || 0) / 100;
+  const slabRate = (parseFloat(slab) || 0) / 100;
+  const t = parseFloat(years) || 0;
+
+  // Post-tax nominal rate, then Fisher real rate net of inflation.
+  const postTaxNom = nom * (1 - slabRate);
+  const realRate = (1 + postTaxNom) / (1 + inf) - 1;
+  const ready = P > 0 && t > 0;
+
+  const nominalValue = P * Math.pow(1 + postTaxNom, t);
+  const realValue = P * Math.pow(1 + realRate, t);          // today's purchasing power
+  const purchasingLoss = nominalValue - realValue;          // erosion vs face
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Flame size={14} className="text-[var(--color-primary)]" /> Real Yield (Inflation-Adjusted)</h3>
+        <p className="text-xs text-[var(--color-muted)]">A 7% FD after 30% tax and 5% inflation barely grows your purchasing power. See the real return left once tax and inflation take their cut.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Nominal yield (% p.a.)</label>
+            <input type="number" value={nominalRate} onChange={e => setNominalRate(e.target.value)} placeholder="7.25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tax slab (%)</label>
+            <input type="number" value={slab} onChange={e => setSlab(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Inflation (% p.a.)</label>
+            <input type="number" value={inflation} onChange={e => setInflation(e.target.value)} placeholder="5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Years</label>
+            <input type="number" value={years} onChange={e => setYears(e.target.value)} placeholder="5" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Post-tax yield", value: `${(postTaxNom * 100).toFixed(2)}%`, color: "text-[var(--color-text)]", sub: `nominal ${nominalRate || 0}%` },
+              { label: "Real yield", value: `${(realRate * 100).toFixed(2)}%`, color: realRate >= 0 ? "text-green-400" : "text-red-400", sub: `net of ${inflation || 0}% CPI` },
+              { label: "Value (today's ₹)", value: formatCurrency(Math.round(realValue)), color: "text-[var(--color-text)]", sub: `purchasing power in ${years} yr` },
+              { label: "Eroded by inflation", value: formatCurrency(Math.round(purchasingLoss)), color: "text-red-400", sub: "vs nominal balance" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${realRate >= 0 ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${realRate >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {realRate >= 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {realRate >= 0
+                ? `Real return is positive at ${(realRate * 100).toFixed(2)}% — purchasing power grows after tax and inflation.`
+                : `Real return is negative at ${(realRate * 100).toFixed(2)}% — this parking loses purchasing power. Consider higher-yield or tax-deferred instruments.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Uses the Fisher relation on a post-tax nominal rate. Inflation is your assumption — actual CPI varies. FD interest is taxed yearly; debt-fund gains defer tax to redemption, improving real yield. Illustrative, not advice.</p>
+    </div>
+  );
+}
+
+// ── FD Maturity Auto-Renewal Optimizer ──────────────────────────────────────────
+function FdRenewalOptimizer() {
+  const [amount, setAmount] = useState("");
+  const [renewalRate, setRenewalRate] = useState("6.5");
+  const [marketRate, setMarketRate] = useState("7.5");
+  const [tenureMonths, setTenureMonths] = useState("12");
+
+  const P = parseFloat(amount) || 0;
+  const rr = (parseFloat(renewalRate) || 0) / 100;
+  const mr = (parseFloat(marketRate) || 0) / 100;
+  const months = Math.max(1, parseFloat(tenureMonths) || 12);
+  const years = months / 12;
+
+  const renewMaturity = P * Math.pow(1 + rr / 4, 4 * years);
+  const marketMaturity = P * Math.pow(1 + mr / 4, 4 * years);
+  const extraInterest = marketMaturity - renewMaturity;
+  const spreadBps = Math.round((mr - rr) * 10000);
+  const ready = P > 0;
+  const worthMoving = extraInterest > 0;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> FD Renewal Optimizer</h3>
+        <p className="text-xs text-[var(--color-muted)]">Banks auto-renew maturing FDs at their default (often lower) rate. Compare the auto-renewal rate against the best market rate before letting it roll.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Maturing amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Auto-renewal rate (% p.a.)</label>
+            <input type="number" value={renewalRate} onChange={e => setRenewalRate(e.target.value)} placeholder="6.5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Best market rate (% p.a.)</label>
+            <input type="number" value={marketRate} onChange={e => setMarketRate(e.target.value)} placeholder="7.5" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">New tenure (months)</label>
+            <input type="number" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="12" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Auto-renew maturity", value: formatCurrency(Math.round(renewMaturity)), color: "text-[var(--color-muted)]", sub: `@ ${renewalRate || 0}%` },
+              { label: "Reinvest maturity", value: formatCurrency(Math.round(marketMaturity)), color: "text-green-400", sub: `@ ${marketRate || 0}%` },
+              { label: "Extra interest", value: formatCurrency(Math.round(extraInterest)), color: worthMoving ? "text-green-400" : "text-[var(--color-muted)]", sub: `over ${months} mo` },
+              { label: "Rate gap", value: `${spreadBps} bps`, color: worthMoving ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]", sub: "market − renewal" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg p-4 border ${worthMoving ? "border-green-800/40 bg-green-950/20" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${worthMoving ? "text-green-400" : "text-[var(--color-text)]"}`}>
+              {worthMoving ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              {worthMoving
+                ? `Reinvesting at the market rate earns ${formatCurrency(Math.round(extraInterest))} more — give standing instructions to pay out at maturity, then redeposit at the higher rate.`
+                : `The auto-renewal rate already matches or beats the market — letting it roll is fine this cycle.`}
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Many banks default to auto-renewal at the prevailing card rate, which can lag promotional or other-bank rates. Compare across banks (and your DICGC ₹5L cover) before moving. Both legs assume quarterly compounding; FD interest is taxed at slab.</p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, agingBuckets, financingOptions, earlyPayAnnualizedReturn, paymentTermsSuggestions } from "@/lib/finance";
 import type { FinancialSnapshot, AgingBucket } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
-import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank, Calculator, FileSpreadsheet, FileText, Repeat, Split, Clock, Sliders, ArrowLeftRight, Award } from "lucide-react";
+import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Handshake, Activity, Boxes, Scale, CreditCard, Landmark, TrendingDown, Wallet, Gauge, Target, Percent, Snowflake, LineChart as LineChartIcon, Coins, Zap, PiggyBank, Calculator, FileSpreadsheet, FileText, Repeat, Split, Clock, Sliders, ArrowLeftRight, Award, Banknote, ShieldCheck, Siren, HandCoins, FileBarChart } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -15,7 +15,7 @@ const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 export default function WorkingCapitalPage() {
   const { store } = useApp();
   const navigate = useNavigate();
-  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od" | "operating-cycle" | "current-ratio-planner" | "terms-gap" | "wc-efficiency-score">("overview");
+  const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od" | "operating-cycle" | "current-ratio-planner" | "terms-gap" | "wc-efficiency-score" | "wc-loan-sizer" | "dscr-forecast" | "liquidity-stress" | "od-interest-min" | "bill-discount-margin">("overview");
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const aging = useMemo(() => agingBuckets(store.invoices), [store.invoices]);
   const options = useMemo(
@@ -44,7 +44,7 @@ export default function WorkingCapitalPage() {
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split], ["operating-cycle", "Operating Cycle", Clock], ["current-ratio-planner", "Current-Ratio Planner", Sliders], ["terms-gap", "Terms Gap", ArrowLeftRight], ["wc-efficiency-score", "WC Efficiency Score", Award]] as const).map(([id, label, Icon]) => (
+          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split], ["operating-cycle", "Operating Cycle", Clock], ["current-ratio-planner", "Current-Ratio Planner", Sliders], ["terms-gap", "Terms Gap", ArrowLeftRight], ["wc-efficiency-score", "WC Efficiency Score", Award], ["wc-loan-sizer", "WC Loan Sizer", Banknote], ["dscr-forecast", "DSCR Forecast", ShieldCheck], ["liquidity-stress", "Liquidity Stress Test", Siren], ["od-interest-min", "OD Interest Minimiser", HandCoins], ["bill-discount-margin", "Bill Discounting", FileBarChart]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setWcTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${wcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -381,6 +381,11 @@ export default function WorkingCapitalPage() {
       {wcTab === "current-ratio-planner" && <CurrentRatioTargetPlanner snap={snap} />}
       {wcTab === "terms-gap" && <TermsGapAnalyzer snap={snap} />}
       {wcTab === "wc-efficiency-score" && <WcEfficiencyScore snap={snap} />}
+      {wcTab === "wc-loan-sizer" && <WcLoanSizer snap={snap} />}
+      {wcTab === "dscr-forecast" && <DscrForecast snap={snap} />}
+      {wcTab === "liquidity-stress" && <LiquidityStressTest snap={snap} />}
+      {wcTab === "od-interest-min" && <OdInterestMinimiser snap={snap} />}
+      {wcTab === "bill-discount-margin" && <BillDiscountMargin snap={snap} />}
     </div>
   );
 }
@@ -2269,6 +2274,480 @@ function WcEfficiencyScore({ snap }: { snap: FinancialSnapshot }) {
         ))}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Score = sum of four 0-25 sub-scores: CCC (0d→25, 90d→0), receivables quality (0% overdue→25, 40%→0), supplier-credit cover (DPO ÷ operating cycle), and current ratio (1.5x→25, 0.5x→0). Weights are equal and directional — a planning lens, not a credit rating.</p>
+    </div>
+  );
+}
+
+// ── #103 Working-Capital Loan Sizer — bridge amount, tenor & EMI ────────────────
+function WcLoanSizer({ snap }: { snap: FinancialSnapshot }) {
+  // Size a working-capital term loan to bridge the cash tied up in the cycle.
+  const [gap, setGap] = useState(String(Math.round(snap.workingCapitalGap) || 0));
+  const [coverPct, setCoverPct] = useState("80");       // how much of the gap to fund
+  const [ratePct, setRatePct] = useState("16");          // annual interest %
+  const [tenorMonths, setTenorMonths] = useState("24");  // repayment tenor
+  const [procFeePct, setProcFeePct] = useState("1.5");   // one-time processing fee %
+
+  const gapAmt = Math.max(0, parseFloat(gap) || 0);
+  const cover = Math.max(0, Math.min(100, parseFloat(coverPct) || 0)) / 100;
+  const principal = Math.round(gapAmt * cover);
+  const r = (parseFloat(ratePct) || 0) / 100 / 12; // monthly rate
+  const n = Math.max(1, Math.round(parseFloat(tenorMonths) || 0));
+  const procFee = Math.round(principal * ((parseFloat(procFeePct) || 0) / 100));
+
+  // Standard amortised EMI.
+  const emi = r > 0 ? Math.round((principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1)) : Math.round(principal / n);
+  const totalRepay = emi * n;
+  const totalInterest = Math.max(0, totalRepay - principal);
+
+  // Can monthly net cover the EMI? (monthlyNet may be negative.)
+  const coverage = emi > 0 ? snap.monthlyNet / emi : null;
+  const affordable = coverage !== null && coverage >= 1.25;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Banknote size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Working-Capital Loan Sizer — Bridge Amount, Tenor & EMI</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Your cycle ties up <strong>{formatCurrency(snap.workingCapitalGap)}</strong>. Size a term loan to bridge it, then check the EMI against your monthly net.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { l: "Cash gap to bridge (₹)", v: gap, s: setGap },
+            { l: "Fund % of gap", v: coverPct, s: setCoverPct },
+            { l: "Interest rate (%/yr)", v: ratePct, s: setRatePct },
+            { l: "Tenor (months)", v: tenorMonths, s: setTenorMonths },
+            { l: "Processing fee %", v: procFeePct, s: setProcFeePct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Loan Principal", value: formatCurrency(principal), color: "text-[var(--color-primary)]" },
+          { label: "Monthly EMI", value: formatCurrency(emi), color: "text-blue-400" },
+          { label: "Total Interest", value: formatCurrency(totalInterest), color: "text-orange-400" },
+          { label: "Processing Fee", value: formatCurrency(procFee), color: "text-[var(--color-muted)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Repayment Summary</p>
+        <div className="space-y-2 text-sm">
+          {[
+            { l: "Principal borrowed", v: formatCurrency(principal) },
+            { l: `Total repaid over ${n} months`, v: formatCurrency(totalRepay) },
+            { l: "Of which interest", v: formatCurrency(totalInterest) },
+            { l: "Net cash in hand (after fee)", v: formatCurrency(Math.max(0, principal - procFee)) },
+          ].map(row => (
+            <div key={row.l} className="flex items-center justify-between border-b border-[var(--color-border)] last:border-0 py-2">
+              <span className="text-[var(--color-muted)]">{row.l}</span>
+              <span className="tabular-nums font-medium">{row.v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${affordable ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm ${affordable ? "text-green-400" : "text-orange-400"}`}>
+          {coverage === null
+            ? "Enter loan terms to test affordability."
+            : affordable
+              ? `Comfortable: your ${formatCurrency(snap.monthlyNet)} monthly net covers the ${formatCurrency(emi)} EMI ${coverage.toFixed(1)}× over. Borrow the bridge.`
+              : `Tight: your monthly net (${formatCurrency(snap.monthlyNet)}) covers the EMI only ${coverage.toFixed(1)}×. Lengthen tenor, fund a smaller slice, or fix the cycle first.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula P·r·(1+r)ⁿ / ((1+r)ⁿ−1) at a monthly rate. Affordability flagged green when monthly net ≥ 1.25× EMI. Indicative only — lender sanction depends on drawing power, security and credit history.</p>
+    </div>
+  );
+}
+
+// ── #104 DSCR Forecast — debt-service coverage vs lender covenant ────────────────
+function DscrForecast({ snap }: { snap: FinancialSnapshot }) {
+  // DSCR = cash available for debt service ÷ total debt service. Lenders want ≥ 1.25–1.5x.
+  const [covenant, setCovenant] = useState("1.25");
+  const [extraDebtService, setExtraDebtService] = useState("0"); // proposed new EMI to stress
+  const [growthPct, setGrowthPct] = useState("0");               // forward profit growth %
+
+  const cov = parseFloat(covenant) || 0;
+  const newEmi = Math.max(0, parseFloat(extraDebtService) || 0);
+  const growth = (parseFloat(growthPct) || 0) / 100;
+
+  // Cash available for debt service ≈ monthly net + interest already in expenses (added back).
+  const monthlyCads = Math.max(0, snap.monthlyNet + snap.monthlyInterest);
+  const projCads = Math.round(monthlyCads * (1 + growth));
+  const totalDebtService = snap.monthlyDebtService + newEmi;
+
+  const currentDscr = snap.monthlyDebtService > 0 ? monthlyCads / snap.monthlyDebtService : null;
+  const projDscr = totalDebtService > 0 ? projCads / totalDebtService : null;
+  const meets = projDscr !== null && projDscr >= cov;
+
+  // Max additional EMI the business can take while still clearing covenant.
+  const maxTotalService = cov > 0 ? projCads / cov : 0;
+  const headroomEmi = Math.max(0, Math.round(maxTotalService - snap.monthlyDebtService));
+
+  const dscrColor = (d: number | null) => d === null ? "text-[var(--color-muted)]" : d >= cov ? "text-green-400" : d >= 1 ? "text-yellow-400" : "text-red-400";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Debt-Service Coverage (DSCR) Forecast</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          DSCR = cash available for debt service ÷ debt service due. Lenders covenant a floor (typically 1.25–1.5×). Stress a new EMI and forward growth to see if you stay compliant.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { l: "Covenant floor (×)", v: covenant, s: setCovenant },
+            { l: "Proposed new EMI (₹/mo)", v: extraDebtService, s: setExtraDebtService },
+            { l: "Profit growth (%)", v: growthPct, s: setGrowthPct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" step="0.05" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Current DSCR", value: currentDscr !== null ? `${currentDscr.toFixed(2)}x` : "—", color: dscrColor(currentDscr) },
+          { label: "Projected DSCR", value: projDscr !== null ? `${projDscr.toFixed(2)}x` : "—", color: dscrColor(projDscr) },
+          { label: "Cash for Debt Service", value: formatCurrency(projCads) + "/mo", color: "text-[var(--color-text)]" },
+          { label: "Debt Service Due", value: formatCurrency(totalDebtService) + "/mo", color: "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-1">Borrowing Headroom</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Additional monthly EMI you could service while still clearing the {cov.toFixed(2)}× covenant:</p>
+        <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(headroomEmi)}/mo</p>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${meets ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+        <p className={`text-sm ${meets ? "text-green-400" : "text-red-400"}`}>
+          {projDscr === null
+            ? "No debt service modelled — add an existing or proposed EMI to test coverage."
+            : meets
+              ? `Compliant: projected DSCR of ${projDscr.toFixed(2)}× clears the ${cov.toFixed(2)}× floor. You can absorb up to ${formatCurrency(headroomEmi)}/mo more.`
+              : `Breach risk: projected DSCR of ${projDscr.toFixed(2)}× is below the ${cov.toFixed(2)}× covenant. Cut the proposed EMI, grow profit, or term debt out before drawing.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Cash available for debt service ≈ monthly net profit + interest (added back). Current DSCR uses existing debt service; projected applies growth and any new EMI. This is a directional read from your ledger — lenders compute DSCR on audited annual EBITDA and full repayment schedules.</p>
+    </div>
+  );
+}
+
+// ── #105 Liquidity Stress Test — survival weeks under shock ─────────────────────
+function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
+  // Stress the cash position against a revenue shock and the loss of a top customer.
+  const [revDropPct, setRevDropPct] = useState("30");
+  const [loseTopCustomer, setLoseTopCustomer] = useState(true);
+  const [collectStuckPct, setCollectStuckPct] = useState("50"); // how much of AR you can still collect
+
+  const drop = Math.max(0, Math.min(100, parseFloat(revDropPct) || 0)) / 100;
+  const collect = Math.max(0, Math.min(100, parseFloat(collectStuckPct) || 0)) / 100;
+
+  // Shocked monthly revenue: cut by the drop, then strip the top customer's share if lost.
+  const custLoss = loseTopCustomer ? snap.topCustomerPct / 100 : 0;
+  const shockedRevenue = Math.round(snap.monthlyRevenue * (1 - drop) * (1 - custLoss));
+  const shockedNet = shockedRevenue - snap.monthlyExpense; // expenses assumed sticky short-term
+  const shockedBurn = Math.max(0, -shockedNet); // monthly cash burn under shock
+
+  // Liquid resources you can pull on: cash + a haircut on collectable AR.
+  const collectableAr = Math.round(snap.accountsReceivable * collect);
+  const liquidPool = snap.cash + collectableAr;
+
+  const dailyBurn = shockedBurn / 30;
+  const survivalDays = shockedBurn > 0 ? Math.round(liquidPool / dailyBurn) : 999;
+  const survivalWeeks = survivalDays >= 999 ? 999 : Math.round(survivalDays / 7);
+  const danger = survivalWeeks < 13;
+
+  const scenarios = [
+    { label: "Base (today)", rev: snap.monthlyRevenue, net: snap.monthlyNet },
+    { label: `−${parseFloat(revDropPct) || 0}% revenue${loseTopCustomer ? " + lose top customer" : ""}`, rev: shockedRevenue, net: shockedNet },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <Siren size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Liquidity Stress Test — Survival Under Shock</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Simulate a demand shock and the loss of your largest customer ({snap.topCustomerPct.toFixed(0)}% of revenue), then see how many weeks your cash plus collectable receivables last.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Revenue drop (%)</label>
+            <input type="number" value={revDropPct} onChange={e => setRevDropPct(e.target.value)} className={WC_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">AR still collectable (%)</label>
+            <input type="number" value={collectStuckPct} onChange={e => setCollectStuckPct(e.target.value)} className={WC_INP} />
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer py-2">
+            <input type="checkbox" checked={loseTopCustomer} onChange={e => setLoseTopCustomer(e.target.checked)} className="accent-[var(--color-primary)]" />
+            Also lose top customer
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Shocked Monthly Net", value: formatCurrency(shockedNet), color: shockedNet >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Monthly Burn Under Shock", value: formatCurrency(shockedBurn), color: shockedBurn > 0 ? "text-orange-400" : "text-green-400" },
+          { label: "Liquid Pool", value: formatCurrency(liquidPool), color: "text-blue-400" },
+          { label: "Survival", value: survivalWeeks >= 999 ? "Cash-positive" : `${survivalWeeks} weeks`, color: danger ? "text-red-400" : "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[420px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Scenario", "Monthly Revenue", "Monthly Net"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {scenarios.map(s => (
+              <tr key={s.label} className="border-b border-[var(--color-border)] last:border-0">
+                <td className="px-4 py-2.5 font-medium">{s.label}</td>
+                <td className="px-4 py-2.5 tabular-nums">{formatCurrency(s.rev)}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${s.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(s.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${danger ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
+        <p className={`text-sm ${danger ? "text-red-400" : "text-green-400"}`}>
+          {survivalWeeks >= 999
+            ? "Even under this shock you stay cash-flow positive — strong resilience. Keep a buffer for slower receivables."
+            : danger
+              ? `Fragile: only ${survivalWeeks} weeks of cash under shock — below the 13-week safety line. Pre-arrange a credit line, diversify customers, and hold a larger buffer.`
+              : `Resilient: ${survivalWeeks} weeks of runway under shock clears the 13-week line. Watch customer concentration (${snap.topCustomerPct.toFixed(0)}%).`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Shocked revenue = current × (1 − drop) × (1 − top-customer share if lost). Expenses are held fixed (sticky short-term). Liquid pool = cash + (AR × collectable %). Survival = liquid pool ÷ daily burn. 13 weeks is the standard liquidity-planning horizon.</p>
+    </div>
+  );
+}
+
+// ── #106 Overdraft Interest Minimiser — draw/repay timing ───────────────────────
+function OdInterestMinimiser({ snap }: { snap: FinancialSnapshot }) {
+  // OD/CC interest is charged on the daily drawn balance. Sweeping idle cash to repay,
+  // and drawing only when needed, cuts the average balance and the interest bill.
+  const [avgDrawn, setAvgDrawn] = useState(String(Math.round(snap.workingCapitalGap) || 0));
+  const [ratePct, setRatePct] = useState("14");
+  const [idleCash, setIdleCash] = useState(String(Math.round(snap.cash) || 0));
+  const [sweepablePct, setSweepablePct] = useState("60"); // % of idle cash you can park against OD
+
+  const drawn = Math.max(0, parseFloat(avgDrawn) || 0);
+  const rate = (parseFloat(ratePct) || 0) / 100;
+  const idle = Math.max(0, parseFloat(idleCash) || 0);
+  const sweep = Math.max(0, Math.min(100, parseFloat(sweepablePct) || 0)) / 100;
+
+  // Sweep idle cash to reduce the average drawn balance (can't go below zero).
+  const sweepAmt = Math.min(drawn, Math.round(idle * sweep));
+  const newAvgDrawn = Math.max(0, drawn - sweepAmt);
+
+  const currentInterest = Math.round(drawn * rate);          // annual
+  const optimisedInterest = Math.round(newAvgDrawn * rate);  // annual
+  const saved = Math.max(0, currentInterest - optimisedInterest);
+  const savedMonthly = Math.round(saved / 12);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <HandCoins size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Overdraft Interest Minimiser — Sweep & Repay</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          OD/CC interest accrues on the daily drawn balance. Sweeping idle cash against the line — and drawing only when you must — cuts the average balance and the interest bill, with same-day redraw if you need it.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { l: "Avg drawn balance (₹)", v: avgDrawn, s: setAvgDrawn },
+            { l: "OD rate (%/yr)", v: ratePct, s: setRatePct },
+            { l: "Idle cash on hand (₹)", v: idleCash, s: setIdleCash },
+            { l: "Sweepable % of idle", v: sweepablePct, s: setSweepablePct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Cash Swept to OD", value: formatCurrency(sweepAmt), color: "text-blue-400" },
+          { label: "New Avg Drawn", value: formatCurrency(newAvgDrawn), color: "text-[var(--color-primary)]" },
+          { label: "Interest Saved / yr", value: formatCurrency(saved), color: "text-green-400" },
+          { label: "Saved / month", value: formatCurrency(savedMonthly), color: "text-green-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Before vs After Sweep</p>
+        <div className="space-y-3">
+          {[
+            { label: "Today — interest on full drawn balance", amt: currentInterest, base: drawn, color: "bg-orange-500" },
+            { label: "After sweep — interest on reduced balance", amt: optimisedInterest, base: newAvgDrawn, color: "bg-green-500" },
+          ].map(row => (
+            <div key={row.label}>
+              <div className="flex items-center justify-between mb-1.5 text-sm">
+                <span>{row.label}</span>
+                <span className="tabular-nums font-semibold">{formatCurrency(row.amt)}/yr</span>
+              </div>
+              <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${row.color}`} style={{ width: `${currentInterest > 0 ? (row.amt / currentInterest) * 100 : 0}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+        <p className="text-sm text-green-400">
+          {saved > 0
+            ? `Sweeping ${formatCurrency(sweepAmt)} of idle cash against the line saves ${formatCurrency(saved)}/yr (${formatCurrency(savedMonthly)}/mo) in interest — redraw same-day when cash dips.`
+            : "No idle cash to sweep against the line yet. Once collections arrive, park surplus against the OD to cut daily interest."}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">OD interest ≈ average drawn balance × annual rate (charged on daily balances). Sweeping reduces the average; assumes same-day redraw availability and no minimum-utilisation charge. Keep an operating float — don't sweep cash you need for imminent outflows.</p>
+    </div>
+  );
+}
+
+// ── #107 Bill Discounting / LC Margin Calculator — net proceeds & cost ──────────
+function BillDiscountMargin({ snap }: { snap: FinancialSnapshot }) {
+  // Discount a sales bill (or open an inland LC) to convert a receivable into cash today.
+  const [billAmount, setBillAmount] = useState(String(Math.round(snap.accountsReceivable) || 0));
+  const [marginPct, setMarginPct] = useState("10");   // bank margin / haircut held back
+  const [discRatePct, setDiscRatePct] = useState("12"); // discounting rate %/yr
+  const [usanceDays, setUsanceDays] = useState("60");  // bill tenor (days to maturity)
+  const [chargesPct, setChargesPct] = useState("0.5"); // processing / commission %
+
+  const bill = Math.max(0, parseFloat(billAmount) || 0);
+  const margin = Math.max(0, Math.min(100, parseFloat(marginPct) || 0)) / 100;
+  const rate = (parseFloat(discRatePct) || 0) / 100;
+  const days = Math.max(0, parseFloat(usanceDays) || 0);
+  const charges = (parseFloat(chargesPct) || 0) / 100;
+
+  const advance = Math.round(bill * (1 - margin));            // amount funded before charges
+  const discountCharge = Math.round(advance * rate * (days / 365)); // interest for the tenor
+  const commission = Math.round(bill * charges);
+  const netProceeds = Math.max(0, advance - discountCharge - commission);
+  const totalCost = discountCharge + commission;
+  // Effective annualised cost of this funding.
+  const effAnnualPct = advance > 0 && days > 0 ? (totalCost / advance) * (365 / days) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WC_CARD} p-4 space-y-4`}>
+        <div className="flex items-center gap-2">
+          <FileBarChart size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold">Bill Discounting / LC Margin Calculator</h3>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">
+          Discount a sales bill to turn a receivable into cash today. See the bank's margin held back, the discount charge for the tenor, and your true annualised cost of funds.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { l: "Bill / invoice value (₹)", v: billAmount, s: setBillAmount },
+            { l: "Bank margin %", v: marginPct, s: setMarginPct },
+            { l: "Discount rate (%/yr)", v: discRatePct, s: setDiscRatePct },
+            { l: "Usance / tenor (days)", v: usanceDays, s: setUsanceDays },
+            { l: "Commission / charges %", v: chargesPct, s: setChargesPct },
+          ].map(f => (
+            <div key={f.l}>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.l}</label>
+              <input type="number" value={f.v} onChange={e => f.s(e.target.value)} className={WC_INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Advance (after margin)", value: formatCurrency(advance), color: "text-blue-400" },
+          { label: "Discount Charge", value: formatCurrency(discountCharge), color: "text-orange-400" },
+          { label: "Net Cash Today", value: formatCurrency(netProceeds), color: "text-green-400" },
+          { label: "Eff. Annual Cost", value: `${effAnnualPct.toFixed(1)}%`, color: effAnnualPct <= 16 ? "text-green-400" : "text-orange-400" },
+        ].map(c => (
+          <div key={c.label} className={`${WC_CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${WC_CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">Proceeds Waterfall</p>
+        <div className="space-y-2 text-sm">
+          {[
+            { l: "Bill value", v: bill, strong: false },
+            { l: `Less bank margin (${marginPct}%)`, v: -(bill - advance), strong: false },
+            { l: `Less discount charge (${usanceDays}d @ ${discRatePct}%)`, v: -discountCharge, strong: false },
+            { l: `Less commission (${chargesPct}%)`, v: -commission, strong: false },
+            { l: "Net cash in hand today", v: netProceeds, strong: true },
+          ].map(row => (
+            <div key={row.l} className={`flex items-center justify-between border-b border-[var(--color-border)] last:border-0 py-2 ${row.strong ? "font-bold" : ""}`}>
+              <span className={row.strong ? "" : "text-[var(--color-muted)]"}>{row.l}</span>
+              <span className={`tabular-nums ${row.v < 0 ? "text-orange-400" : row.strong ? "text-green-400" : ""}`}>{row.v < 0 ? "−" : ""}{formatCurrency(Math.abs(row.v))}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`rounded-lg p-4 border ${effAnnualPct <= 16 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
+        <p className={`text-sm ${effAnnualPct <= 16 ? "text-green-400" : "text-orange-400"}`}>
+          {bill <= 0
+            ? "Enter a bill value to compute discounting proceeds and cost."
+            : effAnnualPct <= 16
+              ? `Cheap funding: discounting this bill costs ${effAnnualPct.toFixed(1)}% annualised — below typical OD/term rates. ${formatCurrency(netProceeds)} lands today; the ${formatCurrency(bill - advance)} margin releases at maturity.`
+              : `Pricey: ${effAnnualPct.toFixed(1)}% annualised is steep — compare against your OD line before discounting. The held-back margin (${formatCurrency(bill - advance)}) releases when the buyer pays.`}
+        </p>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Advance = bill × (1 − margin). Discount charge = advance × rate × tenor/365. Effective annual cost = total cost ÷ advance × 365/tenor. The margin is held back and released on buyer payment. Indicative — actual terms vary by bank, buyer rating and whether the bill is LC-backed (lower rate) or clean.</p>
     </div>
   );
 }

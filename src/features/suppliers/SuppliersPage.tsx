@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck, CalendarDays, Scale, ShieldCheck, Boxes } from "lucide-react";
+import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck, CalendarDays, Scale, ShieldCheck, Boxes, Wallet, CalendarRange, Copy, Warehouse, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 
@@ -21,7 +21,8 @@ interface SupplierOffer {
 type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify"
   | "terms-optimizer" | "price-trend" | "leadtime-variance" | "alt-supplier" | "concentration" | "grn-match" | "negotiation-prep"
   | "pay-priority" | "gst-2b" | "quality-ppm" | "credit-util" | "landed-cost"
-  | "contract-calendar" | "terms-benchmark" | "risk-diversification" | "eoq-check";
+  | "contract-calendar" | "terms-benchmark" | "risk-diversification" | "eoq-check"
+  | "vendor-advances" | "recurring-bills" | "dup-invoice" | "carrying-cost" | "tds-bills";
 const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "early-pay",         label: "Early-Pay",      Icon: Zap },
   { id: "scorecard",         label: "Scorecard",      Icon: Award },
@@ -44,6 +45,11 @@ const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "terms-benchmark",       label: "Terms Benchmark",    Icon: Scale },
   { id: "risk-diversification",  label: "Risk Spread",        Icon: ShieldCheck },
   { id: "eoq-check",             label: "EOQ Check",          Icon: Boxes },
+  { id: "vendor-advances",       label: "Vendor Advances",    Icon: Wallet },
+  { id: "recurring-bills",       label: "Recurring Bills",    Icon: CalendarRange },
+  { id: "dup-invoice",           label: "Dup. Invoice",       Icon: Copy },
+  { id: "carrying-cost",         label: "Carrying Cost",      Icon: Warehouse },
+  { id: "tds-bills",             label: "TDS on Bills",       Icon: Receipt },
 ];
 
 export default function SuppliersPage() {
@@ -79,6 +85,11 @@ export default function SuppliersPage() {
       {tab === "terms-benchmark"      && <PaymentTermsBenchmark />}
       {tab === "risk-diversification" && <RiskDiversification />}
       {tab === "eoq-check"            && <EoqCheck />}
+      {tab === "vendor-advances"      && <VendorAdvanceTracker />}
+      {tab === "recurring-bills"      && <RecurringBillCalendar />}
+      {tab === "dup-invoice"          && <DuplicateInvoiceGuard />}
+      {tab === "carrying-cost"        && <CarryingCostCalculator />}
+      {tab === "tds-bills"            && <TdsOnBillsCalculator />}
     </div>
   );
 }
@@ -2253,6 +2264,541 @@ function EoqCheck() {
         </div>
       </>}
       <p className="text-[10px] text-[var(--color-muted)]">EOQ balances ordering cost against carrying cost. Where the supplier MOQ exceeds EOQ you carry excess stock — negotiate a lower MOQ, split lots, or factor the extra holding cost into the price comparison.</p>
+    </div>
+  );
+}
+
+// ── #86 Vendor Advance / Prepayment Tracker ──────────────────────────────────────
+type AdvanceRow = {
+  id: string;
+  vendor: string;
+  reference: string;
+  advancePaid: number;
+  adjusted: number;
+  paidDate: string;
+};
+function VendorAdvanceTracker() {
+  const [rows, setRows] = useFeatureState<AdvanceRow[]>("sup-vendor-advances", []);
+  const [vendor, setVendor] = useState("");
+  const [reference, setReference] = useState("");
+  const [advancePaid, setAdvancePaid] = useState("");
+  const [adjusted, setAdjusted] = useState("");
+  const [paidDate, setPaidDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const fc = formatCurrency;
+  const today = new Date();
+
+  const balanceOf = (r: AdvanceRow) => Math.max(0, r.advancePaid - r.adjusted);
+  const ageOf = (r: AdvanceRow) => Math.floor((today.getTime() - new Date(r.paidDate).getTime()) / 86400000);
+
+  const add = () => {
+    if (!vendor.trim()) { toast.error("Enter vendor name"); return; }
+    const paid = Math.max(0, parseFloat(advancePaid) || 0);
+    const adj = Math.max(0, parseFloat(adjusted) || 0);
+    if (adj > paid) { toast.error("Adjusted cannot exceed advance paid"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      vendor: vendor.trim(),
+      reference: reference.trim(),
+      advancePaid: paid,
+      adjusted: adj,
+      paidDate,
+    }]);
+    setVendor(""); setReference(""); setAdvancePaid(""); setAdjusted("");
+    toast.success("Advance recorded");
+  };
+
+  const fullyAdjust = (id: string) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, adjusted: r.advancePaid } : r));
+    toast.success("Advance fully adjusted");
+  };
+
+  const totalOutstanding = rows.reduce((s, r) => s + balanceOf(r), 0);
+  const openCount = rows.filter(r => balanceOf(r) > 0).length;
+  const staleCount = rows.filter(r => balanceOf(r) > 0 && ageOf(r) > 90).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Vendor Advance / Prepayment Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track advances paid to vendors and adjust them against later invoices. Unadjusted balances are cash sitting with suppliers — chase or net them off before they go stale.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
+          <input value={reference} onChange={e => setReference(e.target.value)} placeholder="PO / reference" className={INP} />
+          <input type="number" value={advancePaid} onChange={e => setAdvancePaid(e.target.value)} placeholder="Advance paid (₹)" className={INP} />
+          <input type="number" value={adjusted} onChange={e => setAdjusted(e.target.value)} placeholder="Already adjusted (₹)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Advance date</label>
+            <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Record advance</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Open advances", value: String(openCount), color: "text-[var(--color-primary)]" },
+            { label: "Unadjusted balance", value: fc(totalOutstanding), color: totalOutstanding > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Stale (>90d)", value: String(staleCount), color: staleCount > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Reference", "Advance", "Adjusted", "Balance", "Age", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const bal = balanceOf(r);
+                const age = ageOf(r);
+                const stale = bal > 0 && age > 90;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reference || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.advancePaid)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.adjusted)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${bal > 0 ? "text-yellow-400" : "text-green-400"}`}>{fc(bal)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${stale ? "text-red-400 font-semibold" : ""}`}>{age}d</td>
+                    <td className="px-3 py-2.5">
+                      {bal <= 0
+                        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Settled</span>
+                        : <button onClick={() => fullyAdjust(r.id)} className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-[var(--color-bg)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary)]">Mark adjusted</button>}
+                    </td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Advances paid sit as an asset until invoiced against. Net them off promptly — long-open advances tie up cash and signal disputed deliveries or a vendor at risk. GST on advances for goods is not payable post-Nov 2017; advances for services still attract GST.</p>
+    </div>
+  );
+}
+
+// ── #53 Recurring Bill Calendar (rent / utility / SaaS) ──────────────────────────
+type RecurRow = {
+  id: string;
+  name: string;
+  amount: number;
+  cadence: "monthly" | "quarterly" | "annual";
+  dueDay: number;       // day-of-month the bill falls due
+};
+function RecurringBillCalendar() {
+  const [rows, setRows] = useFeatureState<RecurRow[]>("sup-recurring-bills", []);
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [cadence, setCadence] = useState<RecurRow["cadence"]>("monthly");
+  const [dueDay, setDueDay] = useState("1");
+  const fc = formatCurrency;
+  const today = new Date();
+  const tDay = today.getDate();
+
+  // Normalise everything to monthly run-rate for the spend summary.
+  const monthlyOf = (r: RecurRow) => r.cadence === "monthly" ? r.amount : r.cadence === "quarterly" ? r.amount / 3 : r.amount / 12;
+  const nextDueDate = (r: RecurRow) => {
+    const d = new Date(today.getFullYear(), today.getMonth(), Math.min(r.dueDay, 28));
+    if (r.dueDay < tDay) d.setMonth(d.getMonth() + 1);
+    return d;
+  };
+  const daysToOf = (r: RecurRow) => Math.ceil((nextDueDate(r).getTime() - new Date(today.getFullYear(), today.getMonth(), tDay).getTime()) / 86400000);
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Enter bill name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      amount: Math.max(0, parseFloat(amount) || 0),
+      cadence,
+      dueDay: Math.max(1, Math.min(28, parseInt(dueDay) || 1)),
+    }]);
+    setName(""); setAmount("");
+    toast.success("Recurring bill added");
+  };
+
+  const sorted = useMemo(() => [...rows].sort((a, b) => daysToOf(a) - daysToOf(b)), [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const monthlyTotal = rows.reduce((s, r) => s + monthlyOf(r), 0);
+  const dueThisWeek = rows.filter(r => daysToOf(r) <= 7).length;
+  const CAD: Record<RecurRow["cadence"], string> = { monthly: "Monthly", quarterly: "Quarterly", annual: "Annual" };
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Recurring Bill Calendar</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Schedule fixed dues — rent, utilities, SaaS — by cadence and due day. See what is due this week and your true monthly run-rate so nothing slips into a late fee.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Bill name *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
+          <select value={cadence} onChange={e => setCadence(e.target.value as RecurRow["cadence"])} className={INP}>
+            {(Object.keys(CAD) as RecurRow["cadence"][]).map(k => <option key={k} value={k}>{CAD[k]}</option>)}
+          </select>
+          <select value={dueDay} onChange={e => setDueDay(e.target.value)} className={INP}>
+            {Array.from({ length: 28 }, (_, i) => i + 1).map(d => <option key={d} value={d}>Due on day {d}</option>)}
+          </select>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add bill</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Recurring bills", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "Monthly run-rate", value: fc(Math.round(monthlyTotal)), color: "text-[var(--color-muted)]" },
+            { label: "Due in ≤7 days", value: String(dueThisWeek), color: dueThisWeek > 0 ? "text-yellow-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Bill", "Amount", "Cadence", "Due day", "Next due", "Monthly eq.", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {sorted.map(r => {
+                const dt = daysToOf(r);
+                const soon = dt <= 7;
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.name}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{CAD[r.cadence]}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.dueDay}</td>
+                    <td className={`px-3 py-2.5 text-xs ${soon ? "text-yellow-400 font-semibold" : ""}`}>{nextDueDate(r).toISOString().split("T")[0]} <span className="text-[var(--color-muted)]">({dt}d)</span></td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(Math.round(monthlyOf(r)))}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Quarterly and annual dues are shown as a monthly equivalent so the run-rate reflects true commitment. Set the due day a few days ahead of the actual deadline to leave room for approval and bank cut-off times.</p>
+    </div>
+  );
+}
+
+// ── #87 Duplicate Invoice Guard ──────────────────────────────────────────────────
+type InvLogRow = {
+  id: string;
+  vendor: string;
+  invoiceNo: string;
+  amount: number;
+  date: string;
+};
+function DuplicateInvoiceGuard() {
+  const [rows, setRows] = useFeatureState<InvLogRow[]>("sup-dup-invoice", []);
+  const [vendor, setVendor] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const fc = formatCurrency;
+
+  const keyOf = (vendorName: string, inv: string) => `${vendorName.trim().toLowerCase()}␟${inv.trim().toLowerCase()}`;
+
+  // A row is a duplicate if its (vendor + invoice no) key matches an earlier row.
+  const flagged = useMemo(() => {
+    const seen = new Map<string, number>();
+    return rows.map((r, i) => {
+      const k = keyOf(r.vendor, r.invoiceNo);
+      const firstIdx = seen.has(k) ? seen.get(k)! : i;
+      if (!seen.has(k)) seen.set(k, i);
+      const dup = firstIdx !== i;
+      const sameAmt = dup && rows[firstIdx].amount === r.amount;
+      return { ...r, dup, exact: dup && sameAmt };
+    });
+  }, [rows]);
+
+  const add = () => {
+    if (!vendor.trim() || !invoiceNo.trim()) { toast.error("Enter vendor and invoice no."); return; }
+    const k = keyOf(vendor, invoiceNo);
+    const amt = Math.max(0, parseFloat(amount) || 0);
+    const prior = rows.find(r => keyOf(r.vendor, r.invoiceNo) === k);
+    if (prior) {
+      toast.error(prior.amount === amt
+        ? `Exact duplicate of ${prior.vendor} ${prior.invoiceNo} (${fc(prior.amount)}) — added but flagged`
+        : `Same invoice no. already logged for ${prior.vendor} — added but flagged`);
+    }
+    setRows(prev => [...prev, { id: crypto.randomUUID(), vendor: vendor.trim(), invoiceNo: invoiceNo.trim(), amount: amt, date }]);
+    setVendor(""); setInvoiceNo(""); setAmount("");
+    if (!prior) toast.success("Invoice logged — no duplicate");
+  };
+
+  const dupCount = flagged.filter(r => r.dup).length;
+  const exposure = flagged.filter(r => r.dup).reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Copy size={14} className="text-[var(--color-primary)]" /> Duplicate Invoice Guard</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log every bill before payment. The guard flags any repeat of the same vendor + invoice number, and highlights exact amount matches — stopping double payments before the cash leaves.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no. *" className={INP} />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Invoice date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log & check</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Invoices logged", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "Duplicates flagged", value: String(dupCount), color: dupCount > 0 ? "text-red-400" : "text-green-400" },
+            { label: "Double-pay exposure", value: fc(exposure), color: exposure > 0 ? "text-red-400" : "text-green-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Invoice no.", "Amount", "Date", "Check", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {flagged.map(r => (
+                <tr key={r.id} className={`hover:bg-white/2 ${r.dup ? "bg-red-900/10" : ""}`}>
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
+                  <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.invoiceNo}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.date}</td>
+                  <td className="px-3 py-2.5">
+                    {r.exact
+                      ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-red-900/30 text-red-400 border-red-800/40">Exact duplicate</span>
+                      : r.dup
+                        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Same invoice no.</span>
+                        : <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Unique</span>}
+                  </td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Duplicate payments are one of the most common AP leaks — often a re-sent PDF or a credit note re-keyed as a fresh bill. Match on vendor + invoice number first, then amount; investigate flagged rows before releasing payment.</p>
+    </div>
+  );
+}
+
+// ── #52 Carrying-Cost Calculator (true holding cost per SKU) ──────────────────────
+type CarryRow = {
+  id: string;
+  item: string;
+  avgInventoryValue: number;  // ₹ value of stock held on average
+  capitalPct: number;         // cost of capital % p.a.
+  storagePct: number;         // warehousing/handling % p.a.
+  obsolescencePct: number;    // shrinkage/obsolescence/insurance % p.a.
+};
+function CarryingCostCalculator() {
+  const [rows, setRows] = useFeatureState<CarryRow[]>("sup-carrying-cost", []);
+  const [item, setItem] = useState("");
+  const [avgInventoryValue, setAvgInventoryValue] = useState("");
+  const [capitalPct, setCapitalPct] = useState("14");
+  const [storagePct, setStoragePct] = useState("4");
+  const [obsolescencePct, setObsolescencePct] = useState("3");
+  const fc = formatCurrency;
+
+  const totalPctOf = (r: CarryRow) => r.capitalPct + r.storagePct + r.obsolescencePct;
+  const annualCostOf = (r: CarryRow) => Math.round(r.avgInventoryValue * (totalPctOf(r) / 100));
+
+  const add = () => {
+    if (!item.trim()) { toast.error("Enter item name"); return; }
+    const num = (v: string) => Math.max(0, parseFloat(v) || 0);
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      item: item.trim(),
+      avgInventoryValue: num(avgInventoryValue),
+      capitalPct: num(capitalPct),
+      storagePct: num(storagePct),
+      obsolescencePct: num(obsolescencePct),
+    }]);
+    setItem(""); setAvgInventoryValue("");
+    toast.success("Item added");
+  };
+
+  const totalAnnual = rows.reduce((s, r) => s + annualCostOf(r), 0);
+  const totalValue = rows.reduce((s, r) => s + r.avgInventoryValue, 0);
+  const blendedPct = totalValue > 0 ? (totalAnnual / totalValue) * 100 : 0;
+  const ranked = useMemo(() => [...rows].sort((a, b) => annualCostOf(b) - annualCostOf(a)), [rows]);
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Warehouse size={14} className="text-[var(--color-primary)]" /> Carrying-Cost Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Quantify the true cost of holding each SKU: capital tied up + storage/handling + obsolescence & insurance. The hidden 20–30% p.a. drag that makes slow stock far costlier than it looks.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
+          <input type="number" value={avgInventoryValue} onChange={e => setAvgInventoryValue(e.target.value)} placeholder="Avg stock value (₹)" className={INP} />
+          <input type="number" value={capitalPct} onChange={e => setCapitalPct(e.target.value)} placeholder="Cost of capital % p.a." className={INP} />
+          <input type="number" value={storagePct} onChange={e => setStoragePct(e.target.value)} placeholder="Storage % p.a." className={INP} />
+          <input type="number" value={obsolescencePct} onChange={e => setObsolescencePct(e.target.value)} placeholder="Obsolescence % p.a." className={INP} />
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add item</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Stock value", value: fc(totalValue), color: "text-[var(--color-muted)]" },
+            { label: "Annual carrying cost", value: fc(totalAnnual), color: "text-red-400" },
+            { label: "Blended rate", value: `${blendedPct.toFixed(1)}%`, color: blendedPct >= 25 ? "text-red-400" : "text-yellow-400" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Item", "Stock value", "Capital", "Storage", "Obsolescence", "Total %", "Annual cost", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ranked.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-3 py-2.5 text-xs font-medium">{r.item}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.avgInventoryValue)}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.capitalPct}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.storagePct}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.obsolescencePct}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{totalPctOf(r).toFixed(1)}%</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums font-bold text-red-400">{fc(annualCostOf(r))}</td>
+                  <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost typically runs 20–30% of stock value per year. A SKU that turns slowly bleeds this rate continuously — weigh it against EOQ savings, bulk discounts, and the margin the stock actually earns before over-ordering.</p>
+    </div>
+  );
+}
+
+// ── #21 TDS-on-Bills Calculator (section / rate / threshold) ─────────────────────
+type TdsSection = "194C" | "194C-co" | "194J" | "194J-tech" | "194Q" | "194I-rent" | "194H";
+type TdsBillRow = {
+  id: string;
+  vendor: string;
+  section: TdsSection;
+  amount: number;        // taxable bill value (ex-GST)
+  ytdPaid: number;       // amount already paid to this vendor this FY (for threshold)
+  hasPan: boolean;
+};
+const TDS_RULES: Record<TdsSection, { label: string; rate: number; threshold: number }> = {
+  "194C":      { label: "194C — Contractor (indiv/HUF)", rate: 1,  threshold: 30000 },
+  "194C-co":   { label: "194C — Contractor (others)",    rate: 2,  threshold: 30000 },
+  "194J":      { label: "194J — Professional fees",      rate: 10, threshold: 30000 },
+  "194J-tech": { label: "194J — Technical services",     rate: 2,  threshold: 30000 },
+  "194Q":      { label: "194Q — Purchase of goods",      rate: 0.1, threshold: 5000000 },
+  "194I-rent": { label: "194I — Rent (plant/building)",  rate: 10, threshold: 240000 },
+  "194H":      { label: "194H — Commission/brokerage",   rate: 2,  threshold: 20000 },
+};
+function TdsOnBillsCalculator() {
+  const [rows, setRows] = useFeatureState<TdsBillRow[]>("sup-tds-bills", []);
+  const [vendor, setVendor] = useState("");
+  const [section, setSection] = useState<TdsSection>("194C-co");
+  const [amount, setAmount] = useState("");
+  const [ytdPaid, setYtdPaid] = useState("");
+  const [hasPan, setHasPan] = useState(true);
+  const fc = formatCurrency;
+
+  // 194Q applies on value above the ₹50L threshold; other sections on the whole bill once crossed.
+  // No-PAN → flat 20% (Sec 206AA) unless the section rate is higher.
+  const calc = (r: TdsBillRow) => {
+    const rule = TDS_RULES[r.section];
+    const crossed = (r.ytdPaid + r.amount) >= rule.threshold;
+    if (!crossed) return { applies: false, rate: 0, base: 0, tds: 0 };
+    const base = r.section === "194Q" ? Math.max(0, (r.ytdPaid + r.amount) - rule.threshold) : r.amount;
+    const rate = r.hasPan ? rule.rate : Math.max(20, rule.rate);
+    return { applies: true, rate, base, tds: Math.round(base * (rate / 100)) };
+  };
+
+  const add = () => {
+    if (!vendor.trim()) { toast.error("Enter vendor name"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(),
+      vendor: vendor.trim(),
+      section,
+      amount: Math.max(0, parseFloat(amount) || 0),
+      ytdPaid: Math.max(0, parseFloat(ytdPaid) || 0),
+      hasPan,
+    }]);
+    setVendor(""); setAmount(""); setYtdPaid("");
+    toast.success("Bill added");
+  };
+
+  const totalTds = rows.reduce((s, r) => s + calc(r).tds, 0);
+  const dueCount = rows.filter(r => calc(r).applies).length;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> TDS-on-Bills Calculator</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Apply the right TDS section, rate, and threshold to each vendor bill. Tracks FY-to-date payments to know when a threshold is crossed, and flags the 20% no-PAN rate.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
+          <select value={section} onChange={e => setSection(e.target.value as TdsSection)} className={INP}>
+            {(Object.keys(TDS_RULES) as TdsSection[]).map(k => <option key={k} value={k}>{TDS_RULES[k].label}</option>)}
+          </select>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Bill value ex-GST (₹)" className={INP} />
+          <input type="number" value={ytdPaid} onChange={e => setYtdPaid(e.target.value)} placeholder="Paid YTD this FY (₹)" className={INP} />
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] px-1">
+            <input type="checkbox" checked={hasPan} onChange={e => setHasPan(e.target.checked)} className="accent-[var(--color-primary)]" /> Vendor PAN on file
+          </label>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add bill</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && <>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Bills", value: String(rows.length), color: "text-[var(--color-primary)]" },
+            { label: "TDS applicable", value: String(dueCount), color: "text-yellow-400" },
+            { label: "Total TDS to deduct", value: fc(totalTds), color: "text-[var(--color-primary)]" },
+          ].map(c => (
+            <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Section", "Bill value", "Rate", "TDS base", "TDS", "Net payable", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const c = calc(r);
+                return (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}{!r.hasPan && <span className="ml-1 text-[9px] text-red-400 font-semibold">no-PAN</span>}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{c.applies ? `${c.rate}%` : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{c.applies ? fc(c.base) : "below thr."}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${c.applies ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{c.applies ? fc(c.tds) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount - c.tds)}</td>
+                    <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates for resident vendors — deduct on the ex-GST value. 194Q applies only above the ₹50L per-vendor annual threshold (and not where the seller charges 206C(1H) TCS). No PAN triggers a flat 20% under Sec 206AA. Confirm current rates and your 194C single-bill vs ₹1L annual limits with your CA.</p>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   Split, Gauge, PiggyBank, CalendarClock,
   ClipboardCheck, Globe, CopyCheck, ArrowLeftRight, Award, FolderCheck, Activity,
   ScrollText, Timer, BellRing, PieChart,
+  Layers, HandCoins, RefreshCw, Calculator, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -25,7 +26,8 @@ type Tab =
   | "beneficiaries" | "transfer-planner" | "min-balance" | "savings-interest" | "payment-date"
   | "balance-confirmation" | "forex-tracker" | "duplicate-payment" | "netting"
   | "interest-cert" | "doc-checklist" | "runway"
-  | "deposit-slip" | "clearing-tracker" | "od-renewal" | "bank-spend";
+  | "deposit-slip" | "clearing-tracker" | "od-renewal" | "bank-spend"
+  | "fd-ladder" | "early-pay" | "wc-cycle" | "drawing-power" | "bank-scorecard";
 
 export default function BankingPage() {
   const { store } = useApp();
@@ -81,6 +83,11 @@ export default function BankingPage() {
             ["clearing-tracker", "Clearing Tracker", Timer],
             ["od-renewal", "OD Renewal", BellRing],
             ["bank-spend", "Spend by Bank", PieChart],
+            ["fd-ladder", "FD Ladder", Layers],
+            ["early-pay", "Early-Pay Discount", HandCoins],
+            ["wc-cycle", "Working-Capital Cycle", RefreshCw],
+            ["drawing-power", "Drawing Power", Calculator],
+            ["bank-scorecard", "Bank Scorecard", Star],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -192,6 +199,11 @@ export default function BankingPage() {
       {tab === "clearing-tracker" && <ClearingTracker />}
       {tab === "od-renewal" && <OdRenewalReminder />}
       {tab === "bank-spend" && <SpendByBank />}
+      {tab === "fd-ladder" && <FdLadderPlanner />}
+      {tab === "early-pay" && <EarlyPayDiscountEngine />}
+      {tab === "wc-cycle" && <WorkingCapitalCycle />}
+      {tab === "drawing-power" && <DrawingPowerCalculator />}
+      {tab === "bank-scorecard" && <BankRelationshipScorecard />}
     </div>
   );
 }
@@ -3001,6 +3013,455 @@ function SpendByBank() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── 32. FD ladder planner (split surplus across staggered maturities) ─────────────
+function FdLadderPlanner() {
+  const [corpus, setCorpus] = useState("1000000");
+  const [rungs, setRungs] = useState(4);
+  const [step, setStep] = useState(3); // months between maturities
+  const [rate, setRate] = useState("7");
+  const today = new Date();
+
+  const amount = parseFloat(corpus) || 0;
+  const annualRate = parseFloat(rate) || 0;
+  const perRung = rungs > 0 ? Math.round(amount / rungs) : 0;
+
+  const ladder = useMemo(() => {
+    const out: { id: number; tenorMonths: number; maturity: string; principal: number; interest: number; payout: number }[] = [];
+    for (let i = 1; i <= rungs; i++) {
+      const tenorMonths = i * step;
+      const m = new Date(today);
+      m.setMonth(m.getMonth() + tenorMonths);
+      // simple-interest approximation for a short-tenor FD
+      const interest = Math.round(perRung * annualRate / 100 * (tenorMonths / 12));
+      out.push({ id: i, tenorMonths, maturity: format(m, "MMM yyyy"), principal: perRung, interest, payout: perRung + interest });
+    }
+    return out;
+  }, [rungs, step, perRung, annualRate]);
+
+  const totalInterest = ladder.reduce((s, r) => s + r.interest, 0);
+  const firstMaturity = ladder[0]?.maturity ?? "—";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> FD Ladder Planner</h3>
+        <p className="text-xs text-[var(--color-muted)]">Instead of locking one lump-sum FD, split surplus into equal rungs that mature in staggered intervals. You keep regular access to liquidity while still earning term-deposit rates — and you re-price as rates move.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Surplus to ladder (₹)</label>
+            <input type="number" value={corpus} onChange={e => setCorpus(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Number of rungs</label>
+            <input type="number" min={2} max={12} value={rungs} onChange={e => setRungs(Math.min(12, Math.max(2, Number(e.target.value) || 2)))} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Months between maturities</label>
+            <input type="number" min={1} max={24} value={step} onChange={e => setStep(Math.min(24, Math.max(1, Number(e.target.value) || 1)))} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">FD rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Per-rung amount", value: formatCurrency(perRung), color: "text-[var(--color-text)]" },
+          { label: "Rungs", value: `${rungs}`, color: "text-blue-400" },
+          { label: "First maturity", value: firstMaturity, color: "text-[var(--color-text)]" },
+          { label: "Total interest (held to term)", value: formatCurrency(totalInterest), color: "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Ladder schedule</p></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]"><tr>{["Rung", "Tenor", "Matures", "Principal", "Interest", "Payout"].map(h => <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {ladder.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-5 py-2.5 font-medium">#{r.id}</td>
+                  <td className="px-5 py-2.5 text-xs text-[var(--color-muted)]">{r.tenorMonths} mo</td>
+                  <td className="px-5 py-2.5 text-xs">{r.maturity}</td>
+                  <td className="px-5 py-2.5 tabular-nums">{formatCurrency(r.principal)}</td>
+                  <td className="px-5 py-2.5 tabular-nums text-green-400">{formatCurrency(r.interest)}</td>
+                  <td className="px-5 py-2.5 tabular-nums font-semibold">{formatCurrency(r.payout)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Interest is a simple-interest estimate for illustration; actual FD returns compound quarterly and are subject to TDS above ₹40,000 (₹50,000 for seniors) of interest per bank per year. As each rung matures, renew it at the longest tenor to keep the ladder rolling.</p>
+    </div>
+  );
+}
+
+// ── 33. Vendor early-pay discount engine (2/10-net-30 vs idle yield) ──────────────
+function EarlyPayDiscountEngine() {
+  const [invoice, setInvoice] = useState("100000");
+  const [discountPct, setDiscountPct] = useState("2");
+  const [earlyDays, setEarlyDays] = useState("10");
+  const [netDays, setNetDays] = useState("30");
+  const [idleYield, setIdleYield] = useState("6.5");
+
+  const inv = parseFloat(invoice) || 0;
+  const disc = parseFloat(discountPct) || 0;
+  const early = parseFloat(earlyDays) || 0;
+  const net = parseFloat(netDays) || 0;
+  const yld = parseFloat(idleYield) || 0;
+
+  const daysSaved = Math.max(0, net - early);
+  const discountValue = Math.round(inv * disc / 100);
+  // Effective annualized return of taking the discount = discount / (1 - discount) * 365 / daysSaved
+  const effAnnual = daysSaved > 0 && disc < 100 ? (disc / (100 - disc)) * (365 / daysSaved) * 100 : 0;
+  const idleEarnings = Math.round((inv - discountValue) * yld / 100 * (daysSaved / 365));
+  const netBenefit = discountValue - idleEarnings;
+  const worthIt = effAnnual > yld;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Early-Pay Discount Engine</h3>
+        <p className="text-xs text-[var(--color-muted)]">A supplier offers e.g. <strong>2/10 net 30</strong> — 2% off if you pay within 10 days instead of 30. Compare the implied annualized return against what the same cash earns sitting idle, so you only take discounts that genuinely beat your cost of cash.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice (₹)</label>
+            <input type="number" value={invoice} onChange={e => setInvoice(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Discount (%)</label>
+            <input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pay within (days)</label>
+            <input type="number" value={earlyDays} onChange={e => setEarlyDays(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Net due (days)</label>
+            <input type="number" value={netDays} onChange={e => setNetDays(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Idle-cash yield (% p.a.)</label>
+            <input type="number" value={idleYield} onChange={e => setIdleYield(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Discount saved", value: formatCurrency(discountValue), color: "text-green-400" },
+          { label: "Days paid early", value: `${daysSaved}`, color: "text-blue-400" },
+          { label: "Implied annual return", value: `${effAnnual.toFixed(1)}%`, color: worthIt ? "text-green-400" : "text-red-400" },
+          { label: "Net benefit vs idle", value: formatCurrency(netBenefit), color: netBenefit > 0 ? "text-green-400" : "text-red-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {inv > 0 && daysSaved > 0 && (
+        worthIt ? (
+          <Callout tone="ok" icon={CheckCircle2}>
+            Take it. Paying {daysSaved} days early for a {disc}% discount is an implied <strong>{effAnnual.toFixed(1)}% p.a.</strong> return — well above the {yld}% your idle cash earns. Net gain ≈ {formatCurrency(netBenefit)} on this invoice.
+          </Callout>
+        ) : (
+          <Callout tone="warn" icon={AlertTriangle}>
+            Skip it (if cash is tight). The {effAnnual.toFixed(1)}% implied return is below your {yld}% idle yield, so you are better off holding the cash to the net due date — unless the supplier relationship or a stock-out risk justifies paying early.
+          </Callout>
+        )
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Implied return = discount / (1 − discount) × 365 / days-saved. The decision flips if your true cost of cash is higher (e.g. OD interest) — use your borrowing rate, not the savings rate, when you are running on overdraft.</p>
+    </div>
+  );
+}
+
+// ── 34. Working-capital cycle dashboard (DSO / DPO / DIO / CCC) ────────────────────
+function WorkingCapitalCycle() {
+  const [revenue, setRevenue] = useState("12000000");
+  const [cogs, setCogs] = useState("8000000");
+  const [receivables, setReceivables] = useState("2000000");
+  const [inventory, setInventory] = useState("1500000");
+  const [payables, setPayables] = useState("1200000");
+
+  const rev = parseFloat(revenue) || 0;
+  const cog = parseFloat(cogs) || 0;
+  const ar = parseFloat(receivables) || 0;
+  const inv = parseFloat(inventory) || 0;
+  const ap = parseFloat(payables) || 0;
+
+  const dso = rev > 0 ? (ar / rev) * 365 : 0;
+  const dio = cog > 0 ? (inv / cog) * 365 : 0;
+  const dpo = cog > 0 ? (ap / cog) * 365 : 0;
+  const ccc = dso + dio - dpo;
+  // cash freed per day shaved off the cycle, on COGS run-rate
+  const cashPerDay = cog > 0 ? cog / 365 : 0;
+
+  const metrics = [
+    { key: "DSO", label: "Days Sales Outstanding", value: dso, hint: "How long customers take to pay", good: "lower" },
+    { key: "DIO", label: "Days Inventory Outstanding", value: dio, hint: "How long stock sits before sale", good: "lower" },
+    { key: "DPO", label: "Days Payables Outstanding", value: dpo, hint: "How long you take to pay suppliers", good: "higher" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Working-Capital Cycle</h3>
+        <p className="text-xs text-[var(--color-muted)]">Your cash-conversion cycle (CCC = DSO + DIO − DPO) is the number of days your cash is tied up between paying suppliers and collecting from customers. Lower is better; a negative cycle means customers fund your operations.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual revenue (₹)</label>
+            <input type="number" value={revenue} onChange={e => setRevenue(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual COGS (₹)</label>
+            <input type="number" value={cogs} onChange={e => setCogs(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Receivables (₹)</label>
+            <input type="number" value={receivables} onChange={e => setReceivables(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Inventory (₹)</label>
+            <input type="number" value={inventory} onChange={e => setInventory(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payables (₹)</label>
+            <input type="number" value={payables} onChange={e => setPayables(e.target.value)} className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {metrics.map(m => (
+          <div key={m.key} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{m.key} — {m.label}</p>
+            <p className="text-xl font-bold tabular-nums text-[var(--color-text)]">{m.value.toFixed(0)} days</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">{m.hint}</p>
+          </div>
+        ))}
+        <div className={`${CARD} p-4`}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">CCC — Cash-Conversion Cycle</p>
+          <p className={`text-xl font-bold tabular-nums ${ccc <= 0 ? "text-green-400" : ccc > 60 ? "text-red-400" : "text-yellow-400"}`}>{ccc.toFixed(0)} days</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">{ccc <= 0 ? "Negative — suppliers fund you" : "Cash tied up in the cycle"}</p>
+        </div>
+      </div>
+
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-2">Cycle breakdown</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Cash is locked for <strong className="text-[var(--color-text)]">{ccc.toFixed(0)} days</strong>. Shaving even 5 days off the cycle frees roughly <strong className="text-green-400">{formatCurrency(Math.round(cashPerDay * 5))}</strong> of cash on your current COGS run-rate.</p>
+        <div className="space-y-2 text-xs">
+          <div className="flex justify-between"><span>+ DSO (collect from customers)</span><span className="tabular-nums">{dso.toFixed(0)} d</span></div>
+          <div className="flex justify-between"><span>+ DIO (hold inventory)</span><span className="tabular-nums">{dio.toFixed(0)} d</span></div>
+          <div className="flex justify-between text-green-400"><span>− DPO (delay supplier payment)</span><span className="tabular-nums">{dpo.toFixed(0)} d</span></div>
+          <div className="flex justify-between font-semibold border-t border-[var(--color-border)] pt-2 mt-1"><span>= Cash-conversion cycle</span><span className="tabular-nums">{ccc.toFixed(0)} d</span></div>
+        </div>
+      </div>
+
+      {ccc > 60 && (
+        <Callout tone="warn" icon={AlertTriangle}>
+          A {ccc.toFixed(0)}-day cycle is long — cash is trapped in receivables and stock. Tighten credit terms (lower DSO), trim slow inventory (lower DIO), or negotiate longer supplier terms (higher DPO) to release working capital.
+        </Callout>
+      )}
+    </div>
+  );
+}
+
+// ── 35. Drawing-power calculator (CC limit from stock & debtors) ──────────────────
+function DrawingPowerCalculator() {
+  const [stock, setStock] = useState("3000000");
+  const [stockMargin, setStockMargin] = useState(25);
+  const [debtors, setDebtors] = useState("2500000");
+  const [debtorMargin, setDebtorMargin] = useState(40);
+  const [creditors, setCreditors] = useState("1000000");
+  const [sanctioned, setSanctioned] = useState("4000000");
+
+  const st = parseFloat(stock) || 0;
+  const db = parseFloat(debtors) || 0;
+  const cr = parseFloat(creditors) || 0;
+  const limit = parseFloat(sanctioned) || 0;
+
+  // Paid stock = stock net of creditors; apply margins (haircuts)
+  const paidStock = Math.max(0, st - cr);
+  const stockDP = Math.round(paidStock * (100 - stockMargin) / 100);
+  const debtorDP = Math.round(db * (100 - debtorMargin) / 100);
+  const drawingPower = stockDP + debtorDP;
+  const effectiveDP = Math.min(drawingPower, limit);
+  const headroom = effectiveDP;
+  const capped = drawingPower > limit;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Drawing-Power Calculator</h3>
+        <p className="text-xs text-[var(--color-muted)]">Banks cap your cash-credit drawing power (DP) at a haircut of paid stock plus eligible book debts — not the full sanctioned limit. Compute DP before you file the monthly stock statement so you never assume more credit than the bank will allow.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Closing stock (₹)</label>
+            <input type="number" value={stock} onChange={e => setStock(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Less: sundry creditors (₹)</label>
+            <input type="number" value={creditors} onChange={e => setCreditors(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Book debts &lt; 90 days (₹)</label>
+            <input type="number" value={debtors} onChange={e => setDebtors(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sanctioned CC limit (₹)</label>
+            <input type="number" value={sanctioned} onChange={e => setSanctioned(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Stock margin <strong className="text-[var(--color-text)]">{stockMargin}%</strong></label>
+            <input type="range" min={10} max={50} step={5} value={stockMargin} onChange={e => setStockMargin(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Debtor margin <strong className="text-[var(--color-text)]">{debtorMargin}%</strong></label>
+            <input type="range" min={20} max={60} step={5} value={debtorMargin} onChange={e => setDebtorMargin(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "DP from paid stock", value: formatCurrency(stockDP), color: "text-[var(--color-text)]" },
+          { label: "DP from book debts", value: formatCurrency(debtorDP), color: "text-[var(--color-text)]" },
+          { label: "Total drawing power", value: formatCurrency(drawingPower), color: "text-blue-400" },
+          { label: "Effective limit (lower of DP / sanction)", value: formatCurrency(effectiveDP), color: "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4 space-y-2 text-xs`}>
+        <p className="text-sm font-semibold mb-1">How it is built up</p>
+        <div className="flex justify-between"><span>Closing stock</span><span className="tabular-nums">{formatCurrency(st)}</span></div>
+        <div className="flex justify-between text-red-400"><span>Less: sundry creditors (unpaid stock)</span><span className="tabular-nums">{formatCurrency(cr)}</span></div>
+        <div className="flex justify-between"><span>Paid stock × (100 − {stockMargin}%)</span><span className="tabular-nums">{formatCurrency(stockDP)}</span></div>
+        <div className="flex justify-between"><span>Book debts × (100 − {debtorMargin}%)</span><span className="tabular-nums">{formatCurrency(debtorDP)}</span></div>
+        <div className="flex justify-between font-semibold border-t border-[var(--color-border)] pt-2"><span>Drawing power</span><span className="tabular-nums">{formatCurrency(drawingPower)}</span></div>
+      </div>
+
+      {capped ? (
+        <Callout tone="ok" icon={CheckCircle2}>
+          Your computed drawing power ({formatCurrency(drawingPower)}) exceeds the sanctioned limit — you can draw the full {formatCurrency(limit)}. Available headroom: {formatCurrency(headroom)} (before deducting current utilization).
+        </Callout>
+      ) : (
+        <Callout tone="warn" icon={AlertTriangle}>
+          Your drawing power ({formatCurrency(drawingPower)}) is below the {formatCurrency(limit)} sanction, so the bank will only let you draw up to DP. Build up paid stock or eligible debtors — or reduce creditors — to unlock the rest of the limit.
+        </Callout>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Margins (haircuts) and the &lt;90-day debtor rule vary by sanction letter; some banks exclude inter-group debtors and slow-moving stock entirely. Use your facility&apos;s exact terms when filing the statement.</p>
+    </div>
+  );
+}
+
+// ── 36. Bank-relationship scorecard (rate banks on rates, fees, service, usage) ───
+type BankScore = { id: string; bank: string; rate: number; fee: number; service: number; utilization: number };
+function BankRelationshipScorecard() {
+  const [banks, setBanks] = useFeatureState<BankScore[]>("bank-scorecard", []);
+  const [name, setName] = useState("");
+  const [rate, setRate] = useState(3);
+  const [fee, setFee] = useState(3);
+  const [service, setService] = useState(3);
+  const [utilization, setUtilization] = useState(3);
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Enter a bank name"); return; }
+    setBanks([...banks, { id: crypto.randomUUID(), bank: name.trim(), rate, fee, service, utilization }]);
+    setName(""); setRate(3); setFee(3); setService(3); setUtilization(3);
+    toast.success("Bank scored");
+  };
+
+  const scoreOf = (b: BankScore) => (b.rate + b.fee + b.service + b.utilization) / 4;
+  const rows = banks.map(b => ({ ...b, score: scoreOf(b) })).sort((a, b) => b.score - a.score);
+  const best = rows[0];
+  const weakest = rows.length > 1 ? rows[rows.length - 1] : undefined;
+
+  const Slider = ({ label, value, set }: { label: string; value: number; set: (n: number) => void }) => (
+    <div>
+      <label className="text-xs text-[var(--color-muted)] block mb-1">{label} <strong className="text-[var(--color-text)]">{value}/5</strong></label>
+      <input type="range" min={1} max={5} step={1} value={value} onChange={e => set(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Star size={14} className="text-[var(--color-primary)]" /> Bank-Relationship Scorecard</h3>
+        <p className="text-xs text-[var(--color-muted)]">Score each banking relationship 1–5 on the rates you get, the fees you pay, service quality, and how much of your limit you actually use. A neutral scorecard tells you where to consolidate business and which relationship to renegotiate.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="HDFC Bank" className={INP} />
+          </div>
+          <Slider label="Rates" value={rate} set={setRate} />
+          <Slider label="Low fees" value={fee} set={setFee} />
+          <Slider label="Service" value={service} set={setService} />
+          <Slider label="Limit usage fit" value={utilization} set={setUtilization} />
+        </div>
+        <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit"><Plus size={13} /> Add / score bank</button>
+      </div>
+
+      {banks.length > 0 ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Banks scored", value: `${banks.length}`, color: "text-blue-400" },
+              { label: "Top relationship", value: best ? `${best.bank} (${best.score.toFixed(1)})` : "—", color: "text-green-400" },
+              { label: "Weakest relationship", value: weakest ? `${weakest.bank} (${weakest.score.toFixed(1)})` : "—", color: weakest ? "text-yellow-400" : "text-[var(--color-muted)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Bank", "Rates", "Fees", "Service", "Usage fit", "Overall", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.bank}{best?.id === r.id && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">TOP</span>}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.rate}/5</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.fee}/5</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.service}/5</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.utilization}/5</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.score >= 4 ? "text-green-400" : r.score >= 2.5 ? "text-yellow-400" : "text-red-400"}`}>{r.score.toFixed(1)}/5</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setBanks(banks.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {weakest && weakest.score < 2.5 && (
+            <Callout tone="warn" icon={AlertTriangle}>
+              {weakest.bank} scores just {weakest.score.toFixed(1)}/5. Use the rate and fee data from your top bank as leverage to renegotiate, or shift transaction volume away to a better-scoring relationship.
+            </Callout>
+          )}
+        </>
+      ) : <EmptyHint text="Score your banks on rates, fees, service and limit usage to see where to consolidate and which relationship to renegotiate." />}
     </div>
   );
 }

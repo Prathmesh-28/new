@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -117,7 +117,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode">("directory");
+  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode" | "recurring-bills" | "landed-cost" | "dup-invoice" | "approval-sla" | "wc-simulator">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -236,6 +236,11 @@ export default function VendorsPage() {
             ["rebate", "Rebate Tracker", BadgePercent],
             ["watchlist", "Watchlist / Blacklist", Ban],
             ["pay-mode", "Payment-Mode Mix", CreditCard],
+            ["recurring-bills", "Recurring Bills", Repeat],
+            ["landed-cost", "Landed Cost", Truck],
+            ["dup-invoice", "Duplicate Invoice", CopyCheck],
+            ["approval-sla", "Approval SLA", Hourglass],
+            ["wc-simulator", "Working-Capital Sim", Scale],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -546,6 +551,11 @@ export default function VendorsPage() {
       {view === "rebate"        && <RebateTracker />}
       {view === "watchlist"     && <VendorWatchlist />}
       {view === "pay-mode"      && <PaymentModeMix />}
+      {view === "recurring-bills" && <RecurringBillTracker />}
+      {view === "landed-cost"   && <LandedCostCalculator />}
+      {view === "dup-invoice"   && <DuplicateInvoiceDetector />}
+      {view === "approval-sla"  && <ApprovalSlaTracker />}
+      {view === "wc-simulator"  && <WorkingCapitalSimulator />}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
     </div>
@@ -3254,6 +3264,574 @@ function PaymentModeMix() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #53 / #54 Recurring Bill & Subscription Tracker — detect vendors charged on
+   a regular cadence (rent, utilities, SaaS), project the monthly & annual
+   run-rate, and flag tools that look dormant (no charge in 60+ days).
+   ───────────────────────────────────────────────────────────────────────── */
+function RecurringBillTracker() {
+  const { store } = useApp();
+
+  const recurs = useMemo(() => {
+    const map: Record<string, { dates: string[]; amounts: number[]; category: string }> = {};
+    store.transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+      const cur = map[t.counterparty] ?? { dates: [], amounts: [], category: t.category };
+      cur.dates.push(t.date);
+      cur.amounts.push(Math.abs(t.amount));
+      map[t.counterparty] = cur;
+    });
+    const today = new Date();
+    return Object.entries(map)
+      .map(([vendor, { dates, amounts, category }]) => {
+        const sorted = [...dates].sort();
+        const n = sorted.length;
+        if (n < 2) return null;
+        // average gap between consecutive charges (days)
+        let gapSum = 0;
+        for (let i = 1; i < n; i++) {
+          gapSum += (new Date(sorted[i]).getTime() - new Date(sorted[i - 1]).getTime()) / 86400000;
+        }
+        const avgGap = gapSum / (n - 1);
+        // treat 25–95 day cadence (monthly-ish/quarterly) as recurring
+        if (avgGap < 25 || avgGap > 95) return null;
+        const avgAmt = amounts.reduce((s, a) => s + a, 0) / n;
+        const monthly = avgAmt * (30 / avgGap);
+        const lastDate = sorted[n - 1];
+        const daysSinceLast = Math.floor((today.getTime() - new Date(lastDate).getTime()) / 86400000);
+        const dormant = daysSinceLast > Math.max(60, avgGap * 2);
+        return { vendor, category, charges: n, avgAmt, avgGap, monthly, lastDate, daysSinceLast, dormant };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .sort((a, b) => b.monthly - a.monthly);
+  }, [store.transactions]);
+
+  const monthlyRunRate = recurs.filter(r => !r.dormant).reduce((s, r) => s + r.monthly, 0);
+  const annualRunRate = monthlyRunRate * 12;
+  const dormantN = recurs.filter(r => r.dormant).length;
+  const dormantAnnual = recurs.filter(r => r.dormant).reduce((s, r) => s + r.monthly * 12, 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Detects vendors you pay on a regular cadence — rent, utilities, SaaS — from your transaction history, and projects the committed run-rate. Subscriptions with no charge in months are flagged as possibly dormant so you can cancel the dead ones.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Monthly Run-Rate", value: formatCurrency(Math.round(monthlyRunRate)), color: "text-orange-400" },
+          { label: "Annual Run-Rate", value: formatCurrency(Math.round(annualRunRate)), color: "text-red-400" },
+          { label: "Possibly Dormant", value: `${dormantN} · ${formatCurrency(Math.round(dormantAnnual))}/yr`, color: dormantN > 0 ? "text-yellow-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {recurs.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Repeat size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No recurring bills detected yet. Import a few months of transactions so a monthly cadence can be spotted.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Cadence", "Avg Charge", "Est. Monthly", "Last Charged", "Status"].map((h, i) => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i >= 2 && i <= 3 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {recurs.map(r => (
+                <tr key={r.vendor} className={`hover:bg-white/2 ${r.dormant ? "opacity-70" : ""}`}>
+                  <td className="px-4 py-3 font-medium">{r.vendor}<span className="block text-[10px] text-[var(--color-muted)]">{r.charges} charges</span></td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">~ every {Math.round(r.avgGap)}d</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(r.avgAmt))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.monthly))}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.lastDate), "dd MMM")} <span className="text-[10px]">({r.daysSinceLast}d ago)</span></td>
+                  <td className="px-4 py-3">
+                    {r.dormant ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-950/30 text-yellow-400 border-yellow-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Dormant?</span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-950/30 text-green-400 border-green-800/30 w-fit flex items-center gap-1"><Repeat size={10} /> Active</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+            <p className="text-xs text-[var(--color-muted)]">{recurs.length} recurring vendors · review dormant ones to stop paying for tools you no longer use.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #65 Landed Cost Allocation — spread freight, customs duty, insurance and
+   other charges across received line items (by value or by quantity) to get
+   the true per-unit landed cost for inventory valuation.
+   ───────────────────────────────────────────────────────────────────────── */
+interface LandedLine { id: string; item: string; qty: number; unitCost: number; }
+type AllocBasis = "value" | "qty";
+
+function LandedCostCalculator() {
+  const [lines, setLines] = useState<LandedLine[]>([{ id: crypto.randomUUID(), item: "", qty: 1, unitCost: 0 }]);
+  const [freight, setFreight] = useState("");
+  const [duty, setDuty] = useState("");
+  const [insurance, setInsurance] = useState("");
+  const [other, setOther] = useState("");
+  const [basis, setBasis] = useState<AllocBasis>("value");
+
+  const numInp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-2 text-sm outline-none focus:border-[var(--color-primary)] w-full";
+
+  const valid = lines.filter(l => l.item.trim() && l.qty > 0 && l.unitCost >= 0);
+  const goodsValue = valid.reduce((s, l) => s + l.qty * l.unitCost, 0);
+  const totalQty = valid.reduce((s, l) => s + l.qty, 0);
+  const addOns = (parseFloat(freight) || 0) + (parseFloat(duty) || 0) + (parseFloat(insurance) || 0) + (parseFloat(other) || 0);
+  const grandTotal = goodsValue + addOns;
+
+  const allocated = valid.map(l => {
+    const lineValue = l.qty * l.unitCost;
+    const share = basis === "value"
+      ? (goodsValue > 0 ? lineValue / goodsValue : 0)
+      : (totalQty > 0 ? l.qty / totalQty : 0);
+    const allocatedAddOn = addOns * share;
+    const landedTotal = lineValue + allocatedAddOn;
+    const landedUnit = l.qty > 0 ? landedTotal / l.qty : 0;
+    const uplift = l.unitCost > 0 ? (landedUnit - l.unitCost) / l.unitCost * 100 : 0;
+    return { ...l, lineValue, allocatedAddOn, landedTotal, landedUnit, uplift };
+  });
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Freight, customs duty and insurance are real costs of your goods, but they arrive on separate bills. Allocate those charges across the received items — by value or by quantity — to book inventory at its true landed cost instead of the bare invoice price.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold">Received Items</h3>
+        <div className="space-y-2">
+          {lines.map((l, i) => (
+            <div key={l.id} className="grid grid-cols-[1fr_70px_100px_auto] gap-2 items-center">
+              <input value={l.item} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, item: e.target.value } : x))} placeholder="Item description" className={numInp} />
+              <input type="number" min="0" value={l.qty} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, qty: parseFloat(e.target.value) || 0 } : x))} placeholder="Qty" className={numInp} />
+              <input type="number" min="0" value={l.unitCost} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, unitCost: parseFloat(e.target.value) || 0 } : x))} placeholder="Unit cost" className={numInp} />
+              <button onClick={() => setLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <button onClick={() => setLines(prev => [...prev, { id: crypto.randomUUID(), item: "", qty: 1, unitCost: 0 }])} className="text-xs text-[var(--color-primary)] hover:underline">+ Add item</button>
+        </div>
+
+        <h3 className="text-sm font-semibold pt-2">Charges to Allocate</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Freight</label><input type="number" min="0" value={freight} onChange={e => setFreight(e.target.value)} placeholder="0" className={numInp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Customs duty</label><input type="number" min="0" value={duty} onChange={e => setDuty(e.target.value)} placeholder="0" className={numInp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Insurance</label><input type="number" min="0" value={insurance} onChange={e => setInsurance(e.target.value)} placeholder="0" className={numInp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Other</label><input type="number" min="0" value={other} onChange={e => setOther(e.target.value)} placeholder="0" className={numInp} /></div>
+        </div>
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs text-[var(--color-muted)]">Allocate by:</span>
+          {(["value", "qty"] as AllocBasis[]).map(b => (
+            <button key={b} onClick={() => setBasis(b)} className={`px-3 py-1 text-xs rounded-lg border font-medium transition-colors ${basis === b ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{b === "value" ? "Value" : "Quantity"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Goods Value", value: formatCurrency(Math.round(goodsValue)), color: "text-[var(--color-primary)]" },
+          { label: "Charges Allocated", value: formatCurrency(Math.round(addOns)), color: "text-orange-400" },
+          { label: "Total Landed Cost", value: formatCurrency(Math.round(grandTotal)), color: "text-red-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {allocated.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Truck size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add at least one item with a quantity and unit cost to compute landed cost.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Item", "Goods Value", "+ Allocated", "Landed Total", "Landed Unit", "Uplift"].map((h, i) => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {allocated.map(l => (
+                <tr key={l.id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-medium">{l.item}<span className="block text-[10px] text-[var(--color-muted)]">{l.qty} × {formatCurrency(Math.round(l.unitCost))}</span></td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(l.lineValue))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-orange-400">{formatCurrency(Math.round(l.allocatedAddOn))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(l.landedTotal))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(l.landedUnit))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-xs text-[var(--color-muted)]">+{l.uplift.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #87 Duplicate Invoice Detector — log bills as you receive them; the moment
+   the same vendor + invoice number, or the same vendor + amount + date,
+   repeats, it is flagged so you never pay it twice.
+   ───────────────────────────────────────────────────────────────────────── */
+interface BillEntry { id: string; vendor: string; invoiceNo: string; amount: number; date: string; }
+
+function DuplicateInvoiceDetector() {
+  const { store } = useApp();
+  const [bills, setBills] = useFeatureState<BillEntry[]>("ven-bill-register", []);
+  const [vendor, setVendor] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const knownVendors = useMemo(() =>
+    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
+  [store.transactions]);
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    if (!vendor.trim() || amt <= 0) { toast.error("Enter vendor and amount"); return; }
+    const e: BillEntry = { id: crypto.randomUUID(), vendor: vendor.trim(), invoiceNo: invoiceNo.trim(), amount: amt, date };
+    // warn on entry if it collides with something already in the register
+    const collides = bills.some(b =>
+      b.vendor.toLowerCase() === e.vendor.toLowerCase() &&
+      ((e.invoiceNo && b.invoiceNo.toLowerCase() === e.invoiceNo.toLowerCase()) ||
+       (Math.abs(b.amount - e.amount) < 0.01 && b.date === e.date)));
+    setBills(prev => [e, ...prev]);
+    setVendor(""); setInvoiceNo(""); setAmount("");
+    if (collides) toast.error(`Possible duplicate for ${e.vendor} — flagged in the register`);
+    else toast.success(`Bill logged for ${e.vendor}`);
+  };
+  const remove = (id: string) => setBills(prev => prev.filter(b => b.id !== id));
+
+  const flagged = useMemo(() => {
+    const dupIds = new Set<string>();
+    for (let i = 0; i < bills.length; i++) {
+      for (let j = i + 1; j < bills.length; j++) {
+        const a = bills[i], b = bills[j];
+        if (a.vendor.toLowerCase() !== b.vendor.toLowerCase()) continue;
+        const sameInv = a.invoiceNo && b.invoiceNo && a.invoiceNo.toLowerCase() === b.invoiceNo.toLowerCase();
+        const sameAmtDate = Math.abs(a.amount - b.amount) < 0.01 && a.date === b.date;
+        if (sameInv || sameAmtDate) { dupIds.add(a.id); dupIds.add(b.id); }
+      }
+    }
+    return dupIds;
+  }, [bills]);
+
+  const dupExposure = bills.filter(b => flagged.has(b.id)).reduce((s, b) => s + b.amount, 0) / 2;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">The single most common AP leak is paying the same invoice twice — once from email, once from a chase. Log each bill in this register and any repeat of a vendor + invoice number (or vendor + amount + date) is flagged before it gets paid.</p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Bills Logged", value: bills.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Suspected Duplicates", value: flagged.size.toString(), color: flagged.size > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Double-Pay Exposure", value: formatCurrency(Math.round(dupExposure)), color: dupExposure > 0 ? "text-orange-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold">Log a Bill</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div>
+            <input list="dupinv-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+            <datalist id="dupinv-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
+          </div>
+          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice #" className={inpCls} />
+          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount *" className={inpCls} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Bill</button>
+      </div>
+
+      {bills.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <CopyCheck size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No bills logged yet. Add invoices here as they arrive to catch duplicates before payment.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Invoice #", "Date", "Amount", "Status", ""].map((h, i) => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {bills.map(b => {
+                const dup = flagged.has(b.id);
+                return (
+                  <tr key={b.id} className={`hover:bg-white/2 ${dup ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-3 font-medium">{b.vendor}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.invoiceNo || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(b.date), "dd MMM yyyy")}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(b.amount)}</td>
+                    <td className="px-4 py-3">
+                      {dup ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Duplicate</span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-950/30 text-green-400 border-green-800/30 w-fit flex items-center gap-1"><CheckCircle2 size={10} /> Unique</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right"><button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #74 Approval SLA Tracker — log invoice/PO approvals, measure the cycle time
+   from request to decision per approver, and surface who is the bottleneck.
+   ───────────────────────────────────────────────────────────────────────── */
+interface ApprovalEntry { id: string; item: string; approver: string; requested: string; decided: string; outcome: "approved" | "rejected"; }
+
+function ApprovalSlaTracker() {
+  const [entries, setEntries] = useFeatureState<ApprovalEntry[]>("ven-approval-sla", []);
+  const [item, setItem] = useState("");
+  const [approver, setApprover] = useState("");
+  const [requested, setRequested] = useState(() => new Date().toISOString().split("T")[0]);
+  const [decided, setDecided] = useState(() => new Date().toISOString().split("T")[0]);
+  const [outcome, setOutcome] = useState<"approved" | "rejected">("approved");
+  const [slaDays, setSlaDays] = useState("2");
+
+  const sla = parseFloat(slaDays) || 2;
+
+  const cycleDays = (e: ApprovalEntry) =>
+    Math.max(0, Math.round((new Date(e.decided).getTime() - new Date(e.requested).getTime()) / 86400000));
+
+  const add = () => {
+    if (!item.trim() || !approver.trim()) { toast.error("Enter item and approver"); return; }
+    if (new Date(decided) < new Date(requested)) { toast.error("Decision date can't be before the request"); return; }
+    const e: ApprovalEntry = { id: crypto.randomUUID(), item: item.trim(), approver: approver.trim(), requested, decided, outcome };
+    setEntries(prev => [e, ...prev]);
+    setItem("");
+    toast.success(`Approval logged for ${e.item}`);
+  };
+  const remove = (id: string) => setEntries(prev => prev.filter(e => e.id !== id));
+
+  const avgCycle = entries.length > 0 ? entries.reduce((s, e) => s + cycleDays(e), 0) / entries.length : 0;
+  const breaches = entries.filter(e => cycleDays(e) > sla).length;
+
+  const byApprover = useMemo(() => {
+    const m: Record<string, { count: number; totalDays: number; breaches: number }> = {};
+    entries.forEach(e => {
+      const cur = m[e.approver] ?? { count: 0, totalDays: 0, breaches: 0 };
+      const d = cycleDays(e);
+      m[e.approver] = { count: cur.count + 1, totalDays: cur.totalDays + d, breaches: cur.breaches + (d > sla ? 1 : 0) };
+    });
+    return Object.entries(m)
+      .map(([approver, v]) => ({ approver, count: v.count, avg: v.totalDays / v.count, breaches: v.breaches }))
+      .sort((a, b) => b.avg - a.avg);
+  }, [entries, sla]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When a PO or invoice sits unapproved, you miss early-pay discounts and blow MSME deadlines. Log each approval as it happens to measure how long approvers actually take, and nudge whoever is the bottleneck.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold">Log an Approval</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item (PO / invoice ref) *" className={inpCls} />
+          <input value={approver} onChange={e => setApprover(e.target.value)} placeholder="Approver *" className={inpCls} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Requested</label><input type="date" value={requested} onChange={e => setRequested(e.target.value)} className={inpCls} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Decided</label><input type="date" value={decided} onChange={e => setDecided(e.target.value)} className={inpCls} /></div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Outcome</label>
+            <select value={outcome} onChange={e => setOutcome(e.target.value as "approved" | "rejected")} className={inpCls}>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">SLA (days)</label><input type="number" min="0" value={slaDays} onChange={e => setSlaDays(e.target.value)} className={inpCls} /></div>
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Approval</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Logged", value: entries.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Avg Cycle Time", value: `${avgCycle.toFixed(1)}d`, color: avgCycle > sla ? "text-orange-400" : "text-green-400" },
+          { label: `SLA Breaches (>${sla}d)`, value: breaches.toString(), color: breaches > 0 ? "text-red-400" : "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Hourglass size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No approvals logged yet. Record a request and decision date to start measuring cycle time.</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={15} className="text-[var(--color-primary)]" /> Cycle Time by Approver</h3>
+            {byApprover.map(a => (
+              <div key={a.approver} className="flex items-center justify-between text-sm">
+                <span className="font-medium">{a.approver} <span className="text-[10px] text-[var(--color-muted)]">({a.count})</span></span>
+                <span className={`tabular-nums font-semibold ${a.avg > sla ? "text-red-400" : "text-green-400"}`}>
+                  {a.avg.toFixed(1)}d avg{a.breaches > 0 && <span className="text-[10px] text-[var(--color-muted)] ml-1">· {a.breaches} breach</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>
+                  {["Item", "Approver", "Requested", "Cycle", "Outcome", ""].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {entries.map(e => {
+                  const d = cycleDays(e);
+                  return (
+                    <tr key={e.id} className="hover:bg-white/2">
+                      <td className="px-4 py-3 font-medium">{e.item}</td>
+                      <td className="px-4 py-3 text-[var(--color-muted)]">{e.approver}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(e.requested), "dd MMM")}</td>
+                      <td className={`px-4 py-3 tabular-nums font-semibold ${d > sla ? "text-red-400" : "text-green-400"}`}>{d}d</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit ${e.outcome === "approved" ? "bg-green-950/30 text-green-400 border-green-800/30" : "bg-red-950/30 text-red-400 border-red-800/30"}`}>{e.outcome === "approved" ? "Approved" : "Rejected"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #83 Working-Capital / DPO Simulator — model how lengthening or shortening
+   the days-payable-outstanding on your annual vendor spend frees up (or ties
+   up) cash, and what that one-time swing is worth at your cost of capital.
+   ───────────────────────────────────────────────────────────────────────── */
+function WorkingCapitalSimulator() {
+  const { store } = useApp();
+
+  // Annualise vendor spend from the last 90 days of expense transactions.
+  const annualSpend = useMemo(() => {
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().split("T")[0];
+    const recent = store.transactions.filter(t => t.amount < 0 && t.counterparty && t.date >= cutoffStr)
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
+    return recent * (365 / 90);
+  }, [store.transactions]);
+
+  const [spendInput, setSpendInput] = useState("");
+  const [currentDpo, setCurrentDpo] = useState("30");
+  const [targetDpo, setTargetDpo] = useState("45");
+  const [coc, setCoc] = useState("14");
+
+  const spend = parseFloat(spendInput) || Math.round(annualSpend);
+  const cur = parseFloat(currentDpo) || 0;
+  const tgt = parseFloat(targetDpo) || 0;
+  const rate = parseFloat(coc) || 0;
+
+  const dailySpend = spend / 365;
+  const apCurrent = dailySpend * cur;
+  const apTarget = dailySpend * tgt;
+  const cashFreed = apTarget - apCurrent; // positive = cash released to you
+  const annualValue = cashFreed * (rate / 100); // value of holding that cash for a year
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every extra day you take to pay vendors keeps cash in your account a little longer. This models how moving your average payment terms (Days Payable Outstanding) up or down changes the cash tied up in payables — and what that swing is worth at your borrowing rate. Stretch responsibly: MSME vendors are capped at 45 days.</p>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Annual vendor spend (₹)</label>
+          <input type="number" min="0" value={spendInput} onChange={e => setSpendInput(e.target.value)} placeholder={Math.round(annualSpend).toString()} className={inpCls} />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Auto: {formatCurrency(Math.round(annualSpend))} (from last 90d)</p>
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Current DPO (days)</label>
+          <input type="number" min="0" value={currentDpo} onChange={e => setCurrentDpo(e.target.value)} className={inpCls} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Target DPO (days)</label>
+          <input type="number" min="0" value={targetDpo} onChange={e => setTargetDpo(e.target.value)} className={inpCls} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--color-muted)] block mb-1">Cost of capital (% p.a.)</label>
+          <input type="number" min="0" value={coc} onChange={e => setCoc(e.target.value)} className={inpCls} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "AP at Current DPO", value: formatCurrency(Math.round(apCurrent)), color: "text-[var(--color-muted)]" },
+          { label: "AP at Target DPO", value: formatCurrency(Math.round(apTarget)), color: "text-blue-400" },
+          { label: cashFreed >= 0 ? "Cash Freed Up" : "Cash Tied Up", value: formatCurrency(Math.abs(Math.round(cashFreed))), color: cashFreed >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Annual Value @ CoC", value: formatCurrency(Math.abs(Math.round(annualValue))), color: cashFreed >= 0 ? "text-green-400" : "text-red-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`rounded-lg p-4 flex items-start gap-3 border ${cashFreed >= 0 ? "bg-green-950/20 border-green-800/30" : "bg-red-950/20 border-red-800/30"}`}>
+        <Scale size={16} className={`shrink-0 mt-0.5 ${cashFreed >= 0 ? "text-green-400" : "text-red-400"}`} />
+        <p className="text-xs text-[var(--color-muted)]">
+          {tgt === cur
+            ? "Set a target DPO different from your current to model the cash impact."
+            : cashFreed >= 0
+              ? <>Stretching terms from {cur} to {tgt} days releases a one-time <span className="font-semibold text-green-400">{formatCurrency(Math.round(cashFreed))}</span> of working capital — worth about <span className="font-semibold text-green-400">{formatCurrency(Math.round(annualValue))}</span> a year at {rate}% cost of capital. Keep MSME vendors inside 45 days to avoid 43B(h) interest.</>
+              : <>Shortening terms from {cur} to {tgt} days consumes a one-time <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(cashFreed)))}</span> of cash, costing roughly <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(annualValue)))}</span> a year in carry — justify it with early-pay discounts.</>}
+        </p>
+      </div>
     </div>
   );
 }

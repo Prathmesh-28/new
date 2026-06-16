@@ -12,6 +12,7 @@ import {
   Gauge, ShieldAlert, CalendarClock, Percent, TrendingUp, ListChecks, Tag, Gavel,
   Activity, PieChart, Trophy, History, FlaskConical, Save,
   Printer, Banknote, IndianRupee, UserCheck,
+  Split, Inbox, CreditCard, Target, Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -128,7 +129,7 @@ function ReminderModal({
 export default function CollectionsPage() {
   const { store } = useApp();
 
-  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep">("collections");
+  const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep" | "partpay" | "unapplied" | "creditlimit" | "goal" | "recoveryroi">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
@@ -254,6 +255,11 @@ export default function CollectionsPage() {
               { id: "interestinv",   label: "Interest Invoice", icon: <IndianRupee size={10} /> },
               { id: "nach",          label: "NACH Mandates",  icon: <Banknote size={10} /> },
               { id: "byrep",         label: "Ageing by Rep",  icon: <UserCheck size={10} /> },
+              { id: "partpay",       label: "Part-Payments",  icon: <Split size={10} /> },
+              { id: "unapplied",     label: "Unapplied Cash", icon: <Inbox size={10} /> },
+              { id: "creditlimit",   label: "Credit Limits",  icon: <CreditCard size={10} /> },
+              { id: "goal",          label: "Monthly Goal",   icon: <Target size={10} /> },
+              { id: "recoveryroi",   label: "Recovery ROI",   icon: <Calculator size={10} /> },
             ] as const).map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === v.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -522,6 +528,11 @@ export default function CollectionsPage() {
       {view === "interestinv" && <InterestInvoiceGenerator />}
       {view === "nach" && <NachMandateTracker />}
       {view === "byrep" && <AgeingBySalesperson />}
+      {view === "partpay" && <PartialPaymentTracker />}
+      {view === "unapplied" && <UnappliedCashApplicator />}
+      {view === "creditlimit" && <CreditLimitEngine />}
+      {view === "goal" && <CollectionGoalTracker />}
+      {view === "recoveryroi" && <RecoveryRoiCalculator />}
     </div>
   );
 }
@@ -3398,6 +3409,583 @@ function AgeingBySalesperson() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Tag each customer with their sales rep, then see whose book is carrying the oldest AR. Unassigned customers roll up together until you assign an owner.</p>
+    </div>
+  );
+}
+
+// ── #16 PARTIAL PAYMENT TRACKING ────────────────────────────────────────────
+// Log instalments received against an open invoice; outstanding auto-recalculates
+// and the invoice clears in-view once fully settled. Kept device-local so it
+// never overwrites the canonical invoice record on the server.
+type PartPayRow = { id: string; invoiceId: string; amount: number; date: string; note: string };
+
+function PartialPaymentTracker() {
+  const { store } = useApp();
+  const [payments, setPayments] = useFeatureState<PartPayRow[]>("col-partial-payments", []);
+  const open = useMemo(() => (store.invoices ?? []).filter(i => i.status !== "paid"), [store.invoices]);
+  const [selId, setSelId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [note, setNote] = useState("");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const paidFor = (invId: string) => payments.filter(p => p.invoiceId === invId).reduce((s, p) => s + p.amount, 0);
+
+  const ref = (i: { invoiceNumber?: string; id: string }) => i.invoiceNumber || i.id.slice(0, 6);
+
+  const add = () => {
+    const amt = parseFloat(amount) || 0;
+    const inv = open.find(i => i.id === selId);
+    if (!inv) { toast.error("Pick an invoice"); return; }
+    if (amt <= 0) { toast.error("Enter a payment amount"); return; }
+    const remaining = inv.amount - paidFor(selId);
+    if (amt > remaining + 0.5) { toast.error(`Only ${formatCurrency(remaining)} is outstanding on this invoice`); return; }
+    setPayments([{ id: crypto.randomUUID(), invoiceId: selId, amount: amt, date, note: note.trim() }, ...payments]);
+    setAmount(""); setNote("");
+    toast.success("Part-payment recorded");
+  };
+  const remove = (id: string) => setPayments(payments.filter(p => p.id !== id));
+
+  const rows = useMemo(() => open.map(i => {
+    const paid = paidFor(i.id);
+    return { ...i, paid, outstanding: Math.max(0, i.amount - paid), pct: i.amount > 0 ? Math.min(100, Math.round((paid / i.amount) * 100)) : 0 };
+  }).filter(r => r.paid > 0).sort((a, b) => b.paid - a.paid), [open, payments]);
+
+  const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
+  const stillOpen = rows.reduce((s, r) => s + r.outstanding, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Split size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Record a part-payment</span>
+        </div>
+        {open.length === 0 ? (
+          <EmptyState icon={Split} title="No open invoices" description="Part-payments apply against unpaid invoices. Create an invoice to start tracking instalments." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
+              <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
+                <option value="">Select…</option>
+                {open.map(i => {
+                  const rem = i.amount - paidFor(i.id);
+                  return <option key={i.id} value={i.id}>{i.customer} · {ref(i)} · {formatCurrency(rem)} left</option>;
+                })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+            </div>
+            <div className="md:col-span-3">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. UPI ref, cheque no." className={inp} />
+            </div>
+            <div className="flex items-end">
+              <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90"><Plus size={13} /> Record</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Invoices part-paid", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+              { label: "Collected via instalments", value: formatCurrency(totalCollected), color: "text-green-400" },
+              { label: "Still outstanding on them", value: formatCurrency(stillOpen), color: stillOpen > 0 ? "text-orange-400" : "text-green-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {rows.map(r => {
+              const invPayments = payments.filter(p => p.invoiceId === r.id).sort((a, b) => b.date.localeCompare(a.date));
+              return (
+                <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                    <div>
+                      <p className="text-sm font-semibold">{r.customer} <span className="text-[var(--color-muted)] text-xs font-normal">· {ref(r)}</span></p>
+                      <p className="text-[11px] text-[var(--color-muted)]">Invoice {formatCurrency(r.amount)} · paid {formatCurrency(r.paid)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-bold tabular-nums ${r.outstanding > 0 ? "text-orange-400" : "text-green-400"}`}>{r.outstanding > 0 ? `${formatCurrency(r.outstanding)} left` : "Fully paid"}</p>
+                      <p className="text-[11px] text-[var(--color-muted)] tabular-nums">{r.pct}% settled</p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-3">
+                    <div className={`h-full rounded-full ${r.outstanding > 0 ? "bg-[var(--color-primary)]" : "bg-green-500"}`} style={{ width: `${r.pct}%` }} />
+                  </div>
+                  <div className="divide-y divide-[var(--color-border)]/60">
+                    {invPayments.map(p => (
+                      <div key={p.id} className="flex items-center justify-between py-1.5 gap-2">
+                        <span className="text-xs text-[var(--color-muted)]">{format(parseISO(p.date), "d MMM yyyy")}{p.note && ` · ${p.note}`}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs font-semibold tabular-nums text-green-400">{formatCurrency(p.amount)}</span>
+                          <button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Instalments are tracked here on this device against your live invoices — the outstanding figure recalculates as you log payments. Mark the invoice paid in Invoices once it fully clears.</p>
+    </div>
+  );
+}
+
+// ── #54 AUTO-APPLY UNAPPLIED CASH (FIFO) ────────────────────────────────────
+// Enter an on-account credit for a customer; preview how it would sweep across
+// their open invoices oldest-first, leaving any remainder as a balance to hold.
+function UnappliedCashApplicator() {
+  const { store } = useApp();
+  const customers = useMemo(() => Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean))), [store.invoices]);
+  const [customer, setCustomer] = useState("");
+  const [credit, setCredit] = useState("");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const openForCust = useMemo(() => (store.invoices ?? [])
+    .filter(i => i.status !== "paid" && i.customer === customer)
+    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")), [store.invoices, customer]);
+
+  const allocation = useMemo(() => {
+    let pool = parseFloat(credit) || 0;
+    const rows = openForCust.map(i => {
+      const applied = Math.min(pool, i.amount);
+      pool -= applied;
+      return { id: i.id, ref: i.invoiceNumber || i.id.slice(0, 6), due: i.dueDate, amount: i.amount, applied, remaining: i.amount - applied, cleared: applied >= i.amount - 0.5 };
+    });
+    return { rows, leftover: Math.max(0, pool) };
+  }, [openForCust, credit]);
+
+  const totalApplied = allocation.rows.reduce((s, r) => s + r.applied, 0);
+  const cleared = allocation.rows.filter(r => r.cleared).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Inbox size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Apply an on-account credit (oldest invoice first)</span>
+        </div>
+        {customers.length === 0 ? (
+          <EmptyState icon={Inbox} title="No customers yet" description="Add invoices, then enter a customer credit to see how it sweeps across their open balances." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+              <select value={customer} onChange={e => setCustomer(e.target.value)} className={inp}>
+                <option value="">Select…</option>
+                {customers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Credit received (₹)</label>
+              <input type="number" value={credit} onChange={e => setCredit(e.target.value)} placeholder="0" className={inp} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {customer && (parseFloat(credit) || 0) > 0 && (
+        openForCust.length === 0 ? (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 text-center">
+            <CheckCircle2 size={24} className="mx-auto mb-2 text-green-400 opacity-60" />
+            <p className="text-sm text-[var(--color-muted)]">{customer} has no open invoices — the full {formatCurrency(parseFloat(credit) || 0)} stays on account.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Credit applied", value: formatCurrency(totalApplied), color: "text-green-400" },
+                { label: "Invoices cleared", value: cleared.toString(), color: "text-[var(--color-primary)]" },
+                { label: "Invoices touched", value: allocation.rows.filter(r => r.applied > 0).length.toString(), color: "text-blue-400" },
+                { label: "Left on account", value: formatCurrency(allocation.leftover), color: allocation.leftover > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+              ].map(c => (
+                <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                  <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                  <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+              <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">FIFO allocation — {customer}</span></div>
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)]">
+                    {["Invoice", "Due", "Invoice amt", "Applied", "Remaining", "Status"].map(h => (
+                      <th key={h} className={`text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5 ${h === "Invoice" || h === "Due" ? "text-left" : "text-right"}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allocation.rows.map(r => (
+                    <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${r.applied > 0 ? "" : "opacity-50"}`}>
+                      <td className="px-4 py-2.5 font-medium">{r.ref}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.due ? format(parseISO(r.due), "d MMM yy") : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{r.applied > 0 ? formatCurrency(r.applied) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(r.remaining)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.cleared ? "bg-green-950/30 text-green-400" : r.applied > 0 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                          {r.cleared ? "Cleared" : r.applied > 0 ? "Part" : "Untouched"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Preview only — shows how an unattributed credit would clear the customer's oldest invoices first under FIFO. Apply the matched payments in Invoices to update the books.</p>
+    </div>
+  );
+}
+
+// ── #9 CREDIT LIMIT ENGINE ──────────────────────────────────────────────────
+// Set a per-customer credit ceiling, then watch live exposure (open AR) against
+// it. Flags customers at or over their limit so sales can hold new orders.
+function CreditLimitEngine() {
+  const { store } = useApp();
+  const customers = useMemo(() => Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean))), [store.invoices]);
+  const [limits, setLimits] = useFeatureState<Record<string, number>>("col-credit-limits", {});
+
+  const exposure = useMemo(() => {
+    const map: Record<string, number> = {};
+    (store.invoices ?? []).filter(i => i.status !== "paid").forEach(i => { map[i.customer] = (map[i.customer] ?? 0) + i.amount; });
+    return map;
+  }, [store.invoices]);
+
+  const rows = useMemo(() => customers.map(c => {
+    const limit = limits[c] ?? 0;
+    const used = exposure[c] ?? 0;
+    const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
+    const state = limit <= 0 ? "none" : used >= limit ? "over" : pct >= 80 ? "warn" : "ok";
+    return { customer: c, limit, used, headroom: Math.max(0, limit - used), pct, state };
+  }).sort((a, b) => b.pct - a.pct), [customers, limits, exposure]);
+
+  const over = rows.filter(r => r.state === "over").length;
+  const warn = rows.filter(r => r.state === "warn").length;
+  const inp = "w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] text-right tabular-nums";
+
+  const STATE: Record<string, { label: string; cls: string; bar: string }> = {
+    over: { label: "Over limit", cls: "bg-red-950/40 text-red-300", bar: "bg-red-500" },
+    warn: { label: "Near limit", cls: "bg-orange-950/30 text-orange-400", bar: "bg-orange-500" },
+    ok:   { label: "Within", cls: "bg-green-950/30 text-green-400", bar: "bg-green-500" },
+    none: { label: "No limit", cls: "bg-[var(--color-accent)] text-[var(--color-muted)]", bar: "bg-[var(--color-border)]" },
+  };
+
+  return (
+    <div className="space-y-4">
+      {customers.length === 0 ? (
+        <EmptyState icon={CreditCard} title="No customers yet" description="Add invoices to set per-customer credit ceilings and watch exposure against them." />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Over limit", value: over.toString(), color: "text-red-400" },
+              { label: "Near limit (≥80%)", value: warn.toString(), color: "text-orange-400" },
+              { label: "Limits set", value: rows.filter(r => r.limit > 0).length + " / " + rows.length, color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-2xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+              <CreditCard size={13} className="text-[var(--color-primary)]" />
+              <span className="text-sm font-semibold">Credit exposure vs ceiling</span>
+            </div>
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Customer", "Open AR", "Credit limit", "Utilisation", "Headroom", "Status"].map(h => (
+                    <th key={h} className={`text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5 ${h === "Customer" ? "text-left" : h === "Credit limit" ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => {
+                  const st = STATE[r.state];
+                  return (
+                    <tr key={r.customer} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                      <td className="px-4 py-3 font-semibold">{r.customer}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatCurrency(r.used)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <input type="number" value={limits[r.customer] ?? ""} onChange={e => setLimits({ ...limits, [r.customer]: Math.max(0, Number(e.target.value) || 0) })} placeholder="set" className={inp} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.limit > 0 ? (
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden w-20">
+                              <div className={`h-full rounded-full ${st.bar}`} style={{ width: `${Math.min(100, r.pct)}%` }} />
+                            </div>
+                            <span className="tabular-nums text-xs font-semibold w-9">{r.pct}%</span>
+                          </div>
+                        ) : <span className="text-xs text-[var(--color-muted)]">—</span>}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{r.limit > 0 ? formatCurrency(r.headroom) : "—"}</td>
+                      <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {over > 0 && (
+            <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-5 py-4 flex items-start gap-3">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold">{over} customer(s) are over their credit ceiling</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">Hold new orders for these accounts until they clear outstanding balances back under their limit.</p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Exposure = current open (unpaid) AR per customer. Limits are stored on this device and sync across your sessions — they don't block order entry, they flag for manual hold.</p>
+    </div>
+  );
+}
+
+// ── #56 MONTHLY COLLECTION GOAL TRACKER ─────────────────────────────────────
+// Set a collection target for the current month; tracks invoices marked paid
+// with a due date inside the month against it, and shows the run-rate needed.
+function CollectionGoalTracker() {
+  const { store } = useApp();
+  const monthKey = format(new Date(), "yyyy-MM");
+  const [goals, setGoals] = useFeatureState<Record<string, number>>("col-monthly-goals", {});
+  const [draft, setDraft] = useState("");
+
+  const goal = goals[monthKey] ?? 0;
+
+  const collected = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(i => i.status === "paid" && (i.dueDate || "").startsWith(monthKey))
+      .reduce((s, i) => s + i.amount, 0);
+  }, [store.invoices, monthKey]);
+
+  const dueThisMonth = useMemo(() => {
+    return (store.invoices ?? [])
+      .filter(i => (i.dueDate || "").startsWith(monthKey))
+      .reduce((s, i) => s + i.amount, 0);
+  }, [store.invoices, monthKey]);
+
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const daysLeft = daysInMonth - dayOfMonth;
+  const pct = goal > 0 ? Math.min(100, Math.round((collected / goal) * 100)) : 0;
+  const remaining = Math.max(0, goal - collected);
+  const perDayNeeded = daysLeft > 0 ? remaining / daysLeft : remaining;
+  const onTrackTarget = goal * (dayOfMonth / daysInMonth);
+  const ahead = collected >= onTrackTarget;
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const save = () => {
+    const g = parseFloat(draft) || 0;
+    if (g <= 0) { toast.error("Enter a target amount"); return; }
+    setGoals({ ...goals, [monthKey]: g });
+    setDraft("");
+    toast.success(`Goal set for ${format(now, "MMMM yyyy")}`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Target size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Collection target — {format(now, "MMMM yyyy")}</span>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Target this month (₹)</label>
+            <input type="number" value={draft} onChange={e => setDraft(e.target.value)} placeholder={goal > 0 ? String(goal) : "e.g. 500000"} className={inp} />
+          </div>
+          <button onClick={save} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90"><Save size={13} /> {goal > 0 ? "Update" : "Set goal"}</button>
+          {goal > 0 && dueThisMonth > 0 && (
+            <button onClick={() => { setGoals({ ...goals, [monthKey]: dueThisMonth }); toast.success("Goal set to amount due this month"); }} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] py-2">Use amount due ({formatCurrency(dueThisMonth)})</button>
+          )}
+        </div>
+      </div>
+
+      {goal > 0 ? (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="flex items-end justify-between mb-2">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Collected this month</p>
+                <p className="text-2xl font-bold tabular-nums text-green-400">{formatCurrency(collected)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[var(--color-muted)]">of {formatCurrency(goal)}</p>
+                <p className={`text-lg font-bold tabular-nums ${pct >= 100 ? "text-green-400" : ahead ? "text-[var(--color-primary)]" : "text-orange-400"}`}>{pct}%</p>
+              </div>
+            </div>
+            <div className="h-3 bg-[var(--color-bg)] rounded-full overflow-hidden relative">
+              <div className={`h-full rounded-full ${pct >= 100 ? "bg-green-500" : ahead ? "bg-[var(--color-primary)]" : "bg-orange-500"}`} style={{ width: `${pct}%` }} />
+              {goal > 0 && (
+                <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/60" style={{ left: `${Math.min(100, Math.round((dayOfMonth / daysInMonth) * 100))}%` }} title="Pace marker" />
+              )}
+            </div>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1.5">Vertical marker = where you should be by today to finish on time.</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Remaining to goal", value: formatCurrency(remaining), color: remaining > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "Days left", value: `${daysLeft}d`, color: "text-[var(--color-primary)]" },
+              { label: "Needed per day", value: remaining > 0 ? formatCurrency(perDayNeeded) : "Done", color: "text-yellow-400" },
+              { label: "Pace", value: ahead ? "On / ahead" : "Behind", color: ahead ? "text-green-400" : "text-red-400" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyState icon={Target} title="No goal set for this month" description="Set a collection target above to track paid-invoice progress against it and see the daily run-rate you need." />
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Progress counts invoices marked paid whose due date falls in the current month. Mark invoices paid in Invoices to move the bar. Goals are saved per month on this device.</p>
+    </div>
+  );
+}
+
+// ── #69 RECOVERY ROI CALCULATOR ─────────────────────────────────────────────
+// Before chasing a bad debt through legal/agency, estimate net recovery after
+// expected success rate and the cost of pursuing it — so you don't throw good
+// money after bad.
+function RecoveryRoiCalculator() {
+  const { store } = useApp();
+  const open = useMemo(() => (store.invoices ?? []).filter(i => i.status !== "paid").sort((a, b) => b.amount - a.amount), [store.invoices]);
+  const [selId, setSelId] = useState("");
+  const [manualAmt, setManualAmt] = useState("");
+  const [recoveryPct, setRecoveryPct] = useState(50);
+  const [route, setRoute] = useState<"agency" | "legal" | "internal">("agency");
+  const [agencyFeePct, setAgencyFeePct] = useState(20);
+  const [legalCost, setLegalCost] = useState("15000");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const selected = open.find(i => i.id === selId);
+  const owed = selected ? selected.amount : (parseFloat(manualAmt) || 0);
+
+  const expectedGross = owed * (recoveryPct / 100);
+  const cost = route === "agency" ? expectedGross * (agencyFeePct / 100)
+             : route === "legal" ? (parseFloat(legalCost) || 0)
+             : 0;
+  const netRecovery = expectedGross - cost;
+  const roiPct = cost > 0 ? Math.round((netRecovery / cost) * 100) : (netRecovery > 0 ? Infinity : 0);
+  const worthIt = netRecovery > 0 && netRecovery > owed * 0.1;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Calculator size={14} className="text-[var(--color-primary)]" />
+          <span className="text-sm font-semibold">Estimate net recovery before you pursue</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Overdue invoice</label>
+            <select value={selId} onChange={e => { setSelId(e.target.value); setManualAmt(""); }} className={inp}>
+              <option value="">— enter amount manually —</option>
+              {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {formatCurrency(i.amount)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount owed (₹)</label>
+            <input type="number" value={selected ? selected.amount : manualAmt} onChange={e => { setManualAmt(e.target.value); setSelId(""); }} disabled={!!selected} placeholder="0" className={`${inp} ${selected ? "opacity-60" : ""}`} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Expected recovery rate — {recoveryPct}%</label>
+          <input type="range" min={5} max={100} value={recoveryPct} onChange={e => setRecoveryPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Beyond 90 days, realistic recovery often falls below 40%.</p>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-2">Recovery route</label>
+          <div className="flex gap-2 flex-wrap">
+            {([
+              { id: "agency", label: "Recovery agency" },
+              { id: "legal", label: "Legal / demand notice" },
+              { id: "internal", label: "Internal chase (free)" },
+            ] as const).map(r => (
+              <button key={r.id} onClick={() => setRoute(r.id)} className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${route === r.id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{r.label}</button>
+            ))}
+          </div>
+        </div>
+        {route === "agency" && (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Agency commission — {agencyFeePct}% of recovered</label>
+            <input type="range" min={5} max={50} value={agencyFeePct} onChange={e => setAgencyFeePct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+          </div>
+        )}
+        {route === "legal" && (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated legal cost (₹)</label>
+            <input type="number" value={legalCost} onChange={e => setLegalCost(e.target.value)} placeholder="0" className={inp} />
+          </div>
+        )}
+      </div>
+
+      {owed > 0 ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Expected gross recovery", value: formatCurrency(expectedGross), color: "text-green-400" },
+              { label: "Cost to pursue", value: formatCurrency(cost), color: cost > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
+              { label: "Net recovery", value: formatCurrency(netRecovery), color: netRecovery > 0 ? "text-green-400" : "text-red-400" },
+              { label: "ROI on cost", value: cost > 0 ? (roiPct === Infinity ? "∞" : `${roiPct}%`) : "—", color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`rounded-lg px-5 py-4 flex items-start gap-3 border ${worthIt ? "bg-green-950/20 border-green-800/30" : "bg-orange-950/20 border-orange-800/30"}`}>
+            {worthIt ? <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="text-orange-400 shrink-0 mt-0.5" />}
+            <div>
+              <p className="text-sm font-semibold">{worthIt ? "Likely worth pursuing" : "Pursue with caution"}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                {worthIt
+                  ? `Of ${formatCurrency(owed)} owed, you'd net about ${formatCurrency(netRecovery)} via ${route === "internal" ? "internal chase" : route}. Compare against staff time before committing.`
+                  : `Net recovery of ${formatCurrency(netRecovery)} on ${formatCurrency(owed)} owed is thin. Consider a settlement haircut or write-off rather than ${route === "internal" ? "more chasing" : `paying ${route} costs`}.`}
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <EmptyState icon={Calculator} title="Pick an invoice or enter an amount" description="Choose an overdue invoice (or type a figure), set an expected recovery rate and route, and see the net you'd realistically keep." />
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A planning estimate, not advice. Recovery rate and costs are your assumptions; legal outcomes and agency fees vary by case and contract.</p>
     </div>
   );
 }
