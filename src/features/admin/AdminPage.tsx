@@ -10,7 +10,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 import { FEATURE_ENTITLEMENTS, FEATURE_PITCH, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 
-type Tab = "overview" | "companies" | "users" | "plan-access" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
+type Tab = "overview" | "companies" | "users" | "plan-access" | "invites" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string; subscription_plan?: PlanTier; display_name?: string };
 type Company = {
@@ -132,6 +132,7 @@ export default function AdminPage() {
     { id: "companies",    label: "Companies",          icon: Building2 },
     { id: "users",        label: "Users",              icon: Users },
     { id: "plan-access",  label: "Plan Access",        icon: Crown },
+    { id: "invites",      label: "Team Invites",       icon: Mail },
     { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
     { id: "usage",        label: "Usage Analytics",    icon: Activity },
     { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
@@ -339,7 +340,7 @@ export default function AdminPage() {
                   const isSelf = u.id === user?.id;
                   return (
                     <tr key={u.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5">{u.email}{isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)]">(you)</span>}</td>
+                      <td className="px-4 py-2.5">{u.email}{u.role === "owner" && <Crown size={11} className="inline ml-1.5 -mt-0.5 text-[var(--color-primary)]" aria-label="Primary owner" />}{isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)]">(you)</span>}</td>
                       <td className="px-4 py-2.5">
                         {isSelf ? (
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${roleBadge(u.role)}`}>{roleLabel(u.role)}</span>
@@ -376,6 +377,7 @@ export default function AdminPage() {
       )}
 
       {tab === "plan-access" && <PlanAccessMatrix />}
+      {tab === "invites" && <TeamInvites authHeaders={authHeaders} isSuper={user?.role === "super_admin"} myTenant={user?.tenant_id ?? ""} companies={companies} />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} onSave={saveUserProfile} />}
       {tab === "ca-workspace" && <CaWorkspace companies={companies} loadCompanies={loadCompanies} />}
       {tab === "usage" && <UsageAnalytics />}
@@ -414,6 +416,124 @@ type CaAdvisor = {
   invitedAt: string;
   status: "invited" | "active";
 };
+
+// ── Team invites — request / accept / reject lifecycle (polled, no websockets) ──
+type Invite = { id: string; tenant_id: string; inviter_email: string | null; invitee_email: string; invitee_user_id: string | null; role: string; status: string; message: string | null; created_at: string; resolved_at: string | null };
+
+function TeamInvites({ authHeaders, isSuper, myTenant, companies }: { authHeaders: () => Record<string, string>; isSuper: boolean; myTenant: string; companies: Company[] }) {
+  const [incoming, setIncoming] = useState<Invite[]>([]);
+  const [outgoing, setOutgoing] = useState<Invite[]>([]);
+  const [invitee, setInvitee] = useState("");
+  const [role, setRole] = useState("finance_manager");
+  const [tenant, setTenant] = useState(myTenant);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    fetch(`${BASE}/api/invites`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { incoming: [], outgoing: [] })
+      .then(d => { setIncoming(d.incoming ?? []); setOutgoing(d.outgoing ?? []); })
+      .catch(() => {});
+  }, [authHeaders]);
+  // Poll every 15s → near-real-time without websockets (web + iOS + Android).
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [load]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = invitee.trim();
+    if (!v) { toast.error("Enter an invitee email or user-id"); return; }
+    const body: Record<string, string> = { role };
+    if (v.includes("@")) body.invitee_email = v; else body.invitee_user_id = v;
+    if (isSuper && tenant.trim()) body.tenant_id = tenant.trim();
+    setBusy(true);
+    const res = await fetch(`${BASE}/api/invites`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setBusy(false);
+    if (res.ok) { toast.success("Invite sent"); setInvitee(""); load(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to send invite");
+  };
+  const act = async (id: string, action: "accept" | "reject" | "cancel") => {
+    const res = await fetch(`${BASE}/api/invites/${id}/${action}`, { method: "POST", headers: authHeaders() });
+    if (res.ok) { toast.success(`Invite ${action === "accept" ? "accepted" : action === "reject" ? "rejected" : "cancelled"}`); load(); if (action === "accept") setTimeout(() => window.location.reload(), 700); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? `Failed to ${action}`);
+  };
+  const teamLabel = (tid: string) => companies.find(c => c.tenant_id === tid)?.company_name || companies.find(c => c.tenant_id === tid)?.owner_email || tid;
+  const statusBadge = (s: string) => s === "pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"
+    : s === "accepted" ? "bg-green-900/30 text-green-400 border-green-800/40"
+    : s === "rejected" ? "bg-red-900/30 text-red-400 border-red-800/40"
+    : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]";
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Mail size={14} className="text-[var(--color-primary)]" /> Team Invites</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Invite a person to a team by email or user-id; they accept or reject. Updates poll live (no refresh) across web &amp; mobile. Super-admin can invite into any tenant.</p>
+      </div>
+
+      {/* Send an invite */}
+      <form onSubmit={send} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className={isSuper ? "" : "md:col-span-2"}>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Invitee (email or user-id)</label>
+          <input value={invitee} onChange={e => setInvitee(e.target.value)} placeholder="person@company.in or a user-id"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Role</label>
+          <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {ALL_ROLE_OPTIONS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </div>
+        {isSuper && (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Into team (tenant-id)</label>
+            <input value={tenant} onChange={e => setTenant(e.target.value)} placeholder="tenant-id"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        )}
+        <button type="submit" disabled={busy} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"><UserPlus size={14} /> Send invite</button>
+      </form>
+
+      {/* Incoming requests for the signed-in user */}
+      {incoming.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
+          <p className="text-sm font-semibold flex items-center gap-2"><Clock size={13} className="text-yellow-400" /> Invites awaiting your response</p>
+          {incoming.map(inv => (
+            <div key={inv.id} className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+              <div className="text-sm">Join <strong>{teamLabel(inv.tenant_id)}</strong> as <span className="font-medium">{roleLabel(inv.role)}</span> <span className="text-[11px] text-[var(--color-muted)]">· invited by {inv.inviter_email || "—"}</span></div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => act(inv.id, "accept")} className="text-xs font-semibold px-3 py-1 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] flex items-center gap-1"><Check size={12} /> Accept</button>
+                <button onClick={() => act(inv.id, "reject")} className="text-xs font-semibold px-3 py-1 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 flex items-center gap-1"><X size={12} /> Reject</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* All sent invites (tenant / all for super) */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[680px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>{["Invitee", "Team", "Role", "Status", "Invited by", ""].map((h, i) => (
+              <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 5 ? "text-right" : "text-left"}`}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {outgoing.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--color-muted)] text-xs">No invites yet.</td></tr>
+            ) : outgoing.map(inv => (
+              <tr key={inv.id} className="hover:bg-white/2">
+                <td className="px-4 py-2.5">{inv.invitee_email}</td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[160px]">{teamLabel(inv.tenant_id)}</td>
+                <td className="px-4 py-2.5">{roleLabel(inv.role)}</td>
+                <td className="px-4 py-2.5"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge(inv.status)}`}>{inv.status}</span></td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{inv.inviter_email || "—"}</td>
+                <td className="px-4 py-2.5 text-right">{inv.status === "pending" && <button onClick={() => act(inv.id, "cancel")} title="Cancel invite" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 // ── Plan-access matrix — exactly which modules each plan unlocks (config-driven) ──
 function PlanAccessMatrix() {

@@ -486,6 +486,23 @@ async function initDb() {
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS provider TEXT;
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 
+    -- ── Team invites (request / accept / reject join-a-team lifecycle) ─────────
+    CREATE TABLE IF NOT EXISTS team_invites (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      inviter_id      UUID REFERENCES users(id),
+      inviter_email   TEXT,
+      invitee_email   TEXT NOT NULL,
+      invitee_user_id UUID REFERENCES users(id),
+      role            TEXT NOT NULL DEFAULT 'finance_manager',
+      status          TEXT NOT NULL DEFAULT 'pending',   -- pending | accepted | rejected | cancelled
+      message         TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at     TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS invites_invitee ON team_invites(invitee_email, status);
+    CREATE INDEX IF NOT EXISTS invites_tenant  ON team_invites(tenant_id, status);
+
     -- ── Push notification device tokens ──────────────────────────────────────
     CREATE TABLE IF NOT EXISTS push_tokens (
       token      TEXT PRIMARY KEY,
