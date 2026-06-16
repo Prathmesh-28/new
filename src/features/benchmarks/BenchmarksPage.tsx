@@ -89,7 +89,7 @@ type BmTab = "overview" | "ratios" | "cost-structure" | "growth-percentile" | "w
 
 export default function BenchmarksPage() {
   const { store }    = useApp();
-  const { transactions, bankAccounts, firm } = store;
+  const { transactions, bankAccounts } = store;
 
   const [bmTab, setBmTab] = useState<BmTab>("overview");
   const [sector, setSector] = useState("Manufacturing (SMB)");
@@ -423,7 +423,7 @@ export default function BenchmarksPage() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Where `value` sits given a sector low/median/high band. Returns 0–100 percentile. */
-function bandPercentile(value: number, low: number, mid: number, high: number, higherIsBetter: boolean): number {
+function bandPercentile(value: number, low: number, _mid: number, high: number, higherIsBetter: boolean): number {
   // Treat the band as a monotone scale and linearly interpolate the rank.
   const lo = Math.min(low, high), hi = Math.max(low, high);
   let raw = hi === lo ? 0.5 : (value - lo) / (hi - lo);
@@ -602,7 +602,6 @@ const COST_REFS: Record<string, CostMix[]> = {
 };
 
 function CostStructureBenchmark({ sector }: { sector: string }) {
-  const { store } = useApp();
   const refs = COST_REFS[sector] ?? COST_REFS["default"];
   const series = useMonthlyRevenue();
   const months = series.filter(m => m.revenue > 0);

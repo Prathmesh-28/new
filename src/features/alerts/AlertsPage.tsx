@@ -15,7 +15,7 @@ const SEV: Record<string, { color: string; bg: string; icon: React.ElementType; 
 };
 
 export default function AlertsPage() {
-  const { store, markAlertRead, deleteAlert, addAlert, updateFirm, resolveAlert } = useApp();
+  const { store, markAlertRead, deleteAlert, updateFirm, resolveAlert } = useApp();
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 

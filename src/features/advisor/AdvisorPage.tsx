@@ -4,16 +4,16 @@ import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
 import {
   Users, Plus, X, AlertTriangle, TrendingUp, CheckCircle2, CreditCard, Trash2,
-  Calculator, Star, FileBarChart2, Zap, ArrowRight, Building2, Clock, FilePlus,
-  SquareCheck, Paperclip, Timer, Send, Download, Settings2, ChevronDown, ChevronUp,
-  ReceiptText, Sparkles, Badge,
+  Calculator, Star, FileBarChart2, Zap, ArrowRight, Building2,
+  Paperclip, Timer, Send, Download, Settings2, ChevronDown, ChevronUp,
+  ReceiptText,
   ShieldCheck, Inbox, MessageSquare, FileSignature, Reply, Copy,
 } from "lucide-react";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { format, differenceInCalendarDays, addMonths, setDate, isBefore, startOfYear } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -922,7 +922,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ client, firm, onUnlink, onNavigate, onReport }: {
+function ClientCard({ client, onUnlink, onNavigate, onReport }: {
   client: ClientSummary;
   firm: CaFirmProfile;
   onUnlink: (id: string, label: string) => void;

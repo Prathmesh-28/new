@@ -7,7 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import { differenceInDays, format, parseISO, addDays } from "date-fns";
 import {
   PhoneCall, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter,
-  Send, TrendingDown, ArrowUpRight, Zap, RefreshCw, BarChart2, Star, FileText, Copy,
+  Send, TrendingDown, Zap, RefreshCw, BarChart2, Star, FileText, Copy,
   Layers, LineChart, HandCoins, Users, Scissors, Plus, Trash2, Mail,
   Gauge, ShieldAlert, CalendarClock, Percent, TrendingUp, ListChecks, Tag, Gavel,
   Activity, PieChart, Trophy, History, FlaskConical, Save,
@@ -36,7 +36,7 @@ const AGING_STYLE: Record<Aging, { label: string; badge: string; row: string }> 
 };
 
 const REMINDER_TEMPLATES = [
-  { id: "soft",   label: "Friendly nudge",   text: (name: string, amt: string, days: number) => `Hi, just a gentle reminder that your invoice of ${amt} was due ${days} days ago. Please let us know if you need any details. Thanks!` },
+  { id: "soft",   label: "Friendly nudge",   text: (_name: string, amt: string, days: number) => `Hi, just a gentle reminder that your invoice of ${amt} was due ${days} days ago. Please let us know if you need any details. Thanks!` },
   { id: "firm",   label: "Firm reminder",    text: (name: string, amt: string, days: number) => `Dear ${name}, your payment of ${amt} is now ${days} days overdue. Kindly clear this at your earliest to avoid service disruption.` },
   { id: "final",  label: "Final notice",     text: (name: string, amt: string, days: number) => `FINAL NOTICE: ${name}, your outstanding payment of ${amt} (${days} days overdue) has not been received. Legal action will be initiated if not cleared within 7 days.` },
 ];
@@ -133,8 +133,6 @@ export default function CollectionsPage() {
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
   const [contacted, setContacted] = useState<Set<string>>(new Set());
-
-  const today = new Date().toISOString().split("T")[0];
 
   const receivables = useMemo(() => {
     return store.invoices

@@ -609,7 +609,6 @@ function RiskWatchlistBrief() {
     const out: RiskItem[] = [];
     const cur = monthBounds(0);
     const c = flowsIn(transactions, cur.start, cur.end);
-    const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
     const burn = monthlyBurn(transactions);
     const runway = runwayDays(bankAccounts.map(b => b.balance), burn);
 
