@@ -8,6 +8,7 @@ import {
   Clock, ShoppingCart, Receipt as ReceiptIcon, Wallet, PackagePlus, PenLine, PackageCheck, Target,
   Eraser, Navigation, Eye, Activity, AlertTriangle, FileText,
   BarChart3, Banknote, Percent, HeartPulse,
+  Landmark, Repeat, Map, Boxes, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -60,7 +61,8 @@ type FieldTab =
   | "daysheet" | "lowdata" | "visits" | "summary" | "beat" | "receipt"
   | "attendance" | "order" | "outstanding" | "expense" | "stockreq"
   | "signature" | "pod" | "target" | "km" | "intel" | "meter"
-  | "issue" | "quote" | "routesales" | "handover" | "discount" | "synchealth";
+  | "issue" | "quote" | "routesales" | "handover" | "discount" | "synchealth"
+  | "deposit" | "frequency" | "coverage" | "samples" | "callplan";
 
 const TABS = [
   ["overview", "Overview", Smartphone],
@@ -91,6 +93,11 @@ const TABS = [
   ["handover", "Cash Handover", Banknote],
   ["discount", "Discount Approval", Percent],
   ["synchealth", "Sync Health", HeartPulse],
+  ["deposit", "Deposit Recon", Landmark],
+  ["frequency", "Visit Frequency", Repeat],
+  ["coverage", "Territory Coverage", Map],
+  ["samples", "Sample / Demo Stock", Boxes],
+  ["callplan", "Daily-Call Planner", CalendarClock],
 ] as const;
 
 export default function FieldPage() {
@@ -148,6 +155,11 @@ export default function FieldPage() {
       {tab === "handover" && <CashHandover />}
       {tab === "discount" && <DiscountApproval />}
       {tab === "synchealth" && <SyncHealth online={online} />}
+      {tab === "deposit" && <DepositRecon />}
+      {tab === "frequency" && <VisitFrequency />}
+      {tab === "coverage" && <TerritoryCoverage />}
+      {tab === "samples" && <SampleStock />}
+      {tab === "callplan" && <CallPlanner />}
     </div>
   );
 }
@@ -2322,6 +2334,381 @@ function SyncHealth({ online }: { online: boolean }) {
         <CloudUpload size={12} /> Flush pending ({pending.length})
       </button>
       <p className="text-[10px] text-[var(--color-muted)]">Health is derived live from the offline queue and navigator.onLine — the flush button marks staged entries committed; real sync runs automatically on reconnect.</p>
+    </div>
+  );
+}
+
+// ── Field-deposit reconciliation (cash-drop slip vs collections) ─────────────────────
+interface Deposit { id: string; bank: string; ref: string; amount: number; at: string; image: string | null }
+function DepositRecon() {
+  const [deposits, setDeposits] = useFeatureState<Deposit[]>("field-deposits", []);
+  const [queue, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [bank, setBank] = useState("");
+  const [ref, setRef] = useState("");
+  const [amount, setAmount] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+
+  const todayStr = new Date().toDateString();
+  const collectedToday = useMemo(
+    () => queue.filter(q => new Date(q.at).toDateString() === todayStr && q.kind === "collection").reduce((s, q) => s + q.amount, 0),
+    [queue, todayStr],
+  );
+  const depositedToday = deposits.filter(d => new Date(d.at).toDateString() === todayStr).reduce((s, d) => s + d.amount, 0);
+  const undeposited = collectedToday - depositedToday;
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large slip photo — stored by reference to keep data light"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const record = () => {
+    const amt = parseFloat(amount);
+    if (!bank.trim()) { toast.error("Add the bank / CMS point"); return; }
+    if (isNaN(amt) || amt <= 0) { toast.error("Add the deposited amount"); return; }
+    const d: Deposit = { id: crypto.randomUUID(), bank: bank.trim(), ref: ref.trim(), amount: Math.round(amt), at: new Date().toISOString(), image };
+    setDeposits(prev => [d, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "daysheet", label: `Deposit · ${d.bank}`, amount: d.amount, at: d.at, synced: false, meta: ref.trim() ? `Slip ${ref.trim()}` : "Cash drop" }, ...prev]);
+    setBank(""); setRef(""); setAmount(""); setImage(null);
+    toast.success("Deposit recorded — matches against collections on reconnect");
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Field-Deposit Reconciliation</h3>
+        <p className="text-xs text-[var(--color-muted)]">Record cash dropped at the bank or CMS point, snap the slip, and reconcile it against today's field collections — close the cash-in-transit loop.</p>
+        <input value={bank} onChange={e => setBank(e.target.value)} placeholder="Bank / CMS point *" className={INP} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Slip / ref no.</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="e.g. DEP-4471" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="12000" className={INP} />
+          </div>
+        </div>
+        <label className="flex items-center justify-center gap-2 border border-dashed border-[var(--color-border)] rounded-lg py-4 cursor-pointer hover:border-[var(--color-primary)]/40 text-sm text-[var(--color-muted)]">
+          <Camera size={16} /> {image ? "Re-capture slip" : "Snap deposit slip (optional)"}
+          <input type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
+        </label>
+        {image && <img src={image} alt="deposit slip" className="w-20 h-20 object-cover rounded-lg border border-[var(--color-border)]" />}
+        <button onClick={record} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <CheckCircle2 size={14} /> Record deposit
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Collected today", value: formatCurrency(collectedToday), color: "text-blue-400" },
+          { label: "Deposited today", value: formatCurrency(depositedToday), color: "text-[var(--color-text)]" },
+          { label: "Undeposited", value: formatCurrency(undeposited), color: undeposited <= 0 ? "text-green-400" : "text-yellow-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {deposits.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {deposits.slice(0, 12).map(d => (
+            <div key={d.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="flex-1 min-w-0">
+                <span className="text-xs font-medium truncate block">{d.bank}{d.ref && <span className="text-[var(--color-muted)]"> · {d.ref}</span>}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(d.at), "d MMM, h:mm a")}</span>
+              </span>
+              {d.image && <img src={d.image} alt="slip" className="w-8 h-8 object-cover rounded border border-[var(--color-border)] shrink-0" />}
+              <span className="tabular-nums text-sm font-semibold">{formatCurrency(d.amount)}</span>
+              <button onClick={() => setDeposits(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Undeposited = today's queued collections minus today's recorded deposits. Coins and prior-day floats can cause small differences.</p>
+    </div>
+  );
+}
+
+// ── Customer-visit frequency (gap since last visit, from the visit log) ──────────────
+function VisitFrequency() {
+  const [visits] = useFeatureState<Visit[]>("field-visits", []);
+  const [graceDays, setGraceDays] = useFeatureState<number>("field-visit-grace", 14);
+
+  const rows = useMemo(() => {
+    const acc: Record<string, { customer: string; count: number; last: string }> = {};
+    for (const v of visits) {
+      const key = v.customer.toLowerCase();
+      const r = acc[key] ?? { customer: v.customer, count: 0, last: v.at };
+      r.count += 1;
+      if (new Date(v.at).getTime() > new Date(r.last).getTime()) r.last = v.at;
+      acc[key] = r;
+    }
+    const now = Date.now();
+    return Object.values(acc)
+      .map(r => ({ ...r, gapDays: Math.floor((now - new Date(r.last).getTime()) / 86400000) }))
+      .sort((a, b) => b.gapDays - a.gapDays);
+  }, [visits]);
+
+  const overdue = rows.filter(r => r.gapDays >= graceDays).length;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Customer-Visit Frequency</h3>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{rows.length} customers · {overdue} overdue</span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">How often each customer is being seen, drawn from your visit log. Anyone past the grace window is flagged so no relationship goes cold.</p>
+        <div className="max-w-[200px]">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Overdue after (days)</label>
+          <input type="number" min={1} value={graceDays} onChange={e => setGraceDays(Math.max(1, parseInt(e.target.value) || 1))} className={INP} />
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No visits logged yet. Record field calls in the Visit Log and this builds a per-customer frequency view automatically.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Customer", "Visits", "Last seen", "Gap", "Status"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => {
+                const od = r.gapDays >= graceDays;
+                return (
+                  <tr key={r.customer} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 text-xs font-medium">{r.customer}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.count}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(r.last), "d MMM")}</td>
+                    <td className="px-4 py-2.5 text-xs tabular-nums">{r.gapDays === 0 ? "today" : `${r.gapDays}d`}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[10px] font-semibold ${od ? "text-red-400" : "text-green-400"}`}>{od ? "Overdue" : "On track"}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Territory coverage % (planned beat stops covered vs target) ──────────────────────
+function TerritoryCoverage() {
+  const [stops] = useFeatureState<Stop[]>("field-beat", []);
+  const [visits] = useFeatureState<Visit[]>("field-visits", []);
+  const [target, setTarget] = useFeatureState<number>("field-coverage-target", 20);
+
+  const planned = stops.length;
+  const done = stops.filter(s => s.done).length;
+  const todayStr = new Date().toDateString();
+  const visitedToday = visits.filter(v => new Date(v.at).toDateString() === todayStr).length;
+
+  const planPct = planned > 0 ? Math.round((done / planned) * 100) : 0;
+  const targetPct = target > 0 ? Math.min(100, Math.round((visitedToday / target) * 100)) : 0;
+  const bar = (pct: number) => pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-[var(--color-primary)]" : "bg-yellow-500";
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Map size={14} className="text-[var(--color-primary)]" /> Territory Coverage</h3>
+        <p className="text-xs text-[var(--color-muted)]">See how much of the day's beat you've actually covered — planned stops ticked off, and visits made against your territory target. Both read live from the field tools.</p>
+        <div className="max-w-[200px]">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Territory target (customers/day)</label>
+          <input type="number" min={1} value={target} onChange={e => setTarget(Math.max(1, parseInt(e.target.value) || 1))} className={INP} />
+        </div>
+      </div>
+
+      <div className={`${CARD} p-5 space-y-4`}>
+        <div>
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-[var(--color-muted)]">Beat stops covered</span>
+            <span className="tabular-nums font-semibold">{done} / {planned} · {planPct}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${bar(planPct)}`} style={{ width: `${planPct}%` }} />
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">From the Beat / Route plan — tick stops there as you reach them.</p>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-[var(--color-muted)]">Territory target hit</span>
+            <span className="tabular-nums font-semibold">{visitedToday} / {target} · {targetPct}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${bar(targetPct)}`} style={{ width: `${targetPct}%` }} />
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Counts visits logged today against your territory target.</p>
+        </div>
+        {planned === 0 && visitedToday === 0 && (
+          <p className="text-xs text-[var(--color-muted)]">Build a beat in the Route plan and log visits — coverage fills in as you work the territory.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Sample / demo-stock issue tracker (carried demo inventory) ───────────────────────
+interface Sample { id: string; item: string; customer: string; qty: number; status: "issued" | "returned" | "converted"; at: string }
+function SampleStock() {
+  const [samples, setSamples] = useFeatureState<Sample[]>("field-samples", []);
+  const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
+  const [item, setItem] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [qty, setQty] = useState("1");
+
+  const outstanding = samples.filter(s => s.status === "issued").reduce((acc, s) => acc + s.qty, 0);
+
+  const issue = () => {
+    if (!item.trim()) { toast.error("Name the sample / demo item"); return; }
+    if (!customer.trim()) { toast.error("Who is it issued to?"); return; }
+    const s: Sample = { id: crypto.randomUUID(), item: item.trim(), customer: customer.trim(), qty: Math.max(1, parseInt(qty) || 1), status: "issued", at: new Date().toISOString() };
+    setSamples(prev => [s, ...prev]);
+    setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Sample · ${s.item}`, amount: 0, at: s.at, synced: false, meta: `${s.qty}× to ${s.customer}` }, ...prev]);
+    setItem(""); setCustomer(""); setQty("1");
+    toast.success("Sample issued — tracked against your demo float");
+  };
+
+  const setStatus = (id: string, status: Sample["status"]) =>
+    setSamples(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+
+  const badge = (st: Sample["status"]) =>
+    st === "issued" ? "bg-yellow-950/30 text-yellow-400" : st === "returned" ? "bg-blue-950/30 text-blue-400" : "bg-green-950/30 text-green-400";
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Sample / Demo-Stock Issue</h3>
+          <span className="text-[10px] text-[var(--color-muted)]">Out on demo: <span className="text-[var(--color-text)] font-semibold tabular-nums">{outstanding}</span></span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Track samples and demo units you hand out on the beat so the float reconciles — mark each returned or converted to a sale.</p>
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-5">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={item} onChange={e => setItem(e.target.value)} placeholder="Demo blender" className={INP} />
+          </div>
+          <div className="col-span-5">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Issued to</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Stores" className={INP} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Qty</label>
+            <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className={INP} />
+          </div>
+        </div>
+        <button onClick={issue} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">
+          <Plus size={14} /> Issue sample
+        </button>
+      </div>
+
+      {samples.length > 0 && (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {samples.slice(0, 15).map(s => (
+            <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="flex-1 min-w-0">
+                <span className="text-xs font-medium truncate block">{s.qty}× {s.item}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{s.customer} · {format(new Date(s.at), "d MMM")}</span>
+              </span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${badge(s.status)}`}>{s.status}</span>
+              {s.status === "issued" && (
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setStatus(s.id, "returned")} className="text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-1 rounded hover:text-[var(--color-text)]">Returned</button>
+                  <button onClick={() => setStatus(s.id, "converted")} className="text-[10px] border border-green-800/40 text-green-400 bg-green-950/20 px-2 py-1 rounded">Sold</button>
+                </div>
+              )}
+              <button onClick={() => setSamples(prev => prev.filter(x => x.id !== s.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Daily-call planner (next-visit plan with priority + status) ──────────────────────
+interface PlannedCall { id: string; customer: string; reason: string; priority: "low" | "medium" | "high"; date: string; done: boolean }
+function CallPlanner() {
+  const [calls, setCalls] = useFeatureState<PlannedCall[]>("field-callplan", []);
+  const [customer, setCustomer] = useState("");
+  const [reason, setReason] = useState("");
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
+  const [date, setDate] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
+
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const sorted = useMemo(
+    () => [...calls].sort((a, b) =>
+      a.date === b.date ? rank[a.priority] - rank[b.priority] : a.date.localeCompare(b.date)),
+    [calls],
+  );
+  const pending = calls.filter(c => !c.done).length;
+
+  const add = () => {
+    if (!customer.trim()) { toast.error("Add the customer to call"); return; }
+    if (!date) { toast.error("Pick a date"); return; }
+    setCalls(prev => [{ id: crypto.randomUUID(), customer: customer.trim(), reason: reason.trim(), priority, date, done: false }, ...prev]);
+    setCustomer(""); setReason(""); setPriority("medium");
+    toast.success("Call planned");
+  };
+
+  const dot = (p: PlannedCall["priority"]) => p === "high" ? "bg-red-400" : p === "medium" ? "bg-yellow-400" : "bg-green-400";
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Daily-Call Planner</h3>
+          <span className="text-[10px] text-[var(--color-muted)]">{pending} pending</span>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Plan tomorrow's calls tonight — schedule customers by date and priority so the beat starts with a clear list. Works fully offline.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={INP} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+        </div>
+        <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (order / collection / demo)" className={INP} />
+        <div className="flex items-center gap-2">
+          <select value={priority} onChange={e => setPriority(e.target.value as "low" | "medium" | "high")} className={`${INP} max-w-[140px]`}>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <button onClick={add} className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={14} /> Plan call
+          </button>
+        </div>
+      </div>
+
+      {calls.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No calls planned. Build a date-ordered call list so no customer is missed on the beat.</p>
+      ) : (
+        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+          {sorted.map(c => (
+            <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <button onClick={() => setCalls(prev => prev.map(x => x.id === c.id ? { ...x, done: !x.done } : x))}
+                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${c.done ? "bg-green-500 border-green-500" : "border-[var(--color-border)]"}`}>
+                {c.done && <CheckCircle2 size={11} className="text-white" />}
+              </button>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${dot(c.priority)}`} />
+              <span className="flex-1 min-w-0">
+                <span className={`text-xs font-medium truncate block ${c.done ? "line-through text-[var(--color-muted)]" : ""}`}>{c.customer}</span>
+                <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(c.date), "EEE, d MMM")}{c.reason && ` · ${c.reason}`}</span>
+              </span>
+              <button onClick={() => setCalls(prev => prev.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
