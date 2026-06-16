@@ -289,7 +289,7 @@ function TreasuryBanner() {
 
 function HealthScoreWidget() {
   const { store } = useApp();
-  const { transactions, bankAccounts, alerts, activeLoans, firm } = store;
+  const { transactions, bankAccounts, alerts, activeLoans } = store;
   const burn    = monthlyBurn(transactions);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
   const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);

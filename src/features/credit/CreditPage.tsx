@@ -37,12 +37,11 @@ const SCORE_FACTORS = [
 export default function CreditPage() {
   const {
     store, addCreditApplication, updateCreditApplication, addCreditOffer,
-    addActiveLoan, updateActiveLoan, deleteActiveLoan,
+    addActiveLoan, updateActiveLoan,
   } = useApp();
   const { creditApplications, creditOffers, activeLoans, bankAccounts, transactions } = store;
 
   const burn     = monthlyBurn(transactions);
-  const balance  = bankAccounts.reduce((s, a) => s + a.balance, 0);
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
@@ -59,7 +58,6 @@ export default function CreditPage() {
 
   const bestApp   = creditApplications.find(a => a.status === "approved");
   const bestScore = Math.max(0, ...creditApplications.map(a => a.underwritingScore));
-  const declined  = creditApplications.filter(a => a.status === "rejected");
 
   // Real lender offers returned by the underwriting backend for this application
   // (persisted in the store with their server-side offer ids so "Accept" can hit
@@ -1129,7 +1127,7 @@ function FdRdTab() {
             .slice()
             .sort((a,b) => calcMaturity(a).daysLeft - calcMaturity(b).daysLeft)
             .map(d => {
-              const { maturityDate, interest, tds, netInt, daysLeft, matured, maturityValue } = calcMaturity(d);
+              const { maturityDate, interest, tds, daysLeft, matured, maturityValue } = calcMaturity(d);
               return (
                 <div key={d.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${matured ? "border-purple-800/40" : daysLeft <= 30 ? "border-yellow-800/40" : "border-[var(--color-border)]"}`}>
                   <div className="flex items-start justify-between mb-3">

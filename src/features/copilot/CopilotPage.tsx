@@ -201,7 +201,7 @@ function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
             ["Ask the Copilot", "Plain-language answers to 'why is cash down?' grounded only in your metrics.", "qa"],
             ["Runway Goal Planner", "Set a runway target; the planner proposes a mix of collect / cut / borrow.", "goal"],
             ["Attention Feed", "Anomalies and risks surfaced from your data, newest first.", "attention"],
-          ].map(([title, desc, t]) => (
+          ].map(([title, desc]) => (
             <button key={title} onClick={() => navigate("/copilot") /* in-page */}
               className="text-left bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 hover:border-[var(--color-primary)]/40 transition-colors">
               <p className="text-sm font-medium">{title}</p>

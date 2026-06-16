@@ -4,9 +4,9 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import {
-  Package, ShoppingCart, Truck, BarChart2, Plus, X, MessageCircle,
+  Package, ShoppingCart, Truck, Plus, X, MessageCircle,
   Mail, FileSpreadsheet, Phone, CheckCircle2, Clock, AlertTriangle,
-  Radar, Copy, TrendingUp, ArrowUpRight, UserPlus, Banknote, Download,
+  Radar, Copy, TrendingUp, ArrowUpRight, UserPlus, Download,
   Layers, CalendarClock, Wrench, Factory, Warehouse, ScanLine, Route,
   ArrowDownCircle, ArrowUpCircle,
   PieChart, Calculator, Repeat, Percent, Ship, ClipboardCheck, Trash2, Undo2,
@@ -66,7 +66,7 @@ const SEV_DOT: Record<Anomaly["severity"], string> = {
 };
 
 export default function OperationsPage() {
-  const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, updateInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
+  const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
   const { orders, inventory, procurement, transactions } = store;
   const [tab, setTab] = useState<Tab>("overview");
 

@@ -4,8 +4,6 @@ import { toast } from "sonner";
 import { generateId } from "@/lib/utils";
 import type { Transaction } from "@/data/types";
 
-const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
-
 function parseCSV(text: string): string[][] {
   return text.trim().split("\n").map(line => {
     const cols: string[] = [];
