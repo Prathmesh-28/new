@@ -3,17 +3,18 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw, Pencil, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
+import { FEATURE_ENTITLEMENTS, FEATURE_PITCH, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 
-type Tab = "overview" | "companies" | "users" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
+type Tab = "overview" | "companies" | "users" | "plan-access" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
 
-type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string };
+type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string; subscription_plan?: PlanTier; display_name?: string };
 type Company = {
-  tenant_id: string; company_name: string | null; owner_email: string | null; user_count: number;
+  tenant_id: string; company_name: string | null; owner_email: string | null; user_count: number; plan?: PlanTier;
   created_at: string | null; last_activity: string | null;
   cash: number; revenue: number; expense: number; transactions: number; accounts: number; openReceivables: number;
 };
@@ -39,6 +40,7 @@ export default function AdminPage() {
   const [invRole, setInvRole]   = useState("owner");
   const [invTenant, setInvTenant] = useState("");
   const [resetInfo, setResetInfo] = useState<{ email: string; password: string } | null>(null);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
 
   const token = () => localStorage.getItem("hr_access") ?? "";
   const authHeaders = useCallback(() => ({ Authorization: `Bearer ${token()}` }), []);
@@ -99,11 +101,37 @@ export default function AdminPage() {
     toast.success(`Opened ${c.company_name || c.tenant_id} — you can view and edit; changes save to this company`);
     navigate("/dashboard");
   };
+  // Open ANY user's live data (their dashboard, books, every number) as that tenant.
+  const openTenant = (tenantId: string, label: string) => {
+    setSelectedClient(tenantId, label);
+    toast.success(`Viewing ${label} — you can edit every value; changes save to this company`);
+    navigate("/dashboard");
+  };
+  // Super-admin override of a tenant's plan (per-tenant; syncs all its users locally).
+  const setTenantPlan = async (tenantId: string, plan: PlanTier) => {
+    const res = await fetch(`${BASE}/api/admin/tenants/${tenantId}/plan`, {
+      method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ plan }),
+    });
+    if (res.ok) {
+      toast.success(`Plan → ${PLAN_LABEL[plan]}`);
+      setUsers(prev => prev.map(u => u.tenant_id === tenantId ? { ...u, subscription_plan: plan } : u));
+      setCompanies(prev => prev.map(c => c.tenant_id === tenantId ? { ...c, plan } : c));
+    } else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to set plan");
+  };
+  // Save edited user record (email / display name) — super-admin only.
+  const saveUserProfile = async (id: string, patch: { email?: string; display_name?: string }) => {
+    const res = await fetch(`${BASE}/api/users/${id}/profile`, {
+      method: "PATCH", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(patch),
+    });
+    if (res.ok) { toast.success("User updated"); setEditUser(null); loadUsers(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to update user");
+  };
 
   const TABS = [
     { id: "overview",     label: "Platform Overview", icon: ShieldCheck },
     { id: "companies",    label: "Companies",          icon: Building2 },
     { id: "users",        label: "Users",              icon: Users },
+    { id: "plan-access",  label: "Plan Access",        icon: Crown },
     { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
     { id: "usage",        label: "Usage Analytics",    icon: Activity },
     { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
@@ -301,8 +329,8 @@ export default function AdminPage() {
             <table className="w-full text-sm min-w-[720px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
-                  {["Email", "Role", "Tenant", "Status", "Actions"].map((h, i) => (
-                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                  {["Email", "Role", "Plan", "Tenant", "Status", "Actions"].map((h, i) => (
+                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 5 ? "text-right" : "text-left"}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -322,10 +350,18 @@ export default function AdminPage() {
                           </select>
                         )}
                       </td>
+                      <td className="px-4 py-2.5">
+                        <select value={u.subscription_plan ?? "free"} onChange={e => setTenantPlan(u.tenant_id, e.target.value as PlanTier)}
+                          title="Set this tenant's plan" className="text-xs font-semibold rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-2 py-1 outline-none cursor-pointer">
+                          {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+                        </select>
+                      </td>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)] truncate max-w-[160px]">{u.tenant_id}</td>
                       <td className="px-4 py-2.5">{u.first_login ? <span className="text-yellow-400 text-xs">Pending login</span> : <span className="text-green-400 text-xs">Active</span>}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-3">
+                          <button onClick={() => openTenant(u.tenant_id, u.display_name || u.email)} title="Open this user's data (view & edit)" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={14} /></button>
+                          <button onClick={() => setEditUser(u)} title="Edit user" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={14} /></button>
                           <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={14} /></button>
                           {!isSelf && <button onClick={() => removeUser(u)} title="Delete user" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>}
                         </div>
@@ -339,6 +375,8 @@ export default function AdminPage() {
         )
       )}
 
+      {tab === "plan-access" && <PlanAccessMatrix />}
+      {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} onSave={saveUserProfile} />}
       {tab === "ca-workspace" && <CaWorkspace companies={companies} loadCompanies={loadCompanies} />}
       {tab === "usage" && <UsageAnalytics />}
       {tab === "retention" && <RetentionSettings />}
@@ -376,6 +414,78 @@ type CaAdvisor = {
   invitedAt: string;
   status: "invited" | "active";
 };
+
+// ── Plan-access matrix — exactly which modules each plan unlocks (config-driven) ──
+function PlanAccessMatrix() {
+  const plans = Object.keys(PLAN_LABEL) as PlanTier[];
+  const rows = Object.entries(FEATURE_ENTITLEMENTS)
+    .map(([slug, req]) => ({ slug, req: req as PlanTier, label: FEATURE_PITCH[slug]?.title ?? slug }))
+    .sort((a, b) => PLAN_RANK[a.req] - PLAN_RANK[b.req] || a.label.localeCompare(b.label));
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Crown size={14} className="text-[var(--color-primary)]" /> Plan Access</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Exactly which modules each plan unlocks — read live from the entitlement config (nothing hardcoded). Modules not listed are open on every plan; super-admin bypasses all gates.</p>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">Module</th>
+              {plans.map(p => <th key={p} className="px-4 py-2.5 text-center text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{PLAN_LABEL[p]}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map(r => (
+              <tr key={r.slug} className="hover:bg-white/2">
+                <td className="px-4 py-2.5"><span className="font-medium">{r.label}</span> <span className="text-[10px] text-[var(--color-muted)] font-mono">/{r.slug}</span></td>
+                {plans.map(p => (
+                  <td key={p} className="px-4 py-2.5 text-center">
+                    {PLAN_RANK[p] >= PLAN_RANK[r.req]
+                      ? <Check size={15} className="inline text-green-400" />
+                      : <Lock size={13} className="inline text-[var(--color-muted)] opacity-40" />}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {plans.map(p => (
+          <div key={p} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 min-w-[130px]">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{PLAN_LABEL[p]} unlocks</p>
+            <p className="text-lg font-bold text-[var(--color-primary)]">{rows.filter(r => PLAN_RANK[p] >= PLAN_RANK[r.req]).length}<span className="text-xs text-[var(--color-muted)]"> / {rows.length} gated</span></p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Editable user record (super-admin): email + display name ────────────────────
+function UserEditModal({ user, onClose, onSave }: { user: AdminUser; onClose: () => void; onSave: (id: string, patch: { email?: string; display_name?: string }) => void }) {
+  const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState(user.display_name ?? "");
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Pencil size={14} className="text-[var(--color-primary)]" /> Edit user</h3>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+        </div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Email</label><input className={inp} value={email} onChange={e => setEmail(e.target.value)} /></div>
+        <div><label className="text-xs text-[var(--color-muted)] block mb-1">Display name</label><input className={inp} value={name} onChange={e => setName(e.target.value)} placeholder="(optional)" /></div>
+        <p className="text-[11px] text-[var(--color-muted)]">Role and plan are edited inline in the table. Tenant: <span className="font-mono">{user.tenant_id}</span></p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)]">Cancel</button>
+          <button onClick={() => onSave(user.id, { email: email.trim(), display_name: name.trim() })} className="text-xs px-3 py-1.5 rounded-lg font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] flex items-center gap-1"><Check size={12} /> Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CaWorkspace({ companies, loadCompanies }: { companies: Company[]; loadCompanies: () => void }) {
   const [advisors, setAdvisors] = useFeatureState<CaAdvisor[]>("admin-ca-advisors", []);
@@ -1730,8 +1840,8 @@ function NotificationTemplates() {
 }
 
 // ── #198 Subscription / Plan Usage ─────────────────────────────────────────
-type PlanTier = { id: string; name: string; price: number; seatCap: number; companyCap: number };
-const PLAN_TIERS: PlanTier[] = [
+type SeatPlan = { id: string; name: string; price: number; seatCap: number; companyCap: number };
+const PLAN_TIERS: SeatPlan[] = [
   { id: "starter", name: "Starter", price: 999, seatCap: 5, companyCap: 1 },
   { id: "growth", name: "Growth", price: 2999, seatCap: 25, companyCap: 5 },
   { id: "scale", name: "Scale", price: 7999, seatCap: 100, companyCap: 25 },

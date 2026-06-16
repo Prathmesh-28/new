@@ -36,8 +36,8 @@ async function countSuperAdmins(client) {
 router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const isSuperAdmin = req.user.role === "super_admin";
   const { rows } = isSuperAdmin
-    ? await pool.query("SELECT id,email,role,tenant_id,first_login,created_at FROM users ORDER BY created_at DESC")
-    : await pool.query("SELECT id,email,role,tenant_id,first_login,created_at FROM users WHERE tenant_id=$1 ORDER BY created_at DESC", [req.user.tenant_id]);
+    ? await pool.query("SELECT id,email,role,tenant_id,first_login,created_at,COALESCE(subscription_plan,'free') AS subscription_plan FROM users ORDER BY created_at DESC")
+    : await pool.query("SELECT id,email,role,tenant_id,first_login,created_at,COALESCE(subscription_plan,'free') AS subscription_plan FROM users WHERE tenant_id=$1 ORDER BY created_at DESC", [req.user.tenant_id]);
   res.json(rows);
 });
 
@@ -102,6 +102,30 @@ router.patch("/:id", authenticate, async (req, res) => {
   }
 
   const { rows } = await pool.query("UPDATE users SET role=$1 WHERE id=$2 RETURNING id,email,role,tenant_id", [role, req.params.id]);
+  res.json(rows[0]);
+});
+
+// PATCH /api/users/:id/profile — super-admin edits a user's email / display name.
+// Parameterised (no hardcoded values); email uniqueness enforced.
+router.patch("/:id/profile", authenticate, async (req, res) => {
+  if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
+  const { email, display_name } = req.body || {};
+  const sets = [], vals = [];
+  if (typeof email === "string" && email.trim()) {
+    const e = email.trim().toLowerCase();
+    const { rows: dup } = await pool.query("SELECT id FROM users WHERE email=$1 AND id<>$2", [e, req.params.id]);
+    if (dup.length) return res.status(409).json({ error: "Email already in use" });
+    sets.push(`email=$${sets.length + 1}`); vals.push(e);
+  }
+  if (typeof display_name === "string") { sets.push(`display_name=$${sets.length + 1}`); vals.push(display_name.trim()); }
+  if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
+  vals.push(req.params.id);
+  const { rows } = await pool.query(
+    `UPDATE users SET ${sets.join(", ")} WHERE id=$${vals.length}
+     RETURNING id,email,role,tenant_id,first_login,created_at,display_name,COALESCE(subscription_plan,'free') AS subscription_plan`,
+    vals
+  );
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
   res.json(rows[0]);
 });
 

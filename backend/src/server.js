@@ -164,6 +164,7 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
     `SELECT tenant_id,
             COUNT(*)::int AS user_count,
             MAX(CASE WHEN role IN ('owner','super_admin') THEN email END) AS owner_email,
+            COALESCE(MAX(subscription_plan), 'free') AS plan,
             MIN(created_at) AS created_at
      FROM users GROUP BY tenant_id ORDER BY MIN(created_at) DESC`
   );
@@ -180,12 +181,29 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
       company_name: app.firm?.name || null,
       owner_email:  t.owner_email,
       user_count:   t.user_count,
+      plan:         t.plan || "free",
       created_at:   t.created_at,
       last_activity: blob?.updated_at || null,
       ...companyFinancials(app),
     };
   });
   res.json(companies);
+});
+
+// POST /api/admin/tenants/:tid/plan — super-admin override of a tenant's plan
+// (comp / test / manual upgrade). Syncs tenant_billing + every user in the tenant.
+app.post("/api/admin/tenants/:tid/plan", _auth, requireSuper, async (req, res) => {
+  const plan = (req.body && req.body.plan) || "";
+  if (!["free", "starter", "growth", "pro"].includes(plan)) return res.status(400).json({ error: "Invalid plan" });
+  const tid = req.params.tid;
+  await pool.query(
+    `INSERT INTO tenant_billing(tenant_id, plan, provider, status, updated_at)
+     VALUES($1,$2,'admin','active',now())
+     ON CONFLICT(tenant_id) DO UPDATE SET plan=$2, provider='admin', status='active', updated_at=now()`,
+    [tid, plan]
+  );
+  await pool.query("UPDATE users SET subscription_plan=$1 WHERE tenant_id=$2", [plan, tid]);
+  res.json({ ok: true, tenant_id: tid, plan });
 });
 
 // GET /api/admin/tenants — lightweight tenant list (kept for back-compat)
