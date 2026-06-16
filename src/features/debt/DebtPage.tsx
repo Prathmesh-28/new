@@ -12,6 +12,7 @@ import {
   CalendarRange, Target, Percent, DoorClosed, CircleDollarSign, ArrowDownUp, BadgeIndianRupee,
   PiggyBank, Gem, Factory, RefreshCw, Layers, Wallet,
   Activity, BarChart3, Coins, Gauge,
+  CalendarClock, CalendarDays, TrendingUp, ShieldCheck, HandCoins, Receipt, Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, format, parseISO } from "date-fns";
@@ -37,6 +38,7 @@ export default function DebtPage() {
     | "schedule" | "optimizer" | "wacd" | "foreclosure" | "balloon" | "stepemi" | "subsidy"
     | "lasf" | "gold" | "equip" | "reset" | "stacking" | "wcdl"
     | "icr" | "maturity" | "prepaypenalty" | "gearing"
+    | "emidue" | "ratebench" | "premiumfin" | "refundbridge"
   >("overview");
   const [selectedId, setSelectedId] = useState<string | null>(loans[0]?.id ?? null);
   const [prepay, setPrepay] = useState(100000);
@@ -100,6 +102,10 @@ export default function DebtPage() {
             ["maturity", "Maturity Profile", BarChart3],
             ["prepaypenalty", "Prepay vs Penalty", Coins],
             ["gearing", "Debt-to-Equity Target", Gauge],
+            ["emidue", "EMI Due Calendar", CalendarClock],
+            ["ratebench", "Rate Benchmark", TrendingUp],
+            ["premiumfin", "Premium / Liability Financing", ShieldCheck],
+            ["refundbridge", "Refund / ITC Bridge", Receipt],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -130,6 +136,10 @@ export default function DebtPage() {
       {tab === "maturity" && <DebtMaturityProfile loans={loans} />}
       {tab === "prepaypenalty" && <PrepaymentPenaltyVsSavings loans={loans} />}
       {tab === "gearing" && <DebtToEquityPlanner loans={loans} />}
+      {tab === "emidue" && <EmiDueCalendar loans={loans} />}
+      {tab === "ratebench" && <RateBenchmark loans={loans} />}
+      {tab === "premiumfin" && <PremiumFinancingCalculator />}
+      {tab === "refundbridge" && <RefundBridgeAdvance />}
 
       {tab === "overview" && <>
       {/* KPI strip */}
@@ -2702,6 +2712,428 @@ function DebtToEquityPlanner({ loans }: { loans: ActiveLoanLike[] }) {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">D/E (gearing) = total debt ÷ shareholders' equity. Lenders embed gearing caps in covenants and re-test at every drawdown. Enter equity from your latest balance sheet; this tool tracks only loans recorded here.</p>
+    </div>
+  );
+}
+
+// ── #107 EMI Due Calendar & Cash-Cover Check ─────────────────────────────────────
+// Pulls every loan's nextPaymentDate into a forward 6-month due calendar, runs a
+// rolling cash-cover test against current bank balance, and exports an .ics so the
+// owner can drop EMI reminders straight into their calendar app.
+function EmiDueCalendar({ loans }: { loans: ActiveLoanLike[] }) {
+  const { store } = useApp();
+  const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
+  const [months, setMonths] = useState(6);
+  const fc = formatCurrency;
+
+  // Build forward due events: each loan repeats monthly from its recorded next due date.
+  const events = useMemo(() => {
+    const out: { date: Date; loanId: string; lender: string; amount: number }[] = [];
+    for (const l of store.activeLoans) {
+      const base = l.nextPaymentDate ? parseISO(l.nextPaymentDate) : new Date();
+      const amount = l.nextPaymentAmount > 0 ? l.nextPaymentAmount : l.monthlyEmi;
+      for (let k = 0; k < months; k++) {
+        out.push({ date: addMonths(base, k), loanId: l.id, lender: l.lender, amount });
+      }
+    }
+    return out.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [store.activeLoans, months]);
+
+  // Group by month and run a rolling cash-cover test: starting balance less cumulative EMIs.
+  const monthly = useMemo(() => {
+    const map = new Map<string, { label: string; sortKey: number; total: number; rows: typeof events }>();
+    for (const e of events) {
+      const key = format(e.date, "yyyy-MM");
+      const cur = map.get(key) ?? { label: format(e.date, "MMM yyyy"), sortKey: e.date.getTime(), total: 0, rows: [] };
+      cur.total += e.amount;
+      cur.rows.push(e);
+      map.set(key, cur);
+    }
+    const arr = Array.from(map.values()).sort((a, b) => a.sortKey - b.sortKey);
+    let running = snap.cash;
+    return arr.map(m => {
+      const before = running;
+      running -= m.total;
+      return { ...m, balanceBefore: before, balanceAfter: running, short: running < 0 };
+    });
+  }, [events, snap.cash]);
+
+  const firstShort = monthly.find(m => m.short) ?? null;
+  const totalDue = useMemo(() => events.reduce((s, e) => s + e.amount, 0), [events]);
+
+  const exportIcs = () => {
+    if (events.length === 0) { toast.error("No EMIs to export"); return; }
+    const stamp = format(new Date(), "yyyyMMdd'T'HHmmss'Z'");
+    const vevents = events.map((e, i) => {
+      const d = format(e.date, "yyyyMMdd");
+      return [
+        "BEGIN:VEVENT",
+        `UID:headroom-emi-${e.loanId}-${i}@headroom`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${d}`,
+        `SUMMARY:EMI ${Math.round(e.amount)} — ${e.lender}`,
+        `DESCRIPTION:Loan EMI due to ${e.lender}. Ensure cash cover.`,
+        "BEGIN:VALARM\nTRIGGER:-P2D\nACTION:DISPLAY\nDESCRIPTION:EMI due in 2 days\nEND:VALARM",
+        "END:VEVENT",
+      ].join("\n");
+    });
+    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Headroom//Debt//EN", ...vevents, "END:VCALENDAR"].join("\n");
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "headroom-emi-calendar.ics"; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${events.length} EMI reminder(s)`);
+  };
+
+  if (loans.length === 0) return <NoLoansHint what="Your EMI due calendar" />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> EMI due calendar & cash-cover check</h3>
+          <button onClick={exportIcs} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/25">
+            <CalendarDays size={12} /> Export .ics
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-[var(--color-muted)]">Horizon: <strong className="text-[var(--color-text)]">{months} month(s)</strong></label>
+          <input type="range" min={1} max={12} step={1} value={months} onChange={e => setMonths(Number(e.target.value))} className="flex-1 accent-[var(--color-primary)]" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Current cash", value: formatAmount(Math.round(snap.cash)), color: "text-[var(--color-text)]" },
+            { label: `Total EMIs (${months}m)`, value: formatAmount(Math.round(totalDue)), color: "text-red-400" },
+            { label: "First short month", value: firstShort ? firstShort.label : "None", color: firstShort ? "text-red-400" : "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {firstShort && (
+        <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2">
+            <AlertTriangle size={14} /> On current balance, cumulative EMIs exhaust your cash in {firstShort.label}. Arrange a draw or stagger a payment before then.
+          </p>
+        </div>
+      )}
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Forward due schedule</p></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Month", "Loans due", "EMI total", "Cash after", "Cover"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {monthly.map(m => (
+                <tr key={m.label} className={`hover:bg-white/2 ${m.short ? "bg-red-950/20" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{m.label}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{m.rows.map(r => r.lender).join(", ")}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(m.total))}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${m.short ? "text-red-400 font-semibold" : ""}`}>{fc(Math.round(m.balanceAfter))}</td>
+                  <td className="px-4 py-2.5">
+                    {m.short
+                      ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={12} /> Short</span>
+                      : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Covered</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Cover test assumes today's bank balance with no new inflows — a deliberately conservative floor. Each loan repeats its recorded EMI monthly from its next due date. The .ics file imports into Google/Apple/Outlook calendars with a 2-day reminder.</p>
+    </div>
+  );
+}
+
+// ── #108 Rate Benchmark vs Peer Band ─────────────────────────────────────────────
+// Compares each loan's rate against a peer band you set (e.g. typical MSME term-loan
+// pricing) and quantifies the rupee cost of any premium you're paying, so you know
+// exactly which loans are worth a renegotiation or refinance push.
+function RateBenchmark({ loans }: { loans: ActiveLoanLike[] }) {
+  const [bandLow, setBandLow] = useState(11);
+  const [bandHigh, setBandHigh] = useState(15);
+  const fc = formatCurrency;
+
+  const fair = (bandLow + bandHigh) / 2;
+
+  const rows = useMemo(() => loans.map(l => {
+    const rem = remainingMonths(l);
+    const premium = l.rate - fair;             // ppt over the fair midpoint
+    const curInt = totalInterest(l.outstanding, l.rate, rem);
+    const fairInt = totalInterest(l.outstanding, Math.max(0.01, fair), rem);
+    const overpay = Math.max(0, curInt - fairInt);
+    const status: "below" | "in" | "above" = l.rate < bandLow ? "below" : l.rate > bandHigh ? "above" : "in";
+    return { ...l, rem, premium, overpay, status };
+  }), [loans, fair, bandLow, bandHigh]);
+
+  const totalOverpay = useMemo(() => rows.reduce((s, r) => s + r.overpay, 0), [rows]);
+  const aboveCount = rows.filter(r => r.status === "above").length;
+
+  if (loans.length === 0) return <NoLoansHint what="Your rate benchmark" />;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Rate benchmark vs peer band</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Peer band low (% p.a.)</label>
+            <input type="number" value={bandLow} onChange={e => setBandLow(Number(e.target.value) || 0)} className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Peer band high (% p.a.)</label>
+            <input type="number" value={bandHigh} onChange={e => setBandHigh(Number(e.target.value) || 0)} className={DINP} />
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Comparing against a fair midpoint of <strong className="text-[var(--color-text)]">{fair.toFixed(1)}%</strong>. Set the band to what comparable MSME borrowers in your sector and ticket size pay.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Loans above band", value: `${aboveCount} / ${loans.length}`, color: aboveCount > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Est. lifetime overpay", value: formatAmount(Math.round(totalOverpay)), color: "text-red-400" },
+          { label: "Fair midpoint", value: `${fair.toFixed(1)}%`, color: "text-[var(--color-text)]" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Per-loan pricing vs band</p></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Lender", "Rate", "vs fair", "Outstanding", "Overpay (life)", "Verdict"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className={`hover:bg-white/2 ${r.status === "above" ? "bg-red-950/20" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.premium > 0 ? "text-red-400" : "text-green-400"}`}>{r.premium > 0 ? "+" : ""}{r.premium.toFixed(1)} ppt</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overpay > 0 ? fc(Math.round(r.overpay)) : "—"}</td>
+                  <td className="px-4 py-2.5">
+                    {r.status === "above" ? <span className="text-xs text-red-400 font-semibold">Above band — renegotiate</span>
+                      : r.status === "below" ? <span className="text-xs text-green-400 font-semibold">Below band — keep</span>
+                      : <span className="text-xs text-[var(--color-muted)]">In band</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Overpay = lifetime interest at your rate minus interest at the fair midpoint over each loan's remaining term. A clean repayment record is your strongest lever to negotiate any above-band loan down — or refinance it.</p>
+    </div>
+  );
+}
+
+// ── #109 Premium / Liability Financing Cost ──────────────────────────────────────
+// Spreading a lump liability — annual insurance premium, an advance-tax instalment,
+// a GST dues bridge — into monthly EMIs has a real carrying cost. This computes the
+// EMI, total finance charge and effective APR so you can judge if instant cash is worth it.
+function PremiumFinancingCalculator() {
+  const [lumpStr, setLumpStr] = useFeatureState<string>("debt-premiumfin-lump", "");
+  const [rateStr, setRateStr] = useFeatureState<string>("debt-premiumfin-rate", "16");
+  const [procStr, setProcStr] = useState("1");
+  const [tenure, setTenure] = useState(10);
+  const [purpose, setPurpose] = useState<"insurance" | "tax" | "gst" | "other">("insurance");
+  const fc = formatCurrency;
+
+  const lump = parseFloat(lumpStr) || 0;
+  const rate = parseFloat(rateStr) || 0;
+  const procPct = parseFloat(procStr) || 0;
+
+  const result = useMemo(() => {
+    if (lump <= 0 || tenure <= 0) return null;
+    const fees = lump * (procPct / 100);
+    const financed = lump + fees;
+    const monthlyEmi = emi(financed, rate, tenure);
+    const interest = totalInterest(financed, rate, tenure);
+    const totalCost = interest + fees;
+    // Effective APR = IRR of receiving the liability paid net of fees vs the EMI stream.
+    const cashflows = [lump - fees, ...Array(tenure).fill(-monthlyEmi)];
+    const effRate = irr(cashflows);
+    return { fees, financed, monthlyEmi, interest, totalCost, effRate };
+  }, [lump, rate, procPct, tenure]);
+
+  const label = purpose === "insurance" ? "annual insurance premium" : purpose === "tax" ? "advance-tax instalment" : purpose === "gst" ? "GST liability" : "lump liability";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Premium / liability financing cost</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+            <select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)} className={DINP}>
+              <option value="insurance">Insurance premium</option>
+              <option value="tax">Advance / income tax</option>
+              <option value="gst">GST dues</option>
+              <option value="other">Other lump liability</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
+            <input type="number" value={lumpStr} onChange={e => setLumpStr(e.target.value)} placeholder="300000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Finance rate (% p.a.)</label>
+            <input type="number" value={rateStr} onChange={e => setRateStr(e.target.value)} placeholder="16" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Processing %</label>
+            <input type="number" value={procStr} onChange={e => setProcStr(e.target.value)} placeholder="1" className={DINP} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Spread over: <strong className="text-[var(--color-text)]">{tenure} month(s)</strong></label>
+          <input type="range" min={2} max={12} step={1} value={tenure} onChange={e => setTenure(Number(e.target.value))} className="w-full mt-1 accent-[var(--color-primary)]" />
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the {label} amount and rate to see the EMI and the true cost of paying over time.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Monthly instalment", value: fc(Math.round(result.monthlyEmi)), color: "text-[var(--color-text)]" },
+              { label: "Total finance charge", value: formatAmount(Math.round(result.totalCost)), color: "text-red-400" },
+              { label: "Of which fees", value: fc(Math.round(result.fees)), color: "text-yellow-400" },
+              { label: "Effective APR", value: result.effRate !== null ? `${result.effRate.toFixed(2)}%` : "—", color: "text-[var(--color-primary)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)]">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <HandCoins size={14} className="text-[var(--color-primary)]" />
+              Spreading {fc(lump)} over {tenure} months costs you {formatAmount(Math.round(result.totalCost))} extra — about {((result.totalCost / Math.max(1, lump)) * 100).toFixed(1)}% of the amount. Pay upfront if you have idle cash earning less than {result.effRate !== null ? `${result.effRate.toFixed(1)}%` : "this APR"}.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Financing a one-off liability preserves working capital but the all-in cost (interest + fees) is real. Compare the effective APR to your next-best use of that cash — and to any penalty for paying the underlying liability late.</p>
+    </div>
+  );
+}
+
+// ── #110 Refund / ITC Bridge Advance Estimator ───────────────────────────────────
+// Cash blocked in a pending GST input-credit refund or a TDS/income-tax refund can be
+// bridge-financed today. This estimates net proceeds after advance-rate haircut and
+// the carrying cost until the refund actually lands, with a cost-per-day view.
+function RefundBridgeAdvance() {
+  const [kind, setKind] = useState<"itc" | "tds" | "gst">("itc");
+  const [refundStr, setRefundStr] = useFeatureState<string>("debt-refundbridge-amt", "");
+  const [advancePct, setAdvancePct] = useState(85);
+  const [rateStr, setRateStr] = useState("18");
+  const [days, setDays] = useState(60);
+  const [procStr, setProcStr] = useState("1");
+  const fc = formatCurrency;
+
+  const refund = parseFloat(refundStr) || 0;
+  const rate = parseFloat(rateStr) || 0;
+  const procPct = parseFloat(procStr) || 0;
+
+  const result = useMemo(() => {
+    if (refund <= 0 || days <= 0) return null;
+    const advance = refund * (advancePct / 100);
+    const fees = advance * (procPct / 100);
+    const interest = advance * (rate / 100) * (days / 365);
+    const totalCost = interest + fees;
+    const netToday = advance - fees;            // cash you receive now
+    const costPerDay = totalCost / days;
+    const effCostPct = (totalCost / Math.max(1, advance)) * 100;
+    return { advance, fees, interest, totalCost, netToday, costPerDay, effCostPct };
+  }, [refund, advancePct, rate, days, procPct]);
+
+  const kindLabel = kind === "itc" ? "blocked GST input-tax credit" : kind === "tds" ? "TDS / income-tax refund" : "GST refund";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-4`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Refund / ITC bridge advance estimator</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Receivable type</label>
+            <select value={kind} onChange={e => setKind(e.target.value as typeof kind)} className={DINP}>
+              <option value="itc">GST input-tax credit</option>
+              <option value="tds">TDS / tax refund</option>
+              <option value="gst">GST refund claim</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Refund amount (₹)</label>
+            <input type="number" value={refundStr} onChange={e => setRefundStr(e.target.value)} placeholder="500000" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Days till refund lands</label>
+            <input type="number" value={days} onChange={e => setDays(Number(e.target.value) || 0)} placeholder="60" className={DINP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Advance rate: <strong className="text-[var(--color-text)]">{advancePct}%</strong></label>
+            <input type="range" min={50} max={95} step={5} value={advancePct} onChange={e => setAdvancePct(Number(e.target.value))} className="w-full mt-2 accent-[var(--color-primary)]" />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bridge rate (% p.a.)</label>
+            <input type="number" value={rateStr} onChange={e => setRateStr(e.target.value)} placeholder="18" className={DINP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Processing %</label>
+            <input type="number" value={procStr} onChange={e => setProcStr(e.target.value)} placeholder="1" className={DINP} />
+          </div>
+        </div>
+      </div>
+
+      {!result ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Enter the {kindLabel} amount and expected wait to see what bridging it costs.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Cash you get today", value: formatAmount(Math.round(result.netToday)), color: "text-green-400", sub: `${advancePct}% advance less fees` },
+              { label: "Bridge cost", value: formatAmount(Math.round(result.totalCost)), color: "text-red-400", sub: `over ${days} days` },
+              { label: "Cost per day", value: fc(Math.round(result.costPerDay)), color: "text-yellow-400", sub: "carrying cost" },
+              { label: "Effective cost", value: `${result.effCostPct.toFixed(1)}%`, color: "text-[var(--color-primary)]", sub: "of advance drawn" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)]">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Banknote size={14} className="text-[var(--color-primary)]" />
+              Bridging {fc(refund)} of {kindLabel} frees {formatAmount(Math.round(result.netToday))} now and costs {formatAmount(Math.round(result.totalCost))} until it lands. Worth it if that cash earns or saves more than {fc(Math.round(result.costPerDay))} a day in your business.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Lenders advance a haircut (typically 80–90%) of a verified refund and settle on receipt. Interest accrues only for the days outstanding — so the faster the refund clears, the cheaper the bridge. GST ITC refunds can themselves earn statutory interest on delay; net that off before deciding.</p>
     </div>
   );
 }
