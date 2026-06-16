@@ -11,6 +11,8 @@ import {
   Download, Trash2,
   FileCheck, Scale, ListOrdered, Boxes, BadgeCheck, Zap, CopyCheck,
   Layers, ArrowDownUp, PiggyBank, PlugZap,
+  RefreshCw, HelpCircle, ReceiptText, Lock, PackageCheck,
+  ReceiptIndianRupee, Landmark, UserCheck, LineChart, ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
@@ -25,7 +27,9 @@ type Tab =
   | "autopay" | "bulk" | "reminders" | "qrbatch" | "disputes"
   | "emi" | "convfee" | "forecast" | "tip" | "utr"
   | "nach" | "gwcompare" | "dunning" | "vaccount" | "verify" | "instant" | "dupe"
-  | "feetier" | "allocate" | "reserve" | "downtime";
+  | "feetier" | "allocate" | "reserve" | "downtime"
+  | "retry" | "decode" | "tds" | "preauth" | "cod"
+  | "itc" | "pennydrop" | "approval" | "recovery" | "tippool";
 
 async function copy(text: string, label = "Copied") {
   try {
@@ -84,6 +88,16 @@ export default function PaymentsPage() {
             ["allocate", "Payment Allocation", ArrowDownUp],
             ["reserve", "Rolling Reserve", PiggyBank],
             ["downtime", "Method Downtime", PlugZap],
+            ["retry", "Mandate Retry", RefreshCw],
+            ["decode", "Decline Decoder", HelpCircle],
+            ["tds", "Settlement TDS", ReceiptText],
+            ["preauth", "Pre-Auth Holds", Lock],
+            ["cod", "COD → Prepaid", PackageCheck],
+            ["itc", "Fee GST / ITC", ReceiptIndianRupee],
+            ["pennydrop", "Penny-Drop Verify", Landmark],
+            ["approval", "Payout Approvals", UserCheck],
+            ["recovery", "Recovery Analytics", LineChart],
+            ["tippool", "Tip Pooling", ClipboardCheck],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -125,6 +139,16 @@ export default function PaymentsPage() {
       {tab === "allocate" && <PaymentAllocator />}
       {tab === "reserve" && <RollingReserveTracker />}
       {tab === "downtime" && <MethodDowntimeLog />}
+      {tab === "retry" && <MandateRetryPlanner />}
+      {tab === "decode" && <DeclineDecoder />}
+      {tab === "tds" && <SettlementTdsTagger />}
+      {tab === "preauth" && <PreAuthHoldTracker />}
+      {tab === "cod" && <CodToPrepaidSaver />}
+      {tab === "itc" && <FeeGstItcTracker />}
+      {tab === "pennydrop" && <PennyDropVerifier />}
+      {tab === "approval" && <PayoutApprovalDesk />}
+      {tab === "recovery" && <RecoveryAnalytics />}
+      {tab === "tippool" && <TipPoolingSplitter />}
     </div>
   );
 }
@@ -3415,6 +3439,976 @@ function MethodDowntimeLog() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">RBI's framework expects gateways to publish uptime; your own log is what turns a vague "it was down" into a credit claim. Route around a method that repeatedly fails at peak hours and keep a second PG warm as automatic fallback.</p>
+    </div>
+  );
+}
+
+// ── Mandate retry planner ───────────────────────────────────────────────────────────
+function MandateRetryPlanner() {
+  const [amount, setAmount] = useState("");
+  const [failDate, setFailDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [payday, setPayday] = useState("1");
+
+  const amt = parseFloat(amount) || 0;
+  const base = useMemo(() => new Date(failDate), [failDate]);
+  const paydayN = Math.min(28, Math.max(1, parseInt(payday) || 1));
+
+  // RBI/NPCI allow limited re-presentments; schedule them around the next payday.
+  const nextPayday = useMemo(() => {
+    const d = new Date(base);
+    d.setDate(paydayN);
+    if (d <= base) d.setMonth(d.getMonth() + 1);
+    return d;
+  }, [base, paydayN]);
+
+  const attempts = useMemo(() => {
+    const list: { label: string; date: Date; rationale: string }[] = [
+      { label: "Retry 1 — T+1", date: new Date(base.getTime() + 1 * 864e5), rationale: "Catch a same-cycle top-up before the balance moves again" },
+      { label: "Retry 2 — payday +1", date: new Date(nextPayday.getTime() + 1 * 864e5), rationale: "Salary has landed — highest success window" },
+      { label: "Retry 3 — payday +3", date: new Date(nextPayday.getTime() + 3 * 864e5), rationale: "Final attempt before flagging for manual collection" },
+    ];
+    return list;
+  }, [base, nextPayday]);
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Mandate Retry Planner</h2>
+        <p className="text-xs text-[var(--color-muted)]">A failed AutoPay debit is usually just an empty balance, not a lost customer. This schedules re-presentments around the payer's next payday — when money is most likely to be there.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Debit amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="2999" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Failed on</label>
+            <input type="date" value={failDate} onChange={e => setFailDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payer's payday (day of month)</label>
+            <input type="number" min={1} max={28} value={payday} onChange={e => setPayday(e.target.value)} placeholder="1" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Attempt", "Date", "Why then", "Amount"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {attempts.map(a => (
+                <tr key={a.label} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{a.label}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{format(a.date, "EEE d MMM")}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-[11px]">{a.rationale}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{amt > 0 ? formatCurrency(amt) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <button onClick={() => copy(attempts.map(a => `${a.label}: ${format(a.date, "d MMM yyyy")}`).join("\n"), "Retry schedule copied")}
+        className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
+        <Copy size={12} /> Copy schedule
+      </button>
+      <p className="text-[10px] text-[var(--color-muted)]">UPI AutoPay and e-NACH cap the number of re-presentments per mandate cycle — don't burn all attempts on day one. A 24h pre-debit notification is still required before each retry; pair this with the Dunning Ladder for the messaging.</p>
+    </div>
+  );
+}
+
+// ── Decline-reason decoder ──────────────────────────────────────────────────────────
+function DeclineDecoder() {
+  const [q, setQ] = useState("");
+  const CODES: { code: string; aliases: string[]; meaning: string; fix: string; retry: "yes" | "no" | "later" }[] = [
+    { code: "INSUFFICIENT_FUNDS", aliases: ["51", "u30", "low balance"], meaning: "Payer's account/card didn't have enough balance.", fix: "Ask the customer to top up, then retry — or schedule around their payday.", retry: "later" },
+    { code: "DO_NOT_HONOUR", aliases: ["05", "decline"], meaning: "Issuing bank declined without a specific reason — often a soft risk block.", fix: "Retry once; if it repeats, ask the customer to contact their bank or use another method.", retry: "yes" },
+    { code: "EXPIRED_CARD", aliases: ["54"], meaning: "The card on file has expired.", fix: "Collect a fresh card or switch the customer to UPI AutoPay.", retry: "no" },
+    { code: "AUTH_TIMEOUT", aliases: ["91", "u69", "no response"], meaning: "The bank or UPI app didn't respond in time.", fix: "Safe to retry immediately — this is usually transient.", retry: "yes" },
+    { code: "LIMIT_EXCEEDED", aliases: ["61", "u16"], meaning: "Transaction exceeds the per-txn or daily limit on the instrument.", fix: "Split into smaller amounts or ask the customer to raise their limit.", retry: "later" },
+    { code: "MANDATE_NOT_FOUND", aliases: ["um", "revoked"], meaning: "The AutoPay mandate is paused, revoked or never activated.", fix: "Re-create the mandate; don't keep retrying against a dead one.", retry: "no" },
+    { code: "RISK_DECLINED", aliases: ["59", "fraud", "u67"], meaning: "Flagged by the bank or gateway risk engine.", fix: "Don't hammer retries — ask the customer to authenticate via their bank app first.", retry: "no" },
+  ];
+  const norm = q.trim().toLowerCase();
+  const matches = norm === "" ? CODES : CODES.filter(c =>
+    c.code.toLowerCase().includes(norm) || c.meaning.toLowerCase().includes(norm) || c.aliases.some(a => a.includes(norm)));
+  const RETRY_STYLE = { yes: "text-green-400", no: "text-red-400", later: "text-yellow-400" } as const;
+  const RETRY_LABEL = { yes: "Retry now", no: "Don't retry", later: "Retry later" } as const;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={14} className="text-[var(--color-primary)]" /> Decline-Reason Decoder</h2>
+        <p className="text-xs text-[var(--color-muted)]">Acquirer error codes are cryptic — "05" or "U69" means nothing to counter staff. Search the code or symptom to get a plain-language meaning, the fix, and whether it's safe to retry.</p>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Type a code (51, U30) or a symptom (low balance, expired)…" className={INP} />
+      </div>
+
+      {matches.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No match. Try the raw acquirer code, or a keyword like "balance", "expired" or "limit".</p>
+      ) : (
+        <div className="space-y-2">
+          {matches.map(c => (
+            <div key={c.code} className={`${CARD} p-4`}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="font-mono text-xs font-semibold text-[var(--color-primary)]">{c.code}</span>
+                <span className={`text-[11px] font-semibold ${RETRY_STYLE[c.retry]}`}>{RETRY_LABEL[c.retry]}</span>
+              </div>
+              <p className="text-sm mt-1">{c.meaning}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-1"><span className="text-[var(--color-text)] font-medium">Fix:</span> {c.fix}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">Also shown as: {c.aliases.join(", ")}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Codes vary slightly by acquirer — these are the common mappings across major Indian gateways. When in doubt, the gateway's settlement report carries the canonical reason; never retry a hard decline (expired/revoked/risk) more than once.</p>
+    </div>
+  );
+}
+
+// ── Settlement-TDS tagger ───────────────────────────────────────────────────────────
+type TdsRow = { id: string; date: string; source: string; gross: number; tdsPct: number };
+function SettlementTdsTagger() {
+  const [rows, setRows] = useFeatureState<TdsRow[]>("pay-tds", []);
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [source, setSource] = useState("");
+  const [gross, setGross] = useState("");
+  const [tdsPct, setTdsPct] = useState("1");
+
+  const add = () => {
+    const g = parseFloat(gross), t = parseFloat(tdsPct);
+    if (!source.trim() || isNaN(g) || g <= 0) { toast.error("Enter the source and gross settled amount"); return; }
+    setRows([{ id: crypto.randomUUID(), date, source: source.trim(), gross: g, tdsPct: isNaN(t) ? 0 : t }, ...rows]);
+    setSource(""); setGross("");
+    toast.success("TDS entry tagged");
+  };
+
+  const evaluated = rows.map(r => ({ ...r, tds: r.gross * r.tdsPct / 100 }));
+  const totalGross = evaluated.reduce((s, r) => s + r.gross, 0);
+  const totalTds = evaluated.reduce((s, r) => s + r.tds, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ReceiptText size={14} className="text-[var(--color-primary)]" /> Settlement-TDS Tagger</h2>
+        <p className="text-xs text-[var(--color-muted)]">Marketplaces (194-O) and some gateways deduct TDS before they pay you out. That TDS is your credit — tag it here so it shows up in your 26AS reconciliation and isn't written off as a fee.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Source</label>
+            <input value={source} onChange={e => setSource(e.target.value)} placeholder="Amazon / Razorpay" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gross settled ₹</label>
+            <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="200000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">TDS %</label>
+            <input type="number" step="0.1" value={tdsPct} onChange={e => setTdsPct(e.target.value)} placeholder="1" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Tag
+          </button>
+        </div>
+      </div>
+
+      {evaluated.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Gross settled", value: formatAmount(Math.round(totalGross)), color: "text-[var(--color-text)]" },
+            { label: "TDS deducted", value: formatCurrency(Math.round(totalTds)), color: "text-orange-400" },
+            { label: "Claimable credit", value: formatCurrency(Math.round(totalTds)), color: "text-green-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {evaluated.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No TDS tagged yet. Pull the TDS line from each marketplace/gateway settlement report and log it so it reconciles to Form 26AS.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Date", "Source", "Gross", "TDS %", "TDS amount", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {[...evaluated].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums">{format(new Date(r.date), "d MMM")}</td>
+                    <td className="px-4 py-2.5 font-medium">{r.source}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.gross)}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.tdsPct}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.tds))}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Section 194-O TDS on e-commerce is typically 0.1–1%. The deductor must file it against your PAN for the credit to appear in 26AS/AIS — chase a missing entry with the marketplace before you file your return.</p>
+    </div>
+  );
+}
+
+// ── Pre-authorization hold tracker ──────────────────────────────────────────────────
+type HoldRow = { id: string; customer: string; held: number; placed: string; expiryDays: number; status: "held" | "captured" | "released" };
+function PreAuthHoldTracker() {
+  const [rows, setRows] = useFeatureState<HoldRow[]>("pay-preauth", []);
+  const [customer, setCustomer] = useState("");
+  const [held, setHeld] = useState("");
+  const [expiryDays, setExpiryDays] = useState("7");
+
+  const add = () => {
+    const h = parseFloat(held), e = parseInt(expiryDays);
+    if (!customer.trim() || isNaN(h) || h <= 0) { toast.error("Enter customer and the amount to block"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), held: h, placed: new Date().toISOString().split("T")[0], expiryDays: isNaN(e) ? 7 : e, status: "held" }, ...rows]);
+    setCustomer(""); setHeld("");
+    toast.success("Hold logged");
+  };
+  const setStatus = (id: string, status: HoldRow["status"]) =>
+    setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+
+  const active = rows.filter(r => r.status === "held");
+  const blockedValue = active.reduce((s, r) => s + r.held, 0);
+  const today = new Date();
+  const STATUS_STYLE: Record<HoldRow["status"], string> = {
+    held: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    captured: "bg-green-900/30 text-green-400 border-green-800/40",
+    released: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Lock size={14} className="text-[var(--color-primary)]" /> Pre-Authorization Hold Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">For rentals, hospitality or bookings: block funds at reservation, capture on fulfilment, release if cancelled. Track every hold so an auth never silently expires and costs you the sale.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Room 204 — Mehta" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount blocked ₹</label>
+            <input type="number" value={held} onChange={e => setHeld(e.target.value)} placeholder="15000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Auth valid (days)</label>
+            <input type="number" min={1} value={expiryDays} onChange={e => setExpiryDays(e.target.value)} placeholder="7" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Hold
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Active holds", value: String(active.length), color: "text-blue-400" },
+            { label: "Funds blocked", value: formatAmount(Math.round(blockedValue)), color: "text-yellow-400" },
+            { label: "Total tracked", value: String(rows.length), color: "text-[var(--color-text)]" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No holds tracked. Log each pre-auth at booking so you can capture or release it before the authorization lapses.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Blocked", "Placed", "Auth expires", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => {
+                  const expiry = new Date(new Date(r.placed).getTime() + r.expiryDays * 864e5);
+                  const daysLeft = differenceInCalendarDays(expiry, today);
+                  return (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.held)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.placed), "d MMM")}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[11px]">
+                        {format(expiry, "d MMM")}
+                        {r.status === "held" && <span className={`ml-2 text-[10px] ${daysLeft <= 1 ? "text-red-400" : daysLeft <= 3 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{daysLeft < 0 ? "lapsed" : `${daysLeft}d`}</span>}
+                      </td>
+                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {r.status === "held" && (
+                          <>
+                            <button onClick={() => setStatus(r.id, "captured")} className="text-[10px] text-green-400 hover:underline mr-2">Capture</button>
+                            <button onClick={() => setStatus(r.id, "released")} className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] mr-2">Release</button>
+                          </>
+                        )}
+                        <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Card pre-auths typically lapse in 5–7 days (longer for hotels); after that you must re-auth, which can fail. Capture only the amount actually consumed — over-capturing beyond the held value usually needs a fresh authorization.</p>
+    </div>
+  );
+}
+
+// ── COD → prepaid conversion saver ──────────────────────────────────────────────────
+function CodToPrepaidSaver() {
+  const [orders, setOrders] = useState("");
+  const [aov, setAov] = useState("");
+  const [rtoPct, setRtoPct] = useState("25");
+  const [shipCost, setShipCost] = useState("120");
+  const [codFee, setCodFee] = useState("40");
+  const [convertPct, setConvertPct] = useState("30");
+
+  const n = parseFloat(orders) || 0;
+  const a = parseFloat(aov) || 0;
+  const rto = (parseFloat(rtoPct) || 0) / 100;
+  const fwdBack = (parseFloat(shipCost) || 0) * 2; // forward + return leg on an RTO
+  const cod = parseFloat(codFee) || 0;
+  const conv = (parseFloat(convertPct) || 0) / 100;
+
+  // Cost of COD as-is: RTO orders eat two-way shipping + the per-order COD handling fee.
+  const codOrders = n;
+  const rtoOrders = codOrders * rto;
+  const currentRtoCost = rtoOrders * fwdBack;
+  const currentCodFees = codOrders * cod;
+  const currentBleed = currentRtoCost + currentCodFees;
+
+  // After nudging a share to prepaid: those orders carry zero RTO risk and no COD fee.
+  const converted = codOrders * conv;
+  const savedRto = converted * rto * fwdBack;
+  const savedFees = converted * cod;
+  const totalSaved = savedRto + savedFees;
+  const blockedRevenueFreed = converted * rto * a; // revenue no longer lost to prepaid-order RTO
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PackageCheck size={14} className="text-[var(--color-primary)]" /> COD → Prepaid Conversion Saver</h2>
+        <p className="text-xs text-[var(--color-muted)]">Cash-on-delivery quietly bleeds money through returns (RTO) and per-order handling fees. See what a pre-shipment UPI nudge saves when you convert a share of COD orders to prepaid.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">COD orders / month</label>
+            <input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="500" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Avg order value ₹</label>
+            <input type="number" value={aov} onChange={e => setAov(e.target.value)} placeholder="800" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">RTO / return rate %</label>
+            <input type="number" value={rtoPct} onChange={e => setRtoPct(e.target.value)} placeholder="25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Shipping leg ₹ (one way)</label>
+            <input type="number" value={shipCost} onChange={e => setShipCost(e.target.value)} placeholder="120" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">COD handling fee ₹</label>
+            <input type="number" value={codFee} onChange={e => setCodFee(e.target.value)} placeholder="40" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Convert to prepaid %</label>
+            <input type="number" value={convertPct} onChange={e => setConvertPct(e.target.value)} placeholder="30" className={INP} />
+          </div>
+        </div>
+      </div>
+
+      {n > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "COD bleed / month", value: formatCurrency(Math.round(currentBleed)), color: "text-red-400", sub: `${Math.round(rtoOrders)} RTOs + fees` },
+              { label: "Orders converted", value: String(Math.round(converted)), color: "text-blue-400", sub: `${convertPct}% to prepaid` },
+              { label: "Monthly saving", value: formatCurrency(Math.round(totalSaved)), color: "text-green-400", sub: "RTO + COD fees avoided" },
+              { label: "Revenue de-risked", value: formatCurrency(Math.round(blockedRevenueFreed)), color: "text-green-400", sub: "no longer lost to RTO" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
+            <p className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <TrendingUp size={14} /> Converting {convertPct}% of COD to prepaid saves about {formatCurrency(Math.round(totalSaved))}/month in shipping &amp; fees — roughly {formatCurrency(Math.round(totalSaved * 12))} a year — before counting the working capital freed from cash-in-transit.
+            </p>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A small prepaid discount (₹20–50) often pays for itself many times over against RTO cost. Send a UPI link the moment the order is placed and again before dispatch; prepaid orders also return far less often than COD.</p>
+    </div>
+  );
+}
+
+// ── Gateway-fee GST / ITC tracker ──────────────────────────────────────────────────
+type FeeGstRow = { id: string; month: string; gateway: string; feeBase: number; gstPct: number };
+function FeeGstItcTracker() {
+  const [rows, setRows] = useFeatureState<FeeGstRow[]>("pay-fee-gst", []);
+  const [month, setMonth] = useState(() => format(new Date(), "yyyy-MM"));
+  const [gateway, setGateway] = useState("");
+  const [feeBase, setFeeBase] = useState("");
+  const [gstPct, setGstPct] = useState("18");
+
+  const add = () => {
+    const f = parseFloat(feeBase), g = parseFloat(gstPct);
+    if (!gateway.trim() || isNaN(f) || f <= 0) { toast.error("Enter gateway and the fee charged (before GST)"); return; }
+    setRows([{ id: crypto.randomUUID(), month, gateway: gateway.trim(), feeBase: f, gstPct: isNaN(g) ? 18 : g }, ...rows]);
+    setGateway(""); setFeeBase("");
+    toast.success("Fee entry added");
+  };
+
+  const evaluated = rows.map(r => {
+    const gst = r.feeBase * r.gstPct / 100;
+    return { ...r, gst, gross: r.feeBase + gst };
+  });
+  const totalFee = evaluated.reduce((s, r) => s + r.feeBase, 0);
+  const totalGst = evaluated.reduce((s, r) => s + r.gst, 0);
+  const months = new Set(evaluated.map(r => r.month)).size;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ReceiptIndianRupee size={14} className="text-[var(--color-primary)]" /> Gateway-Fee GST &amp; ITC Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Payment gateways charge 18% GST on their processing fee — and you can claim it back as input tax credit. Log each month's fee so the ITC shows up in your GSTR-3B instead of leaking away.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Gateway</label>
+            <input value={gateway} onChange={e => setGateway(e.target.value)} placeholder="Razorpay" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Fee charged ₹ (ex-GST)</label>
+            <input type="number" value={feeBase} onChange={e => setFeeBase(e.target.value)} placeholder="4200" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">GST %</label>
+            <input type="number" value={gstPct} onChange={e => setGstPct(e.target.value)} placeholder="18" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {evaluated.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total fees (ex-GST)", value: formatCurrency(Math.round(totalFee)), color: "text-orange-400" },
+            { label: "GST paid on fees", value: formatCurrency(Math.round(totalGst)), color: "text-blue-400" },
+            { label: "Claimable ITC", value: formatCurrency(Math.round(totalGst)), color: "text-green-400" },
+            { label: "Months tracked", value: String(months), color: "text-[var(--color-text)]" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {evaluated.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No fee entries yet. Pull the GST-on-fee figure from each gateway's monthly tax invoice and log it here.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Month", "Gateway", "Fee (ex-GST)", "GST", "Gross debit", "ITC", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {[...evaluated].sort((a, b) => b.month.localeCompare(a.month)).map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 tabular-nums">{r.month}</td>
+                    <td className="px-4 py-2.5 font-medium">{r.gateway}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.feeBase))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(Math.round(r.gst))} <span className="text-[10px] text-[var(--color-muted)]">@{r.gstPct}%</span></td>
+                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.gross))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.gst))}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">ITC is claimable only if the gateway's GSTIN and your invoice details match what's filed in their GSTR-1 and reflected in your GSTR-2B. Reconcile this log against 2B before claiming, and keep the tax invoice — not just the settlement statement — on file.</p>
+    </div>
+  );
+}
+
+// ── Penny-drop bank verification log ────────────────────────────────────────────────
+type PennyRow = { id: string; payee: string; account: string; ifsc: string; nameAtBank: string; status: "verified" | "mismatch" | "failed"; ts: string };
+function PennyDropVerifier() {
+  const [rows, setRows] = useFeatureState<PennyRow[]>("pay-pennydrop", []);
+  const [payee, setPayee] = useState("");
+  const [account, setAccount] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [nameAtBank, setNameAtBank] = useState("");
+
+  const ifscValid = /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase());
+  const acctValid = /^\d{6,18}$/.test(account.trim());
+
+  const add = (status: PennyRow["status"]) => {
+    if (!payee.trim() || !acctValid || !ifscValid) { toast.error("Enter payee, a valid account number and IFSC"); return; }
+    setRows([{ id: crypto.randomUUID(), payee: payee.trim(), account: account.trim(), ifsc: ifsc.trim().toUpperCase(), nameAtBank: nameAtBank.trim(), status, ts: new Date().toISOString() }, ...rows]);
+    setPayee(""); setAccount(""); setIfsc(""); setNameAtBank("");
+    toast.success(status === "verified" ? "Marked verified" : status === "mismatch" ? "Logged name mismatch" : "Logged failed drop");
+  };
+
+  const verified = rows.filter(r => r.status === "verified").length;
+  const flagged = rows.filter(r => r.status !== "verified").length;
+  const STATUS_STYLE: Record<PennyRow["status"], string> = {
+    verified: "bg-green-900/30 text-green-400 border-green-800/40",
+    mismatch: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    failed: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Penny-Drop Bank Verification</h2>
+        <p className="text-xs text-[var(--color-muted)]">Before a bulk or high-value payout, confirm the account is real and the name matches. Push a ₹1 credit, read back the registered name, and log the result here so a wrong-account transfer never leaves your books.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payee (as you know them)</label>
+            <input value={payee} onChange={e => setPayee(e.target.value)} placeholder="Sharma Logistics" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Account number</label>
+            <input value={account} onChange={e => setAccount(e.target.value)} inputMode="numeric" placeholder="50100123456789" className={INP} />
+            {account.trim() !== "" && !acctValid && <p className="text-[10px] text-red-400 mt-1">6–18 digits</p>}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
+            <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} placeholder="HDFC0001234" className={INP} />
+            {ifsc.trim() !== "" && !ifscValid && <p className="text-[10px] text-red-400 mt-1">Format ABCD0XXXXXX</p>}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Name returned by bank</label>
+            <input value={nameAtBank} onChange={e => setNameAtBank(e.target.value)} placeholder="SHARMA LOGISTICS PVT LTD" className={INP} />
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => add("verified")} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-xs font-medium"><CheckCircle2 size={12} /> Name matches — verify</button>
+          <button onClick={() => add("mismatch")} className="flex items-center gap-1.5 bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-xs hover:border-yellow-800/40">Name mismatch</button>
+          <button onClick={() => add("failed")} className="flex items-center gap-1.5 bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-xs hover:border-red-800/40">Drop failed</button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Verified", value: String(verified), color: "text-green-400" },
+            { label: "Flagged", value: String(flagged), color: flagged ? "text-orange-400" : "text-green-400" },
+            { label: "Total checks", value: String(rows.length), color: "text-[var(--color-text)]" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No verifications logged. Verify every new beneficiary once, then reuse the confirmed record on future pay-runs.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Payee", "Account", "IFSC", "Bank name", "Status", "Checked", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className={`hover:bg-white/2 ${r.status === "failed" ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{r.account}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.ifsc}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.nameAtBank || "—"}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                    <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">A penny-drop costs a rupee or two per check but prevents a misdirected payout that's almost impossible to claw back. Treat a name mismatch as a hard stop — confirm the spelling with the payee before releasing funds.</p>
+    </div>
+  );
+}
+
+// ── Payout approval desk (maker-checker) ────────────────────────────────────────────
+type ApprovalRow = { id: string; payee: string; amount: number; purpose: string; requestedBy: string; ts: string; status: "pending" | "approved" | "rejected" };
+function PayoutApprovalDesk() {
+  const [rows, setRows] = useFeatureState<ApprovalRow[]>("pay-approvals", []);
+  const [threshold, setThreshold] = useFeatureState<number>("pay-approval-threshold", 50000);
+  const [payee, setPayee] = useState("");
+  const [amount, setAmount] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
+
+  const submit = () => {
+    const a = parseFloat(amount);
+    if (!payee.trim() || isNaN(a) || a <= 0) { toast.error("Enter payee and a valid amount"); return; }
+    const needsApproval = a >= threshold;
+    setRows([{
+      id: crypto.randomUUID(), payee: payee.trim(), amount: a, purpose: purpose.trim(),
+      requestedBy: requestedBy.trim() || "—", ts: new Date().toISOString(),
+      status: needsApproval ? "pending" : "approved",
+    }, ...rows]);
+    setPayee(""); setAmount(""); setPurpose("");
+    toast.success(needsApproval ? "Sent for approval" : "Auto-approved (below threshold)");
+  };
+  const setStatus = (id: string, status: ApprovalRow["status"]) =>
+    setRows(rows.map(r => r.id === id ? { ...r, status } : r));
+
+  const pending = rows.filter(r => r.status === "pending");
+  const pendingValue = pending.reduce((s, r) => s + r.amount, 0);
+  const approvedValue = rows.filter(r => r.status === "approved").reduce((s, r) => s + r.amount, 0);
+  const STATUS_STYLE: Record<ApprovalRow["status"], string> = {
+    pending: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    approved: "bg-green-900/30 text-green-400 border-green-800/40",
+    rejected: "bg-red-900/30 text-red-400 border-red-800/40",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> Payout Approval Desk</h2>
+        <p className="text-xs text-[var(--color-muted)]">Maker-checker for disbursals: anything at or above your threshold needs a second pair of eyes before it's released. Small payouts auto-clear so routine spend isn't blocked.</p>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-[var(--color-muted)]">Approval needed at or above ₹</span>
+          <input type="number" min={0} value={threshold} onChange={e => setThreshold(parseFloat(e.target.value) || 0)} className={`${INP} max-w-[140px]`} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Payee</label>
+            <input value={payee} onChange={e => setPayee(e.target.value)} placeholder="Vendor / staff" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="75000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+            <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Q2 supplier dues" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Requested by</label>
+            <input value={requestedBy} onChange={e => setRequestedBy(e.target.value)} placeholder="Priya (accounts)" className={INP} />
+          </div>
+          <button onClick={submit} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Submit
+          </button>
+        </div>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Awaiting approval", value: formatAmount(pendingValue), sub: `${pending.length} request(s)`, color: pending.length ? "text-orange-400" : "text-green-400" },
+            { label: "Approved", value: formatAmount(approvedValue), sub: "cleared to pay", color: "text-green-400" },
+            { label: "Total requests", value: String(rows.length), sub: "all-time", color: "text-[var(--color-text)]" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No payout requests yet. Submit one above; anything at or above {formatCurrency(threshold)} will queue for approval.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Payee", "Amount", "Purpose", "Requested by", "When", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.purpose || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.requestedBy}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
+                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      {r.status === "pending" && (
+                        <>
+                          <button onClick={() => setStatus(r.id, "approved")} className="text-[10px] text-green-400 hover:underline mr-2">Approve</button>
+                          <button onClick={() => setStatus(r.id, "rejected")} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 mr-2">Reject</button>
+                        </>
+                      )}
+                      <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Maker-checker is the single cheapest control against payout fraud and fat-finger errors. The person who raises a payout should never be the one who approves it — keep submit and approve in different hands.</p>
+    </div>
+  );
+}
+
+// ── Failed-payment recovery analytics ───────────────────────────────────────────────
+type RecoveryRow = { id: string; label: string; failedCount: number; failedValue: number; recoveredCount: number };
+function RecoveryAnalytics() {
+  const [rows, setRows] = useFeatureState<RecoveryRow[]>("pay-recovery", []);
+  const [label, setLabel] = useState("");
+  const [failedCount, setFailedCount] = useState("");
+  const [failedValue, setFailedValue] = useState("");
+  const [recoveredCount, setRecoveredCount] = useState("");
+
+  const add = () => {
+    const fc = parseInt(failedCount), fv = parseFloat(failedValue), rc = parseInt(recoveredCount);
+    if (!label.trim() || isNaN(fc) || fc <= 0 || isNaN(fv) || fv < 0) { toast.error("Enter a label, failed count and failed value"); return; }
+    const rcN = isNaN(rc) ? 0 : Math.min(rc, fc);
+    setRows([{ id: crypto.randomUUID(), label: label.trim(), failedCount: fc, failedValue: fv, recoveredCount: rcN }, ...rows]);
+    setLabel(""); setFailedCount(""); setFailedValue(""); setRecoveredCount("");
+    toast.success("Cohort added");
+  };
+
+  const evaluated = rows.map(r => {
+    const avgTicket = r.failedValue / r.failedCount;
+    const recoveryRate = r.failedCount ? r.recoveredCount / r.failedCount : 0;
+    const recoveredValue = avgTicket * r.recoveredCount;
+    const stillRecoverable = r.failedValue - recoveredValue;
+    return { ...r, avgTicket, recoveryRate, recoveredValue, stillRecoverable };
+  });
+  const totalFailedValue = evaluated.reduce((s, r) => s + r.failedValue, 0);
+  const totalRecoveredValue = evaluated.reduce((s, r) => s + r.recoveredValue, 0);
+  const totalLeft = evaluated.reduce((s, r) => s + r.stillRecoverable, 0);
+  const blendedRate = totalFailedValue ? totalRecoveredValue / totalFailedValue : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Failed-Payment Recovery Analytics</h2>
+        <p className="text-xs text-[var(--color-muted)]">A failed payment isn't lost revenue yet — most of it is recoverable with a timely retry or fresh link. Log failed cohorts by period or method to see how much you've clawed back and how much is still on the table.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cohort (period / method)</label>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="May · UPI collect" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Failed count</label>
+            <input type="number" value={failedCount} onChange={e => setFailedCount(e.target.value)} placeholder="240" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Failed value ₹</label>
+            <input type="number" value={failedValue} onChange={e => setFailedValue(e.target.value)} placeholder="360000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Recovered count</label>
+            <input type="number" value={recoveredCount} onChange={e => setRecoveredCount(e.target.value)} placeholder="156" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      </div>
+
+      {evaluated.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Failed value", value: formatAmount(Math.round(totalFailedValue)), color: "text-orange-400" },
+            { label: "Recovered", value: formatAmount(Math.round(totalRecoveredValue)), color: "text-green-400" },
+            { label: "Still recoverable", value: formatAmount(Math.round(totalLeft)), color: totalLeft > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Blended recovery", value: `${(blendedRate * 100).toFixed(0)}%`, color: "text-blue-400" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {evaluated.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No cohorts yet. Add a period or payment method with its failed and recovered counts to size your recoverable revenue.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Cohort", "Failed", "Failed value", "Avg ticket", "Recovery", "Recovered", "Still recoverable", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {evaluated.map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{r.label}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.failedCount}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.failedValue)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.avgTicket))}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.recoveryRate >= 0.5 ? "text-green-400" : r.recoveryRate >= 0.25 ? "text-yellow-400" : "text-orange-400"}`}>{(r.recoveryRate * 100).toFixed(0)}%</td>
+                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.recoveredValue))}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatAmount(Math.round(r.stillRecoverable))}</td>
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Insufficient-balance and step-up declines recover best when retried 2–3 days after payday; hard declines (closed card, blocked account) rarely do. Use the Dunning Ladder and Mandate Retry tools to action the "still recoverable" pool.</p>
+    </div>
+  );
+}
+
+// ── Tip pooling / staff split ───────────────────────────────────────────────────────
+type TipStaff = { id: string; name: string; shares: number };
+function TipPoolingSplitter() {
+  const [staff, setStaff] = useFeatureState<TipStaff[]>("pay-tip-staff", []);
+  const [pool, setPool] = useState("");
+  const [name, setName] = useState("");
+  const [shares, setShares] = useState("1");
+
+  const add = () => {
+    const sh = parseFloat(shares);
+    if (!name.trim() || isNaN(sh) || sh <= 0) { toast.error("Enter a staff name and a positive share weight"); return; }
+    setStaff([...staff, { id: crypto.randomUUID(), name: name.trim(), shares: sh }]);
+    setName(""); setShares("1");
+    toast.success("Staff added");
+  };
+
+  const poolN = parseFloat(pool) || 0;
+  const totalShares = staff.reduce((s, m) => s + m.shares, 0);
+  const allocation = staff.map(m => ({
+    ...m,
+    amount: totalShares > 0 ? poolN * m.shares / totalShares : 0,
+  }));
+  // Penny-correct: give rounding remainder to the largest-share staffer.
+  const rounded = allocation.map(a => ({ ...a, paid: Math.floor(a.amount) }));
+  const distributed = rounded.reduce((s, a) => s + a.paid, 0);
+  const remainder = Math.round(poolN) - distributed;
+  const topIdx = rounded.reduce((best, a, i) => a.amount > (rounded[best]?.amount ?? -1) ? i : best, 0);
+  const finalRows = rounded.map((a, i) => ({ ...a, paid: i === topIdx ? a.paid + remainder : a.paid }));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Tip Pooling &amp; Staff Split</h2>
+        <p className="text-xs text-[var(--color-muted)]">Tips collected at checkout go into one pool — this splits them fairly across staff by share weight (e.g. full-timers 2, part-timers 1), to the rupee, with no money lost to rounding.</p>
+        <div className="flex items-end gap-2 flex-wrap">
+          <div className="w-44">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tip pool to split ₹</label>
+            <input type="number" value={pool} onChange={e => setPool(e.target.value)} placeholder="4800" className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Staff name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Anil" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Share weight</label>
+            <input type="number" min={0} step="0.5" value={shares} onChange={e => setShares(e.target.value)} placeholder="1" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add staff
+          </button>
+        </div>
+      </div>
+
+      {staff.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Pool", value: formatCurrency(Math.round(poolN)), color: "text-[var(--color-text)]" },
+            { label: "Staff", value: String(staff.length), color: "text-blue-400" },
+            { label: "Total shares", value: String(totalShares), color: "text-[var(--color-muted)]" },
+          ].map(k => (
+            <div key={k.label} className={`${CARD} p-4`}>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+              <p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {staff.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No staff added. Add the people who share the tip pool and set each one's share weight.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Staff", "Shares", "% of pool", "Payout", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {finalRows.map(a => (
+                  <tr key={a.id} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{a.name}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{a.shares}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totalShares > 0 ? `${(a.shares / totalShares * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(a.paid)}</td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <button onClick={() => copy(`${a.name}: ${formatCurrency(a.paid)}`, "Payout copied")} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Copy</button>
+                      <button onClick={() => setStaff(staff.filter(x => x.id !== a.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">The largest-share staffer absorbs the rounding remainder so the payouts always add back exactly to the pool. Disbursed tips are taxable as the recipients' income — keep this split sheet as the record behind each payout.</p>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   Repeat, Gift,
   PieChart, Gauge, Users, Calculator, FolderKanban, Tag, Timer,
   Filter, Wallet, FileCheck2, CalendarRange,
+  Handshake, Hourglass, Sparkles, RotateCw, Map as MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -26,7 +27,8 @@ type TabId =
   | "cross-sell" | "churn-risk" | "nps" | "playbook" | "renewals" | "referrals"
   | "source-roi" | "rep-scorecard" | "rfm" | "incentive-sim" | "account-plan"
   | "rate-card" | "velocity"
-  | "conversion-funnel" | "revenue-per-customer" | "quote-acceptance" | "seasonality";
+  | "conversion-funnel" | "revenue-per-customer" | "quote-acceptance" | "seasonality"
+  | "negotiation" | "lead-response" | "loyalty" | "reorder-reminder" | "revenue-region";
 
 export default function SalesPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -76,6 +78,11 @@ export default function SalesPage() {
             ["revenue-per-customer", "Revenue / Customer", Wallet],
             ["quote-acceptance", "Quote Acceptance", FileCheck2],
             ["seasonality", "Seasonal Pattern", CalendarRange],
+            ["negotiation", "Negotiation", Handshake],
+            ["lead-response", "Response Time", Hourglass],
+            ["loyalty", "Loyalty Points", Sparkles],
+            ["reorder-reminder", "Reorder Reminder", RotateCw],
+            ["revenue-region", "Revenue / Region", MapIcon],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -117,6 +124,11 @@ export default function SalesPage() {
       {tab === "revenue-per-customer" && <RevenuePerCustomer />}
       {tab === "quote-acceptance" && <QuoteAcceptanceRate />}
       {tab === "seasonality" && <SeasonalPattern />}
+      {tab === "negotiation" && <NegotiationTracker />}
+      {tab === "lead-response" && <LeadResponseTime />}
+      {tab === "loyalty" && <LoyaltyEngine />}
+      {tab === "reorder-reminder" && <ReorderReminder />}
+      {tab === "revenue-region" && <RevenueByRegion />}
     </div>
   );
 }
@@ -2786,6 +2798,587 @@ function SeasonalPattern() {
         <p className="text-sm font-semibold mb-1">Peak month: {MONTH_LABEL[m.peakMonth]} ({formatCurrency(Math.round(m.peak))})</p>
         <p className="text-[10px] text-[var(--color-muted)]">Green bars are above your average active month. Build inventory and working-capital ahead of peaks, and run promotions to lift the lean months — seasonality is easier to fund than to fight.</p>
       </div>
+    </div>
+  );
+}
+
+// ── #55 Negotiation Tracker (offer / counter rounds + target-price gap) ───────────
+type NegoRound = { id: string; by: "us" | "buyer"; price: number; note: string; at: string };
+type Negotiation = { id: string; deal: string; listPrice: number; floorPrice: number; rounds: NegoRound[] };
+function NegotiationTracker() {
+  const [negos, setNegos] = useFeatureState<Negotiation[]>("sales-negotiation", []);
+  const [deal, setDeal] = useState("");
+  const [listPrice, setListPrice] = useState("");
+  const [floorPrice, setFloorPrice] = useState("");
+  const [activeId, setActiveId] = useState("");
+  const [roundBy, setRoundBy] = useState<NegoRound["by"]>("buyer");
+  const [roundPrice, setRoundPrice] = useState("");
+  const [roundNote, setRoundNote] = useState("");
+
+  const create = () => {
+    const lp = parseFloat(listPrice), fp = parseFloat(floorPrice);
+    if (!deal.trim() || isNaN(lp) || lp <= 0) { toast.error("Enter a deal and a positive list price"); return; }
+    if (isNaN(fp) || fp <= 0) { toast.error("Enter your walk-away floor price"); return; }
+    if (fp > lp) { toast.error("Floor price cannot exceed list price"); return; }
+    const n: Negotiation = { id: crypto.randomUUID(), deal: deal.trim(), listPrice: lp, floorPrice: fp, rounds: [] };
+    setNegos([...negos, n]);
+    setActiveId(n.id); setDeal(""); setListPrice(""); setFloorPrice("");
+    toast.success("Negotiation started");
+  };
+
+  const active = negos.find(n => n.id === activeId) ?? negos[0];
+
+  const addRound = () => {
+    if (!active) return;
+    const p = parseFloat(roundPrice);
+    if (isNaN(p) || p <= 0) { toast.error("Enter the offer/counter price"); return; }
+    setNegos(negos.map(n => n.id === active.id
+      ? { ...n, rounds: [...n.rounds, { id: crypto.randomUUID(), by: roundBy, price: p, note: roundNote.trim(), at: new Date().toISOString() }] }
+      : n));
+    setRoundPrice(""); setRoundNote("");
+    if (p < active.floorPrice) toast.warning(`That price is below your floor of ${formatCurrency(active.floorPrice)}`);
+    else toast.success("Round logged");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Handshake size={14} className="text-[var(--color-primary)]" /> Start a negotiation</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Deal</label>
+            <input value={deal} onChange={e => setDeal(e.target.value)} placeholder="Sharma Traders order" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">List price (₹)</label>
+            <input type="number" value={listPrice} onChange={e => setListPrice(e.target.value)} placeholder="500000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Walk-away floor (₹)</label>
+            <input type="number" value={floorPrice} onChange={e => setFloorPrice(e.target.value)} placeholder="430000" className={INP} />
+          </div>
+          <button onClick={create} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Start
+          </button>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Set a floor before you negotiate. The tracker warns you the moment a price dips below it — your concession discipline lives here, not in your head.</p>
+      </div>
+
+      {negos.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No negotiations yet. Start one above to log every offer and counter.</p>
+      ) : (
+        <>
+          <div className={`${CARD} p-4`}>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Active negotiation</label>
+            <select value={active?.id ?? ""} onChange={e => setActiveId(e.target.value)} className={`${INP} max-w-sm`}>
+              {negos.map(n => <option key={n.id} value={n.id}>{n.deal}</option>)}
+            </select>
+          </div>
+
+          {active && (() => {
+            const last = active.rounds.length ? active.rounds[active.rounds.length - 1] : null;
+            const current = last ? last.price : active.listPrice;
+            const givenAway = active.listPrice - current;
+            const givenPct = active.listPrice > 0 ? (givenAway / active.listPrice) * 100 : 0;
+            const room = current - active.floorPrice;
+            const belowFloor = current < active.floorPrice;
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Current price", value: formatCurrency(Math.round(current)), color: belowFloor ? "text-red-400" : "text-[var(--color-text)]" },
+                    { label: "Given away", value: `${formatCurrency(Math.round(givenAway))} (${givenPct.toFixed(0)}%)`, color: givenPct > 10 ? "text-yellow-400" : "text-[var(--color-text)]" },
+                    { label: "Room to floor", value: belowFloor ? "Below floor!" : formatCurrency(Math.round(room)), color: belowFloor ? "text-red-400" : "text-green-400" },
+                    { label: "Rounds", value: `${active.rounds.length}`, color: "text-[var(--color-muted)]" },
+                  ].map(k => (
+                    <div key={k.label} className={`${CARD} p-4`}>
+                      <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                      <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={`${CARD} p-4 space-y-3`}>
+                  <h3 className="text-sm font-semibold">Log a round</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+                    <div>
+                      <label className="text-xs text-[var(--color-muted)] block mb-1">From</label>
+                      <select value={roundBy} onChange={e => setRoundBy(e.target.value as NegoRound["by"])} className={INP}>
+                        <option value="buyer">Buyer counter</option>
+                        <option value="us">Our offer</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--color-muted)] block mb-1">Price (₹)</label>
+                      <input type="number" value={roundPrice} onChange={e => setRoundPrice(e.target.value)} placeholder="460000" className={INP} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
+                      <input value={roundNote} onChange={e => setRoundNote(e.target.value)} placeholder="Wants free delivery" className={INP} />
+                    </div>
+                    <button onClick={addRound} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+                      <Plus size={13} /> Log round
+                    </button>
+                  </div>
+                </div>
+
+                {active.rounds.length > 0 && (
+                  <div className={`${CARD} p-4 space-y-2`}>
+                    <p className="text-sm font-semibold mb-1">Round history</p>
+                    {active.rounds.map((r, i) => (
+                      <div key={r.id} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] last:border-0 py-1.5">
+                        <span className="flex items-center gap-2">
+                          <span className="text-[10px] text-[var(--color-muted)] w-5">#{i + 1}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.by === "us" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-purple-900/30 text-purple-400 border-purple-800/40"}`}>{r.by === "us" ? "Our offer" : "Buyer"}</span>
+                          {r.note && <span className="text-[var(--color-muted)] text-xs truncate max-w-[200px]">{r.note}</span>}
+                        </span>
+                        <span className={`tabular-nums font-semibold ${r.price < active.floorPrice ? "text-red-400" : ""}`}>{formatCurrency(Math.round(r.price))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => { setNegos(negos.filter(n => n.id !== active.id)); setActiveId(""); }}
+                  className="text-xs text-red-400 hover:underline flex items-center gap-1"><Trash2 size={11} /> Delete this negotiation</button>
+              </>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #66 Lead-Response-Time Tracker (first-touch speed vs SLA) ─────────────────────
+type ResponseRow = { id: string; lead: string; source: string; receivedAt: string; respondedAt: string };
+function LeadResponseTime() {
+  const [rows, setRows] = useFeatureState<ResponseRow[]>("sales-lead-response", []);
+  const [slaMins, setSlaMins] = useFeatureState<number>("sales-response-sla", 30);
+  const [lead, setLead] = useState("");
+  const [source, setSource] = useState("WhatsApp");
+  const nowLocal = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const [receivedAt, setReceivedAt] = useState(nowLocal);
+  const [respondedAt, setRespondedAt] = useState(nowLocal);
+
+  const minutesBetween = (a: string, b: string) => {
+    const ra = new Date(a).getTime(), rb = new Date(b).getTime();
+    if (isNaN(ra) || isNaN(rb)) return null;
+    return Math.round((rb - ra) / 60000);
+  };
+
+  const add = () => {
+    if (!lead.trim()) { toast.error("Enter a lead name"); return; }
+    const m = minutesBetween(receivedAt, respondedAt);
+    if (m === null || m < 0) { toast.error("Responded time must be after received time"); return; }
+    setRows([...rows, { id: crypto.randomUUID(), lead: lead.trim(), source, receivedAt, respondedAt }]);
+    setLead("");
+    toast.success(`Logged — first response in ${m} min`);
+  };
+
+  const stats = useMemo(() => {
+    const mins = rows.map(r => minutesBetween(r.receivedAt, r.respondedAt)).filter((m): m is number => m !== null && m >= 0);
+    const avg = mins.length ? mins.reduce((s, m) => s + m, 0) / mins.length : 0;
+    const withinSla = mins.filter(m => m <= slaMins).length;
+    const slaPct = mins.length ? (withinSla / mins.length) * 100 : 0;
+    const slowest = mins.length ? Math.max(...mins) : 0;
+    return { avg, slaPct, slowest, count: mins.length };
+  }, [rows, slaMins]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Log a first response</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Lead</label>
+            <input value={lead} onChange={e => setLead(e.target.value)} placeholder="Anita enquiry" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Source</label>
+            <select value={source} onChange={e => setSource(e.target.value)} className={INP}>
+              {["WhatsApp", "IndiaMART", "JustDial", "Referral", "Walk-in", "Website"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Received</label>
+            <input type="datetime-local" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First responded</label>
+            <input type="datetime-local" value={respondedAt} onChange={e => setRespondedAt(e.target.value)} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Log
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-[var(--color-muted)]">Response SLA (minutes)</label>
+          <input type="number" value={slaMins} onChange={e => setSlaMins(Math.max(1, parseInt(e.target.value) || 1))} className={`${INP} max-w-[100px] py-1`} />
+        </div>
+      </div>
+
+      {stats.count === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No responses logged yet. The lead that gets the first reply usually wins — measure it.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Avg first response", value: `${stats.avg.toFixed(0)} min`, color: stats.avg <= slaMins ? "text-green-400" : "text-yellow-400" },
+              { label: `Within ${slaMins}-min SLA`, value: `${stats.slaPct.toFixed(0)}%`, color: stats.slaPct >= 80 ? "text-green-400" : "text-red-400" },
+              { label: "Slowest response", value: `${stats.slowest} min`, color: "text-[var(--color-muted)]" },
+              { label: "Leads tracked", value: `${stats.count}`, color: "text-[var(--color-text)]" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Lead", "Source", "Received", "Response time", ""].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const m = minutesBetween(r.receivedAt, r.respondedAt) ?? 0;
+                    const breached = m > slaMins;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.lead}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.source}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{format(new Date(r.receivedAt), "d MMM, HH:mm")}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${breached ? "text-red-400" : "text-green-400"}`}>{m} min{breached ? " · SLA missed" : ""}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #25 Loyalty Points Engine (earn per spend + redemption ledger) ────────────────
+type LoyaltyEntry = { id: string; customer: string; kind: "earn" | "redeem"; amount: number; points: number; at: string };
+function LoyaltyEngine() {
+  const [ratePer100, setRatePer100] = useFeatureState<number>("sales-loyalty-rate", 1);
+  const [pointValue, setPointValue] = useFeatureState<number>("sales-loyalty-value", 1);
+  const [entries, setEntries] = useFeatureState<LoyaltyEntry[]>("sales-loyalty", []);
+  const [customer, setCustomer] = useState("");
+  const [kind, setKind] = useState<LoyaltyEntry["kind"]>("earn");
+  const [amount, setAmount] = useState("");
+
+  const balances = useMemo(() => {
+    const m = new Map<string, number>();
+    entries.forEach(e => m.set(e.customer, (m.get(e.customer) ?? 0) + (e.kind === "earn" ? e.points : -e.points)));
+    return m;
+  }, [entries]);
+
+  const add = () => {
+    const v = parseFloat(amount);
+    if (!customer.trim() || isNaN(v) || v <= 0) { toast.error("Enter a customer and a positive amount"); return; }
+    const name = customer.trim();
+    if (kind === "earn") {
+      const pts = Math.floor((v / 100) * Math.max(0, ratePer100));
+      setEntries([...entries, { id: crypto.randomUUID(), customer: name, kind, amount: v, points: pts, at: new Date().toISOString() }]);
+      toast.success(`${name} earned ${pts} point(s)`);
+    } else {
+      const reqPts = Math.ceil(v);
+      const bal = balances.get(name) ?? 0;
+      if (reqPts > bal) { toast.error(`${name} has only ${bal} point(s) — cannot redeem ${reqPts}`); return; }
+      setEntries([...entries, { id: crypto.randomUUID(), customer: name, kind, amount: reqPts * Math.max(0, pointValue), points: reqPts, at: new Date().toISOString() }]);
+      toast.success(`${name} redeemed ${reqPts} point(s) = ${formatCurrency(reqPts * Math.max(0, pointValue))}`);
+    }
+    setCustomer(""); setAmount("");
+  };
+
+  const sortedBalances = [...balances.entries()].filter(([, p]) => p !== 0).sort((a, b) => b[1] - a[1]);
+  const totalOutstanding = sortedBalances.reduce((s, [, p]) => s + Math.max(0, p), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Loyalty program</h3>
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Points earned per ₹100 spent</label>
+            <input type="number" value={ratePer100} onChange={e => setRatePer100(Math.max(0, parseFloat(e.target.value) || 0))} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Value per point on redemption (₹)</label>
+            <input type="number" value={pointValue} onChange={e => setPointValue(Math.max(0, parseFloat(e.target.value) || 0))} className={INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end pt-1">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Traders" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Action</label>
+            <select value={kind} onChange={e => setKind(e.target.value as LoyaltyEntry["kind"])} className={INP}>
+              <option value="earn">Earn on purchase</option>
+              <option value="redeem">Redeem points</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{kind === "earn" ? "Purchase amount (₹)" : "Points to redeem"}</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={kind === "earn" ? "5000" : "50"} className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Record
+          </button>
+        </div>
+      </div>
+
+      {sortedBalances.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No loyalty activity yet. Record a purchase to start awarding points — a cheap retention hook Tally and Khatabook don't have.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Members with points", value: `${sortedBalances.length}`, color: "text-[var(--color-text)]" },
+              { label: "Points outstanding", value: `${totalOutstanding}`, color: "text-[var(--color-primary)]" },
+              { label: "Redemption liability", value: formatCurrency(Math.round(totalOutstanding * Math.max(0, pointValue))), color: "text-yellow-400" },
+            ].map(k => (
+              <div key={k.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Point balances</p></div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-[var(--color-border)]">
+                  <tr>{["Customer", "Points", "Worth"].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {sortedBalances.map(([c, p]) => (
+                    <tr key={c} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{c}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{p}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(p * Math.max(0, pointValue)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className={`${CARD} p-4 space-y-1.5`}>
+            <p className="text-sm font-semibold mb-1">Recent activity</p>
+            {[...entries].slice(-8).reverse().map(e => (
+              <div key={e.id} className="flex items-center justify-between text-xs border-b border-[var(--color-border)] last:border-0 py-1.5">
+                <span className="flex items-center gap-2">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${e.kind === "earn" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-blue-900/30 text-blue-400 border-blue-800/40"}`}>{e.kind}</span>
+                  <span className="font-medium">{e.customer}</span>
+                  <span className="text-[var(--color-muted)]">{format(parseISO(e.at), "d MMM")}</span>
+                </span>
+                <span className="tabular-nums">{e.kind === "earn" ? "+" : "−"}{e.points} pts · {formatCurrency(Math.round(e.amount))}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #12 Repeat-Order Reminder (cadence → predicted next reorder date) ─────────────
+type ReorderCustomer = { id: string; name: string; lastOrder: string; cycleDays: number; avgValue: number };
+function ReorderReminder() {
+  const [custs, setCusts] = useFeatureState<ReorderCustomer[]>("sales-reorder", []);
+  const [name, setName] = useState("");
+  const [lastOrder, setLastOrder] = useState(() => new Date().toISOString().split("T")[0]);
+  const [cycleDays, setCycleDays] = useState("30");
+  const [avgValue, setAvgValue] = useState("");
+  const today = new Date();
+
+  const add = () => {
+    const c = parseInt(cycleDays), v = parseFloat(avgValue);
+    if (!name.trim() || isNaN(c) || c <= 0) { toast.error("Enter a customer and a positive reorder cycle"); return; }
+    setCusts([...custs, { id: crypto.randomUUID(), name: name.trim(), lastOrder, cycleDays: c, avgValue: isNaN(v) ? 0 : v }]);
+    setName(""); setAvgValue("");
+    toast.success("Customer added to reorder watch");
+  };
+
+  const enriched = useMemo(() => custs.map(c => {
+    const due = new Date(parseISO(c.lastOrder)); due.setDate(due.getDate() + c.cycleDays);
+    const daysToDue = differenceInCalendarDays(due, today);
+    return { ...c, dueDate: due, daysToDue };
+  }).sort((a, b) => a.daysToDue - b.daysToDue), [custs, today]);
+
+  const dueNow = enriched.filter(c => c.daysToDue <= 0);
+  const pipeline = dueNow.reduce((s, c) => s + c.avgValue, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><RotateCw size={14} className="text-[var(--color-primary)]" /> Add a repeat buyer</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Verma Stores" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Last order date</label>
+            <input type="date" value={lastOrder} onChange={e => setLastOrder(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reorder cycle (days)</label>
+            <input type="number" value={cycleDays} onChange={e => setCycleDays(e.target.value)} placeholder="30" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Avg order value (₹)</label>
+            <input type="number" value={avgValue} onChange={e => setAvgValue(e.target.value)} placeholder="25000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add
+          </button>
+        </div>
+        {dueNow.length > 0 && (
+          <p className="text-xs text-[var(--color-primary)] flex items-center gap-1.5"><RotateCw size={12} /> {dueNow.length} customer(s) due to reorder now — about {formatCurrency(Math.round(pipeline))} of easy repeat revenue waiting for a nudge.</p>
+        )}
+      </div>
+
+      {enriched.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No repeat buyers tracked yet. Add your regulars and their typical reorder gap — the tool predicts when to nudge each one.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Customer", "Last order", "Cycle", "Predicted reorder", "Avg value", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {enriched.map(c => {
+                  const dueSoon = c.daysToDue <= 0;
+                  const upcoming = c.daysToDue > 0 && c.daysToDue <= 7;
+                  return (
+                    <tr key={c.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{format(parseISO(c.lastOrder), "d MMM yyyy")}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{c.cycleDays}d</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${dueSoon ? "text-[var(--color-primary)]" : upcoming ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>
+                        {format(c.dueDate, "d MMM yyyy")}{dueSoon ? ` · due (${Math.abs(c.daysToDue)}d ago)` : ` · in ${c.daysToDue}d`}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{c.avgValue ? formatCurrency(c.avgValue) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setCusts(custs.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Predicted reorder = last order date + cycle. Nudge a day or two before the predicted date so you reach the buyer before a competitor does.</p>
+    </div>
+  );
+}
+
+// ── #58 Revenue by Region (live invoices grouped by tagged region) ────────────────
+function RevenueByRegion() {
+  const { store } = useApp();
+  const [regions, setRegions] = useFeatureState<Record<string, string>>("sales-customer-region", {});
+  const [editCustomer, setEditCustomer] = useState("");
+  const [editRegion, setEditRegion] = useState("");
+
+  const customers = useMemo(() => {
+    const set = new Set<string>();
+    store.invoices.forEach(i => i.customer && set.add(i.customer));
+    return [...set].sort();
+  }, [store.invoices]);
+
+  const assign = () => {
+    if (!editCustomer || !editRegion.trim()) { toast.error("Pick a customer and enter a region"); return; }
+    setRegions({ ...regions, [editCustomer]: editRegion.trim() });
+    setEditRegion("");
+    toast.success(`${editCustomer} tagged to ${editRegion.trim()}`);
+  };
+
+  const byRegion = useMemo(() => {
+    const m = new Map<string, { revenue: number; count: number }>();
+    store.invoices.forEach(i => {
+      if (!i.customer) return;
+      const region = regions[i.customer] || "Untagged";
+      const cur = m.get(region) ?? { revenue: 0, count: 0 };
+      cur.revenue += i.amount; cur.count += 1;
+      m.set(region, cur);
+    });
+    return [...m.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
+  }, [store.invoices, regions]);
+
+  const totalRevenue = byRegion.reduce((s, [, r]) => s + r.revenue, 0);
+  const maxRev = Math.max(1, ...byRegion.map(([, r]) => r.revenue));
+
+  if (customers.length === 0) {
+    return <EmptyState icon={MapIcon} title="No invoiced customers yet"
+      description="Tag each customer to a city or region, and this slices your invoiced revenue by territory — so you can see where your sales actually come from and where to expand." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><MapIcon size={14} className="text-[var(--color-primary)]" /> Tag a customer to a region</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <select value={editCustomer} onChange={e => { setEditCustomer(e.target.value); setEditRegion(regions[e.target.value] || ""); }} className={INP}>
+              <option value="">Select…</option>
+              {customers.map(c => <option key={c} value={c}>{c}{regions[c] ? ` · ${regions[c]}` : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Region / city</label>
+            <input value={editRegion} onChange={e => setEditRegion(e.target.value)} placeholder="Mumbai" className={INP} />
+          </div>
+          <button onClick={assign} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Tag
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { label: "Total invoiced", value: formatCurrency(Math.round(totalRevenue)), color: "text-[var(--color-text)]" },
+          { label: "Regions", value: `${byRegion.filter(([r]) => r !== "Untagged").length}`, color: "text-[var(--color-primary)]" },
+          { label: "Top region", value: byRegion.length ? byRegion[0][0] : "—", color: "text-green-400" },
+        ].map(k => (
+          <div key={k.label} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${CARD} p-4 space-y-3`}>
+        <p className="text-sm font-semibold">Revenue by region</p>
+        {byRegion.map(([region, r]) => (
+          <div key={region}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-medium">{region} <span className="text-[10px] text-[var(--color-muted)]">{r.count} invoice(s)</span></span>
+              <span className="tabular-nums font-semibold">{formatCurrency(Math.round(r.revenue))} <span className="text-[10px] text-[var(--color-muted)]">{totalRevenue ? ((r.revenue / totalRevenue) * 100).toFixed(0) : 0}%</span></span>
+            </div>
+            <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${region === "Untagged" ? "bg-[var(--color-muted)]/40" : "bg-[var(--color-primary)]"}`} style={{ width: `${(r.revenue / maxRev) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Built live from your invoices — tag customers once and the split updates itself. Untagged revenue is shown separately so nothing is hidden.</p>
     </div>
   );
 }

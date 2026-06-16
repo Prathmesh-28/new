@@ -9,6 +9,7 @@ import {
   FileCheck, RotateCcw, ListChecks, Wallet,
   Trophy, Lock, ShieldAlert, Package, Scale, PartyPopper, Hourglass,
   Ticket, MousePointerClick, PackageX, ScrollText,
+  MapPin, Banknote, CreditCard, MinusCircle, Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,7 +23,8 @@ type MktTab =
   | "target-price" | "inventory-sync" | "fba-fees" | "ppc-budget" | "repricer"
   | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix"
   | "buy-box" | "reserve" | "chargeback" | "bundle" | "break-even" | "festival" | "holding-cost"
-  | "promo-roi" | "conversion" | "return-rate" | "fee-recon";
+  | "promo-roi" | "conversion" | "return-rate" | "fee-recon"
+  | "place-of-supply" | "cod-remit" | "gateway-fee" | "neg-balance" | "channel-roi";
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
@@ -75,6 +77,11 @@ export default function MarketplacePage() {
             ["conversion", "Conversion Tracker", MousePointerClick],
             ["return-rate", "Return Rate / SKU", PackageX],
             ["fee-recon", "Fee Reconciliation", ScrollText],
+            ["place-of-supply", "Place of Supply", MapPin],
+            ["cod-remit", "COD Remittance", Banknote],
+            ["gateway-fee", "Gateway Fee Recon", CreditCard],
+            ["neg-balance", "Negative Balance", MinusCircle],
+            ["channel-roi", "Channel-add ROI", Rocket],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -116,6 +123,11 @@ export default function MarketplacePage() {
       {tab === "conversion" && <ConversionTracker />}
       {tab === "return-rate" && <ReturnRateBySku />}
       {tab === "fee-recon" && <FeeReconciliation />}
+      {tab === "place-of-supply" && <PlaceOfSupplyResolver />}
+      {tab === "cod-remit" && <CodRemittanceTracker />}
+      {tab === "gateway-fee" && <GatewayFeeRecon />}
+      {tab === "neg-balance" && <NegativeBalanceTracker />}
+      {tab === "channel-roi" && <ChannelAddRoi />}
     </div>
   );
 }
@@ -2710,6 +2722,408 @@ function FeeReconciliation() {
             </div>
           </div>
           <p className="text-[10px] text-[var(--color-muted)]">Lines charged more than {tol || 0}% above the expected fee are flagged. Raise a reimbursement / FBA fee-correction case with the order IDs above.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Place-of-supply resolver (IGST vs CGST/SGST) ────────────────────────────────
+const STATES = [
+  "Andhra Pradesh", "Assam", "Bihar", "Chhattisgarh", "Delhi", "Goa", "Gujarat",
+  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
+  "Maharashtra", "Odisha", "Punjab", "Rajasthan", "Tamil Nadu", "Telangana",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal",
+] as const;
+
+function PlaceOfSupplyResolver() {
+  const [sellerState, setSellerState] = useState<string>("Maharashtra");
+  const [buyerState, setBuyerState] = useState<string>("Karnataka");
+  const [taxable, setTaxable] = useState("");
+  const [ratePct, setRatePct] = useState("18");
+
+  const base = parseFloat(taxable) || 0;
+  const rate = parseFloat(ratePct) || 0;
+  const interState = sellerState !== buyerState;
+  const totalTax = base * rate / 100;
+  const igst = interState ? totalTax : 0;
+  const cgst = interState ? 0 : totalTax / 2;
+  const sgst = interState ? 0 : totalTax / 2;
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MapPin size={14} className="text-[var(--color-primary)]" /> Place-of-Supply Resolver</h2>
+        <p className="text-xs text-[var(--color-muted)]">For goods, place of supply is the buyer's ship-to state. If it differs from your registered state the supply is inter-state (charge IGST); if it matches, it is intra-state (split into CGST + SGST). Marketplace orders ship pan-India, so the head flips order to order — get it wrong and you mis-report in GSTR-1.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Your (seller) state</label>
+            <select value={sellerState} onChange={e => setSellerState(e.target.value)} className={INP}>{STATES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Buyer ship-to state</label>
+            <select value={buyerState} onChange={e => setBuyerState(e.target.value)} className={INP}>{STATES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          </div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Taxable value (₹)</label><input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} placeholder="1000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate %</label><input type="number" value={ratePct} onChange={e => setRatePct(e.target.value)} placeholder="18" className={INP} /></div>
+        </div>
+      </div>
+
+      {base > 0 && (
+        <div className={`${CARD} p-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold">Tax breakup</h3>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${interState ? "bg-purple-950/30 text-purple-400 border-purple-800/30" : "bg-blue-950/30 text-blue-400 border-blue-800/30"}`}>{interState ? "Inter-state → IGST" : "Intra-state → CGST + SGST"}</span>
+          </div>
+          <div className="space-y-2">
+            {[
+              { label: "Taxable value", value: formatCurrency(Math.round(base)), color: "text-[var(--color-text)]" },
+              { label: `IGST (${interState ? rate : 0}%)`, value: formatCurrency(Math.round(igst)), color: interState ? "text-purple-400" : "text-[var(--color-muted)]" },
+              { label: `CGST (${interState ? 0 : rate / 2}%)`, value: formatCurrency(Math.round(cgst)), color: interState ? "text-[var(--color-muted)]" : "text-blue-400" },
+              { label: `SGST (${interState ? 0 : rate / 2}%)`, value: formatCurrency(Math.round(sgst)), color: interState ? "text-[var(--color-muted)]" : "text-blue-400" },
+              { label: "Invoice total", value: formatCurrency(Math.round(base + totalTax)), color: "text-green-400 font-bold" },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span>
+                <span className={`tabular-nums ${r.color}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)] mt-3">Rule applies to goods (Sec 10, IGST Act). Services and special cases (e-commerce operator supplies, bill-to/ship-to) can differ — confirm with your CA for edge scenarios.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── COD remittance tracker ──────────────────────────────────────────────────────
+type CodRow = { id: string; partner: string; orders: number; collected: number; remitted: number; expectedOn: string };
+
+function CodRemittanceTracker() {
+  const [rows, setRows] = useFeatureState<CodRow[]>("mkt-cod-remit-rows", []);
+  const [partner, setPartner] = useState("");
+  const [orders, setOrders] = useState("");
+  const [collected, setCollected] = useState("");
+  const [remitted, setRemitted] = useState("");
+  const [expectedOn, setExpectedOn] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const c = parseFloat(collected) || 0;
+    if (!partner.trim() || c <= 0) { toast.error("Enter a logistics partner and amount collected"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), partner: partner.trim(), orders: Math.round(parseFloat(orders) || 0),
+      collected: c, remitted: parseFloat(remitted) || 0, expectedOn,
+    }]);
+    setPartner(""); setOrders(""); setCollected(""); setRemitted("");
+    toast.success("COD batch added");
+  };
+
+  const today = new Date().toISOString().split("T")[0];
+  const enriched = rows.map(r => ({ ...r, float: r.collected - r.remitted, overdue: r.collected - r.remitted > 0 && r.expectedOn < today }));
+  const totCollected = rows.reduce((s, r) => s + r.collected, 0);
+  const totRemitted = rows.reduce((s, r) => s + r.remitted, 0);
+  const totFloat = totCollected - totRemitted;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> COD Remittance Tracker</h2>
+        <p className="text-xs text-[var(--color-muted)]">Your courier collects cash on delivery and remits it days later. That float is your money sitting in their account — track collected vs remitted per partner so nothing goes unremitted past its due date.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Logistics partner</label><input value={partner} onChange={e => setPartner(e.target.value)} placeholder="Delhivery" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">COD orders</label><input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="120" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Collected (₹)</label><input type="number" value={collected} onChange={e => setCollected(e.target.value)} placeholder="180000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Remitted (₹)</label><input type="number" value={remitted} onChange={e => setRemitted(e.target.value)} placeholder="120000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Remit due by</label><input type="date" value={expectedOn} onChange={e => setExpectedOn(e.target.value)} className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add COD batch</button>
+      </div>
+
+      {enriched.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total collected</p><p className="text-xl font-bold tabular-nums">{formatCurrency(Math.round(totCollected))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total remitted</p><p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(totRemitted))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">COD float (unremitted)</p><p className={`text-xl font-bold tabular-nums ${totFloat > 0 ? "text-yellow-400" : "text-green-400"}`}>{formatCurrency(Math.round(totFloat))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Partner", "Orders", "Collected", "Remitted", "Float", "Due by", "Status", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {enriched.map(r => (
+                    <tr key={r.id} className="hover:bg-white/2">
+                      <td className="px-4 py-2.5 font-medium">{r.partner}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.collected)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.remitted)}</td>
+                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.float > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{formatCurrency(Math.round(r.float))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.expectedOn}</td>
+                      <td className="px-4 py-2.5">{r.float <= 0
+                        ? <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={12} /> Settled</span>
+                        : r.overdue
+                          ? <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={12} /> Overdue</span>
+                          : <span className="text-xs text-yellow-400 flex items-center gap-1"><Hourglass size={12} /> Pending</span>}</td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Float = collected − remitted. Overdue rows (due date passed, still unremitted) are your courier holding your cash — follow up.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Payment-gateway fee normalizer (D2C) ────────────────────────────────────────
+type GatewayRow = { id: string; gateway: string; method: string; gross: number; feePct: number; fixedFee: number; gstOnFee: boolean };
+
+function GatewayFeeRecon() {
+  const [rows, setRows] = useFeatureState<GatewayRow[]>("mkt-gateway-rows", []);
+  const [gateway, setGateway] = useState("Razorpay");
+  const [method, setMethod] = useState("UPI");
+  const [gross, setGross] = useState("");
+  const [feePct, setFeePct] = useState("2");
+  const [fixedFee, setFixedFee] = useState("0");
+  const [gstOnFee, setGstOnFee] = useState(true);
+
+  const feeOf = (r: GatewayRow) => {
+    const base = r.gross * r.feePct / 100 + r.fixedFee;
+    return r.gstOnFee ? base * 1.18 : base;
+  };
+
+  const add = () => {
+    const g = parseFloat(gross) || 0;
+    if (g <= 0) { toast.error("Enter the gross transaction value"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), gateway: gateway.trim() || "Gateway", method: method.trim() || "—",
+      gross: g, feePct: parseFloat(feePct) || 0, fixedFee: parseFloat(fixedFee) || 0, gstOnFee,
+    }]);
+    setGross("");
+    toast.success("Transaction added");
+  };
+
+  const totGross = rows.reduce((s, r) => s + r.gross, 0);
+  const totFee = rows.reduce((s, r) => s + feeOf(r), 0);
+  const totNet = totGross - totFee;
+  const blendedPct = totGross > 0 ? (totFee / totGross) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CreditCard size={14} className="text-[var(--color-primary)]" /> Gateway Fee Normalizer</h2>
+        <p className="text-xs text-[var(--color-muted)]">Razorpay, PayU and Cashfree each charge a different MDR by payment method (UPI vs cards vs netbanking), often plus 18% GST on the fee. Normalize them here to see the true net settlement and your blended payment cost across D2C transactions.</p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Gateway</label><input value={gateway} onChange={e => setGateway(e.target.value)} placeholder="Razorpay" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Method</label><input value={method} onChange={e => setMethod(e.target.value)} placeholder="UPI" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Gross (₹)</label><input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="2000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Fee %</label><input type="number" value={feePct} onChange={e => setFeePct(e.target.value)} placeholder="2" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Fixed fee (₹)</label><input type="number" value={fixedFee} onChange={e => setFixedFee(e.target.value)} placeholder="0" className={INP} /></div>
+          <div className="flex items-center gap-2 pb-2.5">
+            <input id="gst-on-fee" type="checkbox" checked={gstOnFee} onChange={e => setGstOnFee(e.target.checked)} className="accent-[var(--color-primary)]" />
+            <label htmlFor="gst-on-fee" className="text-xs text-[var(--color-muted)]">+18% GST</label>
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add transaction</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Gross processed</p><p className="text-xl font-bold tabular-nums">{formatCurrency(Math.round(totGross))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Gateway fees</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(totFee))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Net settlement</p><p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(totNet))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Blended fee rate</p><p className={`text-xl font-bold tabular-nums ${blendedPct > 2.5 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{blendedPct.toFixed(2)}%</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Gateway", "Method", "Gross", "Fee", "Net", "Eff %", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const fee = feeOf(r);
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.gateway}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.method}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(fee))}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.gross - fee))}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.gross > 0 ? `${(fee / r.gross * 100).toFixed(2)}%` : "—"}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">GST on the gateway fee is claimable as ITC against your output tax. Fee includes the fixed per-transaction charge where applicable.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Negative-balance recovery tracker ───────────────────────────────────────────
+type NegRow = { id: string; channel: Channel; reason: string; amount: number; recovered: number; raisedOn: string };
+
+function NegativeBalanceTracker() {
+  const [rows, setRows] = useFeatureState<NegRow[]>("mkt-neg-balance-rows", []);
+  const [channel, setChannel] = useState<Channel>("Amazon");
+  const [reason, setReason] = useState("");
+  const [amount, setAmount] = useState("");
+  const [recovered, setRecovered] = useState("");
+  const [raisedOn, setRaisedOn] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const add = () => {
+    const a = parseFloat(amount) || 0;
+    if (a <= 0) { toast.error("Enter the negative-balance amount"); return; }
+    setRows(prev => [...prev, {
+      id: crypto.randomUUID(), channel, reason: reason.trim() || "Unspecified", amount: a,
+      recovered: Math.min(a, parseFloat(recovered) || 0), raisedOn,
+    }]);
+    setReason(""); setAmount(""); setRecovered("");
+    toast.success("Negative balance logged");
+  };
+
+  const totAmount = rows.reduce((s, r) => s + r.amount, 0);
+  const totRecovered = rows.reduce((s, r) => s + r.recovered, 0);
+  const outstanding = totAmount - totRecovered;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MinusCircle size={14} className="text-[var(--color-primary)]" /> Negative-Balance Recovery</h2>
+        <p className="text-xs text-[var(--color-muted)]">When refunds, reimb, A-to-z claims or fee reversals exceed a period's sales, the marketplace shows a negative balance and claws it back from your next payouts. Log each one so you can confirm the clawback actually stops once it is recovered.</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Reason</label><input value={reason} onChange={e => setReason(e.target.value)} placeholder="Refund > sales" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="14000" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Recovered (₹)</label><input type="number" value={recovered} onChange={e => setRecovered(e.target.value)} placeholder="0" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><input type="date" value={raisedOn} onChange={e => setRaisedOn(e.target.value)} className={INP} /></div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Log negative balance</button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total clawed back</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(totAmount))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Recovered from payouts</p><p className="text-xl font-bold tabular-nums text-green-400">{formatCurrency(Math.round(totRecovered))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Still outstanding</p><p className={`text-xl font-bold tabular-nums ${outstanding > 0 ? "text-yellow-400" : "text-green-400"}`}>{formatCurrency(Math.round(outstanding))}</p></div>
+          </div>
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Channel", "Reason", "Raised", "Amount", "Recovered", "Outstanding", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {rows.map(r => {
+                    const out = r.amount - r.recovered;
+                    return (
+                      <tr key={r.id} className="hover:bg-white/2">
+                        <td className="px-4 py-2.5 font-medium">{r.channel}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.reason}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.amount)}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.recovered)}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${out > 0 ? "text-yellow-400" : "text-green-400"}`}>{formatCurrency(Math.round(out))}</td>
+                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Channel-add ROI simulator ───────────────────────────────────────────────────
+function ChannelAddRoi() {
+  const [monthlyUnits, setMonthlyUnits] = useState("");
+  const [price, setPrice] = useState("");
+  const [cogs, setCogs] = useState("");
+  const [feePct, setFeePct] = useState("18");
+  const [shipPerUnit, setShipPerUnit] = useState("60");
+  const [returnPct, setReturnPct] = useState("8");
+  const [setupCost, setSetupCost] = useState("");
+  const [monthlyFixed, setMonthlyFixed] = useState("");
+  const [cannibalPct, setCannibalPct] = useState("0");
+
+  const units = parseFloat(monthlyUnits) || 0;
+  const p = parseFloat(price) || 0;
+  const c = parseFloat(cogs) || 0;
+  const eff = units * (1 - (parseFloat(cannibalPct) || 0) / 100); // units that are genuinely incremental
+  const grossPerUnit = p - c - p * (parseFloat(feePct) || 0) / 100 - (parseFloat(shipPerUnit) || 0);
+  const lossPerReturn = (parseFloat(shipPerUnit) || 0) * 2 + c; // freight both ways + unrecovered cost proxy
+  const returnRate = (parseFloat(returnPct) || 0) / 100;
+  const netPerUnit = grossPerUnit - returnRate * lossPerReturn;
+  const monthlyContribution = eff * netPerUnit - (parseFloat(monthlyFixed) || 0);
+  const annualContribution = monthlyContribution * 12;
+  const setup = parseFloat(setupCost) || 0;
+  const annualNet = annualContribution - setup;
+  const paybackMonths = monthlyContribution > 0 ? setup / monthlyContribution : Infinity;
+  const roiPct = setup > 0 ? (annualContribution - setup) / setup * 100 : (annualContribution > 0 ? Infinity : 0);
+
+  const ready = units > 0 && p > 0;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <div className={`${CARD} p-5 space-y-3`}>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Rocket size={14} className="text-[var(--color-primary)]" /> Channel-Add ROI Simulator</h2>
+        <p className="text-xs text-[var(--color-muted)]">Before launching on a new marketplace, model whether it actually adds profit. Account for that channel's fees, shipping, returns, one-time onboarding, recurring fixed costs and — crucially — how much volume just cannibalizes your existing channels rather than being net-new.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {([
+            ["Monthly units", monthlyUnits, setMonthlyUnits, "300"],
+            ["Avg selling price (₹)", price, setPrice, "899"],
+            ["COGS / unit (₹)", cogs, setCogs, "350"],
+            ["Channel fee %", feePct, setFeePct, "18"],
+            ["Shipping / unit (₹)", shipPerUnit, setShipPerUnit, "60"],
+            ["Return rate %", returnPct, setReturnPct, "8"],
+            ["One-time setup (₹)", setupCost, setSetupCost, "25000"],
+            ["Monthly fixed (₹)", monthlyFixed, setMonthlyFixed, "5000"],
+            ["Cannibalization %", cannibalPct, setCannibalPct, "0"],
+          ] as const).map(([label, val, setter, ph]) => (
+            <div key={label}>
+              <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+              <input type="number" value={val} onChange={e => setter(e.target.value)} placeholder={ph} className={INP} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Net contribution / unit</p><p className={`text-xl font-bold tabular-nums ${netPerUnit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(netPerUnit))}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Monthly contribution</p><p className={`text-xl font-bold tabular-nums ${monthlyContribution >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(monthlyContribution))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">on {Math.round(eff)} incremental units</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Payback period</p><p className={`text-xl font-bold tabular-nums ${Number.isFinite(paybackMonths) && paybackMonths <= 12 ? "text-green-400" : "text-yellow-400"}`}>{Number.isFinite(paybackMonths) ? `${paybackMonths.toFixed(1)} mo` : "Never"}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Year-1 ROI</p><p className={`text-xl font-bold tabular-nums ${roiPct >= 0 ? "text-green-400" : "text-red-400"}`}>{Number.isFinite(roiPct) ? `${roiPct.toFixed(0)}%` : "—"}</p></div>
+          </div>
+          <div className={`rounded-lg p-4 border ${annualNet >= 0 && netPerUnit >= 0 ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
+            <p className={`text-sm font-bold flex items-center gap-2 ${annualNet >= 0 && netPerUnit >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {annualNet >= 0 && netPerUnit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              {netPerUnit < 0
+                ? "Each unit loses money on this channel after fees, shipping and returns — adding it erodes profit regardless of volume."
+                : annualNet >= 0
+                  ? `Year-1 net profit of ${formatCurrency(Math.round(annualNet))} after setup — this channel is worth adding.`
+                  : `Year-1 still ${formatCurrency(Math.round(Math.abs(annualNet)))} underwater after setup — only add if you expect volume or margin to improve.`}
+            </p>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Cannibalization discounts units that would have sold on an existing channel anyway, so only genuinely incremental volume counts toward this channel's ROI. Per-return loss assumes freight both ways plus unrecovered cost.</p>
         </>
       )}
     </div>

@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { runForecast, generateForecast } from "@/lib/forecastEngine";
-import { monthlyAggregates, cmgr, monthlyCashFlow } from "@/lib/finance";
+import { monthlyAggregates, cmgr, monthlyCashFlow, dso, dio, dpo, advanceTaxSchedule } from "@/lib/finance";
 import { scheduleReminders, cancelReminders } from "@/lib/nativeFeatures";
 import { isNative } from "@/lib/mobile";
 import {
@@ -14,6 +14,7 @@ import {
   LineChart, Receipt, Users, Flame, Layers, ArrowLeftRight, Scale, Target,
   CalendarClock, Wallet, HandCoins, Clock, Gauge, Boxes,
   CalendarDays, Truck, Landmark, Rocket,
+  Repeat, ShieldHalf, PiggyBank, Hourglass,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -50,6 +51,7 @@ export default function ForecastPage() {
     | "rolling-pl" | "capex-plan" | "owner-draw" | "credit-aging"
     | "forecast-accuracy" | "product-mix"
     | "weekly-calendar" | "vendor-timing" | "gst-forecast" | "runway-pipeline"
+    | "cash-cycle" | "stress-test" | "dscr-forecast" | "reserve-tiers" | "advance-tax"
   >("main");
 
   const navigate = useNavigate();
@@ -217,6 +219,11 @@ export default function ForecastPage() {
           ["vendor-timing", "Vendor Payment Timing", Truck],
           ["gst-forecast", "GST Payment Forecast", Landmark],
           ["runway-pipeline", "Runway with Pipeline", Rocket],
+          ["cash-cycle", "Cash-Conversion Cycle", Repeat],
+          ["stress-test", "Liquidity Stress Test", ShieldHalf],
+          ["dscr-forecast", "Debt-Service Coverage", Scale],
+          ["reserve-tiers", "Smart Reserve Tiers", PiggyBank],
+          ["advance-tax", "Advance-Tax Calendar", Hourglass],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setFcTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap ${fcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -248,6 +255,11 @@ export default function ForecastPage() {
       {fcTab === "vendor-timing"     && <VendorPaymentTiming />}
       {fcTab === "gst-forecast"      && <GstPaymentForecast />}
       {fcTab === "runway-pipeline"   && <RunwayWithPipeline />}
+      {fcTab === "cash-cycle"        && <CashConversionCycle />}
+      {fcTab === "stress-test"       && <LiquidityStressTest />}
+      {fcTab === "dscr-forecast"     && <DscrForecast />}
+      {fcTab === "reserve-tiers"     && <SmartReserveTiers />}
+      {fcTab === "advance-tax"       && <AdvanceTaxCalendar />}
 
       {fcTab === "main" && <>
 
@@ -2682,6 +2694,385 @@ function RunwayWithPipeline() {
           {deals.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No pipeline deals yet — add one to extend runway</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #6 — Cash-Conversion-Cycle Tracker
+// CCC = DSO + DIO − DPO. Computed live from invoices, inventory and procurement.
+// A lower (or negative) cycle means cash is tied up for fewer days — the single
+// best lever an SMB has on working capital. Shows each leg and a plain reading.
+// ─────────────────────────────────────────────────────────────────────────────
+function CashConversionCycle() {
+  const { store } = useApp();
+  const { invoices, inventory, procurement } = store;
+
+  const { dsoD, dioD, dpoD, ccc } = useMemo(() => {
+    const dsoD = dso(invoices ?? []);
+    const dioD = dio(inventory ?? [], procurement ?? []);
+    const dpoD = dpo(procurement ?? []);
+    return { dsoD, dioD, dpoD, ccc: dsoD + dioD - dpoD };
+  }, [invoices, inventory, procurement]);
+
+  const legs = [
+    { key: "DSO", label: "Days Sales Outstanding", days: dsoD, sign: "+", desc: "how long customers take to pay you" },
+    { key: "DIO", label: "Days Inventory Outstanding", days: dioD, sign: "+", desc: "how long stock sits before selling" },
+    { key: "DPO", label: "Days Payables Outstanding", days: dpoD, sign: "−", desc: "how long you take to pay suppliers" },
+  ];
+  const chartData = [
+    { name: "DSO", days: dsoD },
+    { name: "DIO", days: dioD },
+    { name: "DPO", days: -dpoD },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Repeat} title="Cash-Conversion-Cycle Tracker" blurb="CCC = DSO + DIO − DPO. The number of days your cash is locked up between paying suppliers and collecting from customers. Lower (or negative) is better — it's the strongest working-capital lever you have." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "DSO (receivables)", value: `${dsoD}d`, color: "text-[var(--color-text)]" },
+        { label: "DIO (inventory)", value: `${dioD}d`, color: "text-[var(--color-text)]" },
+        { label: "DPO (payables)", value: `${dpoD}d`, color: "text-[var(--color-text)]" },
+        { label: "Cash-conversion cycle", value: `${ccc}d`, color: ccc <= 0 ? "text-green-400" : ccc > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: ccc <= 0 ? "negative — suppliers fund your growth" : "days cash is tied up" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Cycle composition (days)</h3>
+        <ResponsiveContainer width="100%" height={180}>
+          <ComposedChart data={chartData} layout="vertical">
+            <XAxis type="number" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} width={42} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${Math.abs(v)} days`, "Days"]} />
+            <ReferenceLine x={0} stroke="#21262D" />
+            <Bar dataKey="days" radius={[0, 4, 4, 0]} animationDuration={400}>
+              {chartData.map(d => <Cell key={d.name} fill={d.days >= 0 ? "#d97706" : "#1A6B55"} />)}
+            </Bar>
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+        {legs.map(l => (
+          <div key={l.key} className="flex items-center justify-between px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">{l.sign} {l.label}</p>
+              <p className="text-xs text-[var(--color-muted)]">{l.desc}</p>
+            </div>
+            <span className="text-sm font-bold tabular-nums">{l.days}d</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Cutting DSO or DIO by 10 days, or stretching DPO by 10 days, each frees up roughly 10 days of working capital. Negative CCC means your suppliers effectively finance your operations.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #11 — Liquidity Stress Test
+// Simulates two shocks against the trailing run-rate: a revenue drop (%) and the
+// loss of the top customer's monthly contribution. Reports how many months of
+// runway survive each shock — the concentration-risk question lenders ask.
+// ─────────────────────────────────────────────────────────────────────────────
+function LiquidityStressTest() {
+  const { store } = useApp();
+  const { transactions, invoices, bankAccounts } = store;
+  const [revDrop, setRevDrop] = useState(30);
+  const [loseTop, setLoseTop] = useState(false);
+
+  const { cash, baseRunway, stressedRunway, topCustomer, topShare, monthsToShortfall } = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const avgRev = hist.length ? hist.reduce((s, m) => s + m.revenue, 0) / hist.length : 0;
+    const avgExp = hist.length ? hist.reduce((s, m) => s + m.expense, 0) / hist.length : 0;
+    const cash = (bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+
+    // Top-customer monthly contribution, from invoiced revenue share.
+    const byCust = new Map<string, number>();
+    for (const inv of invoices ?? []) byCust.set(inv.customer, (byCust.get(inv.customer) ?? 0) + inv.amount);
+    let topCustomer = ""; let topTotal = 0; let allTotal = 0;
+    for (const [c, v] of byCust) { allTotal += v; if (v > topTotal) { topTotal = v; topCustomer = c; } }
+    const topShare = allTotal > 0 ? topTotal / allTotal : 0;
+
+    let stressedRev = avgRev * (1 - revDrop / 100);
+    if (loseTop) stressedRev = Math.max(0, stressedRev - avgRev * topShare);
+
+    const baseBurn = Math.max(0, avgExp - avgRev);
+    const stressedBurn = Math.max(0, avgExp - stressedRev);
+    const baseRunway = baseBurn > 0 ? cash / baseBurn : Infinity;
+    const stressedRunway = stressedBurn > 0 ? cash / stressedBurn : Infinity;
+    return { cash, baseRunway, stressedRunway, topCustomer, topShare, monthsToShortfall: stressedRunway };
+  }, [transactions, invoices, bankAccounts, revDrop, loseTop]);
+
+  const fmtMonths = (m: number) => m === Infinity ? "Survives 6m+" : `${m.toFixed(1)} mo`;
+  const survives = stressedRunway >= 6;
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={ShieldHalf} title="Liquidity Stress Test" blurb="Shocks your trailing run-rate by a revenue drop and (optionally) losing your biggest customer, then reports the surviving runway — the concentration-risk question every lender and prudent owner asks." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
+        { label: "Base runway", value: fmtMonths(baseRunway), color: "text-[var(--color-text)]" },
+        { label: "Stressed runway", value: fmtMonths(stressedRunway), color: survives ? "text-green-400" : "text-red-400", sub: survives ? "survives the shock" : "below 6-month safety" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Revenue drop: <span className="text-[var(--color-text)] font-semibold">{revDrop}%</span></label>
+          <input type="range" min="0" max="60" step="5" value={revDrop} onChange={e => setRevDrop(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={loseTop} onChange={e => setLoseTop(e.target.checked)} className="accent-[var(--color-primary)]" />
+          Also lose top customer{topCustomer ? <span className="text-[var(--color-muted)]">— {topCustomer} ({Math.round(topShare * 100)}% of billings)</span> : <span className="text-[var(--color-muted)]">— no invoice data</span>}
+        </label>
+      </div>
+      {!survives && monthsToShortfall !== Infinity && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 text-sm text-red-400">
+          Under this shock you run short in <strong>{monthsToShortfall.toFixed(1)} months</strong>. Arrange a credit buffer or diversify away from concentration before it bites.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #42 — Debt Service Coverage Forecast
+// Projects DSCR = operating cash flow ÷ annual debt service forward, against the
+// trailing operating run-rate with an adjustable growth assumption. Warns before
+// the ratio slips below the 1.25× covenant most lenders require.
+// ─────────────────────────────────────────────────────────────────────────────
+function DscrForecast() {
+  const { store } = useApp();
+  const { transactions, activeLoans } = store;
+  const [growth, setGrowth] = useState(0);
+
+  const annualDebtService = useMemo(
+    () => (activeLoans ?? []).reduce((s, l) => s + (l.monthlyEmi || 0) * 12, 0),
+    [activeLoans],
+  );
+
+  const { monthlyOpCash, proj } = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const avgRev = hist.length ? hist.reduce((s, m) => s + m.revenue, 0) / hist.length : 0;
+    const avgExp = hist.length ? hist.reduce((s, m) => s + m.expense, 0) / hist.length : 0;
+    const monthlyOpCash = avgRev - avgExp;
+    const now = new Date();
+    const out: { label: string; dscr: number; opCash: number }[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const op = monthlyOpCash * (1 + growth / 100) ** i;
+      const annualOp = op * 12;
+      const dscr = annualDebtService > 0 ? annualOp / annualDebtService : 0;
+      out.push({ label: format(new Date(now.getFullYear(), now.getMonth() + i, 1), "MMM"), dscr: Math.round(dscr * 100) / 100, opCash: Math.round(op) });
+    }
+    return { monthlyOpCash, proj: out };
+  }, [transactions, growth, annualDebtService]);
+
+  if (annualDebtService <= 0) {
+    return (
+      <div className="space-y-4">
+        <ToolHeader icon={Scale} title="Debt Service Coverage Forecast" blurb="Projects DSCR (operating cash flow ÷ debt service) forward so you see a covenant breach coming." />
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Scale size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
+          <h3 className="text-sm font-semibold mb-1">No active loans</h3>
+          <p className="text-sm text-[var(--color-muted)] max-w-xs mx-auto">Add active loans in the Credit section to forecast your debt-service coverage ratio.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentDscr = annualDebtService > 0 ? (monthlyOpCash * 12) / annualDebtService : 0;
+  const COVENANT = 1.25;
+  const breachMonth = proj.find(p => p.dscr < COVENANT);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Scale} title="Debt Service Coverage Forecast" blurb="Projects DSCR (annual operating cash flow ÷ annual EMI) forward six months. Lenders typically require ≥ 1.25×; this warns you before the ratio slips under covenant." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Current DSCR", value: `${currentDscr.toFixed(2)}×`, color: currentDscr < COVENANT ? "text-red-400" : "text-green-400" },
+        { label: "Annual debt service", value: formatCurrency(Math.round(annualDebtService)), color: "text-red-400" },
+        { label: "Monthly op. cash", value: formatCurrency(Math.round(monthlyOpCash)), color: monthlyOpCash >= 0 ? "text-green-400" : "text-red-400" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="text-xs text-[var(--color-muted)] block mb-1">Assumed monthly cash-flow growth: <span className="text-[var(--color-text)] font-semibold">{growth}%</span></label>
+        <input type="range" min="-10" max="15" step="1" value={growth} onChange={e => setGrowth(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-3">Projected DSCR (× coverage)</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={proj}>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v}×`, "DSCR"]} />
+            <ReferenceLine y={COVENANT} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "1.25× covenant", position: "insideTopRight", fontSize: 8, fill: "#ef4444" }} />
+            <Line type="monotone" dataKey="dscr" stroke="#1A6B55" strokeWidth={2} dot={{ r: 3 }} animationDuration={400} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {breachMonth && (
+        <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 text-sm text-red-400">
+          DSCR slips below the 1.25× covenant by <strong>{breachMonth.label}</strong> ({breachMonth.dscr}×). Raise operating cash or restructure EMIs before then.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #73 — Smart Reserve Tiers
+// Splits the recommended cash buffer into three purpose-tagged tiers: operating
+// (N days of burn), tax (next GST + advance-tax due), and emergency (volatility
+// cushion). Shows how today's balance covers each tier, in priority order.
+// ─────────────────────────────────────────────────────────────────────────────
+function SmartReserveTiers() {
+  const { store } = useApp();
+  const { transactions, bankAccounts, obligations, firm } = store;
+  const [opDays, setOpDays] = useState(firm?.safetyThresholdDays ?? 30);
+  const [emergencyDays, setEmergencyDays] = useState(15);
+
+  const { cash, dailyBurn, opReserve, taxReserve, emergencyReserve } = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 3);
+    const avgExp = hist.length ? hist.reduce((s, m) => s + m.expense, 0) / hist.length : 0;
+    const dailyBurn = avgExp / 30;
+    const cash = (bankAccounts ?? []).reduce((s, a) => s + (a.balance || 0), 0);
+    const opReserve = dailyBurn * opDays;
+    // Tax reserve = sum of upcoming dated tax obligations in the next 90 days.
+    const horizon = Date.now() + 90 * 86_400_000;
+    const taxReserve = (obligations ?? [])
+      .filter(o => o.type === "tax" && new Date(o.dueDate).getTime() <= horizon && new Date(o.dueDate).getTime() >= Date.now())
+      .reduce((s, o) => s + Math.abs(o.amount), 0);
+    const emergencyReserve = dailyBurn * emergencyDays;
+    return { cash, dailyBurn, opReserve, taxReserve, emergencyReserve };
+  }, [transactions, bankAccounts, obligations, opDays, emergencyDays]);
+
+  // Allocate cash across tiers in priority order: operating → tax → emergency.
+  const tiers = useMemo(() => {
+    const defs = [
+      { key: "Operating", target: opReserve, color: "#1A6B55", desc: `${opDays} days of burn` },
+      { key: "Tax", target: taxReserve, color: "#d97706", desc: "GST / advance-tax due ≤ 90d" },
+      { key: "Emergency", target: emergencyReserve, color: "#6366f1", desc: `${emergencyDays} days volatility cushion` },
+    ];
+    let remaining = cash;
+    return defs.map(d => {
+      const funded = Math.min(d.target, Math.max(0, remaining));
+      remaining -= funded;
+      return { ...d, funded, gap: Math.max(0, d.target - funded), surplus: remaining > 0 && d === defs[defs.length - 1] ? remaining : 0 };
+    });
+  }, [cash, opReserve, taxReserve, emergencyReserve, opDays, emergencyDays]);
+
+  const totalTarget = opReserve + taxReserve + emergencyReserve;
+  const surplus = Math.max(0, cash - totalTarget);
+  const totalGap = tiers.reduce((s, t) => s + t.gap, 0);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={PiggyBank} title="Smart Reserve Tiers" blurb="Splits your buffer into purpose-tagged tiers — operating, tax, and emergency — and shows how today's balance funds each in priority order, so payroll and GST cash are never raided for something else." />
+      <StatGrid cols="md:grid-cols-4" cards={[
+        { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
+        { label: "Total reserve target", value: formatCurrency(Math.round(totalTarget)), color: "text-[var(--color-text)]" },
+        { label: totalGap > 0 ? "Underfunded by" : "Fully funded", value: totalGap > 0 ? formatCurrency(Math.round(totalGap)) : "✓", color: totalGap > 0 ? "text-red-400" : "text-green-400" },
+        { label: "Free surplus", value: formatCurrency(Math.round(surplus)), color: surplus > 0 ? "text-green-400" : "text-[var(--color-muted)]", sub: "above all tiers" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Operating tier: <span className="text-[var(--color-text)] font-semibold">{opDays} days</span></label>
+          <input type="range" min="7" max="90" step="1" value={opDays} onChange={e => setOpDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Emergency tier: <span className="text-[var(--color-text)] font-semibold">{emergencyDays} days</span></label>
+          <input type="range" min="0" max="60" step="1" value={emergencyDays} onChange={e => setEmergencyDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+        {tiers.map(t => {
+          const pct = t.target > 0 ? Math.round((t.funded / t.target) * 100) : 100;
+          return (
+            <div key={t.key} className="px-4 py-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <div>
+                  <p className="text-sm font-medium">{t.key} reserve</p>
+                  <p className="text-xs text-[var(--color-muted)]">{t.desc}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold tabular-nums">{formatCurrency(Math.round(t.funded))} <span className="text-[var(--color-muted)] font-normal">/ {formatCurrency(Math.round(t.target))}</span></p>
+                  {t.gap > 0 && <p className="text-[10px] text-red-400">short {formatCurrency(Math.round(t.gap))}</p>}
+                </div>
+              </div>
+              <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: t.color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Daily burn ≈ {formatCurrency(Math.round(dailyBurn))} (trailing 3-month average expense ÷ 30). Tiers fill in priority order — operating first, then tax, then emergency.</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #17 — Advance-Tax Calendar
+// Folds India's quarterly advance-tax installments (15 Jun/Sep/Dec/Mar at
+// 15/45/75/100% cumulative) into the cash plan, from an estimated annual profit
+// seeded by the trailing run-rate and overridable.
+// ─────────────────────────────────────────────────────────────────────────────
+function AdvanceTaxCalendar() {
+  const { store } = useApp();
+  const { transactions } = store;
+  const [rate, setRate] = useState(25);
+
+  const seedProfit = useMemo(() => {
+    const hist = monthlyAggregates(transactions ?? [], 6);
+    const avgRev = hist.length ? hist.reduce((s, m) => s + m.revenue, 0) / hist.length : 0;
+    const avgExp = hist.length ? hist.reduce((s, m) => s + m.expense, 0) / hist.length : 0;
+    return Math.max(0, Math.round((avgRev - avgExp) * 12));
+  }, [transactions]);
+
+  const [profit, setProfit] = useState(String(seedProfit));
+  const estProfit = Number(profit) || 0;
+
+  const schedule = useMemo(() => advanceTaxSchedule(estProfit, new Date(), rate), [estProfit, rate]);
+  const annualTax = schedule.length ? schedule[schedule.length - 1].cumulativeTax : 0;
+  const upcoming = schedule.filter(s => s.status === "upcoming");
+  const nextDue = upcoming.length ? upcoming[0] : null;
+  const remaining = upcoming.reduce((s, i) => s + i.installment, 0);
+
+  return (
+    <div className="space-y-4">
+      <ToolHeader icon={Hourglass} title="Advance-Tax Calendar" blurb="Folds India's quarterly advance-tax installments (due 15 Jun / Sep / Dec / Mar at 15 / 45 / 75 / 100% cumulative) into your cash plan, sized from estimated annual profit — so the deposits never blindside your balance." />
+      <StatGrid cols="md:grid-cols-3" cards={[
+        { label: "Estimated annual tax", value: formatCurrency(annualTax), color: "text-red-400" },
+        { label: "Next installment", value: nextDue ? formatCurrency(nextDue.installment) : "All paid", color: "text-red-400", sub: nextDue ? `due ${format(new Date(nextDue.dueDate), "d MMM")}` : undefined },
+        { label: "Remaining this FY", value: formatCurrency(remaining), color: "text-[var(--color-text)]" },
+      ]} />
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated annual profit</label>
+          <input type="number" value={profit} onChange={e => setProfit(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Seeded from your trailing run-rate; override if you have a better estimate.</p>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Tax rate: <span className="text-[var(--color-text)] font-semibold">{rate}%</span></label>
+          <input type="range" min="15" max="35" step="1" value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+        </div>
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[460px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              {["Installment", "Due date", "Cumulative %", "This installment", "Status"].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-3 py-2.5 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {schedule.map(s => (
+              <tr key={s.label} className={s.status === "upcoming" ? "hover:bg-white/2" : "opacity-60"}>
+                <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{s.label}</td>
+                <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(s.dueDate), "d MMM yyyy")}</td>
+                <td className="px-3 py-2 text-xs tabular-nums">{s.cumulativePct}%</td>
+                <td className="px-3 py-2 text-xs tabular-nums font-semibold text-red-400">{formatCurrency(s.installment)}</td>
+                <td className="px-3 py-2 text-xs">{s.status === "upcoming" ? <span className="text-yellow-400">Upcoming</span> : <span className="text-[var(--color-muted)]">Window passed</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Shortfalls in advance tax attract interest under sections 234B/234C. Reserve each installment before its due date.</p>
     </div>
   );
 }

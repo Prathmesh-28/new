@@ -11,6 +11,7 @@ import {
   FileBarChart, Percent, Send,
   Filter, Gauge, Crown, RefreshCw, History, ShieldAlert,
   Link2, Wallet, FileClock, CopyCheck,
+  PackageSearch, ShieldCheck, Fingerprint, ArrowLeftRight, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInCalendarDays, parseISO } from "date-fns";
@@ -25,7 +26,8 @@ type TabId =
   | "numbering" | "categorize" | "escalation" | "sla" | "journals"
   | "routing" | "validation" | "reports" | "discounts" | "cadence"
   | "segments" | "kpiwatch" | "tiered" | "batch" | "runlog" | "creditlimit"
-  | "paymatch" | "lowbalance" | "recurringinv" | "dupcheck";
+  | "paymatch" | "lowbalance" | "recurringinv" | "dupcheck"
+  | "reorder" | "expensepolicy" | "fraudscan" | "cashsweep" | "triggerfilters";
 
 const TABS = [
   ["overview", "Overview", Workflow],
@@ -59,6 +61,11 @@ const TABS = [
   ["lowbalance", "Low-Balance Trigger", Wallet],
   ["recurringinv", "Recurring Invoices", FileClock],
   ["dupcheck", "Duplicate-Payment Check", CopyCheck],
+  ["reorder", "Reorder Rules", PackageSearch],
+  ["expensepolicy", "Expense Policy", ShieldCheck],
+  ["fraudscan", "Fraud-Pattern Scan", Fingerprint],
+  ["cashsweep", "Cash-Sweep Rules", ArrowLeftRight],
+  ["triggerfilters", "Trigger Filters", SlidersHorizontal],
 ] as const;
 
 export default function AutomationPage() {
@@ -116,6 +123,11 @@ export default function AutomationPage() {
       {tab === "lowbalance" && <LowBalanceTrigger />}
       {tab === "recurringinv" && <RecurringInvoiceRules />}
       {tab === "dupcheck" && <DuplicatePaymentCheck />}
+      {tab === "reorder" && <ReorderRules />}
+      {tab === "expensepolicy" && <ExpensePolicyEngine />}
+      {tab === "fraudscan" && <FraudPatternScan />}
+      {tab === "cashsweep" && <CashSweepRules />}
+      {tab === "triggerfilters" && <TriggerFilters />}
     </div>
   );
 }
@@ -2879,6 +2891,483 @@ function DuplicatePaymentCheck() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── #31 Inventory Reorder Rules ────────────────────────────────────────────────
+// Per-SKU override of the reorder level; on-demand scan flags stock at/below it
+// and previews the suggested re-order quantity. No live cron — on-demand.
+type ReorderRule = { id: string; sku: string; reorderLevel: number; reorderQty: number };
+function ReorderRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<ReorderRule[]>("auto-reorder", []);
+  const [, pushActivity] = useActivity();
+  const [sku, setSku] = useState("");
+  const [level, setLevel] = useState("");
+  const [qty, setQty] = useState("");
+
+  const add = () => {
+    const lv = parseFloat(level), q = parseFloat(qty);
+    if (!sku.trim() || isNaN(lv) || lv < 0 || isNaN(q) || q <= 0) { toast.error("Pick a SKU, a reorder level and a positive reorder quantity"); return; }
+    setRules(prev => [...prev.filter(r => r.sku !== sku), { id: crypto.randomUUID(), sku, reorderLevel: lv, reorderQty: q }]);
+    pushActivity({ tool: "Reorder Rules", kind: "create", message: `Reorder rule for ${sku} at ${lv} units` });
+    setSku(""); setLevel(""); setQty("");
+    toast.success("Reorder rule saved");
+  };
+
+  // Items below their effective reorder level (rule override or the item default).
+  const lowStock = useMemo(() => {
+    return store.inventory.map(it => {
+      const rule = rules.find(r => r.sku === it.sku);
+      const level = rule ? rule.reorderLevel : it.reorderLevel;
+      const suggested = rule ? rule.reorderQty : Math.max(level * 2 - it.quantity, 0);
+      return { it, level, suggested, breached: it.quantity <= level };
+    }).filter(x => x.breached);
+  }, [store.inventory, rules]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PackageSearch size={14} className="text-[var(--color-primary)]" /> Inventory Reorder Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Set a reorder level + quantity per SKU; the scan below flags items at or below it and previews the PO quantity. No live cron — on-demand against your current inventory; no purchase order is raised.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Product / SKU</label>
+            <select value={sku} onChange={e => setSku(e.target.value)} className={INP}>
+              <option value="">Select…</option>
+              {store.inventory.map(it => <option key={it.id} value={it.sku}>{it.productName} ({it.sku})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reorder at (units)</label>
+            <input type="number" value={level} onChange={e => setLevel(e.target.value)} placeholder="20" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reorder qty</label>
+            <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="100" className={INP} />
+          </div>
+        </div>
+        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <Plus size={13} /> Save rule
+        </button>
+        {rules.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {rules.map(r => (
+              <span key={r.id} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5">
+                {r.sku} ≤ {r.reorderLevel} → +{r.reorderQty}
+                <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="ml-1.5 text-[var(--color-muted)] hover:text-red-400">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{lowStock.length} item(s) at or below reorder level</p></div>
+        {store.inventory.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">No inventory items synced yet.</p>
+        ) : lowStock.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">All stock is above its reorder level right now.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Product", "On hand", "Reorder at", "Suggested PO", "Est. value"].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {lowStock.map(({ it, level, suggested }) => (
+                <tr key={it.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{it.productName} <span className="text-[var(--color-muted)] text-[10px]">{it.sku}</span></td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{it.quantity} {it.unit}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{level}</td>
+                  <td className="px-4 py-2.5 tabular-nums">+{suggested} {it.unit}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(suggested * it.unitCost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── #32 Expense Policy Engine ──────────────────────────────────────────────────
+// Build per-category spend caps + flag/reject verdicts; evaluate every expense
+// outflow against the policies on demand. No live cron — on-demand.
+type PolicyVerdict = "flag" | "reject";
+type ExpensePolicy = { id: string; category: Transaction["category"]; cap: number; verdict: PolicyVerdict };
+const POLICY_CATEGORIES: Transaction["category"][] = ["expense", "payroll", "tax", "loan", "transfer"];
+function ExpensePolicyEngine() {
+  const { store } = useApp();
+  const [policies, setPolicies] = useFeatureState<ExpensePolicy[]>("auto-expensepolicy", []);
+  const [, pushActivity] = useActivity();
+  const [category, setCategory] = useState<Transaction["category"]>("expense");
+  const [cap, setCap] = useState("");
+  const [verdict, setVerdict] = useState<PolicyVerdict>("flag");
+
+  const add = () => {
+    const c = parseFloat(cap);
+    if (isNaN(c) || c <= 0) { toast.error("Enter a positive per-transaction cap"); return; }
+    setPolicies(prev => [...prev.filter(p => p.category !== category), { id: crypto.randomUUID(), category, cap: c, verdict }]);
+    pushActivity({ tool: "Expense Policy", kind: "create", message: `Policy: ${category} cap ${formatCurrency(c)} (${verdict})` });
+    setCap("");
+    toast.success("Policy saved");
+  };
+
+  // Outflows breaching their category policy, on-demand.
+  const breaches = useMemo(() => {
+    const outs = store.transactions.filter(t => t.amount < 0);
+    return policies.flatMap(p =>
+      outs.filter(t => t.category === p.category && Math.abs(t.amount) > p.cap)
+        .map(t => ({ key: `${p.id}-${t.id}`, t, policy: p })),
+    ).sort((a, b) => Math.abs(b.t.amount) - Math.abs(a.t.amount));
+  }, [store.transactions, policies]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Expense Policy Engine</h3>
+        <p className="text-xs text-[var(--color-muted)]">Cap spend per category and choose whether a breach is flagged or rejected. The scan lists current outflows that violate a policy. No live cron — on-demand; nothing is actually blocked.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value as Transaction["category"])} className={INP}>
+              {POLICY_CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Cap per txn (₹)</label>
+            <input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="50000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">If breached</label>
+            <select value={verdict} onChange={e => setVerdict(e.target.value as PolicyVerdict)} className={INP}>
+              <option value="flag">Flag for review</option>
+              <option value="reject">Auto-reject</option>
+            </select>
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Save policy
+          </button>
+        </div>
+        {policies.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {policies.map(p => (
+              <span key={p.id} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 capitalize">
+                {p.category} ≤ {formatCurrency(p.cap)} · {p.verdict}
+                <button onClick={() => setPolicies(prev => prev.filter(x => x.id !== p.id))} className="ml-1.5 text-[var(--color-muted)] hover:text-red-400">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {policies.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No expense policies defined yet.</p>
+      ) : (
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-4 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{breaches.length} outflow(s) breach a policy</p></div>
+          {breaches.length === 0 ? (
+            <p className="text-xs text-[var(--color-muted)] p-4">No current outflow breaches any policy.</p>
+          ) : (
+            <div className="divide-y divide-[var(--color-border)] max-h-[420px] overflow-y-auto">
+              {breaches.map(({ key, t, policy }) => (
+                <div key={key} className="flex items-center justify-between px-4 py-2.5 text-sm gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{t.counterparty || t.description}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] capitalize">{t.category} · {t.date} · cap {formatCurrency(policy.cap)}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="tabular-nums font-medium">{formatCurrency(Math.abs(t.amount))}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${policy.verdict === "reject" ? "bg-red-950/30 text-red-400" : "bg-yellow-950/30 text-yellow-400"}`}>
+                      {policy.verdict === "reject" ? "Would reject" : "Flagged"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #33 Fraud-Pattern Scan ─────────────────────────────────────────────────────
+// A library of pre-built fraud heuristics evaluated against live transactions:
+// round-amount payouts, duplicate-named vendors, weekend/odd-hour payouts.
+// No live cron — on-demand.
+function FraudPatternScan() {
+  const { store } = useApp();
+  const [, pushActivity] = useActivity();
+  const [enabled, setEnabled] = useFeatureState<Record<string, boolean>>("auto-fraudscan", { round: true, dupvendor: true, weekend: true });
+
+  const PATTERNS = [
+    { id: "round", title: "Suspiciously round payouts", desc: "Outflows that are an exact multiple of ₹50,000 — often fabricated amounts." },
+    { id: "dupvendor", title: "Near-duplicate vendor names", desc: "Two counterparties whose names normalise to the same string — a split-vendor trick." },
+    { id: "weekend", title: "Weekend payouts", desc: "Outflows dated on a Saturday or Sunday, when approvals are usually offline." },
+  ] as const;
+
+  const findings = useMemo(() => {
+    const outs = store.transactions.filter(t => t.amount < 0);
+    const out: { patternId: string; label: string; sub: string }[] = [];
+    if (enabled.round) {
+      outs.filter(t => Math.abs(t.amount) >= 50000 && Math.abs(t.amount) % 50000 === 0)
+        .forEach(t => out.push({ patternId: "round", label: t.counterparty || t.description, sub: `${formatCurrency(Math.abs(t.amount))} · ${t.date}` }));
+    }
+    if (enabled.dupvendor) {
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const byKey = new Map<string, Set<string>>();
+      outs.forEach(t => {
+        const k = norm(t.counterparty);
+        if (!k) return;
+        if (!byKey.has(k)) byKey.set(k, new Set());
+        byKey.get(k)!.add(t.counterparty);
+      });
+      byKey.forEach(names => {
+        if (names.size > 1) out.push({ patternId: "dupvendor", label: [...names].join(" / "), sub: `${names.size} name variants` });
+      });
+    }
+    if (enabled.weekend) {
+      outs.filter(t => { const d = parseISO(t.date).getDay(); return d === 0 || d === 6; })
+        .forEach(t => out.push({ patternId: "weekend", label: t.counterparty || t.description, sub: `${formatCurrency(Math.abs(t.amount))} · ${format(parseISO(t.date), "EEE d MMM")}` }));
+    }
+    return out;
+  }, [store.transactions, enabled]);
+
+  const runScan = () => {
+    pushActivity({ tool: "Fraud-Pattern Scan", kind: "run", message: `Scan flagged ${findings.length} suspect transaction(s)` });
+    toast.success(`Scan complete — ${findings.length} finding(s)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Fraud-Pattern Scan</h3>
+        <p className="text-xs text-[var(--color-muted)]">Toggle pre-built heuristics and scan your live outflows for tell-tale fraud signatures. No live cron — on-demand and read-only; it flags for your review, nothing is blocked.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {PATTERNS.map(p => (
+            <label key={p.id} className={`${CARD} p-3 flex gap-2 cursor-pointer ${enabled[p.id] ? "border-[var(--color-primary)]/40" : ""}`}>
+              <input type="checkbox" checked={!!enabled[p.id]} onChange={e => setEnabled(prev => ({ ...prev, [p.id]: e.target.checked }))} className="accent-[var(--color-primary)] mt-0.5" />
+              <span>
+                <span className="text-xs font-medium block">{p.title}</span>
+                <span className="text-[10px] text-[var(--color-muted)] leading-relaxed">{p.desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <button onClick={runScan} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
+          <Play size={13} /> Run scan ({findings.length})
+        </button>
+      </div>
+
+      {PATTERNS.filter(p => enabled[p.id]).map(p => {
+        const rows = findings.filter(f => f.patternId === p.id);
+        return (
+          <div key={p.id} className={`${CARD} overflow-hidden`}>
+            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+              <p className="text-sm font-semibold">{p.title}</p>
+              <span className={`text-xs font-semibold tabular-nums ${rows.length > 0 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{rows.length}</span>
+            </div>
+            {rows.length === 0 ? (
+              <p className="text-xs text-[var(--color-muted)] p-4">No matches for this pattern right now.</p>
+            ) : (
+              <div className="divide-y divide-[var(--color-border)] max-h-60 overflow-y-auto">
+                {rows.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <span className="font-medium truncate pr-2 flex items-center gap-1.5"><AlertTriangle size={12} className="text-orange-400 shrink-0" /> {r.label}</span>
+                    <span className="text-[var(--color-muted)] text-xs tabular-nums shrink-0">{r.sub}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #34 Cash-Sweep Rules ───────────────────────────────────────────────────────
+// Keep a buffer in an operating account, sweep the surplus to a target account.
+// Evaluated on demand against live bank balances. No live cron — on-demand.
+type SweepRule = { id: string; fromId: string; toId: string; buffer: number };
+function CashSweepRules() {
+  const { store } = useApp();
+  const [rules, setRules] = useFeatureState<SweepRule[]>("auto-cashsweep", []);
+  const [, pushActivity] = useActivity();
+  const accounts = store.bankAccounts;
+  const [fromId, setFromId] = useState("");
+  const [toId, setToId] = useState("");
+  const [buffer, setBuffer] = useState("");
+
+  const nameOf = (id: string) => accounts.find(a => a.id === id)?.name ?? "(account)";
+
+  const add = () => {
+    const b = parseFloat(buffer);
+    if (!fromId || !toId) { toast.error("Pick a source and a destination account"); return; }
+    if (fromId === toId) { toast.error("Source and destination must differ"); return; }
+    if (isNaN(b) || b < 0) { toast.error("Enter a non-negative buffer to keep"); return; }
+    setRules(prev => [...prev, { id: crypto.randomUUID(), fromId, toId, buffer: b }]);
+    pushActivity({ tool: "Cash-Sweep Rules", kind: "create", message: `Sweep ${nameOf(fromId)} surplus above ${formatCurrency(b)}` });
+    setBuffer("");
+    toast.success("Sweep rule saved");
+  };
+
+  const sweepAmount = (r: SweepRule) => Math.max((accounts.find(a => a.id === r.fromId)?.balance ?? 0) - r.buffer, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Cash-Sweep Rules</h3>
+        <p className="text-xs text-[var(--color-muted)]">Keep a buffer in an operating account and sweep any surplus to a target (high-yield / repayment) account. The amount that would move is computed live. No live cron — on-demand; no transfer is made.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sweep from</label>
+            <select value={fromId} onChange={e => setFromId(e.target.value)} className={INP}>
+              <option value="">Select…</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sweep to</label>
+            <select value={toId} onChange={e => setToId(e.target.value)} className={INP}>
+              <option value="">Select…</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Keep buffer (₹)</label>
+            <input type="number" value={buffer} onChange={e => setBuffer(e.target.value)} placeholder="200000" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Add rule
+          </button>
+        </div>
+      </div>
+
+      {accounts.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No bank accounts synced yet.</p>
+      ) : rules.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No sweep rules yet.</p>
+      ) : rules.map(r => {
+        const amt = sweepAmount(r);
+        return (
+          <div key={r.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-1.5">{nameOf(r.fromId)} <ArrowRight size={12} className="text-[var(--color-muted)]" /> {nameOf(r.toId)}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">Keep {formatCurrency(r.buffer)} buffer · balance {formatCurrency(accounts.find(a => a.id === r.fromId)?.balance ?? 0)}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold tabular-nums ${amt > 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>
+                  {amt > 0 ? `${formatCurrency(amt)} to sweep` : "Nothing to sweep"}
+                </span>
+                <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Cash-Sweep Rules", kind: "delete", message: `Sweep rule removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── #35 Trigger Filters ────────────────────────────────────────────────────────
+// A reusable scope: counterparty contains + amount band + category. Live preview
+// of how many transactions a trigger using this filter would fire on, so you can
+// avoid noisy automations. No live cron — on-demand.
+type TriggerFilter = { id: string; name: string; contains: string; minAmount: number; maxAmount: number; category: Transaction["category"] | "any" };
+function TriggerFilters() {
+  const { store } = useApp();
+  const [filters, setFilters] = useFeatureState<TriggerFilter[]>("auto-triggerfilters", []);
+  const [, pushActivity] = useActivity();
+  const [name, setName] = useState("");
+  const [contains, setContains] = useState("");
+  const [min, setMin] = useState("");
+  const [max, setMax] = useState("");
+  const [category, setCategory] = useState<TriggerFilter["category"]>("any");
+
+  const add = () => {
+    if (!name.trim()) { toast.error("Name the filter"); return; }
+    const mn = parseFloat(min), mx = parseFloat(max);
+    setFilters(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), contains: contains.trim(), minAmount: isNaN(mn) ? 0 : mn, maxAmount: isNaN(mx) ? Infinity : mx, category }]);
+    pushActivity({ tool: "Trigger Filters", kind: "create", message: `Filter "${name.trim()}" created` });
+    setName(""); setContains(""); setMin(""); setMax("");
+    toast.success("Filter saved");
+  };
+
+  const evaluate = (f: TriggerFilter) => store.transactions.filter(t => {
+    const amt = Math.abs(t.amount);
+    if (amt < f.minAmount || amt > f.maxAmount) return false;
+    if (f.category !== "any" && t.category !== f.category) return false;
+    if (f.contains && !`${t.counterparty} ${t.description}`.toLowerCase().includes(f.contains.toLowerCase())) return false;
+    return true;
+  });
+
+  const fmtMax = (m: number) => m === Infinity ? "∞" : formatCurrency(m);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Trigger Filters</h3>
+        <p className="text-xs text-[var(--color-muted)]">Narrow a trigger to a counterparty, amount band and category so automations don't fire too broadly. Each filter previews how many live transactions it would catch. No live cron — on-demand.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Filter name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Big vendor band" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty / text contains</label>
+            <input value={contains} onChange={e => setContains(e.target.value)} placeholder="e.g. logistics" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value as TriggerFilter["category"])} className={INP}>
+              <option value="any">Any category</option>
+              {POLICY_CATEGORIES.concat("revenue").map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Min amount (₹)</label>
+            <input type="number" value={min} onChange={e => setMin(e.target.value)} placeholder="0" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Max amount (₹)</label>
+            <input type="number" value={max} onChange={e => setMax(e.target.value)} placeholder="(no limit)" className={INP} />
+          </div>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+            <Plus size={13} /> Save filter
+          </button>
+        </div>
+      </div>
+
+      {filters.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No trigger filters defined yet.</p>
+      ) : filters.map(f => {
+        const matched = evaluate(f);
+        return (
+          <div key={f.id} className={`${CARD} p-4`}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-medium">{f.name}</p>
+                <p className="text-[11px] text-[var(--color-muted)] capitalize">
+                  {f.category} · {formatCurrency(f.minAmount)}–{fmtMax(f.maxAmount)}{f.contains ? ` · contains "${f.contains}"` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold tabular-nums ${matched.length > 0 ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}`}>{matched.length} txn(s) in scope</span>
+                <button onClick={() => { setFilters(prev => prev.filter(x => x.id !== f.id)); pushActivity({ tool: "Trigger Filters", kind: "delete", message: `Filter "${f.name}" removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

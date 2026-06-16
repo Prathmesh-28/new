@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2, Megaphone, PackageCheck, BadgeCheck, PartyPopper, Tag, Star, QrCode, ReceiptIndianRupee, Truck, CalendarClock, Gift, MessageSquareText, Rocket, UserPlus, CalendarCheck, Share2 } from "lucide-react";
+import { MessageCircle, Check, Bell, Zap, Phone, ArrowRight, Copy, RefreshCw, Sparkles, TrendingUp, AlertTriangle, CreditCard, ChevronDown, ChevronUp, Send, BellRing, PlusCircle, FileText, CheckSquare, Trash2, Megaphone, PackageCheck, BadgeCheck, PartyPopper, Tag, Star, QrCode, ReceiptIndianRupee, Truck, CalendarClock, Gift, MessageSquareText, Rocket, UserPlus, CalendarCheck, Share2, CalendarRange, FileSignature, FolderInput, UserCheck, SmilePlus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
@@ -15,7 +15,7 @@ function waLink(text: string, phone?: string): string {
   return `${base}?text=${encodeURIComponent(text)}`;
 }
 
-type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr" | "wa-gst-invoice" | "wa-cod-confirm" | "wa-service-reminder" | "wa-loyalty" | "wa-quick-replies" | "wa-product-launch" | "wa-win-back" | "wa-appointment" | "wa-referral";
+type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr" | "wa-gst-invoice" | "wa-cod-confirm" | "wa-service-reminder" | "wa-loyalty" | "wa-quick-replies" | "wa-product-launch" | "wa-win-back" | "wa-appointment" | "wa-referral" | "wa-payment-plan" | "wa-quotation" | "wa-doc-request" | "wa-onboarding" | "wa-feedback";
 
 // authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
 function apiError(err: unknown): string {
@@ -214,6 +214,11 @@ export default function WhatsAppPage() {
           ["wa-win-back", "Win-Back", UserPlus],
           ["wa-appointment", "Appointment", CalendarCheck],
           ["wa-referral", "Referral Ask", Share2],
+          ["wa-payment-plan", "Payment Plan", CalendarRange],
+          ["wa-quotation", "Quotation", FileSignature],
+          ["wa-doc-request", "Doc / KYC Ask", FolderInput],
+          ["wa-onboarding", "Onboarding", UserCheck],
+          ["wa-feedback", "Feedback / CSAT", SmilePlus],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -243,6 +248,11 @@ export default function WhatsAppPage() {
       {tab === "wa-win-back" && <WaWinBack />}
       {tab === "wa-appointment" && <WaAppointmentReminder />}
       {tab === "wa-referral" && <WaReferralAsk />}
+      {tab === "wa-payment-plan" && <WaPaymentPlan />}
+      {tab === "wa-quotation" && <WaQuotationBuilder />}
+      {tab === "wa-doc-request" && <WaDocRequest />}
+      {tab === "wa-onboarding" && <WaOnboardingForm />}
+      {tab === "wa-feedback" && <WaFeedbackCollector />}
 
       {tab === "overview" && (
       <>
@@ -2134,6 +2144,361 @@ function WaReferralAsk() {
         <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
         <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
         <WaSendButton text={message} phone={phone} label="Ask for referral on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #198 WhatsApp Installment / Payment-Plan Offer ──────────────────────────
+function WaPaymentPlan() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const [customer, setCustomer] = useState("");
+  const [total, setTotal] = useState("");
+  const [count, setCount] = useState("3");
+  const [start, setStart] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const totalAmt = Math.max(0, Math.round(parseFloat(total) || 0));
+  const n = Math.max(1, Math.min(12, parseInt(count, 10) || 1));
+  const base = Math.floor(totalAmt / n);
+  const installments = useMemo(() => {
+    if (totalAmt <= 0) return [] as { label: string; amount: number; due: string }[];
+    const startDate = start ? new Date(start) : new Date();
+    return Array.from({ length: n }, (_, idx) => {
+      const due = new Date(startDate);
+      due.setMonth(due.getMonth() + idx);
+      const amount = idx === n - 1 ? totalAmt - base * (n - 1) : base;
+      return { label: `Instalment ${idx + 1}/${n}`, amount, due: due.toISOString().slice(0, 10) };
+    });
+  }, [totalAmt, n, base, start]);
+
+  const planLines = installments.map(i => `• ${i.label}: ${fc(i.amount)} by ${i.due}`).join("\n");
+  const message = totalAmt > 0
+    ? `Hi ${customer.trim() || "there"}, to make it easier we can split *${fc(totalAmt)}* into *${n}* monthly instalments:\n\n${planLines}\n\nReply *ACCEPT* to confirm this plan, or suggest dates that suit you. — ${store.firm?.name ?? "us"}`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={15} className="text-green-400" />WhatsApp Installment / Payment-Plan Offer</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Turn a big overdue or large order into an easy monthly plan. Headroom splits the amount evenly, dates each instalment, and sends the offer for a one-word ACCEPT.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Reddy ji" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total amount (₹)</label>
+            <input type="number" value={total} onChange={e => setTotal(e.target.value)} placeholder="60000" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Instalments (1–12)</label>
+            <input type="number" value={count} onChange={e => setCount(e.target.value)} placeholder="3" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">First due (optional)</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      {installments.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Total", value: fc(totalAmt), color: "text-[var(--color-primary)]" },
+              { label: "Per month", value: fc(base), color: "text-green-400" },
+              { label: "Instalments", value: String(n), color: "text-[var(--color-text)]" },
+            ].map(c => (
+              <div key={c.label} className={WA_CARD}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+            <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+            <WaSendButton text={message} phone={phone} label="Send plan on WhatsApp" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #199 WhatsApp Quotation Builder ─────────────────────────────────────────
+interface QuoteLine { id: string; item: string; qty: number; rate: number; }
+
+function WaQuotationBuilder() {
+  const { store } = useApp();
+  const fc = formatCurrency;
+  const [lines, setLines] = useState<QuoteLine[]>([]);
+  const [item, setItem] = useState("");
+  const [qty, setQty] = useState("1");
+  const [rate, setRate] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [gst, setGst] = useState("18");
+  const [phone, setPhone] = useState("");
+
+  const add = () => {
+    const q = parseFloat(qty), r = parseFloat(rate);
+    if (!item.trim() || !q || q <= 0 || !r || r < 0) { toast.error("Enter an item, quantity and rate"); return; }
+    setLines(prev => [...prev, { id: crypto.randomUUID(), item: item.trim(), qty: q, rate: Math.round(r) }]);
+    setItem(""); setQty("1"); setRate("");
+  };
+  const remove = (id: string) => setLines(prev => prev.filter(l => l.id !== id));
+
+  const subtotal = lines.reduce((s, l) => s + l.qty * l.rate, 0);
+  const gstRate = Math.max(0, parseFloat(gst) || 0);
+  const tax = Math.round(subtotal * gstRate / 100);
+  const grand = subtotal + tax;
+
+  const body = lines.map(l => `• ${l.item} — ${l.qty} × ${fc(l.rate)} = ${fc(l.qty * l.rate)}`).join("\n");
+  const message = lines.length > 0
+    ? `*Quotation from ${store.firm?.name ?? "us"}*\n${customer.trim() ? `For: ${customer.trim()}\n` : ""}Date: ${new Date().toISOString().slice(0, 10)}\n\n${body}\n\n*Subtotal:* ${fc(subtotal)}\n*GST @ ${gstRate}%:* ${fc(tax)}\n*Total:* ${fc(grand)}\n\nReply *ACCEPT* to confirm this quote and we'll raise the invoice.`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FileSignature size={15} className="text-green-400" />WhatsApp Quotation Builder</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Build a line-item quote on the move, add GST, and send a clean total to the customer on WhatsApp for a one-word ACCEPT.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer (optional)</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Mehta Corp" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">GST %</label>
+            <input type="number" value={gst} onChange={e => setGst(e.target.value)} placeholder="18" className={WA_INP} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
+            <input value={item} onChange={e => setItem(e.target.value)} placeholder="Office chair" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Qty</label>
+            <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="1" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (₹)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="4500" className={WA_INP} />
+          </div>
+          <button onClick={add} className="bg-green-700 hover:bg-green-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors">Add line</button>
+        </div>
+      </div>
+
+      {lines.length > 0 && (
+        <>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="border-b border-[var(--color-border)]">
+                  {["Item", "Qty", "Rate", "Line total", ""].map((h, i) => (
+                    <th key={i} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map(l => (
+                  <tr key={l.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="px-4 py-2.5">{l.item}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{l.qty}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{fc(l.rate)}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{fc(l.qty * l.rate)}</td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { label: "Subtotal", value: fc(subtotal), color: "text-[var(--color-text)]" },
+              { label: `GST @ ${gstRate}%`, value: fc(tax), color: "text-[var(--color-muted)]" },
+              { label: "Grand total", value: fc(grand), color: "text-[var(--color-primary)]" },
+            ].map(c => (
+              <div key={c.label} className={WA_CARD}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${WA_CARD} space-y-3`}>
+            <p className="text-xs font-semibold text-[var(--color-muted)]">Quote preview</p>
+            <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+            <WaSendButton text={message} phone={phone} label="Send quote on WhatsApp" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── #200 WhatsApp Document / KYC Request ────────────────────────────────────
+const KYC_DOCS = [
+  { id: "pan",     label: "PAN card" },
+  { id: "gstin",   label: "GSTIN certificate" },
+  { id: "aadhaar", label: "Aadhaar (front & back)" },
+  { id: "bank",    label: "Cancelled cheque / bank proof" },
+  { id: "address", label: "Business address proof" },
+  { id: "photo",   label: "Shop / signboard photo" },
+];
+
+function WaDocRequest() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [picked, setPicked] = useState<string[]>(["pan", "gstin"]);
+  const [phone, setPhone] = useState("");
+
+  const toggle = (id: string) => setPicked(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+
+  const chosen = KYC_DOCS.filter(d => picked.includes(d.id));
+  const list = chosen.map((d, i) => `${i + 1}. ${d.label}`).join("\n");
+  const message = chosen.length > 0
+    ? `Hi ${customer.trim() || "there"}, to complete your onboarding with ${store.firm?.name ?? "us"} please reply to this chat with photos/PDFs of:\n\n${list}\n\nJust attach each document here — your data stays private and is used only for verification. Thank you!`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><FolderInput size={15} className="text-green-400" />WhatsApp Document / KYC Request</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Stop chasing KYC over calls and email. Tick the documents you need, and send the customer a single tidy checklist to reply with on WhatsApp.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="New supplier" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {KYC_DOCS.map(d => (
+            <button key={d.id} onClick={() => toggle(d.id)}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${picked.includes(d.id) ? "bg-green-700 text-white border-green-600" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {chosen.length > 0 && (
+        <div className={`${WA_CARD} space-y-3`}>
+          <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview · {chosen.length} document(s)</p>
+          <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+          <WaSendButton text={message} phone={phone} label="Request documents on WhatsApp" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── #201 WhatsApp Customer Onboarding Form ──────────────────────────────────
+function WaOnboardingForm() {
+  const { store } = useApp();
+  const [name, setName] = useState("");
+  const [welcome, setWelcome] = useState(true);
+  const [phone, setPhone] = useState("");
+  const fields = [
+    "Full / business name",
+    "GSTIN (if registered)",
+    "Billing address with PIN",
+    "Contact person & mobile",
+    "Email for invoices",
+  ];
+
+  const ask = fields.map((f, i) => `${i + 1}. ${f}`).join("\n");
+  const message = `${welcome ? `🙏 Welcome to ${store.firm?.name ?? "us"}, ${name.trim() || "and thank you for choosing us"}!\n\n` : ""}To set up your account, please reply with:\n\n${ask}\n\nYou can send it all in one message — we'll do the rest and confirm once you're set up. 🚀`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={15} className="text-green-400" />WhatsApp Customer Onboarding</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Self-serve onboarding without losing the first order — send new customers a guided checklist to capture name, GSTIN and address right inside the chat.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer name (optional)</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Sharma Traders" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] cursor-pointer">
+          <input type="checkbox" checked={welcome} onChange={e => setWelcome(e.target.checked)} className="accent-green-600" />
+          Include a warm welcome line
+        </label>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Send onboarding on WhatsApp" />
+      </div>
+    </div>
+  );
+}
+
+// ── #202 WhatsApp Feedback / CSAT Collector ─────────────────────────────────
+function WaFeedbackCollector() {
+  const { store } = useApp();
+  const [customer, setCustomer] = useState("");
+  const [ref, setRef] = useState("");
+  const [scale, setScale] = useState<"5" | "10">("5");
+  const [phone, setPhone] = useState("");
+
+  const max = scale === "5" ? 5 : 10;
+  const message = `Hi ${customer.trim() || "there"}, thanks for choosing ${store.firm?.name ?? "us"}${ref.trim() ? ` (order ${ref.trim()})` : ""}! 🙌\n\nHow was your experience? Reply with a number from *1* (poor) to *${max}* (excellent).\n\nIf anything fell short, tell us in a line — we read every reply and will make it right.`;
+
+  return (
+    <div className="space-y-4">
+      <div className={`${WA_CARD} space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><SmilePlus size={15} className="text-green-400" />WhatsApp Feedback / CSAT Collector</h3>
+        <p className="text-[11px] text-[var(--color-muted)]">Close the loop after a sale — send a quick rating ask on WhatsApp so complaints reach you directly instead of becoming silent churn.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Anita" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Order ref (optional)</label>
+            <input value={ref} onChange={e => setRef(e.target.value)} placeholder="ORD-204" className={WA_INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rating scale</label>
+            <select value={scale} onChange={e => setScale(e.target.value as "5" | "10")} className={WA_INP}>
+              <option value="5">1–5 (CSAT)</option>
+              <option value="10">1–10 (NPS)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
+          </div>
+        </div>
+      </div>
+
+      <div className={`${WA_CARD} space-y-3`}>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">Message preview</p>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">{message}</pre>
+        <WaSendButton text={message} phone={phone} label="Ask for feedback on WhatsApp" />
       </div>
     </div>
   );
