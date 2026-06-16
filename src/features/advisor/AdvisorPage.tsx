@@ -7,7 +7,9 @@ import {
   Calculator, Star, FileBarChart2, Zap, ArrowRight, Building2, Clock, FilePlus,
   SquareCheck, Paperclip, Timer, Send, Download, Settings2, ChevronDown, ChevronUp,
   ReceiptText, Sparkles, Badge,
+  ShieldCheck, Inbox, MessageSquare, FileSignature, Reply, Copy,
 } from "lucide-react";
+import { useFeatureState } from "@/hooks/useFeatureState";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -995,7 +997,7 @@ export default function AdvisorPage() {
   const [clients,       setClients]       = useState<ClientSummary[]>([]);
   const [alerts,        setAlerts]        = useState<AdvisorAlert[]>([]);
   const [loading,       setLoading]       = useState(true);
-  const [tab,           setTab]           = useState<"clients"|"alerts"|"gst"|"practice"|"marketplace"|"billing">("clients");
+  const [tab,           setTab]           = useState<"clients"|"alerts"|"gst"|"compliance-board"|"doc-tracker"|"query-log"|"engagement"|"practice"|"marketplace"|"billing">("clients");
   const [showForm,      setShowForm]      = useState(false);
   const [tenantId,      setTenantId]      = useState("");
   const [clientLabel,   setClientLabel]   = useState("");
@@ -1057,6 +1059,10 @@ export default function AdvisorPage() {
     { id: "clients"     as const, label: `Clients (${clients.length})`, badge: undefined as number | undefined },
     { id: "alerts"      as const, label: "Alert Feed",  badge: highAlerts > 0 ? highAlerts : undefined },
     { id: "gst"         as const, label: "Bulk GST",    badge: undefined },
+    { id: "compliance-board" as const, label: "Compliance Board", badge: undefined },
+    { id: "doc-tracker" as const, label: "Doc Tracker", badge: undefined },
+    { id: "query-log"   as const, label: "Query Log",   badge: undefined },
+    { id: "engagement"  as const, label: "Engagement",  badge: undefined },
     { id: "practice"    as const, label: "Practice",    badge: undefined },
     { id: "marketplace" as const, label: "Marketplace", badge: undefined },
     { id: "billing"     as const, label: "Billing",     badge: undefined },
@@ -1225,7 +1231,11 @@ export default function AdvisorPage() {
         </div>
       )}
 
-      {tab === "gst"         && <BulkGstTab />}
+      {tab === "gst"              && <BulkGstTab />}
+      {tab === "compliance-board" && <ComplianceBoardTab clients={clients} />}
+      {tab === "doc-tracker"      && <DocTrackerTab clients={clients} />}
+      {tab === "query-log"        && <QueryLogTab clients={clients} />}
+      {tab === "engagement"       && <EngagementTab clients={clients} firm={firmProfile} />}
       {tab === "practice"    && <PracticeTab clients={clients} />}
       {tab === "marketplace" && <MarketplaceTab />}
       {tab === "billing"     && <BillingTab clients={clients} />}
@@ -1246,6 +1256,521 @@ export default function AdvisorPage() {
           onClose={() => setShowFirmSetup(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Compliance Status Board ─────────────────────────────────────────────────────
+// Per-client matrix of recurring filing obligations and their current state for
+// the running period. Distinct from the Practice "Compliance Calendar" (which is
+// a portfolio-wide list of upcoming dates): this is a client × obligation grid the
+// CA marks off as each return is filed.
+
+type ComplianceObligation = "gst" | "tds" | "itr" | "roc" | "pf";
+type ComplianceState = "filed" | "pending" | "na";
+
+const COMPLIANCE_COLS: { key: ComplianceObligation; label: string }[] = [
+  { key: "gst", label: "GSTR-3B" },
+  { key: "tds", label: "TDS" },
+  { key: "pf",  label: "PF/ESI" },
+  { key: "itr", label: "ITR" },
+  { key: "roc", label: "ROC" },
+];
+
+const CSTATE_STYLE: Record<ComplianceState, { cls: string; next: ComplianceState }> = {
+  pending: { cls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/40", next: "filed" },
+  filed:   { cls: "bg-green-950/30 text-green-400 border-green-800/40",    next: "na" },
+  na:      { cls: "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]", next: "pending" },
+};
+
+function ComplianceBoardTab({ clients }: { clients: ClientSummary[] }) {
+  const periodKey = `${MONTH_NAMES[new Date().getMonth()]}-${new Date().getFullYear()}`;
+  const [grid, setGrid] = useFeatureState<Record<string, Record<string, ComplianceState>>>("adv-compliance-board", {});
+
+  const stateFor = (tid: string, ob: ComplianceObligation): ComplianceState =>
+    grid[periodKey]?.[`${tid}:${ob}`] ?? "pending";
+
+  const cycle = (tid: string, ob: ComplianceObligation) => {
+    const cur = stateFor(tid, ob);
+    const next = CSTATE_STYLE[cur].next;
+    setGrid(prev => {
+      const period = { ...(prev[periodKey] ?? {}) };
+      period[`${tid}:${ob}`] = next;
+      return { ...prev, [periodKey]: period };
+    });
+  };
+
+  const markAllFiled = (tid: string) => {
+    setGrid(prev => {
+      const period = { ...(prev[periodKey] ?? {}) };
+      COMPLIANCE_COLS.forEach(c => { if (period[`${tid}:${c.key}`] !== "na") period[`${tid}:${c.key}`] = "filed"; });
+      return { ...prev, [periodKey]: period };
+    });
+    toast.success("All obligations marked filed for this client");
+  };
+
+  const totalPending = clients.reduce(
+    (s, c) => s + COMPLIANCE_COLS.filter(col => stateFor(c.tenant_id, col.key) === "pending").length, 0);
+  const totalFiled = clients.reduce(
+    (s, c) => s + COMPLIANCE_COLS.filter(col => stateFor(c.tenant_id, col.key) === "filed").length, 0);
+
+  if (clients.length === 0)
+    return <div className="text-center py-10 text-sm text-[var(--color-muted)]">No clients linked yet. Add clients from the Clients tab.</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--color-primary)]/8 border border-[var(--color-primary)]/25 rounded-lg px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-2.5">
+          <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold">Compliance Status Board · {periodKey.replace("-", " ")}</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Tap any cell to cycle Pending → Filed → N/A. Tracked per period.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-green-400 font-semibold">{totalFiled} filed</span>
+          <span className="text-yellow-400 font-semibold">{totalPending} pending</span>
+        </div>
+      </div>
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[620px]">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>
+              <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Client</th>
+              {COMPLIANCE_COLS.map(c => (
+                <th key={c.key} className="px-3 py-2.5 text-center text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{c.label}</th>
+              ))}
+              <th className="px-3 py-2.5" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {clients.map(c => {
+              const rowPending = COMPLIANCE_COLS.some(col => stateFor(c.tenant_id, col.key) === "pending");
+              return (
+                <tr key={c.tenant_id} className="hover:bg-white/2">
+                  <td className="px-4 py-3 text-xs font-medium">{c.label}</td>
+                  {COMPLIANCE_COLS.map(col => {
+                    const st = stateFor(c.tenant_id, col.key);
+                    return (
+                      <td key={col.key} className="px-3 py-3 text-center">
+                        <button onClick={() => cycle(c.tenant_id, col.key)}
+                          className={`text-[10px] font-bold px-2 py-1 rounded border w-16 ${CSTATE_STYLE[st].cls}`}>
+                          {st === "na" ? "N/A" : st === "filed" ? "Filed" : "Pending"}
+                        </button>
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-3 text-right">
+                    {rowPending && (
+                      <button onClick={() => markAllFiled(c.tenant_id)}
+                        className="text-[10px] text-[var(--color-primary)] hover:underline whitespace-nowrap">All filed ✓</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Document Request Tracker ────────────────────────────────────────────────────
+// A durable, statusful tracker of documents the CA has asked clients for, with
+// follow-up/received states. Distinct from the Practice tab's static "send link"
+// chips — these are records that persist and move through a workflow.
+
+type DocRequest = {
+  id: string;
+  clientLabel: string;
+  document: string;
+  requestedAt: string;
+  status: "requested" | "reminded" | "received";
+};
+
+function DocTrackerTab({ clients }: { clients: ClientSummary[] }) {
+  const [reqs, setReqs] = useFeatureState<DocRequest[]>("adv-doc-requests", []);
+  const [showNew, setShowNew] = useState(false);
+  const [draft, setDraft] = useState({ clientLabel: "", document: "" });
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const DSTATUS: Record<DocRequest["status"], string> = {
+    requested: "bg-blue-950/30 text-blue-400 border-blue-800/30",
+    reminded:  "bg-orange-950/30 text-orange-400 border-orange-800/30",
+    received:  "bg-green-950/30 text-green-400 border-green-800/30",
+  };
+
+  const add = () => {
+    if (!draft.clientLabel || !draft.document.trim()) { toast.error("Pick a client and name the document"); return; }
+    const r: DocRequest = { id: crypto.randomUUID(), clientLabel: draft.clientLabel, document: draft.document.trim(), requestedAt: new Date().toISOString(), status: "requested" };
+    setReqs(prev => [r, ...prev]);
+    setDraft({ clientLabel: "", document: "" });
+    setShowNew(false);
+    toast.success("Document request logged");
+  };
+
+  const remind = (id: string) => {
+    setReqs(prev => prev.map(r => r.id === id ? { ...r, status: "reminded" } : r));
+    toast.success("Reminder sent to client");
+  };
+  const receive = (id: string) => setReqs(prev => prev.map(r => r.id === id ? { ...r, status: "received" } : r));
+  const remove = (id: string) => setReqs(prev => prev.filter(r => r.id !== id));
+
+  const pending = reqs.filter(r => r.status !== "received");
+  const received = reqs.filter(r => r.status === "received");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-xs text-[var(--color-muted)]">Track every document you've asked clients for — chase pending ones, mark received.</p>
+        <button onClick={() => setShowNew(v => !v)}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={11} /> Request Document
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Outstanding", value: pending.length.toString(),  color: pending.length > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+          { label: "Reminded",    value: reqs.filter(r => r.status === "reminded").length.toString(), color: "text-orange-400" },
+          { label: "Received",    value: received.length.toString(), color: "text-green-400" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-base font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {showNew && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Client *</label>
+              <select value={draft.clientLabel} onChange={e => setDraft(d => ({ ...d, clientLabel: e.target.value }))} className={inp}>
+                <option value="">Select client…</option>
+                {clients.map(c => <option key={c.tenant_id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Document *</label>
+              <input value={draft.document} onChange={e => setDraft(d => ({ ...d, document: e.target.value }))} placeholder="e.g. Bank statement – May 2026" className={inp} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-xs font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Request</button>
+            <button onClick={() => setShowNew(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {reqs.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Inbox size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No document requests yet. Log what you need from each client.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+          {reqs.map(r => {
+            const days = differenceInCalendarDays(new Date(), new Date(r.requestedAt));
+            return (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                <Paperclip size={12} className="text-[var(--color-muted)] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{r.document}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{r.clientLabel} · requested {days === 0 ? "today" : `${days}d ago`}</p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${DSTATUS[r.status]}`}>{r.status}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {r.status !== "received" && (
+                    <>
+                      <button onClick={() => remind(r.id)} className="text-[10px] text-orange-400 hover:underline flex items-center gap-1"><Timer size={9} /> Remind</button>
+                      <button onClick={() => receive(r.id)} className="text-[10px] text-green-400 hover:underline flex items-center gap-1"><CheckCircle2 size={9} /> Received</button>
+                    </>
+                  )}
+                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={11} /></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Client Query / Ticket Log ───────────────────────────────────────────────────
+// A lightweight ticket log for the back-and-forth questions clients raise with the
+// firm (notice received, invoice query, advisory ask). Open/resolved workflow with
+// optional reply note.
+
+type CaQuery = {
+  id: string;
+  clientLabel: string;
+  subject: string;
+  priority: "low" | "normal" | "urgent";
+  status: "open" | "resolved";
+  reply: string;
+  createdAt: string;
+};
+
+function QueryLogTab({ clients }: { clients: ClientSummary[] }) {
+  const [queries, setQueries] = useFeatureState<CaQuery[]>("adv-query-log", []);
+  const [showNew, setShowNew] = useState(false);
+  const [draft, setDraft] = useState({ clientLabel: "", subject: "", priority: "normal" as CaQuery["priority"] });
+  const [replyFor, setReplyFor] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const PRIO: Record<CaQuery["priority"], string> = {
+    low:    "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
+    normal: "bg-blue-950/30 text-blue-400 border-blue-800/30",
+    urgent: "bg-red-950/30 text-red-400 border-red-800/30",
+  };
+
+  const add = () => {
+    if (!draft.clientLabel || !draft.subject.trim()) { toast.error("Pick a client and write the query"); return; }
+    const q: CaQuery = { id: crypto.randomUUID(), clientLabel: draft.clientLabel, subject: draft.subject.trim(), priority: draft.priority, status: "open", reply: "", createdAt: new Date().toISOString() };
+    setQueries(prev => [q, ...prev]);
+    setDraft({ clientLabel: "", subject: "", priority: "normal" });
+    setShowNew(false);
+    toast.success("Query logged");
+  };
+
+  const resolve = (id: string) => {
+    setQueries(prev => prev.map(q => q.id === id ? { ...q, status: "resolved", reply: replyFor === id ? replyText : q.reply } : q));
+    setReplyFor(null); setReplyText("");
+    toast.success("Query resolved");
+  };
+  const remove = (id: string) => setQueries(prev => prev.filter(q => q.id !== id));
+
+  const open = queries.filter(q => q.status === "open");
+  const resolved = queries.filter(q => q.status === "resolved");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-xs text-[var(--color-muted)]">Log every client question or notice — track what's open and what you've answered.</p>
+        <button onClick={() => setShowNew(v => !v)}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+          <Plus size={11} /> Log Query
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Open</p>
+          <p className={`text-base font-bold tabular-nums ${open.length > 0 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{open.length}</p>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+          <p className="text-xs text-[var(--color-muted)] mb-1">Resolved</p>
+          <p className="text-base font-bold tabular-nums text-green-400">{resolved.length}</p>
+        </div>
+      </div>
+
+      {showNew && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Client *</label>
+              <select value={draft.clientLabel} onChange={e => setDraft(d => ({ ...d, clientLabel: e.target.value }))} className={inp}>
+                <option value="">Select client…</option>
+                {clients.map(c => <option key={c.tenant_id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Query *</label>
+              <input value={draft.subject} onChange={e => setDraft(d => ({ ...d, subject: e.target.value }))} placeholder="e.g. GST notice received under sec 61" className={inp} />
+            </div>
+          </div>
+          <div className="flex items-end gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Priority</label>
+              <select value={draft.priority} onChange={e => setDraft(d => ({ ...d, priority: e.target.value as CaQuery["priority"] }))} className={inp}>
+                {(["low","normal","urgent"] as const).map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-xs font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Query</button>
+            <button onClick={() => setShowNew(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {queries.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <MessageSquare size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No queries logged. Capture client questions and notices here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {queries.map(q => (
+            <div key={q.id} className={`bg-[var(--color-surface)] border rounded-lg p-3 ${q.status === "resolved" ? "border-green-800/30" : "border-[var(--color-border)]"}`}>
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${PRIO[q.priority]}`}>{q.priority}</span>
+                    <p className="text-sm font-medium">{q.subject}</p>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)]">{q.clientLabel} · {new Date(q.createdAt).toLocaleDateString("en-IN")}</p>
+                  {q.reply && <p className="text-xs text-[var(--color-muted)] mt-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5">↳ {q.reply}</p>}
+                  {replyFor === q.id && (
+                    <div className="mt-2 flex gap-2">
+                      <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Resolution note (optional)" className={inp} />
+                      <button onClick={() => resolve(q.id)} className="text-xs bg-green-600/80 text-white font-semibold px-3 rounded-lg hover:opacity-90 whitespace-nowrap">Resolve ✓</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {q.status === "open" ? (
+                    <button onClick={() => { setReplyFor(replyFor === q.id ? null : q.id); setReplyText(""); }}
+                      className="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-1"><Reply size={9} /> Resolve</button>
+                  ) : (
+                    <span className="text-[10px] text-green-400 flex items-center gap-1"><CheckCircle2 size={9} /> Resolved</span>
+                  )}
+                  <button onClick={() => remove(q.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={11} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Engagement Letter Generator ─────────────────────────────────────────────────
+// Builds a plain-text engagement letter from the firm profile + a chosen client and
+// scope, ready to copy or "send". Uses the same firm branding as white-label reports.
+
+const ENGAGEMENT_SCOPES = [
+  "Monthly GST return filing (GSTR-1 & GSTR-3B)",
+  "TDS computation, deposit & quarterly returns",
+  "Annual income-tax return preparation & filing",
+  "Statutory audit & financial statement preparation",
+  "ROC annual compliance (MGT-7, AOC-4)",
+  "Monthly bookkeeping & MIS reporting",
+  "Virtual CFO / advisory retainer",
+];
+
+function EngagementTab({ clients, firm }: { clients: ClientSummary[]; firm: CaFirmProfile }) {
+  const [clientLabel, setClientLabel] = useState("");
+  const [scopes, setScopes] = useState<string[]>([]);
+  const [fee, setFee] = useState("");
+  const [cadence, setCadence] = useState<"monthly" | "quarterly" | "annual">("monthly");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const firmName = firm.name || "Your CA Firm";
+  const feeNum = parseFloat(fee);
+
+  const toggleScope = (s: string) =>
+    setScopes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+
+  const letter = useMemo(() => {
+    const date = format(new Date(), "d MMMM yyyy");
+    const scopeLines = scopes.length ? scopes.map((s, i) => `   ${i + 1}. ${s}`).join("\n") : "   (scope of work to be defined)";
+    const feeLine = !isNaN(feeNum) && feeNum > 0
+      ? `${formatCurrency(feeNum)} payable ${cadence}, plus applicable GST and statutory fees.`
+      : "as mutually agreed, plus applicable GST and statutory fees.";
+    return [
+      `${firmName}${firm.tagline ? `\n${firm.tagline}` : ""}${firm.gstin ? `\nGSTIN: ${firm.gstin}` : ""}`,
+      ``,
+      `Date: ${date}`,
+      ``,
+      `To,`,
+      `${clientLabel || "[Client name]"}`,
+      ``,
+      `Sub: Engagement for professional services`,
+      ``,
+      `Dear Sir/Madam,`,
+      ``,
+      `We are pleased to confirm our engagement to provide the following professional services:`,
+      scopeLines,
+      ``,
+      `Our professional fee for the above engagement shall be ${feeLine}`,
+      ``,
+      `This engagement is subject to the standards and ethical guidelines of the Institute of Chartered Accountants of India. Either party may terminate this engagement with 30 days' written notice.`,
+      ``,
+      `We look forward to working with you.`,
+      ``,
+      `For ${firmName}`,
+      ``,
+      `____________________`,
+      `Partner / Proprietor`,
+    ].join("\n");
+  }, [firmName, firm.tagline, firm.gstin, clientLabel, scopes, feeNum, cadence]);
+
+  const copy = () => {
+    navigator.clipboard?.writeText(letter).then(
+      () => toast.success("Engagement letter copied to clipboard"),
+      () => toast.error("Could not copy"));
+  };
+
+  return (
+    <div className="space-y-4">
+      {!firm.name && (
+        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-2.5 text-xs text-yellow-300 flex items-center gap-2">
+          <Building2 size={12} /> Set your firm name in Firm Setup so it appears on the letterhead.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Client</label>
+              <select value={clientLabel} onChange={e => setClientLabel(e.target.value)} className={inp}>
+                <option value="">Select client…</option>
+                {clients.map(c => <option key={c.tenant_id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Fee (₹)</label>
+                <input type="number" min="0" value={fee} onChange={e => setFee(e.target.value)} placeholder="e.g. 15000" className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Cadence</label>
+                <select value={cadence} onChange={e => setCadence(e.target.value as typeof cadence)} className={inp}>
+                  {(["monthly","quarterly","annual"] as const).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1.5">Scope of work</label>
+              <div className="space-y-1.5">
+                {ENGAGEMENT_SCOPES.map(s => (
+                  <label key={s} className="flex items-start gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggleScope(s)} className="mt-0.5 accent-[var(--color-primary)]" />
+                    <span className={scopes.includes(s) ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"}>{s}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <FileSignature size={13} className="text-[var(--color-primary)]" />
+              <p className="text-xs font-semibold">Preview</p>
+            </div>
+            <pre className="text-[11px] leading-relaxed text-[var(--color-muted)] whitespace-pre-wrap font-sans max-h-[420px] overflow-y-auto">{letter}</pre>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={copy}
+              className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2.5 rounded-lg text-sm hover:opacity-90">
+              <Copy size={13} /> Copy Letter
+            </button>
+            <button onClick={() => { if (!clientLabel) { toast.error("Select a client first"); return; } toast.success(`Engagement letter sent to ${clientLabel}`); }}
+              className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm px-4 py-2.5 rounded-lg hover:border-[var(--color-primary)]/40">
+              <Send size={13} /> Send
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
