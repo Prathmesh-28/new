@@ -799,7 +799,7 @@ export interface CashFlowStatement {
 
 /** Direct-method cash flow for a [start,end] window. Transactions are real cash
  *  movements so operating+investing+financing reconciles to the change in cash. */
-export function cashFlowStatement(store: AppStore, start: string, end: string, today = new Date()): CashFlowStatement {
+export function cashFlowStatement(store: AppStore, start: string, end: string, _today = new Date()): CashFlowStatement {
   const { transactions, capitalInvestments } = store;
   const win = transactions.filter(t => inWindow(t.date, start, end) && t.category !== "transfer");
 

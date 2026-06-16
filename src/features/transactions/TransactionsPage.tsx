@@ -2844,7 +2844,6 @@ function BudgetVsActual() {
   const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
   const fc = formatCurrency;
   const SPEND_CATS = ["expense", "payroll", "tax", "loan"] as const;
-  type SpendCat = typeof SPEND_CATS[number];
   const [budgets, setBudgets] = useFeatureState<Record<string, number>>("txn-budget-actual", {});
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] w-36";

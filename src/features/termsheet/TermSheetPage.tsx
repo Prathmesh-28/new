@@ -346,7 +346,7 @@ function TermSheetComparator() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {offers.map((o, i) => (
+          {offers.map((o) => (
             <div key={o.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <input value={o.investor} onChange={e => patch(o.id, "investor", e.target.value)}
@@ -2011,7 +2011,6 @@ function DiscountVsCapChooser() {
   const capOwn = ownership(capEffPre);
   const bestOwn = ownership(betterEffPre);
   const noTermsOwn = ownership(pre); // converting at full price, no benefit
-  const fc = formatCurrency;
 
   const rows = [
     { label: "No cap / no discount", effPre: pre, own: noTermsOwn, color: "text-[var(--color-muted)]" },

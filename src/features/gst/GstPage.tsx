@@ -2112,7 +2112,6 @@ function Gstr3bAutoPrep() {
   const rate = (firm.gstRate ?? 18) / 100;
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const fc = formatCurrency;
-  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
   const data = useMemo(() => {
     const txns = (store.transactions ?? []).filter(t => t.date.slice(0, 7) === period);
@@ -2480,7 +2479,6 @@ function MultiGstinConsolidator() {
 
   const tOut = units.reduce((s, u) => s + u.output, 0);
   const tItc = units.reduce((s, u) => s + u.itc, 0);
-  const tCash = units.reduce((s, u) => s + u.cashLedger, 0);
   const tNet = units.reduce((s, u) => s + Math.max(0, u.output - u.itc - u.cashLedger), 0);
 
   return (

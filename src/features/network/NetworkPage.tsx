@@ -1053,7 +1053,7 @@ function Concentration({ live }: { live: Live[] }) {
 }
 
 // ── #9 Payment-Behaviour Rating per Partner ──────────────────────────────────
-function PaymentBehaviourRating({ live }: { live: Live[] }) {
+function PaymentBehaviourRating({}: { live: Live[] }) {
   const { store } = useApp();
   const today = new Date();
 

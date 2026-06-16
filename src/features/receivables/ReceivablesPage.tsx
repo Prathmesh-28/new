@@ -191,7 +191,6 @@ export default function ReceivablesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [view, setView] = useState<"list" | "kanban">("list");
   const [tab, setTab] = useState<ReceivablesTab>("overview");
-  const today = new Date().toISOString().split("T")[0];
 
   const pending = invoices.filter(i => i.status !== "paid");
   const paid    = invoices.filter(i => i.status === "paid");

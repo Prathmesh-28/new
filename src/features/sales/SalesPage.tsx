@@ -160,7 +160,7 @@ function PipelineBoard() {
   const [rep, setRep] = useState("");
   const [value, setValue] = useState("");
   const [source, setSource] = useState("WhatsApp");
-  const [expectedClose, setExpectedClose] = useState(() => new Date().toISOString().split("T")[0]);
+  const [expectedClose] = useState(() => new Date().toISOString().split("T")[0]);
 
   const addDeal = () => {
     const v = parseFloat(value);

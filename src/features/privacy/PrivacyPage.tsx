@@ -134,7 +134,6 @@ interface DpdpEntry {
   id: string; subject: string; purpose: string; collectedOn: string;
   channel: string; granted: boolean; withdrawnOn: string | null;
 }
-type PermLevel = "none" | "read" | "full";
 interface PermRow { id: string; party: string; bank: boolean; gst: boolean; pan: boolean; invoices: boolean; payroll: boolean }
 type DsrType = "access" | "erasure" | "correction" | "portability";
 type DsrStatus = "open" | "in_progress" | "fulfilled" | "rejected";

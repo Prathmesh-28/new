@@ -2329,7 +2329,6 @@ function RelatedPartyDisclosure({ start, end, asOf, label }: { start: string; en
 // Off-balance-sheet exposures (guarantees, litigation, capital commitments) that
 // feed the contingent-liability note. Entries persist with the firm's data.
 function ContingentLiabilities({ asOf }: { asOf: Date }) {
-  const { store } = useApp();
   type CType = "guarantee" | "litigation" | "commitment" | "other";
   interface CItem { id: string; particulars: string; type: CType; amount: number; likelihood: "remote" | "possible" | "probable" }
   const [items, setItems] = useFeatureState<CItem[]>("stm-contingent-items", []);

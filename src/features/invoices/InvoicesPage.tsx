@@ -2676,7 +2676,6 @@ function DiscountTaxCalculator() {
   const [discountMode, setDiscountMode] = useState<"pct" | "amt">("pct");
   const [discountVal, setDiscountVal] = useState("0");
 
-  const upd = (id: string, k: keyof DocItem, v: string) => setItems(p => p.map(r => r.id === id ? { ...r, [k]: v } : r));
 
   // Gross taxable (pre-discount) and proportional discount applied per line, then GST per line.
   const grossTaxable = items.reduce((s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0), 0);

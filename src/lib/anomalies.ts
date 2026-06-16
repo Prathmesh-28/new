@@ -22,12 +22,6 @@ export interface Anomaly {
 const name = (t: Transaction) => (t.counterparty || t.description || "Unknown").trim();
 const daysBetween = (a: string, b: string) => Math.abs((+new Date(a) - +new Date(b)) / 86400000);
 
-function mean(xs: number[]) { return xs.reduce((s, x) => s + x, 0) / (xs.length || 1); }
-function stdev(xs: number[]) {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1));
-}
 function median(xs: number[]) {
   if (!xs.length) return 0;
   const s = [...xs].sort((a, b) => a - b);

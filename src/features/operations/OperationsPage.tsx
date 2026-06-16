@@ -1144,7 +1144,7 @@ function BomCostingTab() {
           </div>
           <div className="divide-y divide-[var(--color-border)]">
             {boms.map(b => {
-              const { totalCost, costPerUnit, gm } = calcBom(b);
+              const { costPerUnit, gm } = calcBom(b);
               return (
                 <button key={b.id} onClick={() => setActiveBom(b.id === activeBom ? null : b.id)}
                   className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm hover:bg-white/2 transition-colors ${b.id === activeBom ? "bg-[var(--color-primary)]/10" : ""}`}>

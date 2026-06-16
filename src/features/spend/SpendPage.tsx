@@ -61,7 +61,6 @@ export default function SpendPage() {
   const curSpend = groupByCategory(expenses.filter(t => inWindow(t.date, curStart, curEnd)));
   const prv1Spend = groupByCategory(expenses.filter(t => inWindow(t.date, prv1Start, prv1End)));
   const prv2Spend = groupByCategory(expenses.filter(t => inWindow(t.date, prv2Start, prv2End)));
-  const prv3Spend = groupByCategory(expenses.filter(t => inWindow(t.date, prv3Start, prv3End)));
 
   const totalCur = Object.values(curSpend).reduce((s, v) => s + v, 0);
 

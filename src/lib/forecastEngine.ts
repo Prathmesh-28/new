@@ -365,7 +365,7 @@ export function customerPaymentProfiles(store: AppStore, today: Date): CustomerP
   return profiles.sort((a, b) => b.openAmount - a.openAmount);
 }
 
-export function projectCollections(store: AppStore, profiles: CustomerPaymentProfile[], today: Date, horizon: number): CollectionDraw[] {
+export function projectCollections(store: AppStore, profiles: CustomerPaymentProfile[], today: Date, _horizon: number): CollectionDraw[] {
   const byCust = new Map(profiles.map(p => [p.customer, p]));
   const draws: CollectionDraw[] = [];
   for (const inv of (store.invoices ?? [])) {

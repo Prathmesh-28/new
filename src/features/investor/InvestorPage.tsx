@@ -113,7 +113,6 @@ function PortfolioTab({ portfolio }: { portfolio: PortfolioCompany[] }) {
   const totalInvested = portfolio.reduce((s, c) => s + c.invested, 0);
   const withAlerts    = portfolio.filter(c => c.last_alert).length;
   const avgRunway     = portfolio.length > 0 ? Math.round(portfolio.reduce((s, c) => s + c.runway_days, 0) / portfolio.length) : 0;
-  const aaVerified    = portfolio.filter(c => c.aa_verified).length;
 
   return (
     <div className="space-y-4">
@@ -263,7 +262,6 @@ function CompanyCard({ company: c }: { company: PortfolioCompany }) {
 // ── Deal Flow Tab ─────────────────────────────────────────────────────────────
 
 const SECTORS = ["All", "SaaS", "D2C", "AgriTech", "Logistics", "Manufacturing", "Distribution", "HealthTech", "EdTech"];
-const REV_BANDS = ["All", "₹5L–50L", "₹50L–2Cr", "₹2Cr–10Cr", "₹10Cr+"];
 
 function DealFlowTab({ publicRaises, loading, user, onCommit, capitalInvestments }: {
   publicRaises: PublicRaise[];
@@ -272,8 +270,6 @@ function DealFlowTab({ publicRaises, loading, user, onCommit, capitalInvestments
   onCommit: (r: PublicRaise) => void;
   capitalInvestments: { raiseId: string; investorEmail: string }[];
 }) {
-  const [sectorFilter, setSectorFilter] = useState("All");
-  const [revFilter, setRevFilter]       = useState("All");
   const [search, setSearch]             = useState("");
   const [trackFilter, setTrackFilter]   = useState<string>("all");
 
@@ -534,7 +530,7 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
 export default function InvestorPage() {
   const { user } = useAuth();
   const { store, addCapitalInvestment } = useApp();
-  const { capitalRaises, capitalInvestments } = store;
+  const { capitalInvestments } = store;
 
   const [publicRaises,  setPublicRaises]  = useState<PublicRaise[]>([]);
   const [loadingRaises, setLoadingRaises] = useState(true);

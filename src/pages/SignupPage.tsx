@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
@@ -25,7 +25,6 @@ const ROLE_OPTIONS = [
 
 export default function SignupPage() {
   const { serverReady } = useAuth();
-  const navigate = useNavigate();
   const [email,       setEmail]       = useState("");
   const [password,    setPassword]    = useState("");
   const [confirm,     setConfirm]     = useState("");
