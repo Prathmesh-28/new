@@ -17,14 +17,14 @@ import {
   Repeat, ShieldHalf, PiggyBank, Hourglass,
 } from "lucide-react";
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Line, ComposedChart, ReferenceLine, Bar, Cell,
 } from "recharts";
 import { format } from "date-fns";
 import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Scenario, CashObligation, Transaction } from "@/data/types";
+import type { Scenario, Transaction } from "@/data/types";
 
 export default function ForecastPage() {
   const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();

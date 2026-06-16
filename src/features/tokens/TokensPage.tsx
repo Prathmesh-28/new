@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { useApp } from "@/context/AppContext";
+
 import { formatCurrency } from "@/lib/utils";
 import {
   Coins, Wallet, GitBranch, Lock, Layers, Boxes, ArrowLeftRight,

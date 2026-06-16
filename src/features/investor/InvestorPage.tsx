@@ -2,13 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
-import {
-  Briefcase, TrendingUp, Users, Rocket, X, ShieldCheck, AlertTriangle,
-  Bell, Search, Filter, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight,
-  Eye, ChevronRight, TrendingDown,
-  Mail, FolderLock, FileText, Layers, Copy, Trash2,
-  Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart,
-} from "lucide-react";
+import { Briefcase, TrendingUp, Rocket, X, ShieldCheck, AlertTriangle, Bell, Search, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight, ChevronRight, Mail, FolderLock, FileText, Layers, Copy, Trash2, Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";

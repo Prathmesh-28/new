@@ -4,10 +4,7 @@
 // Health, Working Capital, Debt, Valuation and Compliance pages derives from
 // the AppStore through computeFinancialSnapshot() so all modules stay in sync.
 // ─────────────────────────────────────────────────────────────────────────────
-import type {
-  AppStore, Transaction, Invoice, ActiveLoan, InventoryItem, ProcurementOrder,
-  CashObligation,
-} from "@/data/types";
+import type { AppStore, Transaction, Invoice, InventoryItem, ProcurementOrder } from "@/data/types";
 import { totalDepreciation, totalNetBookValue } from "@/lib/depreciation";
 
 const DAY_MS = 86_400_000;
