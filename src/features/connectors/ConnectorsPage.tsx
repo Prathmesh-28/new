@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { generateId, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
-import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus, Server, FileCheck2, Calculator, ShieldCheck, FlaskConical, CreditCard, Users, Truck, Wallet } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Banknote, GitCompareArrows, ShoppingCart, Activity, Link2, Upload, XCircle, ArrowDownUp, Store, CalendarClock, Workflow, KeyRound, Webhook, History, Eye, EyeOff, Copy, Send, Plus, Server, FileCheck2, Calculator, ShieldCheck, FlaskConical, CreditCard, Users, Truck, Wallet, Route, PackageCheck, MessageCircle, Globe } from "lucide-react";
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
@@ -318,7 +318,7 @@ export default function ConnectorsPage() {
       </div>
 
       {/* #166–#169 — Connector tools */}
-      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical], ["conn-pos", "POS System", CreditCard], ["conn-payroll", "Payroll Software", Wallet], ["conn-crm", "CRM", Users], ["conn-shipping", "Shipping / Logistics", Truck]] as const).map(([id, label, Icon]) => (
+      {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical], ["conn-pos", "POS System", CreditCard], ["conn-payroll", "Payroll Software", Wallet], ["conn-crm", "CRM", Users], ["conn-shipping", "Shipping / Logistics", Truck], ["conn-eway", "E-Way Bill API", Route], ["conn-awb", "Courier AWB / Labels", PackageCheck], ["conn-whatsapp-bsp", "WhatsApp BSP", MessageCircle], ["conn-fx-rates", "FX Rate Feed", Globe]] as const).map(([id, label, Icon]) => (
         <a key={id} href={`#${id}`} className="sr-only">{label} <Icon size={10} /></a>
       ))}
       <BankUpiFeedConnector />
@@ -340,6 +340,10 @@ export default function ConnectorsPage() {
       <PayrollSoftwareConnector />
       <CrmConnector />
       <ShippingLogisticsConnector />
+      <EWayBillConnector />
+      <CourierAwbConnector />
+      <WhatsappBspConnector />
+      <FxRateFeedConnector />
     </div>
   );
 }
@@ -2308,6 +2312,380 @@ function ShippingLogisticsConnector() {
       </div>
 
       <DemoNote>Demo: courier links, shipment counts and COD figures are simulated and stored locally — no real logistics API is contacted.</DemoNote>
+    </section>
+  );
+}
+
+// ── #189 E-Way Bill API Connector ─────────────────────────────────────────────────
+// NIC E-Way Bill (EWB) GSP credential config + simulated EWB generation log.
+// No real NIC/GSP call — generation and validity are simulated client-side.
+type EwbEntry = { id: string; ewbNo: string; docNo: string; value: number; toState: string; validTill: string; createdAt: string };
+const EWB_STATES = ["Maharashtra", "Karnataka", "Gujarat", "Delhi", "Tamil Nadu", "Uttar Pradesh", "West Bengal", "Telangana"] as const;
+
+function EWayBillConnector() {
+  const [creds, setCreds] = useFeatureState<{ gstin: string; gspUser: string; linked: boolean }>("conn-eway-creds", { gstin: "", gspUser: "", linked: false });
+  const [entries, setEntries] = useFeatureState<EwbEntry[]>("conn-eway-entries", []);
+  const [gstin, setGstin] = useState(creds.gstin);
+  const [gspUser, setGspUser] = useState(creds.gspUser);
+  const [docNo, setDocNo] = useState("");
+  const [value, setValue] = useState("");
+  const [toState, setToState] = useState<string>(EWB_STATES[0]);
+  const [busy, setBusy] = useState(false);
+
+  const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
+
+  const linkGsp = () => {
+    if (!GSTIN_RE.test(gstin.trim().toUpperCase())) { toast.error("Enter a valid 15-character GSTIN"); return; }
+    if (!gspUser.trim()) { toast.error("Enter your EWB portal / GSP username"); return; }
+    setCreds({ gstin: gstin.trim().toUpperCase(), gspUser: gspUser.trim(), linked: true });
+    toast.success("EWB GSP credentials linked (simulated).");
+  };
+  const unlink = () => { setCreds({ gstin: "", gspUser: "", linked: false }); toast.success("EWB credentials cleared."); };
+
+  const generate = async () => {
+    if (!creds.linked) { toast.error("Link your EWB GSP credentials first"); return; }
+    const v = Number(value);
+    if (!docNo.trim()) { toast.error("Enter the invoice / document number"); return; }
+    if (!Number.isFinite(v) || v < 50000) { toast.error("EWB is required only for consignments above ₹50,000"); return; }
+    setBusy(true);
+    await new Promise(r => setTimeout(r, 1100));
+    const ewbNo = String(Math.floor(1e11 + Math.random() * 9e11));
+    const validTill = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    setEntries(prev => [{ id: generateId(), ewbNo, docNo: docNo.trim(), value: v, toState, validTill, createdAt: new Date().toISOString() }, ...prev]);
+    setDocNo(""); setValue("");
+    setBusy(false);
+    toast.success(`E-Way Bill ${ewbNo} generated (simulated).`);
+  };
+
+  const cancel = (id: string) => setEntries(prev => prev.filter(e => e.id !== id));
+  const totalValue = entries.reduce((s, e) => s + e.value, 0);
+
+  return (
+    <section id="conn-eway" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Route size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">E-Way Bill API Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{entries.length} EWBs · {formatCurrency(totalValue)} · #189</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Link your NIC E-Way Bill portal via a GST Suvidha Provider (GSP) and auto-generate EWBs for consignments above ₹50,000 — keeping logistics compliant without re-keying invoice data.
+      </p>
+
+      {!creds.linked ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN (27ABCDE1234F1Z5)" className={FC_INP} />
+          <input value={gspUser} onChange={e => setGspUser(e.target.value)} placeholder="EWB portal / GSP username" className={FC_INP} />
+          <button onClick={linkGsp} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+            <PlugZap size={14} /> Link GSP
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/20 gap-3">
+          <p className="text-xs"><span className="font-semibold text-emerald-400">Linked</span> · {creds.gstin} · user {creds.gspUser}</p>
+          <button onClick={unlink} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Unlink</button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="Invoice / doc no." className={FC_INP} />
+        <input value={value} onChange={e => setValue(e.target.value)} placeholder="Consignment value ₹" inputMode="numeric" className={FC_INP} />
+        <select value={toState} onChange={e => setToState(e.target.value)} className={FC_INP}>
+          {EWB_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <button onClick={generate} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-40">
+          <FileCheck2 size={14} className={busy ? "animate-pulse" : ""} /> Generate EWB
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {entries.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No E-Way Bills generated yet.</p>}
+        {entries.map(e => (
+          <div key={e.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">EWB {e.ewbNo} <span className="font-normal text-[var(--color-muted)]">· {e.docNo}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">{formatCurrency(e.value)} → {e.toState} · valid till {new Date(e.validTill).toLocaleString()}</p>
+            </div>
+            <button onClick={() => cancel(e.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: no NIC / GSP call is made. EWB numbers, validity and the GSTIN check are simulated locally — never paste production GSP credentials here.</DemoNote>
+    </section>
+  );
+}
+
+// ── #190 Courier AWB / Label Connector ─────────────────────────────────────────────
+// Generate simulated Air-Waybill numbers + shipping labels per courier API key.
+// Distinct from the shipping tracker: this issues AWBs, not COD reconciliation.
+type AwbShipment = { id: string; courier: string; awb: string; orderRef: string; weightKg: number; status: "manifested" | "picked_up" | "cancelled"; createdAt: string };
+const AWB_COURIERS = ["Delhivery", "Blue Dart", "DTDC", "Ecom Express", "Shadowfax", "India Post"] as const;
+
+function CourierAwbConnector() {
+  const [apiKey, setApiKey] = useFeatureState<{ courier: string; key: string }>("conn-awb-key", { courier: AWB_COURIERS[0], key: "" });
+  const [shipments, setShipments] = useFeatureState<AwbShipment[]>("conn-awb-shipments", []);
+  const [keyDraft, setKeyDraft] = useState(apiKey.key);
+  const [courier, setCourier] = useState<string>(apiKey.courier);
+  const [orderRef, setOrderRef] = useState("");
+  const [weight, setWeight] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const saveKey = () => {
+    if (!keyDraft.trim()) { toast.error("Paste the courier API key"); return; }
+    setApiKey({ courier, key: keyDraft.trim() });
+    toast.success(`${courier} API key saved (simulated).`);
+  };
+
+  const book = async () => {
+    if (!apiKey.key) { toast.error("Save a courier API key first"); return; }
+    const w = Number(weight);
+    if (!orderRef.trim()) { toast.error("Enter your order reference"); return; }
+    if (!Number.isFinite(w) || w <= 0) { toast.error("Enter a valid weight in kg"); return; }
+    setBusy(true);
+    await new Promise(r => setTimeout(r, 1000));
+    const awb = String(Math.floor(1e12 + Math.random() * 9e12));
+    setShipments(prev => [{ id: generateId(), courier: apiKey.courier, awb, orderRef: orderRef.trim(), weightKg: w, status: "manifested", createdAt: new Date().toISOString() }, ...prev]);
+    setOrderRef(""); setWeight("");
+    setBusy(false);
+    toast.success(`AWB ${awb} booked — label ready (simulated).`);
+  };
+
+  const markPicked = (id: string) => setShipments(prev => prev.map(s => s.id === id ? { ...s, status: "picked_up" } : s));
+  const cancel = (id: string) => setShipments(prev => prev.map(s => s.id === id ? { ...s, status: "cancelled" } : s));
+  const remove = (id: string) => setShipments(prev => prev.filter(s => s.id !== id));
+  const downloadLabel = (s: AwbShipment) => toast.success(`Label PDF for AWB ${s.awb} downloaded (simulated).`);
+
+  const active = shipments.filter(s => s.status !== "cancelled").length;
+
+  return (
+    <section id="conn-awb" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <PackageCheck size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">Courier AWB / Label Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{active} active AWBs · #190</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Plug in a courier's shipping API to generate Air-Waybill numbers and printable labels straight from an order — so dispatch and the books stay in lock-step.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={courier} onChange={e => setCourier(e.target.value)} className={FC_INP}>
+          {AWB_COURIERS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={keyDraft} onChange={e => setKeyDraft(e.target.value)} type="password" placeholder="Courier API key" className={FC_INP} />
+        <button onClick={saveKey} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+          <KeyRound size={14} /> Save key
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input value={orderRef} onChange={e => setOrderRef(e.target.value)} placeholder="Order reference" className={FC_INP} />
+        <input value={weight} onChange={e => setWeight(e.target.value)} placeholder="Weight (kg)" inputMode="decimal" className={FC_INP} />
+        <button onClick={book} disabled={busy} className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-40">
+          <PackageCheck size={14} className={busy ? "animate-pulse" : ""} /> Book AWB
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {shipments.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No AWBs generated yet.</p>}
+        {shipments.map(s => (
+          <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{s.courier} · AWB {s.awb} <span className={`font-normal ${s.status === "cancelled" ? "text-red-400" : "text-emerald-400"}`}>· {s.status.replace("_", " ")}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)]">{s.orderRef} · {s.weightKg} kg · {new Date(s.createdAt).toLocaleString()}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => downloadLabel(s)} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5"><Upload size={12} className="rotate-180" /> Label</button>
+              {s.status === "manifested" && <button onClick={() => markPicked(s.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Mark picked</button>}
+              {s.status !== "cancelled" && <button onClick={() => cancel(s.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Cancel</button>}
+              <button onClick={() => remove(s.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: AWB numbers and label downloads are simulated locally — no courier shipping API is called and no real label is produced.</DemoNote>
+    </section>
+  );
+}
+
+// ── #191 WhatsApp BSP Connector ─────────────────────────────────────────────────────
+// WhatsApp Business Solution Provider (Meta Cloud API / BSP) phone-number + template
+// registration. Connection, OTP and template approval are all simulated locally.
+type WaTemplate = { id: string; name: string; category: "MARKETING" | "UTILITY" | "AUTHENTICATION"; status: "pending" | "approved" | "rejected"; body: string };
+
+function WhatsappBspConnector() {
+  const [num, setNum] = useFeatureState<{ phone: string; wabaId: string; verified: boolean }>("conn-whatsapp-num", { phone: "", wabaId: "", verified: false });
+  const [templates, setTemplates] = useFeatureState<WaTemplate[]>("conn-whatsapp-templates", []);
+  const [phone, setPhone] = useState(num.phone);
+  const [waba, setWaba] = useState(num.wabaId);
+  const [tplName, setTplName] = useState("");
+  const [tplCat, setTplCat] = useState<WaTemplate["category"]>("UTILITY");
+  const [tplBody, setTplBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const register = async () => {
+    if (!/^\+?[0-9]{10,15}$/.test(phone.trim())) { toast.error("Enter a valid WhatsApp business number"); return; }
+    if (!waba.trim()) { toast.error("Enter your WABA (WhatsApp Business Account) ID"); return; }
+    setBusy(true);
+    await new Promise(r => setTimeout(r, 1000));
+    setNum({ phone: phone.trim(), wabaId: waba.trim(), verified: true });
+    setBusy(false);
+    toast.success("Business number verified via BSP (simulated OTP).");
+  };
+  const disconnect = () => { setNum({ phone: "", wabaId: "", verified: false }); toast.success("WhatsApp number disconnected."); };
+
+  const submitTemplate = () => {
+    if (!num.verified) { toast.error("Register & verify a business number first"); return; }
+    const name = tplName.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    if (!name) { toast.error("Enter a template name"); return; }
+    if (!tplBody.trim()) { toast.error("Enter the template body"); return; }
+    if (templates.some(t => t.name === name)) { toast.error("A template with that name already exists"); return; }
+    setTemplates(prev => [{ id: generateId(), name, category: tplCat, status: "pending", body: tplBody.trim() }, ...prev]);
+    setTplName(""); setTplBody("");
+    toast.success(`Template "${name}" submitted for approval (simulated).`);
+  };
+  const approve = (id: string) => setTemplates(prev => prev.map(t => t.id === id ? { ...t, status: "approved" } : t));
+  const remove = (id: string) => setTemplates(prev => prev.filter(t => t.id !== id));
+
+  const approved = templates.filter(t => t.status === "approved").length;
+
+  return (
+    <section id="conn-whatsapp-bsp" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <MessageCircle size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">WhatsApp BSP Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{approved}/{templates.length} templates live · #191</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Register your WhatsApp business number through a BSP (Meta Cloud API) and manage approved message templates — the channel used to send payment reminders and invoice links to customers.
+      </p>
+
+      {!num.verified ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Business number +91…" type="tel" className={FC_INP} />
+          <input value={waba} onChange={e => setWaba(e.target.value)} placeholder="WABA ID" className={FC_INP} />
+          <button onClick={register} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-40">
+            <PlugZap size={14} className={busy ? "animate-pulse" : ""} /> Register
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/20 gap-3">
+          <p className="text-xs"><span className="font-semibold text-emerald-400">Verified</span> · {num.phone} · WABA {num.wabaId}</p>
+          <button onClick={disconnect} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Disconnect</button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input value={tplName} onChange={e => setTplName(e.target.value)} placeholder="Template name" className={FC_INP} />
+        <select value={tplCat} onChange={e => setTplCat(e.target.value as WaTemplate["category"])} className={FC_INP}>
+          {(["UTILITY", "MARKETING", "AUTHENTICATION"] as const).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={tplBody} onChange={e => setTplBody(e.target.value)} placeholder="Body, e.g. Hi {{1}}, your invoice…" className={FC_INP} />
+        <button onClick={submitTemplate} className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm font-semibold rounded-lg px-3 py-2">
+          <Send size={14} /> Submit template
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {templates.length === 0 && <p className="text-xs text-[var(--color-muted)] italic">No message templates submitted yet.</p>}
+        {templates.map(t => (
+          <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{t.name} <span className="font-normal text-[var(--color-muted)]">· {t.category}</span> <span className={`font-normal ${t.status === "approved" ? "text-emerald-400" : t.status === "rejected" ? "text-red-400" : "text-yellow-400"}`}>· {t.status}</span></p>
+              <p className="text-[11px] text-[var(--color-muted)] truncate">{t.body}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {t.status === "pending" && <button onClick={() => approve(t.id)} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Approve</button>}
+              <button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400 p-1.5"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: BSP registration, OTP verification and template approval are all simulated locally — no message is sent and no Meta / BSP API is contacted.</DemoNote>
+    </section>
+  );
+}
+
+// ── #192 FX Rate Feed Connector ─────────────────────────────────────────────────────
+// Multi-currency exchange-rate provider config + simulated rate snapshot. Rates are
+// generated client-side around plausible mid-points — not a live market feed.
+type FxRate = { ccy: string; rate: number };
+const FX_PROVIDERS = ["RBI Reference Rate", "Open Exchange Rates", "Fixer.io", "ExchangeRate-API", "Wise"] as const;
+const FX_BASE: { ccy: string; mid: number }[] = [
+  { ccy: "USD", mid: 83.2 }, { ccy: "EUR", mid: 90.1 }, { ccy: "GBP", mid: 105.4 },
+  { ccy: "AED", mid: 22.7 }, { ccy: "SGD", mid: 61.8 }, { ccy: "AUD", mid: 55.3 },
+];
+
+function FxRateFeedConnector() {
+  const [cfg, setCfg] = useFeatureState<{ provider: string; apiKey: string; linked: boolean; lastSync: string | null }>("conn-fx-cfg", { provider: FX_PROVIDERS[0], apiKey: "", linked: false, lastSync: null });
+  const [rates, setRates] = useFeatureState<FxRate[]>("conn-fx-rates", []);
+  const [provider, setProvider] = useState<string>(cfg.provider);
+  const [keyDraft, setKeyDraft] = useState(cfg.apiKey);
+  const [busy, setBusy] = useState(false);
+
+  const link = () => {
+    setCfg(prev => ({ ...prev, provider, apiKey: keyDraft.trim(), linked: true }));
+    toast.success(`${provider} linked (simulated).`);
+  };
+  const unlink = () => { setCfg({ provider: FX_PROVIDERS[0], apiKey: "", linked: false, lastSync: null }); setRates([]); toast.success("FX feed disconnected."); };
+
+  const refresh = async () => {
+    if (!cfg.linked) { toast.error("Link a rate provider first"); return; }
+    setBusy(true);
+    await new Promise(r => setTimeout(r, 900));
+    const next = FX_BASE.map(b => ({ ccy: b.ccy, rate: Number((b.mid * (1 + (Math.random() - 0.5) * 0.02)).toFixed(4)) }));
+    setRates(next);
+    setCfg(prev => ({ ...prev, lastSync: new Date().toISOString() }));
+    setBusy(false);
+    toast.success("FX rates refreshed (simulated snapshot).");
+  };
+
+  return (
+    <section id="conn-fx-rates" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4 scroll-mt-4">
+      <div className="flex items-center gap-2">
+        <Globe size={16} className="text-[var(--color-primary)]" />
+        <h2 className="text-sm font-semibold">FX Rate Feed Connector</h2>
+        <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{rates.length} pairs · #192</span>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        Connect an exchange-rate provider to value foreign-currency invoices and bank balances in INR — pulling a daily INR mid-rate snapshot for every currency you trade in.
+      </p>
+
+      {!cfg.linked ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select value={provider} onChange={e => setProvider(e.target.value)} className={FC_INP}>
+            {FX_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <input value={keyDraft} onChange={e => setKeyDraft(e.target.value)} type="password" placeholder="API key (blank for RBI free feed)" className={FC_INP} />
+          <button onClick={link} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold rounded-lg px-3 py-2">
+            <PlugZap size={14} /> Link feed
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/20 gap-3">
+          <p className="text-xs"><span className="font-semibold text-emerald-400">Linked</span> · {cfg.provider} · {cfg.lastSync ? `synced ${new Date(cfg.lastSync).toLocaleString()}` : "not synced yet"}</p>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={refresh} disabled={busy} className="flex items-center gap-1 text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5 disabled:opacity-40">
+              <RefreshCw size={12} className={busy ? "animate-spin" : ""} /> Refresh
+            </button>
+            <button onClick={unlink} className="text-[11px] font-semibold border border-[var(--color-border)] rounded-lg px-2 py-1.5">Unlink</button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {rates.length === 0 && <p className="text-xs text-[var(--color-muted)] italic col-span-full">No rates pulled yet.</p>}
+        {rates.map(r => (
+          <div key={r.ccy} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+            <p className="text-[11px] text-[var(--color-muted)]">1 {r.ccy} =</p>
+            <p className="text-sm font-semibold">{formatCurrency(r.rate)}</p>
+          </div>
+        ))}
+      </div>
+
+      <DemoNote>Demo: rates are generated client-side around illustrative mid-points and are NOT a live market feed — do not use them for actual settlement or accounting.</DemoNote>
     </section>
   );
 }

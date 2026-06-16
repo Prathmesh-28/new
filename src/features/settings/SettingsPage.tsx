@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList, ShoppingCart, CalendarCheck, DatabaseBackup, Timer, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
