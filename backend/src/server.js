@@ -103,6 +103,7 @@ app.use("/auth",                   authLimiter, require("./routes/auth"));
 app.use("/api/kv",                 require("./routes/kv"));
 app.use("/api/users",              require("./routes/users"));
 app.use("/api/invites",            require("./routes/invites"));   // team invites: request/accept/reject
+app.use("/api/company",            require("./routes/company"));    // tenant/company profile (identity)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));
@@ -138,6 +139,8 @@ app.use("/api/lenders",            require("./routes/lenders"));
 // These are the PLATFORM owner's god-view across every tenant/company — distinct
 // from an SMB owner, who only ever sees their own tenant.
 const { authenticate: _auth } = require("./middleware/auth");
+const { writeAudit } = require("./lib/audit");
+const PLAN_MONTHLY_INR = { free: 0, starter: 799, growth: 2499, pro: 5999 }; // ex-GST list price
 function requireSuper(req, res, next) {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
   next();
@@ -162,12 +165,16 @@ function companyFinancials(app) {
 // GET /api/admin/companies — every tenant with live financials pulled from KV
 app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
   const { rows: tenants } = await pool.query(
-    `SELECT tenant_id,
+    `SELECT u.tenant_id,
             COUNT(*)::int AS user_count,
-            MAX(CASE WHEN role IN ('owner','super_admin') THEN email END) AS owner_email,
-            COALESCE(MAX(subscription_plan), 'free') AS plan,
-            MIN(created_at) AS created_at
-     FROM users GROUP BY tenant_id ORDER BY MIN(created_at) DESC`
+            MAX(CASE WHEN u.role IN ('owner','super_admin') THEN u.email END) AS owner_email,
+            COALESCE(MAX(u.subscription_plan), 'free') AS plan,
+            MIN(u.created_at) AS created_at,
+            MAX(u.last_login_at) AS last_login_at,
+            MAX(p.company_name) AS profile_name,
+            COALESCE(MAX(p.status), 'active') AS status
+     FROM users u LEFT JOIN tenant_profile p ON p.tenant_id = u.tenant_id
+     GROUP BY u.tenant_id ORDER BY MIN(u.created_at) DESC`
   );
   const { rows: blobs } = await pool.query(
     "SELECT tenant_id, value, updated_at FROM kv_store WHERE namespace='app' AND key='store'"
@@ -179,11 +186,13 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
     const app  = appBlob(blob?.value);
     return {
       tenant_id:    t.tenant_id,
-      company_name: app.firm?.name || null,
+      company_name: t.profile_name || app.firm?.name || null,
       owner_email:  t.owner_email,
       user_count:   t.user_count,
       plan:         t.plan || "free",
+      status:       t.status || "active",
       created_at:   t.created_at,
+      last_login_at: t.last_login_at || null,
       last_activity: blob?.updated_at || null,
       ...companyFinancials(app),
     };
@@ -204,7 +213,72 @@ app.post("/api/admin/tenants/:tid/plan", _auth, requireSuper, async (req, res) =
     [tid, plan]
   );
   await pool.query("UPDATE users SET subscription_plan=$1 WHERE tenant_id=$2", [plan, tid]);
+  writeAudit(req.user.id, "tenant.plan_change", "tenant", tid, { plan });
   res.json({ ok: true, tenant_id: tid, plan });
+});
+
+// POST /api/admin/tenants/:tid/suspend — disable a whole company (blocks login)
+app.post("/api/admin/tenants/:tid/suspend", _auth, requireSuper, async (req, res) => {
+  const tid = req.params.tid;
+  const reason = ((req.body && req.body.reason) || "").toString().slice(0, 280);
+  await pool.query("UPDATE users SET status='suspended' WHERE tenant_id=$1", [tid]);
+  await pool.query(
+    `INSERT INTO tenant_profile(tenant_id, status, suspend_reason, updated_at)
+     VALUES($1,'suspended',$2,now())
+     ON CONFLICT(tenant_id) DO UPDATE SET status='suspended', suspend_reason=$2, updated_at=now()`,
+    [tid, reason]
+  );
+  writeAudit(req.user.id, "tenant.suspend", "tenant", tid, { reason });
+  res.json({ ok: true, tenant_id: tid, status: "suspended" });
+});
+
+// POST /api/admin/tenants/:tid/activate — re-enable a suspended company
+app.post("/api/admin/tenants/:tid/activate", _auth, requireSuper, async (req, res) => {
+  const tid = req.params.tid;
+  await pool.query("UPDATE users SET status='active' WHERE tenant_id=$1", [tid]);
+  await pool.query(
+    `INSERT INTO tenant_profile(tenant_id, status, suspend_reason, updated_at)
+     VALUES($1,'active',NULL,now())
+     ON CONFLICT(tenant_id) DO UPDATE SET status='active', suspend_reason=NULL, updated_at=now()`,
+    [tid]
+  );
+  writeAudit(req.user.id, "tenant.activate", "tenant", tid, {});
+  res.json({ ok: true, tenant_id: tid, status: "active" });
+});
+
+// GET /api/admin/metrics — real platform business metrics (MRR, plan mix, signups)
+app.get("/api/admin/metrics", _auth, requireSuper, async (_req, res) => {
+  // Plan per tenant (max plan held in the tenant), used for MRR + distribution.
+  const { rows: planRows } = await pool.query(
+    "SELECT tenant_id, COALESCE(MAX(subscription_plan),'free') AS plan FROM users GROUP BY tenant_id"
+  );
+  const planMix = { free: 0, starter: 0, growth: 0, pro: 0 };
+  let mrr = 0, paidTenants = 0;
+  for (const r of planRows) {
+    const p = planMix[r.plan] != null ? r.plan : "free";
+    planMix[p] += 1;
+    const price = PLAN_MONTHLY_INR[p] || 0;
+    if (price > 0) { mrr += price; paidTenants += 1; }
+  }
+  // Signups over the last 12 months (by tenant's first user).
+  const { rows: signupRows } = await pool.query(
+    `SELECT to_char(date_trunc('month', first_at), 'YYYY-MM') AS month, COUNT(*)::int AS n
+     FROM (SELECT tenant_id, MIN(created_at) AS first_at FROM users GROUP BY tenant_id) t
+     WHERE first_at > now() - interval '12 months'
+     GROUP BY 1 ORDER BY 1`
+  );
+  const { rows: actRows } = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM users WHERE last_login_at > now() - interval '30 days'"
+  );
+  const { rows: pendingInv } = await pool.query("SELECT COUNT(*)::int AS n FROM team_invites WHERE status='pending'");
+  res.json({
+    mrr, arr: mrr * 12, paidTenants,
+    planMix,
+    signupsByMonth: signupRows,
+    activeUsers30d: actRows[0].n,
+    pendingInvites: pendingInv[0].n,
+    currency: "INR",
+  });
 });
 
 // GET /api/admin/tenants — lightweight tenant list (kept for back-compat)
@@ -240,6 +314,19 @@ app.get("/api/admin/stats", _auth, requireSuper, async (_req, res) => {
   });
 });
 
+// GET /api/admin/audit — recent admin/org actions (accountability trail, A4)
+app.get("/api/admin/audit", _auth, requireSuper, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 200, 1000);
+  const { rows } = await pool.query(
+    `SELECT a.id, a.action, a.entity, a.entity_id, a.meta, a.created_at,
+            u.email AS actor_email, u.role AS actor_role
+     FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+     ORDER BY a.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  res.json(rows);
+});
+
 // POST /api/admin/users/:id/reset — force a password reset for any user
 app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => {
   const { rows } = await pool.query("SELECT id FROM users WHERE id=$1", [req.params.id]);
@@ -250,6 +337,7 @@ app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => 
     "UPDATE users SET password=$1, first_login=true, failed_attempts=0, locked_until=NULL WHERE id=$2",
     [hash, req.params.id]
   );
+  writeAudit(req.user.id, "user.password_reset", "user", req.params.id, {});
   res.json({ password: tempPass });
 });
 

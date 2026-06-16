@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { sendWelcome } = require("../lib/email");
+const { tenantSeatInfo, PLAN_LABEL } = require("../lib/plans");
+const { writeAudit } = require("../lib/audit");
 
 // Roles a workspace owner may hand out. super_admin is reserved for super_admins.
 const ASSIGNABLE_ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
@@ -35,9 +37,10 @@ async function countSuperAdmins(client) {
 // GET /api/users — super_admin sees all; owner sees own tenant. Lower roles blocked.
 router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const isSuperAdmin = req.user.role === "super_admin";
+  const cols = "id,email,role,tenant_id,first_login,created_at,display_name,status,last_login_at,last_active_at,COALESCE(login_count,0) AS login_count,COALESCE(subscription_plan,'free') AS subscription_plan";
   const { rows } = isSuperAdmin
-    ? await pool.query("SELECT id,email,role,tenant_id,first_login,created_at,COALESCE(subscription_plan,'free') AS subscription_plan FROM users ORDER BY created_at DESC")
-    : await pool.query("SELECT id,email,role,tenant_id,first_login,created_at,COALESCE(subscription_plan,'free') AS subscription_plan FROM users WHERE tenant_id=$1 ORDER BY created_at DESC", [req.user.tenant_id]);
+    ? await pool.query(`SELECT ${cols} FROM users ORDER BY created_at DESC`)
+    : await pool.query(`SELECT ${cols} FROM users WHERE tenant_id=$1 ORDER BY created_at DESC`, [req.user.tenant_id]);
   res.json(rows);
 });
 
@@ -60,6 +63,17 @@ router.post("/", authenticate, async (req, res) => {
   const { rows: existing } = await pool.query("SELECT id FROM users WHERE email=$1", [email.toLowerCase()]);
   if (existing[0]) return res.status(409).json({ error: "A user with this email already exists" });
 
+  // Seat-cap: owners are bounded by their plan's included seats; super_admin is not.
+  if (actor.role !== "super_admin") {
+    const seat = await tenantSeatInfo(tid);
+    if (seat.full) {
+      return res.status(402).json({
+        error: `Your ${PLAN_LABEL[seat.plan] || seat.plan} plan includes ${seat.limit} seat${seat.limit === 1 ? "" : "s"} and you've used all of them.`,
+        code: "SEAT_LIMIT", seat,
+      });
+    }
+  }
+
   const tempPass = crypto.randomBytes(8).toString("hex");
   const hash     = await bcrypt.hash(tempPass, 10);
   const { rows } = await pool.query(
@@ -67,6 +81,7 @@ router.post("/", authenticate, async (req, res) => {
     [email.toLowerCase(), hash, role, tid]
   );
   sendWelcome({ to: email, password: tempPass }).catch(() => {});
+  writeAudit(actor.id, "user.create", "user", rows[0].id, { email: email.toLowerCase(), role, tenant_id: tid });
   res.status(201).json(rows[0]);
 });
 
@@ -102,7 +117,42 @@ router.patch("/:id", authenticate, async (req, res) => {
   }
 
   const { rows } = await pool.query("UPDATE users SET role=$1 WHERE id=$2 RETURNING id,email,role,tenant_id", [role, req.params.id]);
+  writeAudit(actor.id, "user.role_change", "user", req.params.id, { from: target.role, to: role });
   res.json(rows[0]);
+});
+
+// POST /api/users/:id/make-owner — promote a teammate to owner (continuity / backup admin).
+// Owner can promote anyone in their own tenant; super_admin anywhere. Co-owners are allowed.
+router.post("/:id/make-owner", authenticate, async (req, res) => {
+  const actor = req.user;
+  if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
+  const { rows: t } = await pool.query("SELECT id,role,tenant_id,email FROM users WHERE id=$1", [req.params.id]);
+  const target = t[0];
+  if (!target) return res.status(404).json({ error: "Not found" });
+  if (actor.role === "owner" && target.tenant_id !== actor.tenant_id) return res.status(403).json({ error: "Forbidden" });
+  if (target.role === "super_admin") return res.status(403).json({ error: "Forbidden" });
+  await pool.query("UPDATE users SET role='owner' WHERE id=$1", [target.id]);
+  writeAudit(actor.id, "user.make_owner", "user", target.id, { email: target.email, tenant_id: target.tenant_id });
+  res.json({ ok: true, id: target.id, role: "owner" });
+});
+
+// POST /api/users/leave — a member leaves their current tenant and gets a fresh
+// solo workspace. Blocked if they're the last owner (would orphan the company).
+router.post("/leave", authenticate, async (req, res) => {
+  const me = req.user;
+  if (me.role === "super_admin") return res.status(400).json({ error: "Super admins can't leave a tenant" });
+  if (me.role === "owner") {
+    const { rows } = await pool.query(
+      "SELECT COUNT(*)::int AS n FROM users WHERE tenant_id=$1 AND role='owner' AND id<>$2", [me.tenant_id, me.id]
+    );
+    if (rows[0].n === 0) return res.status(409).json({ error: "You're the last owner — transfer ownership before leaving." });
+  }
+  const { rows: u } = await pool.query("SELECT email FROM users WHERE id=$1", [me.id]);
+  const slug = (u[0]?.email || "user").split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const newTid = `${slug}-${crypto.randomBytes(3).toString("hex")}`;
+  await pool.query("UPDATE users SET tenant_id=$1, role='owner' WHERE id=$2", [newTid, me.id]);
+  writeAudit(me.id, "user.leave_tenant", "tenant", me.tenant_id, { newTenant: newTid });
+  res.json({ ok: true, tenant_id: newTid });
 });
 
 // PATCH /api/users/:id/profile — super-admin edits a user's email / display name.
@@ -134,7 +184,7 @@ router.delete("/:id", authenticate, async (req, res) => {
   const actor = req.user;
   if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
 
-  const { rows: t } = await pool.query("SELECT id,role,tenant_id FROM users WHERE id=$1", [req.params.id]);
+  const { rows: t } = await pool.query("SELECT id,role,tenant_id,email FROM users WHERE id=$1", [req.params.id]);
   const target = t[0];
   if (!target) return res.status(404).json({ error: "Not found" });
   if (target.id === actor.id) return res.status(400).json({ error: "You can't remove yourself" });
@@ -156,6 +206,7 @@ router.delete("/:id", authenticate, async (req, res) => {
   }
 
   await pool.query("DELETE FROM users WHERE id=$1", [req.params.id]);
+  writeAudit(actor.id, "user.delete", "user", req.params.id, { email: target.email, tenant_id: target.tenant_id });
   res.json({ ok: true });
 });
 

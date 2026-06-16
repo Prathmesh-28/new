@@ -502,6 +502,35 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS invites_invitee ON team_invites(invitee_email, status);
     CREATE INDEX IF NOT EXISTS invites_tenant  ON team_invites(tenant_id, status);
+    -- invite (owner → person) vs request (person → company "let me join")
+    ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'invite';
+
+    -- ── Activity / lifecycle signals on users (last login, status) ────────────
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at  TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count    INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS status         TEXT NOT NULL DEFAULT 'active';  -- active | suspended
+
+    -- ── Company / tenant profile (identity beyond the email-derived tenant id) ─
+    CREATE TABLE IF NOT EXISTS tenant_profile (
+      tenant_id     TEXT PRIMARY KEY,
+      company_name  TEXT,
+      legal_name    TEXT,
+      gstin         TEXT,
+      pan           TEXT,
+      industry      TEXT,
+      company_size  TEXT,
+      address       TEXT,
+      city          TEXT,
+      state         TEXT,
+      pincode       TEXT,
+      phone         TEXT,
+      website       TEXT,
+      logo_url      TEXT,
+      status        TEXT NOT NULL DEFAULT 'active',  -- active | suspended
+      suspend_reason TEXT,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
     -- ── Push notification device tokens ──────────────────────────────────────
     CREATE TABLE IF NOT EXISTS push_tokens (

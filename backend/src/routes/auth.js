@@ -72,9 +72,13 @@ router.post("/login", validateBody({
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
+  if (user.status === "suspended") return res.status(403).json({ error: "This account has been suspended. Contact support." });
+
   const firstLogin = viaResetOtp ? true : user.first_login;
   await pool.query(
-    "UPDATE users SET failed_attempts=0, locked_until=NULL, reset_otp=NULL, reset_otp_expiry=NULL, first_login=$2 WHERE id=$1",
+    `UPDATE users SET failed_attempts=0, locked_until=NULL, reset_otp=NULL, reset_otp_expiry=NULL,
+            first_login=$2, last_login_at=now(), last_active_at=now(), login_count=COALESCE(login_count,0)+1
+     WHERE id=$1`,
     [user.id, firstLogin]
   );
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
