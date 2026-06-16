@@ -10,6 +10,7 @@ import {
   Repeat, FileStack, NotebookPen, Columns3, PieChart,
   Percent, ArrowLeftRight, Briefcase, Layers, CalendarClock, Coins, Receipt, LayoutDashboard,
   GitCompare, LineChart, Crosshair, Target, BarChart3,
+  Rows3, Network, ShieldAlert, Gauge, HandCoins,
 } from "lucide-react";
 import { toast } from "sonner";
 import FixedAssetRegister from "./FixedAssetRegister";
@@ -19,7 +20,8 @@ type Tab =
   | "as3-cashflow" | "schedule3" | "notes" | "comparative" | "segment"
   | "ratios" | "fund-flow" | "working-capital" | "socie"
   | "dep-schedule" | "eps-networth" | "cost-sheet" | "mis-pack"
-  | "indirect-cf" | "projection" | "breakeven" | "budget-variance" | "trend-pl";
+  | "indirect-cf" | "projection" | "breakeven" | "budget-variance" | "trend-pl"
+  | "expense-schedule" | "related-party" | "contingent" | "cashflow-ratios" | "provisions";
 type Preset = "month" | "quarter" | "fy" | "ttm";
 
 function iso(d: Date) { return d.toISOString().split("T")[0]; }
@@ -210,6 +212,11 @@ export default function StatementsPage() {
     { id: "breakeven",       label: "Break-even",       icon: Crosshair },
     { id: "budget-variance", label: "Budget Variance",  icon: Target },
     { id: "trend-pl",        label: "Monthly Trend",    icon: BarChart3 },
+    { id: "expense-schedule", label: "Expense Schedule", icon: Rows3 },
+    { id: "related-party",   label: "Related Party",    icon: Network },
+    { id: "contingent",      label: "Contingent Liab.", icon: ShieldAlert },
+    { id: "cashflow-ratios", label: "Cash-Flow Ratios", icon: Gauge },
+    { id: "provisions",      label: "Provisions",       icon: HandCoins },
   ] as const satisfies readonly { id: Tab; label: string; icon: React.ElementType }[];
   const PRESETS: { id: Preset; label: string }[] = [
     { id: "month",   label: "This Month" },
@@ -494,6 +501,21 @@ export default function StatementsPage() {
 
       {/* ── MONTHLY-TREND P&L ── */}
       {tab === "trend-pl" && <MonthlyTrendPL today={today} />}
+
+      {/* ── EXPENSE SCHEDULE BY HEAD ── */}
+      {tab === "expense-schedule" && <ExpenseSchedule start={range.start} end={range.end} label={range.label} />}
+
+      {/* ── RELATED-PARTY DISCLOSURE (AS-18 / Ind AS 24) ── */}
+      {tab === "related-party" && <RelatedPartyDisclosure start={range.start} end={range.end} asOf={today} label={range.label} />}
+
+      {/* ── CONTINGENT LIABILITIES & COMMITMENTS ── */}
+      {tab === "contingent" && <ContingentLiabilities asOf={today} />}
+
+      {/* ── CASH-FLOW RATIOS & DRIVER ANALYSIS ── */}
+      {tab === "cashflow-ratios" && <CashFlowRatios today={today} />}
+
+      {/* ── PROVISIONS & RESERVES MOVEMENT ── */}
+      {tab === "provisions" && <ProvisionsReserves today={today} />}
     </div>
   );
 }
@@ -2091,6 +2113,536 @@ function MonthlyTrendPL({ today }: { today: Date }) {
         </table>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Net here is cash-basis revenue less total expense per month (a simplified P&amp;L trend), so it differs slightly from the statutory net profit, which also charges depreciation, interest and estimated tax. Use this for momentum and seasonality reading.</p>
+    </div>
+  );
+}
+
+// ── Expense Schedule by Head — supporting schedule of operating expenses ───────────
+// A Schedule-III "Note" style breakdown: aggregates every expense/payroll cash
+// outflow in the window by counterparty (expense head), ranked, with % of total
+// and % of revenue — the supporting annexure behind the P&L "other expenses" line.
+function ExpenseSchedule({ start, end, label }: { start: string; end: string; label: string }) {
+  const { store } = useApp();
+  const { firm } = store;
+  const pl = useMemo(() => incomeStatement(store, start, end), [store, start, end]);
+
+  const heads = useMemo(() => {
+    const inWin = (d: string) => d >= start && d <= end;
+    const txns = (store.transactions ?? []).filter(t => inWin(t.date) && t.amount < 0 && (t.category === "expense" || t.category === "payroll"));
+    const byHead = new Map<string, { amount: number; count: number; payroll: boolean }>();
+    for (const t of txns) {
+      const k = t.counterparty?.trim() || "Unattributed";
+      const cur = byHead.get(k) ?? { amount: 0, count: 0, payroll: false };
+      cur.amount += Math.abs(t.amount);
+      cur.count += 1;
+      if (t.category === "payroll") cur.payroll = true;
+      byHead.set(k, cur);
+    }
+    const rows = [...byHead.entries()]
+      .map(([head, v]) => ({ head, ...v }))
+      .sort((a, b) => b.amount - a.amount);
+    const total = rows.reduce((s, r) => s + r.amount, 0);
+    return { rows, total };
+  }, [store.transactions, start, end]);
+
+  const sharePct = (n: number) => (heads.total > 0 ? Math.round((n / heads.total) * 1000) / 10 : 0);
+  const revPct = (n: number) => (pl.revenue > 0 ? Math.round((n / pl.revenue) * 1000) / 10 : 0);
+
+  const doExport = () => {
+    const body = heads.rows.map(r => [r.head, r.payroll ? "Employee benefits" : "Operating", r.count, r.amount, `${sharePct(r.amount)}%`]) as (string | number)[][];
+    body.push(["TOTAL", "", heads.rows.reduce((s, r) => s + r.count, 0), heads.total, "100%"]);
+    exportPdf(`expense-schedule-${end}.pdf`, `${firm.name} — Expense Schedule by Head`, `${label} · generated by Headroom`,
+      [{ title: "Schedule of Operating Expenses", head: ["Expense head", "Nature", "Entries", "Amount (₹)", "% of total"], body }]);
+    toast.success("PDF downloaded");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className={`${CARD} p-5 flex-1`}>
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Rows3 size={14} className="text-[var(--color-primary)]" /> Expense Schedule by Head</h2>
+          <p className="text-xs text-[var(--color-muted)]">Supporting schedule behind the P&amp;L expense lines for {label}: every operating and payroll outflow grouped by counterparty, ranked by spend, with share of total cost and of revenue.</p>
+        </div>
+        <button onClick={doExport}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+          <FileDown size={13} /> PDF
+        </button>
+      </div>
+      {heads.rows.length === 0 ? (
+        <div className={`${CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No operating or payroll outflows in this period to schedule.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total operating spend", value: formatAmount(heads.total), tone: "text-red-400" },
+              { label: "Distinct expense heads", value: String(heads.rows.length), tone: "text-[var(--color-text)]" },
+              { label: "Largest head % of total", value: `${sharePct(heads.rows[0].amount)}%`, tone: "text-[var(--color-text)]" },
+              { label: "Total cost % of revenue", value: `${revPct(heads.total)}%`, tone: revPct(heads.total) <= 85 ? "text-green-400" : "text-yellow-400" },
+            ].map(c => (
+              <div key={c.label} className={`${CARD} p-4`}>
+                <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${c.tone}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`${CARD} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                <tr>
+                  {["Expense head", "Nature", "Entries", "Amount", "% of total", "% of revenue"].map((h, i) => (
+                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 || i === 1 ? "text-left" : "text-right"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {heads.rows.map(r => (
+                  <tr key={r.head} className="hover:bg-white/2">
+                    <td className="px-4 py-2 font-medium max-w-[220px] truncate">{r.head}</td>
+                    <td className="px-4 py-2 text-[var(--color-muted)] text-xs">{r.payroll ? "Employee benefits" : "Operating"}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{r.count}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.amount)})</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{sharePct(r.amount)}%</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{revPct(r.amount)}%</td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+                  <td className="px-4 py-2" colSpan={2}>Total</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{heads.rows.reduce((s, r) => s + r.count, 0)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(heads.total)})</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{revPct(heads.total)}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Expense heads are derived from the transaction counterparty as a working proxy for a ledger group. Depreciation, finance cost and estimated tax are non-cash / financing items and are excluded here — they appear on the face of the P&amp;L. Reclassify heads to statutory expense categories with your CA.</p>
+    </div>
+  );
+}
+
+// ── Related-Party Disclosure (AS-18 / Ind AS 24) ──────────────────────────────────
+// Auto-flags counterparties as potential related parties (you toggle the flag) and
+// builds the disclosure note: transactions and year-end balances with each party.
+function RelatedPartyDisclosure({ start, end, asOf, label }: { start: string; end: string; asOf: Date; label: string }) {
+  const { store } = useApp();
+
+  // Persisted list of counterparties you have confirmed as related parties.
+  const [related, setRelated] = useFeatureState<Record<string, boolean>>("stm-related-parties", {});
+
+  const parties = useMemo(() => {
+    const inWin = (d: string) => d >= start && d <= end;
+    const txns = (store.transactions ?? []).filter(t => inWin(t.date) && t.category !== "transfer");
+    const byParty = new Map<string, { sales: number; purchases: number; loans: number; count: number }>();
+    for (const t of txns) {
+      const k = t.counterparty?.trim();
+      if (!k) continue;
+      const cur = byParty.get(k) ?? { sales: 0, purchases: 0, loans: 0, count: 0 };
+      if (t.category === "revenue" && t.amount > 0) cur.sales += t.amount;
+      else if (t.category === "loan") cur.loans += t.amount;
+      else if (t.amount < 0) cur.purchases += Math.abs(t.amount);
+      cur.count += 1;
+      byParty.set(k, cur);
+    }
+    return [...byParty.entries()]
+      .map(([name, v]) => ({ name, ...v, total: v.sales + v.purchases + Math.abs(v.loans) }))
+      .sort((a, b) => b.total - a.total);
+  }, [store.transactions, start, end]);
+
+  const flagged = parties.filter(p => related[p.name]);
+  const totals = useMemo(() => ({
+    sales: flagged.reduce((s, p) => s + p.sales, 0),
+    purchases: flagged.reduce((s, p) => s + p.purchases, 0),
+    loans: flagged.reduce((s, p) => s + p.loans, 0),
+  }), [flagged]);
+
+  const toggle = (name: string) => setRelated(r => ({ ...r, [name]: !r[name] }));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> Related-Party Disclosure (AS-18 / Ind AS 24)</h2>
+        <p className="text-xs text-[var(--color-muted)]">Mark which counterparties are related parties (directors, group entities, KMP, relatives). Headroom then compiles the disclosure of transactions for {label} and balances as at {iso(asOf)}.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className={`lg:col-span-2 ${CARD} overflow-x-auto`}>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]">
+            <p className="text-sm font-semibold">Counterparties — tag related parties</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Top counterparties by total dealing value. Tap the toggle to include a party in the disclosure note.</p>
+          </div>
+          <table className="w-full text-sm min-w-[620px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Counterparty", "Sales to", "Purchases from", "Loan flows", "Related?"].map((h, i) => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i === 4 ? "text-center" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {parties.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--color-muted)]">No counterparty transactions in this period.</td></tr>
+              ) : parties.slice(0, 20).map(p => (
+                <tr key={p.name} className={`hover:bg-white/2 ${related[p.name] ? "bg-[var(--color-primary)]/5" : ""}`}>
+                  <td className="px-4 py-2 font-medium max-w-[200px] truncate">{p.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{p.sales > 0 ? formatAmount(p.sales) : "—"}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-400">{p.purchases > 0 ? formatAmount(p.purchases) : "—"}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{p.loans !== 0 ? amt(p.loans) : "—"}</td>
+                  <td className="px-4 py-2 text-center">
+                    <button onClick={() => toggle(p.name)}
+                      className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${related[p.name] ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>
+                      {related[p.name] ? "RELATED" : "Tag"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="space-y-4">
+          <div className={`${CARD} p-5`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Disclosure Summary</p>
+            <Row label="Sales to related parties" value={totals.sales} accent="green" />
+            <Row label="Purchases from related parties" value={-totals.purchases} />
+            <Row label="Net loans/advances" value={totals.loans} />
+            <Row label="Related parties tagged" />
+            <div className="flex items-center justify-between gap-3 px-1 py-1.5 border-t-2 border-[var(--color-border)] mt-1 pt-2.5">
+              <span className="text-sm font-bold">Parties in disclosure</span>
+              <span className="tabular-nums text-base font-bold text-[var(--color-primary)]">{flagged.length}</span>
+            </div>
+          </div>
+          <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg p-3 flex gap-2">
+            <Info size={13} className="text-[var(--color-muted)] shrink-0 mt-px" />
+            <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+              Ind AS 24 / AS-18 require disclosure of the relationship, the transactions, and outstanding balances with each related party. Headroom cannot infer relationships, so you confirm each one; the note compiles from your live transactions.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Tagging persists with your data across sessions. Relationships (holding/subsidiary/associate/KMP) and the basis of pricing must be stated in the final note — agree the related-party list and disclosures with your CA before signing.</p>
+    </div>
+  );
+}
+
+// ── Contingent Liabilities & Commitments Register (Schedule III note) ──────────────
+// Off-balance-sheet exposures (guarantees, litigation, capital commitments) that
+// feed the contingent-liability note. Entries persist with the firm's data.
+function ContingentLiabilities({ asOf }: { asOf: Date }) {
+  const { store } = useApp();
+  type CType = "guarantee" | "litigation" | "commitment" | "other";
+  interface CItem { id: string; particulars: string; type: CType; amount: number; likelihood: "remote" | "possible" | "probable" }
+  const [items, setItems] = useFeatureState<CItem[]>("stm-contingent-items", []);
+  const [draft, setDraft] = useState<{ particulars: string; type: CType; amount: string; likelihood: CItem["likelihood"] }>({
+    particulars: "", type: "guarantee", amount: "", likelihood: "possible",
+  });
+
+  const TYPES: { id: CType; label: string }[] = [
+    { id: "guarantee", label: "Bank guarantee / surety" },
+    { id: "litigation", label: "Claims & litigation" },
+    { id: "commitment", label: "Capital commitment" },
+    { id: "other", label: "Other contingency" },
+  ];
+  const typeLabel = (t: CType) => TYPES.find(x => x.id === t)?.label ?? t;
+
+  const add = () => {
+    const amount = Number(draft.amount) || 0;
+    if (!draft.particulars.trim() || amount <= 0) { toast.error("Enter particulars and an amount"); return; }
+    setItems(list => [...list, { id: `cl-${Date.now()}`, particulars: draft.particulars.trim(), type: draft.type, amount, likelihood: draft.likelihood }]);
+    setDraft({ particulars: "", type: "guarantee", amount: "", likelihood: "possible" });
+    toast.success("Contingency added");
+  };
+  const remove = (id: string) => setItems(list => list.filter(i => i.id !== id));
+
+  const byType = useMemo(() => {
+    const m = new Map<CType, number>();
+    for (const i of items) m.set(i.type, (m.get(i.type) ?? 0) + i.amount);
+    return m;
+  }, [items]);
+  const total = useMemo(() => items.reduce((s, i) => s + i.amount, 0), [items]);
+  const tone = (l: CItem["likelihood"]) => l === "probable" ? "text-red-400" : l === "possible" ? "text-yellow-400" : "text-[var(--color-muted)]";
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Contingent Liabilities &amp; Commitments</h2>
+        <p className="text-xs text-[var(--color-muted)]">Register of off-balance-sheet exposures — guarantees, litigation and capital commitments — feeding the Schedule III contingent-liability note, as at {iso(asOf)}.</p>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Add a contingency</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <label className="flex flex-col gap-1.5 md:col-span-2">
+            <span className="text-xs text-[var(--color-muted)]">Particulars</span>
+            <input type="text" value={draft.particulars} placeholder="e.g. BG to GST dept"
+              onChange={e => setDraft(d => ({ ...d, particulars: e.target.value }))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Type</span>
+            <select value={draft.type} onChange={e => setDraft(d => ({ ...d, type: e.target.value as CType }))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--color-primary)] outline-none">
+              {TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Amount (₹)</span>
+            <input type="number" min={0} value={draft.amount}
+              onChange={e => setDraft(d => ({ ...d, amount: e.target.value }))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-[var(--color-muted)]">Likelihood of outflow</span>
+            <select value={draft.likelihood} onChange={e => setDraft(d => ({ ...d, likelihood: e.target.value as CItem["likelihood"] }))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--color-primary)] outline-none">
+              <option value="remote">Remote</option>
+              <option value="possible">Possible (disclose)</option>
+              <option value="probable">Probable (provide)</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button onClick={add}
+              className="w-full text-xs font-medium bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90 transition-opacity">
+              Add to register
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {TYPES.map(t => (
+          <div key={t.id} className={`${CARD} p-4`}>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{t.label}</p>
+            <p className="text-lg font-bold tabular-nums">{formatAmount(byType.get(t.id) ?? 0)}</p>
+          </div>
+        ))}
+      </div>
+
+      {items.length === 0 ? (
+        <div className={`${CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No contingencies recorded. Add guarantees, claims or commitments above so they are not forgotten at year-end.</div>
+      ) : (
+        <div className={`${CARD} overflow-x-auto`}>
+          <table className="w-full text-sm min-w-[620px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Particulars", "Type", "Likelihood", "Amount", ""].map((h, i) => (
+                  <th key={h || "act"} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 || i === 1 ? "text-left" : i === 4 ? "text-center" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {items.map(i => (
+                <tr key={i.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2 font-medium max-w-[240px] truncate">{i.particulars}</td>
+                  <td className="px-4 py-2 text-[var(--color-muted)] text-xs">{typeLabel(i.type)}</td>
+                  <td className={`px-4 py-2 text-xs font-semibold capitalize ${tone(i.likelihood)}`}>{i.likelihood}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(i.amount)}</td>
+                  <td className="px-4 py-2 text-center">
+                    <button onClick={() => remove(i.id)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 transition-colors">Remove</button>
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+                <td className="px-4 py-2" colSpan={3}>Total contingent liabilities &amp; commitments</td>
+                <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(total)}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Per AS-29 / Ind AS 37, a probable outflow that can be reliably estimated is a provision (recognised on the balance sheet), while a possible obligation is disclosed as a contingent liability. This register is a working note — finalise recognition vs disclosure with your CA.</p>
+    </div>
+  );
+}
+
+// ── Cash-Flow Ratios & Driver Analysis ────────────────────────────────────────────
+// Quality-of-earnings and coverage ratios built on the direct-method cash flow,
+// plus a decomposition of the change in cash into operating / financing drivers.
+function CashFlowRatios({ today }: { today: Date }) {
+  const { store } = useApp();
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const cf = useMemo(() => cashFlowStatement(store, fy.start, iso(today), today), [store, fy, today]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+  const bs = useMemo(() => balanceSheet(store, today), [store, today]);
+
+  const r = useMemo(() => {
+    const div = (a: number, b: number) => (b === 0 ? null : a / b);
+    return {
+      ocfMargin: div(cf.operating, pl.revenue),                       // operating cash ÷ revenue
+      cashConversion: div(cf.operating, pl.ebitda),                   // EBITDA → cash conversion
+      qualityOfEarnings: div(cf.operating, pl.netProfit),             // OCF ÷ net profit
+      cashDebtCoverage: div(cf.operating, bs.totalLiabilities),       // OCF ÷ total debt+payables
+      cashInterestCover: div(cf.operating + pl.interest, pl.interest),// (OCF+interest) ÷ interest
+      cashReturnOnAssets: div(cf.operating, bs.totalAssets),          // OCF ÷ total assets
+    };
+  }, [cf, pl, bs]);
+
+  const f1 = (n: number | null, suffix = "x") => (n === null ? "n/a" : `${n.toFixed(2)}${suffix}`);
+  const pct = (n: number | null) => (n === null ? "n/a" : `${(n * 100).toFixed(1)}%`);
+
+  // Driver decomposition: how each bucket moved cash this period.
+  const drivers = [
+    { label: "Operating activities", value: cf.operating },
+    { label: "Investing activities", value: cf.investing },
+    { label: "Financing activities", value: cf.financing },
+  ];
+  const absTotal = Math.max(1, drivers.reduce((s, d) => s + Math.abs(d.value), 0));
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Cash-Flow Ratios &amp; Driver Analysis</h2>
+        <p className="text-xs text-[var(--color-muted)]">Quality-of-earnings and cash-coverage ratios built on the direct-method cash flow for {fy.label} (YTD), plus a breakdown of what drove the change in cash.</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <RatioCard name="Operating Cash-Flow Margin" formula="Operating cash flow ÷ revenue" value={pct(r.ocfMargin)} target="≥ 10%" ok={r.ocfMargin === null ? null : r.ocfMargin >= 0.1} />
+        <RatioCard name="Cash Conversion (EBITDA)" formula="Operating cash flow ÷ EBITDA" value={pct(r.cashConversion)} target="≥ 80%" ok={r.cashConversion === null ? null : r.cashConversion >= 0.8} />
+        <RatioCard name="Quality of Earnings" formula="Operating cash flow ÷ net profit" value={f1(r.qualityOfEarnings)} target="≥ 1.0x" ok={r.qualityOfEarnings === null ? null : r.qualityOfEarnings >= 1} />
+        <RatioCard name="Cash Debt Coverage" formula="Operating cash flow ÷ total liabilities" value={pct(r.cashDebtCoverage)} target="≥ 20%" ok={r.cashDebtCoverage === null ? null : r.cashDebtCoverage >= 0.2} />
+        <RatioCard name="Cash Interest Coverage" formula="(Operating cash + interest) ÷ interest" value={f1(r.cashInterestCover)} target="≥ 3.0x" ok={r.cashInterestCover === null ? null : r.cashInterestCover >= 3} />
+        <RatioCard name="Cash Return on Assets" formula="Operating cash flow ÷ total assets" value={pct(r.cashReturnOnAssets)} target="≥ 10%" ok={r.cashReturnOnAssets === null ? null : r.cashReturnOnAssets >= 0.1} />
+      </div>
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3">What drove the change in cash</p>
+        <div className="space-y-3">
+          {drivers.map(d => (
+            <div key={d.label}>
+              <div className="flex items-center justify-between gap-3 text-sm mb-1">
+                <span>{d.label}</span>
+                <span className={`tabular-nums font-semibold ${d.value >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(d.value)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden w-full">
+                <div className={`h-full rounded-full ${d.value >= 0 ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${Math.round((Math.abs(d.value) / absTotal) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3 px-1 py-1.5 border-t-2 border-[var(--color-border)] mt-3 pt-2.5">
+          <span className="text-sm font-bold">Net change in cash</span>
+          <span className={`tabular-nums text-base font-bold ${cf.netChange >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(cf.netChange)}</span>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">A quality-of-earnings ratio below 1.0x means profit is not yet converting to cash — usually receivables or inventory tying up working capital. Cash-coverage ratios use period-end balances; capex is not yet tracked, so investing cash is nil. Read alongside the indirect cash-flow tab for the working-capital detail.</p>
+    </div>
+  );
+}
+
+// ── Provisions & Reserves Movement Schedule ───────────────────────────────────────
+// Opening → additions → utilisation → closing roll-forward for each reserve, built
+// from the year-on-year balance-sheet deltas, with persisted manual provision lines.
+function ProvisionsReserves({ today }: { today: Date }) {
+  const { store } = useApp();
+  const priorDate = useMemo(() => new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()), [today]);
+  const cur = useMemo(() => balanceSheet(store, today), [store, today]);
+  const prior = useMemo(() => balanceSheet(store, priorDate), [store, priorDate]);
+  const fy = useMemo(() => fyBounds(today), [today]);
+  const pl = useMemo(() => incomeStatement(store, fy.start, iso(today)), [store, fy, today]);
+
+  interface PRow { label: string; opening: number; additions: number; utilisation: number }
+  // Derived reserve roll-forwards from the live balance sheet.
+  const derived = useMemo<PRow[]>(() => {
+    const reserveAdd = pl.netProfit;                                    // profit transferred to reserves
+    const reserveOther = (cur.retainedEarnings - prior.retainedEarnings) - pl.netProfit; // dividends/adjustments
+    return [
+      { label: "Reserves & surplus (retained earnings)", opening: prior.retainedEarnings, additions: Math.max(0, reserveAdd), utilisation: Math.max(0, -reserveAdd) + Math.max(0, -reserveOther) },
+      { label: "Tax provision (current year)", opening: 0, additions: pl.tax, utilisation: 0 },
+      { label: "GST / statutory dues payable", opening: prior.gstPayable, additions: Math.max(0, cur.gstPayable - prior.gstPayable), utilisation: Math.max(0, prior.gstPayable - cur.gstPayable) },
+    ];
+  }, [cur, prior, pl]);
+
+  // Persisted manual provision lines (e.g. gratuity, warranty, doubtful debts).
+  const [manual, setManual] = useFeatureState<PRow[]>("stm-provisions-manual", []);
+  const [draft, setDraft] = useState<{ label: string; opening: string; additions: string; utilisation: string }>({
+    label: "", opening: "", additions: "", utilisation: "",
+  });
+  const add = () => {
+    if (!draft.label.trim()) { toast.error("Enter a provision name"); return; }
+    setManual(list => [...list, {
+      label: draft.label.trim(),
+      opening: Number(draft.opening) || 0,
+      additions: Number(draft.additions) || 0,
+      utilisation: Number(draft.utilisation) || 0,
+    }]);
+    setDraft({ label: "", opening: "", additions: "", utilisation: "" });
+    toast.success("Provision added");
+  };
+  const removeManual = (idx: number) => setManual(list => list.filter((_, i) => i !== idx));
+
+  const rows = useMemo(() => [...derived, ...manual].map(r => ({ ...r, closing: r.opening + r.additions - r.utilisation })), [derived, manual]);
+  const totals = useMemo(() => rows.reduce((a, r) => ({
+    opening: a.opening + r.opening, additions: a.additions + r.additions,
+    utilisation: a.utilisation + r.utilisation, closing: a.closing + r.closing,
+  }), { opening: 0, additions: 0, utilisation: 0, closing: 0 }), [rows]);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${CARD} p-5`}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Provisions &amp; Reserves Movement</h2>
+        <p className="text-xs text-[var(--color-muted)]">Opening → additions → utilisation → closing roll-forward for each reserve and provision for {fy.label}, derived from the balance sheet (vs {prior.asOf}). Add manual provisions (gratuity, warranty, doubtful debts) below.</p>
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Add a manual provision</p>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <label className="flex flex-col gap-1.5 md:col-span-2">
+            <span className="text-xs text-[var(--color-muted)]">Provision name</span>
+            <input type="text" value={draft.label} placeholder="e.g. Provision for gratuity"
+              onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+              className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--color-primary)] outline-none" />
+          </label>
+          {([["opening", "Opening"], ["additions", "Additions"], ["utilisation", "Utilised"]] as const).map(([k, lbl]) => (
+            <label key={k} className="flex flex-col gap-1.5">
+              <span className="text-xs text-[var(--color-muted)]">{lbl} (₹)</span>
+              <input type="number" min={0} value={draft[k]}
+                onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))}
+                className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums focus:border-[var(--color-primary)] outline-none" />
+            </label>
+          ))}
+        </div>
+        <button onClick={add}
+          className="mt-3 text-xs font-medium bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">
+          Add provision
+        </button>
+      </div>
+
+      <div className={`${CARD} overflow-x-auto`}>
+        <table className="w-full text-sm min-w-[680px]">
+          <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr>
+              {["Provision / reserve", "Opening", "Additions", "Utilisation", "Closing", ""].map((h, i) => (
+                <th key={h || "act"} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i === 5 ? "text-center" : "text-right"}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {rows.map((r, i) => {
+              const isManual = i >= derived.length;
+              return (
+                <tr key={`${r.label}-${i}`} className="hover:bg-white/2">
+                  <td className="px-4 py-2 font-medium max-w-[240px] truncate">{r.label}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(r.opening)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(r.additions)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.utilisation)})</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
+                  <td className="px-4 py-2 text-center">
+                    {isManual && <button onClick={() => removeManual(i - derived.length)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 transition-colors">Remove</button>}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
+              <td className="px-4 py-2">Total</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(totals.opening)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(totals.additions)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(totals.utilisation)})</td>
+              <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.closing)}</td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)]">Reserve and statutory-dues movements are derived from year-on-year balance-sheet deltas; the tax-provision line shows the period's estimated charge. Employee, warranty and doubtful-debt provisions are not in the cash ledger — add them manually so the rollforward is complete. Confirm recognition with your CA.</p>
     </div>
   );
 }
