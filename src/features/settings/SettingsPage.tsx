@@ -1634,13 +1634,13 @@ export default function SettingsPage() {
     if (!email) return;
     setInviting(true);
     try {
-      const res = await fetch(`${BASE}/api/users`, {
+      const res = await fetch(`${BASE}/api/invites`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
-        body:    JSON.stringify({ email: email.toLowerCase(), role }),
+        body:    JSON.stringify({ invitee_email: email.toLowerCase(), role }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
-      toast.success(`Invite sent to ${email} — a temporary password was emailed to them`);
+      toast.success(`Invite sent to ${email} — they'll see it in-app to accept (no email is sent)`);
       setEmail(""); setShowForm(false);
       loadUsers();
     } catch (err) {
@@ -1811,7 +1811,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="p-3 bg-[var(--color-accent)] rounded-lg text-xs text-[var(--color-muted)]">
-              <strong className="text-[var(--color-text)]">What happens:</strong> a temporary password is emailed to them. They set their own password on first login and only ever see the parts of Headroom their role allows.
+              <strong className="text-[var(--color-text)]">What happens:</strong> they get an in-app invite to accept — no email is sent. Once they accept, they join your team and only ever see the parts of Headroom their role allows.
             </div>
             <div className="flex gap-2">
               <button type="submit" disabled={inviting}
