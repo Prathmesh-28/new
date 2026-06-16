@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+/* Fonts (Inter + Space Grotesk) are loaded via a non-blocking <link> in index.html
+   with preconnect — NOT a render-blocking CSS @import. */
 
 @theme {
   /* App dashboard — navy + green finance palette (dark) */
