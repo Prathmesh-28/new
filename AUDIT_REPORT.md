@@ -2,6 +2,8 @@
 
 **Audit date:** 2026-06-16 · **Scope:** full frontend (`src/`), backend (`backend/`), config & build · **Method:** automated build/test/typecheck runs + static inspection of routes, role config, persistence, and in-code disclosure markers. **Not** a manual click-through of all 1,465 tools — see *Limitations*.
 
+> 📒 **Companion: [AUDIT_DETAILED.md](AUDIT_DETAILED.md)** — every module, every tool (1,502 entries) documented from full source reads, with per-tool rule/formula, persistence, and class. Per-module files live in [`audit/`](audit/). **Its "Key honesty findings" section corrects a few optimistic assumptions below** (notably: the Copilot is rule-based, not LLM-backed; connectors are simulated; OCR/e-Sign are simulated; WhatsApp sends are `wa.me` deep-links).
+
 ---
 
 ## 1. Executive summary

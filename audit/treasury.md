@@ -1,0 +1,90 @@
+# Audit Appendix — Wealth & Treasury Module
+
+## Wealth & Treasury (`/treasury`) — 34 tools
+
+Turns idle current-account cash into risk-graded, tax-efficient yield via sweeps, FD/RD ladders, T-bills/G-Secs, goal buckets, allocators and tax/return calculators. Stakeholders: owner, finance. Backend: `/api/treasury` + KV-synced (durable records persist through `useFeatureState` → `store.featureData[<key>]` in the "app" KV namespace, written to localStorage and pushed/polled to the backend; pure calculators hold transient `useState` only).
+
+### Tab-selector array (`src/features/treasury/TreasuryPage.tsx`, lines 48–83) — 34 entries, in order
+
+`overview` · `sweep` · `ladder` · `compare` · `allocate` · `yield` · `tbill` · `goal` · `split` · `posttax` · `maturity` · `sip` · `debteq` · `emergency` · `sweepfd` · `corpfd` · `smallsave` · `swod` · `income` · `capgain` · `rebalance` · `xirr` · `waterfall` · `gold` · `reit` · `mtm` · `dicgc` · `policy` · `accrued` · `almatch` · `incfcast` · `liqtier` · `ylq` · `oppcost`
+
+(The `Tab` union type at lines 20–26 lists the same 34 ids. Every id maps to exactly one rendered component at lines 92–125 — 34 tools total. UI-state filter tokens such as `182`/`360`/`balanced`/`rd`/`fd`/`91`/`364` are mode toggles inside individual tools, not separate tools, and are excluded per spec.)
+
+### Tools
+
+- **Overview** — at-a-glance idle-cash dashboard: inputs → reads `store.bankAccounts` for total cash; estimates operating buffer = `max(₹5L, 35% of total)`; investable surplus = `total − buffer`; yield forgone/yr = `investable × (7% − 3%)`; plus a static horizon→instrument→yield deployment guide (0–7d liquid, 1–6m short-debt/FD, 6m–3y corp-FD/G-Sec/T-bill) → 4 KPI cards + guidance grid. _Persist: none (derived from live `store.bankAccounts`)._ _Class: Indicative._
+
+- **Idle-Cash Sweep Planner** — sizes a runway buffer then sweeps overflow into a liquid/overnight fund: inputs current cash, weekly opex, liquid-fund yield %, buffer weeks (2–16 slider), sweep % (0–100 slider) → buffer = `opex × weeks` (or 35% of cash if no opex), overflow = `cash − buffer`, sweep = `overflow × sweep%`, extra yield = `sweep × yield%` → 4 KPI cards + sweep recommendation (notes liquid funds redeem T+1, ₹50k/25% instant). _Persist: none (seeded from `totalBalance`)._ _Class: Indicative._
+
+- **FD / RD Ladder Builder** — splits a lump sum (FD) or monthly instalment (RD) across staggered maturities: inputs amount, rate %, longest tenure (months), rungs (2–8 slider), FD/RD mode toggle → per rung step = `maxTenure/rungs`; FD maturity = `perRung × (1+r/4)^(4·years)` (quarterly compounding); RD FV = annuity-due `perRung × ((1+i)^m − 1)/i × (1+i)` with `i = r/12` (monthly instalments, approx) → totals (invested/maturity/interest) + per-rung table with maturity dates. _Persist: none._ _Class: Indicative._
+
+- **Liquid Fund vs FD Comparator** — after-tax yield face-off: inputs amount, horizon (months), slab %, FD rate %, liquid rate % → FD gross = `P·(1+fd/4)^(4·yrs) − P` taxed at slab; liquid gross = `P·(1+liq)^yrs − P` taxed at slab (post-Apr-2023, no indexation, tax deferred to redemption) → two net-gain cards with BETTER flag + delta and timing note. _Persist: none._ _Class: Indicative._
+
+- **Surplus-Cash Allocator** — risk-graded tier split: inputs surplus ₹, tier toggle (conservative/balanced/growth) → applies a hardcoded weight×assumed-yield mix per tier (e.g. balanced = 40% liquid / 35% short-debt / 15% AAA corp-FD / 10% G-Sec/SGB); blended yield = `Σ(weight×yield)/100`, annual return = `surplus × blended` → blended-yield + annual-return cards + per-bucket allocation bars. _Persist: none (seeded from 50% of `totalBalance`)._ _Class: Indicative._
+
+- **Treasury Yield Calculator** — compound-interest engine: inputs principal, nominal rate %, years, compounding frequency (annual/half-yearly/quarterly/monthly) → FV = `P·(1+r/n)^(n·t)`, interest = `FV − P`, effective yield = `(FV/P)^(1/t) − 1` → maturity/interest/effective-yield cards. _Persist: none._ _Class: Indicative._
+
+- **T-Bill / G-Sec Return Estimator** — zero-coupon sovereign discount instrument: inputs face value, discount/cut-off yield %, tenor toggle (91/182/364-day) → price = `F/(1 + dr·days/365)`, gain = `F − price`, annualised yield = `(gain/price)·(365/days)·100` → purchase price / redemption / gain / annualised-yield cards (notes RBI Retail Direct, gain taxed as interest). _Persist: none._ _Class: Indicative._
+
+- **Goal-Based Savings Planner** — builds yield-bearing buckets toward dated targets (GST, advance-tax, capex, bonus): inputs goal name, target ₹, already-saved ₹, deadline date, yield % → months left = `days/30`, gap = `target − saved`, required monthly = growth annuity `gap·i/((1+i)^m − 1)` with `i = rate/12/100` → per-goal progress bar + funded % + monthly contribution; add/remove goals. _Persist: `trez-goals` (KV-synced)._ _Class: KV._
+
+- **Owner Personal-vs-Business Split** — separates founder drawings from retained treasury: inputs monthly net profit, business yield %, personal yield %, drawings % (slider), of-drawings-save % (slider) → draw = `profit × draw%`, retained = `profit − draw`, personal save = `draw × save%`, personal spend = remainder; biz annual yield = `retained×12×bizYield`, personal annual yield = `personalSave×12×personalYield` → 4 split cards + annual-yield summary. _Persist: none._ _Class: Indicative._
+
+- **Post-Tax Return Calculator** — net return incl. Sec 194A TDS: inputs amount, rate %, slab %, instrument toggle (Bank FD / Debt fund / T-Bill·G-Sec), senior-citizen checkbox → 1-yr gross = `P × rate`, tax = `gross × slab`, net = `gross − tax`, post-tax yield = `net/P`; TDS = `10% of gross` only for FD when gross > ₹40k (₹50k senior) → gross/tax/net/post-tax-yield cards + TDS warning vs no-TDS note. _Persist: none._ _Class: Indicative._
+
+- **Maturity Calendar** — single tracker for every FD/RD/T-bill/G-Sec/fund lock-in: inputs label, instrument type (dropdown), invested ₹, maturity value ₹, maturity date → sorts by date, totals invested/maturity, sums "maturing in 90 days"; per-row days-to-maturity badge (Matured/Today/Nd, ≤30d highlighted); add/remove holdings. _Persist: `trez-holdings` (KV-synced)._ _Class: KV._
+
+- **SIP / Recurring-Investment Planner** — monthly drip with annual step-up: inputs monthly amount, years, expected return %, step-up % (0–25 slider) → month-by-month loop FV `(fv+contrib)·(1+r/12)`, contribution stepped up each completed year by step-up %, tracks invested vs future → invested/corpus/gain cards. _Persist: none._ _Class: Indicative._
+
+- **Debt-Fund vs Equity-Fund Allocator** — horizon-capped split: inputs amount, horizon years, debt return %, equity return %, risk appetite % (slider) → equity cap by horizon (`<1y→0`, `1–3y→40`, `3–5y→70`, `5y+→90`), equity% = `min(cap, risk)`, debt% = remainder; blended = `(debt%·debtRet + equity%·eqRet)/100`, projected = `A·(1+blended)^yrs` → debt/equity/blended/projected cards + cap warning when horizon limits below appetite. _Persist: none._ _Class: Indicative._
+
+- **Emergency-Fund Target Calculator** — sizes a months-of-cover contingency reserve: inputs monthly fixed opex, already-reserved ₹, build-over months, months-of-cover (3–12 slider) → target = `opex × months`, gap = `target − have`, monthly top-up = `gap/buildMonths`, funded % → target/reserved/gap/top-up cards + funding progress bar. _Persist: none._ _Class: Indicative._
+
+- **Sweep-In FD Auto-Threshold Config** — stores flexi/sweep-FD rules: inputs account (dropdown from `store.bankAccounts`), sweep trigger ₹, keep-liquid floor ₹, break-chunk ₹ → validates floor>0, chunk>0, sweep-back < trigger; shows total cash across banks; renders saved rules as plain-English sweep/break sentences; add/remove rules (intent only — actual sweep set up at the bank). _Persist: `trez-sweepfd-rules` (KV-synced)._ _Class: KV._
+
+- **Corporate-FD Comparator** — ranks issuer deposits by maturity value: inputs amount, issuer, rating (dropdown AAA…A+/Sovereign-ish), rate %, tenure months; seeded with SBI/Bajaj/Shriram rows → maturity = `A·(1+rate/4)^(4·years)` (quarterly compounding) per row, sorted desc, BEST flag on top; rating-colored badges; add/remove (warns corp deposits are NOT DICGC-covered). _Persist: `trez-corpfd` (KV-synced, seeded with 3 rows)._ _Class: KV._
+
+- **NSC / KVP / SGB Calculator** — small-savings maturity: inputs amount, instrument toggle (NSC 7.7%/5y, KVP 7.5%/~9.5y, SGB 2.5%/8y), and (SGB only) assumed gold gain % → NSC/KVP maturity = `A·(1+rate)^years`; SGB = `A + coupon(A·rate·years) + priceGain(A·(1+gold)^years − A)` → maturity/total-gain/effective-gain cards + SGB coupon-vs-appreciation breakdown (coupon slab-taxed, price gain LTCG-exempt to maturity). _Persist: none._ _Class: Indicative._
+
+- **Sweep-FD vs Overdraft Comparator** — cheapest way to cover a short cash gap: inputs shortfall ₹, days short, OD/CC rate %, FD rate forgone %, break penalty % → OD cost = `S·odRate·days/365`; break cost = forgone interest `S·fdRate·days/365` + penalty `S·penalty·days/365` → two cost cards with CHEAPER flag + delta. _Persist: none._ _Class: Indicative._
+
+- **Dividend / Interest Income Tracker** — logs interest/dividend/coupon credits for Form 26AS reconciliation: inputs source, type (dropdown), amount ₹, TDS deducted ₹, date → totals income / TDS / net received, breakdown by type, date-sorted ledger; add/remove entries (notes equity dividend >₹5k attracts 10% TDS u/s 194). _Persist: `trez-income` (KV-synced)._ _Class: KV._
+
+- **Capital-Gains-on-Redemption Estimator** — STCG/LTCG hit before redeeming: inputs asset toggle (equity/debt), buy/cost ₹, sell/proceeds ₹, held months, (debt) slab % → gain = `proceeds − cost`; equity ≥12m → LTCG 12.5% above ₹1.25L exemption; equity <12m → STCG 20%; debt (post-Apr-2023) → slab on full gain → gross/treatment/tax/net cards + LTCG-exemption note and "wait to 12m" STCG warning. _Persist: none._ _Class: Indicative._
+
+- **Asset-Allocation Rebalancer** — drift-to-target buy/sell actions: inputs sleeve name, current value ₹, target %; seeded with cash/debt/equity rows → current% = `r.current/total`, target value = `total·target%`, delta = `targetValue − current` (+buy/−sell), action suppressed unless `|delta| ≥ 1% of total`; warns when targets ≠ 100%; per-sleeve table + total; add/remove. _Persist: `trez-rebalance` (KV-synced, seeded with 3 rows)._ _Class: KV._
+
+- **Portfolio XIRR Calculator** — true annualised return on irregular cashflows: inputs date, amount ₹, note; "Invested" (−) / "Inflow·value" (+) buttons → Newton-Raphson XIRR on NPV `Σ amount/(1+rate)^years` (years from first flow, 100 iterations, guards on derivative/divergence), requires ≥1 neg + ≥1 pos flow → invested/inflows/XIRR cards + date-sorted flow table; add/remove flows. _Persist: `trez-xirr` (KV-synced)._ _Class: KV._
+
+- **Surplus-Deployment Waterfall** — priority cascade of one surplus across claims: inputs surplus ₹, weekly opex, buffer weeks, GST due, advance tax, emergency top-up, high-cost debt → top-down `take(need)` consumes remaining cash in 6 tiers (buffer `opex×weeks` → GST → advance-tax → emergency → prepay high-cost debt → deploy-to-yield remainder); nothing reaches the yield tier until prior claims are fully met → 6 tier cards with amount + % bars. _Persist: none (seeded from `totalBalance`)._ _Class: Indicative._
+
+- **Gold / SGB Allocation Planner** — sizes a gold sleeve via SGB: inputs investable portfolio ₹, horizon years, gold CAGR %, SGB coupon %, gold allocation % (0–25 slider) → goldAlloc = `P×gold%`; SGB price growth = `goldAlloc·((1+cagr)^yrs − 1)`, coupon income = `goldAlloc·coupon·yrs`, total = sum → allocation/coupon/appreciation/total-gain cards + SGB-vs-physical edge note (coupon slab-taxed, price gain LTCG-free at 8y maturity). _Persist: none._ _Class: Indicative._
+
+- **REIT / InvIT Income Estimator** — post-tax distribution yield: inputs amount ₹, distribution yield %, slab %, interest-portion % (slider), dividend-portion % (slider) → gross = `P × distYield`; interest part + dividend part taxed at slab, return-of-capital = remainder (tax-deferred, cuts cost base); net = `gross − tax`, post-tax yield = `net/P` → gross/taxable/RoC/post-tax-yield cards + RoC explainer. _Persist: none._ _Class: Indicative._
+
+- **Mark-to-Market Tracker** — live unrealised P&L across the book: inputs holding name, units, avg cost/unit ₹, current price ₹ (editable inline per row) → per row invested = `units×cost`, value = `units×price`, pnl = `value − invested`, pct; book totals invested/value/P&L/return → KPI cards + per-holding table with editable price; add/remove (notes unrealised gains untaxed until redeemed; FDs hold at face). _Persist: `trez-mtm` (KV-synced)._ _Class: KV._
+
+- **Counterparty / Bank Exposure (DICGC)** — flags deposits over the ₹5L per-bank insurance cover: inputs bank, total deposit ₹ → per bank insured = `min(amount, ₹5,00,000)`, over = `max(0, amount − 5L)`, coverage bar `min(100, 5L/amount)`; book totals deposits/insured/uninsured; OVER COVER badge + red banner suggesting spread across banks or move to T-bills/G-Secs; add/remove. _Persist: `trez-dicgc` (KV-synced)._ _Class: KV._
+
+- **Treasury Policy & Limits** — board-ready investment-policy generator: inputs buffer weeks, min credit rating (dropdown), max-per-issuer %, max-per-bank %, dual-approval-above ₹, equity allowed toggle, permitted-instruments multi-select chips → renders a 6-clause policy statement from the settings and a "Copy policy text" button (writes plain-text policy to clipboard via `navigator.clipboard`). _Persist: `trez-policy` (KV-synced object: bufferWeeks, minRating, maxIssuerPct, maxSingleBankPct, allowEquity, dualApprovalAbove, allowedInstruments)._ _Class: KV._
+
+- **Accrued-Interest Calculator** — interest earned-but-not-credited for mid-tenure valuation / month-end accrual entries: inputs principal/face ₹, coupon/rate %, last-paid/start date, as-of date, day-count basis toggle (Actual/365 FD-bond, Actual/360 money-mkt) → days = `asOf − start`, accrued = `P·r·days/basis` (simple), interest/day = `P·r/basis` → days-accrued / per-day / accrued-interest cards. _Persist: none._ _Class: Indicative._
+
+- **Asset-Liability (Cash-Flow) Matcher** — lines maturing inflows against known outflows by time bucket: inputs type (inflow/outflow), name, amount ₹, date → buckets cashflows into 0–30 / 31–90 / 91–180 / 180+ days, per bucket assets − liabs = gap (negative = will need to break a deposit or borrow); 4 bucket-gap cards + date-sorted item table; add/remove (gaps are within-bucket only, no carry-forward). _Persist: `trez-almatch` (KV-synced)._ _Class: KV._
+
+- **Interest-Income Forecast** — multi-year projection of recurring treasury income: inputs deployed corpus ₹, blended yield %, slab %, corpus growth %/yr (slider), horizon years (1–10 slider) → year loop: gross = `corpus·yield`, tax = `gross·slab`, net = `gross − tax`; next-year corpus = `corpus·(1+growth) + net` (net reinvested) → total gross/tax/net cards + per-year table (opening corpus, gross, tax, net). _Persist: none (seeded from 50% of `totalBalance`)._ _Class: Indicative._
+
+- **Liquidity-Tier Allocator** — buckets cash by when it's needed (not risk): inputs total cash ₹, Tier-1 (0–7d) % slider, Tier-2 (1–6m) % slider; Tier-3 (6m+) = remainder → tiers carry hardcoded indicative yields (T1 6.8%, T2 7.4%, T3 7.9%) and instrument lists; blended = `Σ(pct×yield)/100`, annual income = `cash×blended` → blended-yield + annual-income cards + 3 tier allocation bars. _Persist: none (seeded from `totalBalance`)._ _Class: Indicative._
+
+- **Yield vs Liquidity Tradeoff** — scores instruments on a yield/liquidity blend: input single preference slider (0=pure liquidity … 100=pure yield) → 7 hardcoded options (savings, sweep FD, liquid fund, 91-day T-bill, short-debt fund, 1y FD, AAA corp-FD) each with indicative yield and 0–100 liquidity score; score = `w·(yield/maxYield·100) + (1−w)·liquidity`, sorted desc → best-fit banner + ranked score bars. _Persist: none._ _Class: Indicative._
+
+- **Idle-Cash Opportunity Cost** — cost of leaving cash at a low rate: inputs idle cash ₹, current rate %, achievable rate %, idle period months (1–36 slider) → earnNow = `A·(1+cr)^t − A`, earnBetter = `A·(1+br)^t − A`, forgone = difference, cost/day = `forgone/(months×30.4)`, spread = `br − cr` → earning-now / could-earn / opportunity-cost / cost-per-day cards + red forgone-yield banner. _Persist: none (seeded from `totalBalance`)._ _Class: Indicative._
+
+---
+
+### Classification summary
+
+- **KV (durable records synced via `useFeatureState` → `store.featureData`):** 11 tools — Goal Planner (`trez-goals`), Maturity Calendar (`trez-holdings`), Sweep-FD Config (`trez-sweepfd-rules`), Corporate-FD Comparator (`trez-corpfd`), Income Tracker (`trez-income`), Rebalancer (`trez-rebalance`), XIRR (`trez-xirr`), Mark-to-Market (`trez-mtm`), Bank Exposure/DICGC (`trez-dicgc`), Treasury Policy (`trez-policy`), Asset-Liability Matcher (`trez-almatch`).
+- **Indicative (transient `useState` calculators, no persistence):** 23 tools — Overview, Sweep Planner, Ladder Builder, Liquid-vs-FD, Surplus Allocator, Yield Calculator, T-Bill Estimator, Owner Split, Post-Tax Calculator, SIP Planner, Debt-vs-Equity, Emergency Fund, NSC/KVP/SGB, Sweep-vs-OD, Cap-Gains Estimator, Surplus Waterfall, Gold/SGB Planner, REIT/InvIT Estimator, Accrued Interest, Interest-Income Forecast, Liquidity-Tier Allocator, Yield-vs-Liquidity, Idle-Cash Opportunity Cost.
+- **Backend / Simulated / Preview:** none — no tool issues a real `/api/treasury` write or executes an actual sweep/order; persisted records ride the generic KV `featureData` sync, and all yields/projections are illustrative (every tool carries a "not advice / not guaranteed" disclaimer).
+- **Live-store reads:** Overview, Sweep Planner, Surplus Allocator, Sweep-FD Config, Surplus Waterfall, Interest-Income Forecast, Liquidity-Tier Allocator and Idle-Cash Opportunity Cost seed/derive from `store.bankAccounts` / `totalBalance`.
