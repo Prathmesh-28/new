@@ -1442,6 +1442,76 @@ function StatementTemplateCard() {
   );
 }
 
+// ── Team invites (owner-facing): invite teammates in-platform, see pending/sent ──
+type OutInvite = { id: string; invitee_email: string; role: string; status: string; inviter_email: string | null; created_at: string };
+function TeamInvitesCard() {
+  const { user } = useAuth();
+  const [list, setList] = useState<OutInvite[]>([]);
+  const [invitee, setInvitee] = useState("");
+  const [role, setRole] = useState<string>(ASSIGNABLE_ROLES[0]?.id ?? "finance_manager");
+  const [busy, setBusy] = useState(false);
+  const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+  const load = useCallback(() => {
+    fetch(`${BASE}/api/invites`, { headers: headers() }).then(r => r.ok ? r.json() : { outgoing: [] }).then(d => setList(d.outgoing ?? [])).catch(() => {});
+  }, [headers]);
+  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, [load]);
+
+  if (!user || !["owner", "super_admin"].includes(user.role)) return null;
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = invitee.trim();
+    if (!v) { toast.error("Enter a teammate's email or user-id"); return; }
+    const body: Record<string, string> = { role };
+    if (v.includes("@")) body.invitee_email = v; else body.invitee_user_id = v;
+    setBusy(true);
+    const res = await fetch(`${BASE}/api/invites`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setBusy(false);
+    if (res.ok) { toast.success("Invite sent — they'll see it in-app"); setInvitee(""); load(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to send invite");
+  };
+  const cancel = async (id: string) => {
+    const res = await fetch(`${BASE}/api/invites/${id}/cancel`, { method: "POST", headers: headers() });
+    if (res.ok) { toast.success("Invite cancelled"); load(); } else toast.error("Failed to cancel");
+  };
+  const badge = (s: string) => s === "pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"
+    : s === "accepted" ? "bg-green-900/30 text-green-400 border-green-800/40"
+    : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]";
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2 mb-1"><UserPlus size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Invite teammates</h2></div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Invite people to your team by email or user-id. They accept or decline in-app — no email is sent.</p>
+      <form onSubmit={send} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mb-5">
+        <div className="md:col-span-1">
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Email or user-id</label>
+          <input value={invitee} onChange={e => setInvitee(e.target.value)} placeholder="teammate@company.in" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Role</label>
+          <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+            {ASSIGNABLE_ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </div>
+        <button type="submit" disabled={busy} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"><Send size={14} /> Send invite</button>
+      </form>
+      {list.length > 0 && (
+        <div className="space-y-2">
+          {list.map(inv => (
+            <div key={inv.id} className="flex items-center justify-between gap-3 text-sm border-t border-[var(--color-border)] pt-2 first:border-0 first:pt-0">
+              <span className="truncate"><span className="font-medium">{inv.invitee_email}</span> <span className="text-[var(--color-muted)]">· {roleLabel(inv.role)}</span></span>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge(inv.status)}`}>{inv.status}</span>
+                {inv.status === "pending" && <button onClick={() => cancel(inv.id)} title="Cancel invite" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -1682,6 +1752,9 @@ export default function SettingsPage() {
 
       {/* #188 Customer-statement template */}
       <StatementTemplateCard />
+
+      {/* Team invites (owner-facing, in-platform) */}
+      <TeamInvitesCard />
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">

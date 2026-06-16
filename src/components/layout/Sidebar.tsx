@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
@@ -301,6 +301,17 @@ function NavItems({ groups, collapsed, onNavigate, badges }: {
 
 export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { user, logout }                          = useAuth();
+  // Pending in-platform invites for this user → badge on the Settings nav (polled, no websockets).
+  const [inviteCount, setInviteCount] = useState(0);
+  useEffect(() => {
+    const load = () => fetch(`${BASE}/api/invites`, { headers: { Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` } })
+      .then(r => (r.ok ? r.json() : { incoming: [] }))
+      .then(d => setInviteCount((d.incoming ?? []).length))
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => clearInterval(t);
+  }, []);
   const { canAccess, selectedClientTenantId,
           selectedClientLabel, setSelectedClient, store, previewRole } = useApp();
   const navigate                                  = useNavigate();
@@ -323,6 +334,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   const badges: Record<string, number> = {};
   if (unreadAlerts > 0)   badges["alerts"]   = unreadAlerts;
   if (overdueInvoices > 0) badges["invoices"] = overdueInvoices;
+  if (inviteCount > 0)     badges["settings"]  = inviteCount;
 
   const handleLogout = async () => { await logout(); navigate("/login"); };
   const toggleCollapse = () => setCollapsed(v => {
