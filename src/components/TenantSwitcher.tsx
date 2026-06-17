@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { Building2, ChevronDown, Check, Globe, Search, Loader2 } from "lucide-react";
+import { PLAN_LABEL, type PlanTier } from "@/data/types";
 
 interface Company {
   tenant_id: string;
@@ -10,7 +11,22 @@ interface Company {
   owner_email: string | null;
   user_count: number;
   cash?: number;
+  plan?: PlanTier;
+  status?: string;
 }
+
+// Plan colour so you can read who's on what at a glance (= what they can access).
+const PLAN_STYLE: Record<string, string> = {
+  pro:     "bg-purple-900/40 text-purple-300 border-purple-700/50",
+  growth:  "bg-blue-900/40 text-blue-300 border-blue-700/50",
+  starter: "bg-amber-900/40 text-amber-300 border-amber-700/50",
+  free:    "bg-white/5 text-[var(--color-muted)] border-[var(--color-border)]",
+};
+const PlanPill = ({ plan }: { plan?: PlanTier }) => (
+  <span className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border shrink-0 ${PLAN_STYLE[plan || "free"]}`}>
+    {PLAN_LABEL[plan || "free"]}
+  </span>
+);
 
 /* Platform super_admin only — switch the whole app to view/manage any company's
    data. Reuses setSelectedClient (super_admin can read+write any tenant via the
@@ -95,12 +111,18 @@ export default function TenantSwitcher() {
                   <button key={c.tenant_id} onClick={() => pick(c)}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-white/5">
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium truncate text-[var(--color-text)]">{label(c)}</span>
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-medium truncate text-[var(--color-text)]">{label(c)}</span>
+                        {c.status === "suspended" && <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-800/40 shrink-0">Suspended</span>}
+                      </span>
                       <span className="block text-[11px] text-[var(--color-muted)] truncate">
                         {c.owner_email && c.company_name ? c.owner_email + " · " : ""}{c.user_count} user{c.user_count === 1 ? "" : "s"}
                       </span>
                     </span>
-                    {selectedClientTenantId === c.tenant_id && <Check size={14} className="text-[var(--color-primary)] shrink-0" />}
+                    <span className="flex items-center gap-2 shrink-0">
+                      <PlanPill plan={c.plan} />
+                      {selectedClientTenantId === c.tenant_id && <Check size={14} className="text-[var(--color-primary)]" />}
+                    </span>
                   </button>
                 ))}
               </div>
