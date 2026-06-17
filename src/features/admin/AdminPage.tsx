@@ -11,7 +11,7 @@ import {
 import {
   ShieldCheck, Building2, Users as UsersIcon, CreditCard, ScrollText, Server,
   Search, Copy, X, Pencil, KeyRound, Crown, Trash2, LogIn, Zap, Power, UserPlus,
-  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check, Upload, Eye,
+  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check, Upload, Eye, Mail,
 } from "lucide-react";
 
 // BASE is imported per the spec; referenced here so the import is never dropped.
@@ -834,6 +834,18 @@ function CompaniesSection({
 const USER_ROLES: UserRole[] = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
 const PAGE_SIZE = 25;
 
+// Short, human "what can this role reach" summary for the access-levels legend.
+const ROLE_SCOPE: Record<string, string> = {
+  super_admin: "Everything — platform-wide, all companies",
+  owner: "Full access to their own organisation",
+  finance_manager: "Cash, invoices, GST, payroll, forecasts",
+  accountant: "Books, GST, compliance, statements",
+  sales: "Invoices, receivables, collections",
+  operations_manager: "Operations, vendors, inventory",
+  investor: "Cap table, valuation, investor views",
+  viewer: "Read-only dashboards",
+};
+
 function UsersSection({
   users, companies, loading, selfId, searchPreset, setSearchPreset, onSetPlan, reload, setUsers,
 }: {
@@ -954,9 +966,24 @@ function UsersSection({
   const deleteUser = async (u: AdminUser) => {
     const prev = users;
     setUsers((us) => us.filter((x) => x.id !== u.id));
+    setSelected((s) => { const n = new Set(s); n.delete(u.id); return n; });
     try {
       await api.delete(`/api/users/${u.id}`);
       toast.success("User deleted");
+    } catch (err) {
+      setUsers(prev);
+      toast.error(errMsg(err));
+    }
+  };
+
+  // Per-user activate / deactivate. A suspended user is locked out immediately.
+  const toggleActive = async (u: AdminUser) => {
+    const next = userStatus(u) === "suspended" ? "active" : "suspended";
+    const prev = users;
+    setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, status: next } : x)));
+    try {
+      await api.post(`/api/users/${u.id}/status`, { status: next });
+      toast.success(next === "suspended" ? `${u.email} deactivated` : `${u.email} reactivated`);
     } catch (err) {
       setUsers(prev);
       toast.error(errMsg(err));
@@ -1031,14 +1058,30 @@ function UsersSection({
 
   return (
     <div className="space-y-4">
+      {/* WHERE CHANGES APPEAR — what this section actually controls */}
+      <div className="rounded-lg border border-amber-700/40 bg-amber-900/15 px-4 py-3">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300 mb-1.5">Where changes appear</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs text-amber-200/90">
+          <span>→ Who can log in</span>
+          <span>→ Role-based tab access</span>
+          <span>→ All protected API endpoints</span>
+          <span>→ Audit log</span>
+        </div>
+        <p className="text-[11px] text-amber-200/70 mt-2 italic">Deactivating a user immediately revokes their sessions. Role changes apply on their next page load.</p>
+      </div>
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap text-xs">
           <span className="px-2.5 py-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">Total <strong className="text-[var(--color-text)]">{users.length}</strong></span>
           <span className="px-2.5 py-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">Orgs <strong className="text-[var(--color-text)]">{orgCount}</strong></span>
           <span className="px-2.5 py-1 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">Pending <strong>{pendingCount}</strong></span>
           <span className="px-2.5 py-1 rounded-full bg-red-900/30 text-red-300 border border-red-700/40">Suspended <strong>{suspendedCount}</strong></span>
+          <span className="text-[var(--color-muted)]">· Changes take effect immediately</span>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={reload} title="Refresh" className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
+            <RefreshCw size={13} />
+          </button>
           <button onClick={exportCsv} title="Export filtered users as CSV" className="flex items-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]">
             <Download size={13} /> Export CSV
           </button>
@@ -1113,82 +1156,60 @@ function UsersSection({
         <EmptyState icon={<UsersIcon size={28} />} message="No users match." />
       ) : (
         <>
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[1000px]">
-              <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-                <tr>
-                  <th className="pl-4 pr-1 py-2.5 w-8">
-                    <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} className="accent-[var(--color-primary)]" aria-label="Select page" />
-                  </th>
-                  <th className={`${thCls} text-left`}>User</th>
-                  <th className={`${thCls} text-left`}>ID</th>
-                  <th className={`${thCls} text-left`}>Tenant</th>
-                  <th className={`${thCls} text-left`}>Role</th>
-                  <th className={`${thCls} text-left`}>Plan</th>
-                  <th className={`${thCls} text-left`}>Last login</th>
-                  <th className={`${thCls} text-right`}>Logins</th>
-                  <th className={`${thCls} text-left`}>Status</th>
-                  <th className={`${thCls} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-border)]">
-                {pageRows.map((u) => {
-                  const isSelf = u.id === selfId;
-                  const st = userStatus(u);
-                  return (
-                    <tr key={u.id} className={`group hover:bg-white/5 ${selected.has(u.id) ? "bg-[var(--color-primary)]/5" : ""}`}>
-                      <td className="pl-4 pr-1 py-2.5">
-                        <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} className="accent-[var(--color-primary)]" aria-label="Select user" />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <button onClick={() => setDetailUser(u)} title="View full details" className="flex items-center gap-2.5 text-left hover:opacity-80">
-                          <span className={`w-7 h-7 rounded-full ${avatarBg(u.email)} text-white text-[11px] font-semibold flex items-center justify-center shrink-0`}>{initials(u)}</span>
-                          <div className="min-w-0">
-                            <p className="font-semibold truncate max-w-[180px]">{u.display_name || u.email.split("@")[0]}{isSelf && <span className="ml-1.5 text-[10px] text-[var(--color-muted)]">(you)</span>}</p>
-                            <p className="text-[11px] text-[var(--color-muted)] truncate max-w-[180px]">{u.email}</p>
-                          </div>
-                        </button>
-                      </td>
-                      <td className="px-4 py-2.5"><CopyId id={u.id} /></td>
-                      <td className="px-4 py-2.5"><CopyId id={u.tenant_id} chars={12} /></td>
-                      <td className="px-4 py-2.5"><RolePill role={u.role} /></td>
-                      <td className="px-4 py-2.5"><PlanPill plan={u.subscription_plan ?? "free"} /></td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]" title={u.last_login_at ? new Date(u.last_login_at).toISOString() : "Never"}>{relTime(u.last_login_at)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-xs">{u.login_count ?? 0}</td>
-                      <td className="px-4 py-2.5">
-                        <StatusDot
-                          active={st === "active"}
-                          pending={st === "pending"}
-                          labelActive="Active"
-                          labelInactive={st === "pending" ? "Pending" : "Suspended"}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-2.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setDetailUser(u)} title="View details" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={14} /></button>
-                          <button onClick={() => setEditUser(u)} title="Edit" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={14} /></button>
-                          <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={14} /></button>
-                          <div className="relative">
-                            <button onClick={() => setConfirmOwner(confirmOwner === u.id ? null : u.id)} title="Make owner" className="text-[var(--color-muted)] hover:text-green-400"><Crown size={14} /></button>
-                            {confirmOwner === u.id && (
-                              <ConfirmPopover confirmLabel="Make owner" message={`Make ${u.email} the owner of this org?`} onConfirm={() => { makeOwner(u); setConfirmOwner(null); }} onCancel={() => setConfirmOwner(null)} />
-                            )}
-                          </div>
-                          {!isSelf && (
-                            <div className="relative">
-                              <button onClick={() => setConfirmDelete(confirmDelete === u.id ? null : u.id)} title="Delete" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
-                              {confirmDelete === u.id && (
-                                <ConfirmPopover danger confirmLabel="Delete" message={`Delete ${u.email}? This is permanent.`} onConfirm={() => { deleteUser(u); setConfirmDelete(null); }} onCancel={() => setConfirmDelete(null)} />
-                              )}
-                            </div>
+          <div className="space-y-2">
+            {pageRows.length > 1 && (
+              <label className="flex items-center gap-2 text-xs text-[var(--color-muted)] px-1 cursor-pointer">
+                <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectPage} className="accent-[var(--color-primary)]" /> Select all on page
+              </label>
+            )}
+            {pageRows.map((u) => {
+              const isSelf = u.id === selfId;
+              const st = userStatus(u);
+              return (
+                <div key={u.id} className={`flex items-center justify-between gap-3 bg-[var(--color-surface)] border rounded-lg px-4 py-3 transition-colors ${selected.has(u.id) ? "border-[var(--color-primary)]/50" : "border-[var(--color-border)] hover:border-[var(--color-border)] hover:bg-white/[0.02]"}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} className="accent-[var(--color-primary)] shrink-0" aria-label="Select user" />
+                    <button onClick={() => setDetailUser(u)} className="flex items-center gap-3 text-left min-w-0 hover:opacity-90">
+                      <span className={`w-9 h-9 rounded-full ${avatarBg(u.email)} text-white text-xs font-semibold flex items-center justify-center shrink-0`}>{initials(u)}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold truncate">{u.display_name || u.email.split("@")[0]}{isSelf && <span className="ml-1 text-[10px] text-[var(--color-muted)] font-normal">(you)</span>}</span>
+                          <RolePill role={u.role} />
+                          <PlanPill plan={u.subscription_plan ?? "free"} />
+                          {st === "active" && <Check size={13} className="text-[var(--color-primary)]" aria-label="Active" />}
+                          {st === "pending" && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">Invite pending</span>}
+                          {st === "suspended" && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-900/30 text-red-300 border border-red-700/40">Deactivated</span>}
+                        </div>
+                        <p className="text-[11px] text-[var(--color-muted)] truncate">{u.email} · {st === "pending" ? "Awaiting first login" : `Last login: ${relTime(u.last_login_at)}`}</p>
+                      </div>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {st === "pending" && <button onClick={() => resetPassword(u)} title="Re-issue credentials" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Mail size={15} /></button>}
+                    <button onClick={() => setDetailUser(u)} title="View details" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={15} /></button>
+                    <button onClick={() => setEditUser(u)} title="Edit" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={15} /></button>
+                    <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={15} /></button>
+                    <div className="relative">
+                      <button onClick={() => setConfirmOwner(confirmOwner === u.id ? null : u.id)} title="Make owner" className="text-[var(--color-muted)] hover:text-green-400"><Crown size={15} /></button>
+                      {confirmOwner === u.id && (
+                        <ConfirmPopover confirmLabel="Make owner" message={`Make ${u.email} the owner of this org?`} onConfirm={() => { makeOwner(u); setConfirmOwner(null); }} onCancel={() => setConfirmOwner(null)} />
+                      )}
+                    </div>
+                    {!isSelf && (
+                      <>
+                        <button onClick={() => toggleActive(u)} title={st === "suspended" ? "Reactivate" : "Deactivate"} className={`text-[var(--color-muted)] ${st === "suspended" ? "hover:text-green-400" : "hover:text-amber-400"}`}><Power size={15} /></button>
+                        <div className="relative">
+                          <button onClick={() => setConfirmDelete(confirmDelete === u.id ? null : u.id)} title="Delete" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={15} /></button>
+                          {confirmDelete === u.id && (
+                            <ConfirmPopover danger confirmLabel="Delete" message={`Delete ${u.email}? This is permanent.`} onConfirm={() => { deleteUser(u); setConfirmDelete(null); }} onCancel={() => setConfirmDelete(null)} />
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="flex items-center justify-between text-xs text-[var(--color-muted)]">
             <span>Showing {from}–{to} of {filtered.length}</span>
@@ -1196,6 +1217,18 @@ function UsersSection({
               <button disabled={pageClamped === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="px-2.5 py-1 rounded border border-[var(--color-border)] disabled:opacity-30 hover:border-[var(--color-primary)]">Prev</button>
               <span>{pageClamped + 1} / {totalPages}</span>
               <button disabled={pageClamped + 1 >= totalPages} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} className="px-2.5 py-1 rounded border border-[var(--color-border)] disabled:opacity-30 hover:border-[var(--color-primary)]">Next</button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-muted)] mb-3">Role access levels</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
+              {USER_ROLES.map((r) => (
+                <div key={r} className="flex items-start gap-2 text-xs">
+                  <RolePill role={r} />
+                  <span className="text-[var(--color-muted)] mt-0.5">{ROLE_SCOPE[r] ?? "—"}</span>
+                </div>
+              ))}
             </div>
           </div>
         </>

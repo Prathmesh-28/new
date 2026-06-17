@@ -121,6 +121,25 @@ router.patch("/:id", authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
+// POST /api/users/:id/status — activate / deactivate a single user. A suspended
+// user is blocked at login (auth.js checks user.status). Per-user (not tenant-wide).
+router.post("/:id/status", authenticate, async (req, res) => {
+  const actor = req.user;
+  if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
+  const status = (req.body && req.body.status) === "suspended" ? "suspended" : "active";
+  const { rows: t } = await pool.query("SELECT id,role,tenant_id,email FROM users WHERE id=$1", [req.params.id]);
+  const target = t[0];
+  if (!target) return res.status(404).json({ error: "Not found" });
+  if (target.id === actor.id) return res.status(400).json({ error: "You can't deactivate yourself" });
+  if (actor.role === "owner") {
+    if (target.tenant_id !== actor.tenant_id) return res.status(403).json({ error: "Forbidden" });
+    if (target.role === "super_admin")        return res.status(403).json({ error: "Forbidden" });
+  }
+  await pool.query("UPDATE users SET status=$1 WHERE id=$2", [status, target.id]);
+  writeAudit(actor.id, status === "suspended" ? "user.deactivate" : "user.activate", "user", target.id, { email: target.email });
+  res.json({ ok: true, status });
+});
+
 // POST /api/users/:id/make-owner — promote a teammate to owner (continuity / backup admin).
 // Owner can promote anyone in their own tenant; super_admin anywhere. Co-owners are allowed.
 router.post("/:id/make-owner", authenticate, async (req, res) => {
