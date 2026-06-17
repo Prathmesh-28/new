@@ -61,6 +61,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
       { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
       { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
+      { to: "/advisor",      label: "Advisor / CA", icon: Users,           tab: "advisor"      },
+      { to: "/investor",     label: "Investors",    icon: Briefcase,       tab: "investor"     },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
     ]},
@@ -125,6 +127,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
       { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
       { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
+      { to: "/advisor",      label: "Advisor / CA", icon: Users,           tab: "advisor"      },
+      { to: "/investor",     label: "Investors",    icon: Briefcase,       tab: "investor"     },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
     ]},
     { label: "Growth & Treasury", items: [

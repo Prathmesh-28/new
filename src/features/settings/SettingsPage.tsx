@@ -1730,6 +1730,38 @@ function OwnerOnboardingCard({ users, firmName }: { users: TeamUser[]; firmName?
   );
 }
 
+// Owner accountability — recent actions inside their own organisation (B7/access).
+type OrgAudit = { id: string; action: string; entity: string | null; entity_id: string | null; meta: Record<string, unknown> | null; created_at: string; actor_email: string | null };
+function OrgActivityCard() {
+  const { user } = useAuth();
+  const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+  const [rows, setRows] = useState<OrgAudit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(() => { setLoading(true); fetch(`${BASE}/api/org/audit`, { headers: headers() }).then(r => r.ok ? r.json() : []).then(setRows).finally(() => setLoading(false)); }, [headers]);
+  useEffect(() => { load(); }, [load]);
+  if (!user || !["owner", "super_admin"].includes(user.role)) return null;
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-2"><History size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Organisation activity</h2></div>
+        <button onClick={load} className="text-xs flex items-center gap-1 text-[var(--color-primary)] hover:underline"><RotateCcw size={12} /> Refresh</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Who did what in your workspace — invites, role changes, plan changes and more.</p>
+      {loading ? <p className="text-xs text-[var(--color-muted)] py-4 text-center">Loading…</p> :
+        rows.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-4 text-center">No activity recorded yet.</p> : (
+        <div className="divide-y divide-[var(--color-border)]">
+          {rows.slice(0, 25).map(r => (
+            <div key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="truncate"><span className="text-[var(--color-muted)]">{r.actor_email || "—"}</span> · <span className="font-medium">{r.action.replace(/[._]/g, " ")}</span></span>
+              <span className="text-[10px] text-[var(--color-muted)] shrink-0" title={new Date(r.created_at).toLocaleString("en-IN")}>{relTime(r.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -2091,6 +2123,9 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Organisation activity (owner accountability) */}
+      <OrgActivityCard />
 
       {/* Stakeholder Views & Permissions */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
