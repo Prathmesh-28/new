@@ -10,8 +10,10 @@ import { defaultConfig } from "@/data/defaultConfig";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 import { FEATURE_ENTITLEMENTS, FEATURE_PITCH, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
+import OrganisationTab from "./OrganisationTab";
+import SubscriptionTab from "./SubscriptionTab";
 
-type Tab = "overview" | "metrics" | "companies" | "users" | "plan-access" | "invites" | "admin-actions" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
+type Tab = "overview" | "metrics" | "companies" | "users" | "organisation" | "subscription" | "plan-access" | "invites" | "admin-actions" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
 
 type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string; subscription_plan?: PlanTier; display_name?: string; status?: string; last_login_at?: string | null; last_active_at?: string | null; login_count?: number };
 type Company = {
@@ -45,6 +47,7 @@ function relTime(iso?: string | null): string {
 const ADMIN_SECTIONS: { label: string; ids: Tab[] }[] = [
   { label: "Platform",          ids: ["overview", "metrics", "health", "config-snapshot", "maintenance", "flags", "announce"] },
   { label: "Customers",         ids: ["companies", "users", "plan-access", "plan-usage", "quotas", "invites", "ca-workspace", "onboarding"] },
+  { label: "Selected org",      ids: ["organisation", "subscription"] },
   { label: "Access & Security", ids: ["permissions", "admin-actions", "audit-log", "login-history", "retention"] },
   { label: "Data & Ops",        ids: ["usage", "data-export", "bulk-import", "import-jobs", "notify-templates", "api-keys", "scheduled-jobs", "rate-limits", "error-log"] },
 ];
@@ -221,6 +224,8 @@ export default function AdminPage() {
     { id: "plan-access",  label: "Plan Access",        icon: Crown },
     { id: "invites",      label: "Team Invites",       icon: Mail },
     { id: "admin-actions",label: "Admin Actions",      icon: History },
+    { id: "organisation", label: "Org Settings",       icon: Building2 },
+    { id: "subscription", label: "Subscription",       icon: CreditCard },
     { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
     { id: "usage",        label: "Usage Analytics",    icon: Activity },
     { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
@@ -572,6 +577,8 @@ export default function AdminPage() {
       {tab === "plan-access" && <PlanAccessMatrix />}
       {tab === "invites" && <TeamInvites authHeaders={authHeaders} isSuper={user?.role === "super_admin"} myTenant={user?.tenant_id ?? ""} companies={companies} />}
       {tab === "admin-actions" && <AdminActionsAudit authHeaders={authHeaders} />}
+      {tab === "organisation" && <OrganisationTab />}
+      {tab === "subscription" && <SubscriptionTab />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} onSave={saveUserProfile} />}
       {detailUser && <User360Drawer user={detailUser} isSelf={detailUser.id === user?.id}
         team={companyName(detailUser.tenant_id)}
