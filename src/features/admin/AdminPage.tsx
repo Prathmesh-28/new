@@ -3,19 +3,19 @@ import { useApp } from "@/context/AppContext";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw, Pencil, Lock } from "lucide-react";
+import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw, Pencil, Lock, History, TrendingUp, IndianRupee, CheckSquare, Square, Ban, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 import { FEATURE_ENTITLEMENTS, FEATURE_PITCH, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 
-type Tab = "overview" | "companies" | "users" | "plan-access" | "invites" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
+type Tab = "overview" | "metrics" | "companies" | "users" | "plan-access" | "invites" | "admin-actions" | "ca-workspace" | "usage" | "retention" | "flags" | "announce" | "audit-log" | "quotas" | "health" | "maintenance" | "permissions" | "login-history" | "import-jobs" | "config-snapshot" | "error-log" | "notify-templates" | "plan-usage" | "api-keys" | "onboarding" | "data-export" | "bulk-import" | "scheduled-jobs" | "rate-limits";
 
-type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string; subscription_plan?: PlanTier; display_name?: string };
+type AdminUser = { id: string; email: string; role: string; tenant_id: string; first_login: boolean; created_at: string; subscription_plan?: PlanTier; display_name?: string; status?: string; last_login_at?: string | null; last_active_at?: string | null; login_count?: number };
 type Company = {
   tenant_id: string; company_name: string | null; owner_email: string | null; user_count: number; plan?: PlanTier;
-  created_at: string | null; last_activity: string | null;
+  created_at: string | null; last_activity: string | null; last_login_at?: string | null; status?: string;
   cash: number; revenue: number; expense: number; transactions: number; accounts: number; openReceivables: number;
 };
 type Stats = {
@@ -25,9 +25,24 @@ type Stats = {
 
 const ALL_ROLE_OPTIONS = Object.values(ROLE_META);
 
+// "3d ago" / "2h ago" / "just now" / "Never" — compact last-seen labels.
+function relTime(iso?: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "Never";
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  const days = Math.floor(s / 86400);
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
-  const { canAccess, setSelectedClient } = useApp();
+  const { canAccess, setSelectedClient, setPreviewRole } = useApp();
   const navigate = useNavigate();
   const [tab, setTab]           = useState<Tab>("overview");
   const [stats, setStats]       = useState<Stats | null>(null);
@@ -41,6 +56,11 @@ export default function AdminPage() {
   const [invTenant, setInvTenant] = useState("");
   const [resetInfo, setResetInfo] = useState<{ email: string; password: string } | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [detailUser, setDetailUser] = useState<AdminUser | null>(null);   // A2 user 360
+  const [detailCompany, setDetailCompany] = useState<Company | null>(null); // A7 company 360
+  const [globalQ, setGlobalQ] = useState("");                              // A1 find-anyone
+  const [tabQ, setTabQ] = useState("");                                    // A10 tab search
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());  // A5 bulk select
 
   const token = () => localStorage.getItem("hr_access") ?? "";
   const authHeaders = useCallback(() => ({ Authorization: `Bearer ${token()}` }), []);
@@ -126,13 +146,58 @@ export default function AdminPage() {
     if (res.ok) { toast.success("User updated"); setEditUser(null); loadUsers(); }
     else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to update user");
   };
+  // A6 — step INTO a user's shoes: their tenant's data + their role-limited view.
+  const impersonateUser = (u: AdminUser) => {
+    setSelectedClient(u.tenant_id, u.display_name || u.email);
+    setPreviewRole(u.role as Parameters<typeof setPreviewRole>[0]);
+    toast.success(`Viewing as ${u.display_name || u.email} (${roleLabel(u.role)}) — exactly what they see`);
+    navigate("/dashboard");
+  };
+  // A8 — suspend / re-activate an entire company (suspend blocks all its logins).
+  const suspendTenant = async (tenantId: string, label: string) => {
+    if (!window.confirm(`Suspend "${label}"? Everyone in this company will be locked out until you re-activate it.`)) return;
+    const reason = window.prompt("Reason (optional, shown in the audit log):") ?? "";
+    const res = await fetch(`${BASE}/api/admin/tenants/${tenantId}/suspend`, {
+      method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ reason }),
+    });
+    if (res.ok) { toast.success(`${label} suspended`); setCompanies(prev => prev.map(c => c.tenant_id === tenantId ? { ...c, status: "suspended" } : c)); setDetailCompany(d => d && d.tenant_id === tenantId ? { ...d, status: "suspended" } : d); }
+    else toast.error("Failed to suspend");
+  };
+  const activateTenant = async (tenantId: string, label: string) => {
+    const res = await fetch(`${BASE}/api/admin/tenants/${tenantId}/activate`, { method: "POST", headers: authHeaders() });
+    if (res.ok) { toast.success(`${label} re-activated`); setCompanies(prev => prev.map(c => c.tenant_id === tenantId ? { ...c, status: "active" } : c)); setDetailCompany(d => d && d.tenant_id === tenantId ? { ...d, status: "active" } : d); }
+    else toast.error("Failed to activate");
+  };
+  // A5 — bulk actions over selected users.
+  const toggleSelect = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const bulkSetPlan = async (plan: PlanTier) => {
+    const tenants = [...new Set(users.filter(u => selectedIds.has(u.id)).map(u => u.tenant_id))];
+    for (const t of tenants) await setTenantPlan(t, plan);
+    toast.success(`${tenants.length} tenant${tenants.length === 1 ? "" : "s"} → ${PLAN_LABEL[plan]}`);
+    setSelectedIds(new Set());
+  };
+  const bulkDelete = async () => {
+    const targets = users.filter(u => selectedIds.has(u.id) && u.id !== user?.id);
+    if (!targets.length || !window.confirm(`Delete ${targets.length} user${targets.length === 1 ? "" : "s"}? This is permanent.`)) return;
+    for (const u of targets) await fetch(`${BASE}/api/users/${u.id}`, { method: "DELETE", headers: authHeaders() });
+    toast.success(`${targets.length} deleted`); setSelectedIds(new Set()); loadUsers(); loadStats();
+  };
+  const exportUsersCsv = () => {
+    const rows = (selectedIds.size ? users.filter(u => selectedIds.has(u.id)) : filteredUsers);
+    const head = ["email", "role", "plan", "tenant_id", "status", "last_login_at", "login_count", "created_at"];
+    const csv = [head.join(","), ...rows.map(u => [u.email, u.role, u.subscription_plan ?? "free", u.tenant_id, u.first_login ? "pending" : (u.status ?? "active"), u.last_login_at ?? "", u.login_count ?? 0, u.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "headroom-users.csv"; a.click();
+    toast.success(`Exported ${rows.length} users`);
+  };
 
   const TABS = [
     { id: "overview",     label: "Platform Overview", icon: ShieldCheck },
+    { id: "metrics",      label: "Business Metrics",   icon: Gauge },
     { id: "companies",    label: "Companies",          icon: Building2 },
     { id: "users",        label: "Users",              icon: Users },
     { id: "plan-access",  label: "Plan Access",        icon: Crown },
     { id: "invites",      label: "Team Invites",       icon: Mail },
+    { id: "admin-actions",label: "Admin Actions",      icon: History },
     { id: "ca-workspace", label: "CA Workspace",       icon: Briefcase },
     { id: "usage",        label: "Usage Analytics",    icon: Activity },
     { id: "retention",    label: "Data Retention",     icon: DatabaseZap },
@@ -162,6 +227,11 @@ export default function AdminPage() {
     !q || u.email.toLowerCase().includes(q.toLowerCase()) || u.tenant_id.toLowerCase().includes(q.toLowerCase()) || u.role.includes(q.toLowerCase()));
   const filteredCompanies = companies.filter(c =>
     !q || (c.company_name || "").toLowerCase().includes(q.toLowerCase()) || c.tenant_id.toLowerCase().includes(q.toLowerCase()) || (c.owner_email || "").toLowerCase().includes(q.toLowerCase()));
+  const gq = globalQ.trim().toLowerCase();
+  const globalResults = {
+    users: gq.length < 2 ? [] : users.filter(u => u.email.toLowerCase().includes(gq) || u.tenant_id.toLowerCase().includes(gq) || (u.display_name || "").toLowerCase().includes(gq)).slice(0, 6),
+    companies: gq.length < 2 ? [] : companies.filter(c => (c.company_name || "").toLowerCase().includes(gq) || c.tenant_id.toLowerCase().includes(gq) || (c.owner_email || "").toLowerCase().includes(gq)).slice(0, 6),
+  };
 
   return (
     <div className="space-y-6">
@@ -192,14 +262,46 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); setQ(""); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium whitespace-nowrap transition-colors ${tab === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-            <t.icon size={13} /> {t.label}
-          </button>
-        ))}
+      {/* A1 — global "find anyone" search (jumps to a user/company 360 from anywhere) */}
+      <div className="relative max-w-md">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+        <input value={globalQ} onChange={e => setGlobalQ(e.target.value)} placeholder="Find any user or company…"
+          onFocus={() => { if (!users.length) loadUsers(); if (!companies.length) loadCompanies(); }}
+          className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        {globalQ.trim().length >= 2 && (
+          <div className="absolute z-30 mt-1 w-full max-h-80 overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl divide-y divide-[var(--color-border)]">
+            {globalResults.users.length === 0 && globalResults.companies.length === 0 && (
+              <p className="px-3 py-3 text-xs text-[var(--color-muted)]">No matches. {(!users.length || !companies.length) && "Loading directory…"}</p>
+            )}
+            {globalResults.users.map(u => (
+              <button key={`u-${u.id}`} onClick={() => { setDetailUser(u); setGlobalQ(""); }} className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-2">
+                <Users size={13} className="text-[var(--color-muted)]" /><span className="text-sm">{u.email}</span><span className="text-[10px] text-[var(--color-muted)] ml-auto">{roleLabel(u.role)}</span>
+              </button>
+            ))}
+            {globalResults.companies.map(c => (
+              <button key={`c-${c.tenant_id}`} onClick={() => { setDetailCompany(c); setGlobalQ(""); }} className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-2">
+                <Building2 size={13} className="text-[var(--color-muted)]" /><span className="text-sm">{c.company_name || c.tenant_id}</span><span className="text-[10px] text-[var(--color-muted)] ml-auto">{c.user_count} users</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tabs (searchable — there are 30+) */}
+      <div className="space-y-2">
+        <div className="relative max-w-xs">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input value={tabQ} onChange={e => setTabQ(e.target.value)} placeholder="Filter tools…"
+            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-7 pr-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+        </div>
+        <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {TABS.filter(t => !tabQ || t.label.toLowerCase().includes(tabQ.toLowerCase())).map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); setQ(""); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium whitespace-nowrap transition-colors ${tab === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              <t.icon size={13} /> {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── OVERVIEW (platform-wide) ── */}
@@ -283,11 +385,11 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[820px]">
+            <table className="w-full text-sm min-w-[940px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
-                  {["Company", "Owner", "Users", "Cash", "Revenue", "Receivables", "Txns", ""].map((h, i) => (
-                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 || i === 1 ? "text-left" : "text-right"}`}>{h}</th>
+                  {["Company", "Owner", "Plan", "Users", "Cash", "Revenue", "Last login", "Status", ""].map((h, i) => (
+                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i <= 1 ? "text-left" : i >= 6 ? "text-left" : "text-right"}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -295,19 +397,30 @@ export default function AdminPage() {
                 {filteredCompanies.map(c => (
                   <tr key={c.tenant_id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5">
-                      <p className="font-medium">{c.company_name || "—"}</p>
+                      <button onClick={() => setDetailCompany(c)} className="font-medium hover:text-[var(--color-primary)] text-left">{c.company_name || "—"}</button>
                       <p className="text-[10px] text-[var(--color-muted)] font-mono truncate max-w-[160px]">{c.tenant_id}</p>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[160px]">{c.owner_email || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <select value={c.plan ?? "free"} onChange={e => setTenantPlan(c.tenant_id, e.target.value as PlanTier)}
+                        title="Set this company's plan" className="text-xs font-semibold rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-2 py-1 outline-none cursor-pointer">
+                        {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+                      </select>
+                    </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{c.user_count}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(c.cash)}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{formatCurrency(c.revenue)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-yellow-400">{formatCurrency(c.openReceivables)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{c.transactions}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <button onClick={() => inspect(c)} className="inline-flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
-                        <Eye size={12} /> Inspect
-                      </button>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{relTime(c.last_login_at)}</td>
+                    <td className="px-4 py-2.5">
+                      {c.status === "suspended"
+                        ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-800/40">Suspended</span>
+                        : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-800/40">Active</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <button onClick={() => setDetailCompany(c)} title="Company 360" className="text-[var(--color-muted)] hover:text-[var(--color-primary)] mr-3"><Eye size={14} /></button>
+                      {c.status === "suspended"
+                        ? <button onClick={() => activateTenant(c.tenant_id, c.company_name || c.tenant_id)} title="Re-activate" className="text-[var(--color-muted)] hover:text-green-400"><Power size={14} /></button>
+                        : <button onClick={() => suspendTenant(c.tenant_id, c.company_name || c.tenant_id)} title="Suspend company" className="text-[var(--color-muted)] hover:text-red-400"><Ban size={14} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -327,11 +440,29 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            {/* A5 — bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 bg-[var(--color-bg)] border-b border-[var(--color-border)]">
+                <span className="text-xs font-semibold">{selectedIds.size} selected</span>
+                <span className="text-[10px] text-[var(--color-muted)]">Set plan:</span>
+                {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => (
+                  <button key={p} onClick={() => bulkSetPlan(p)} className="text-[10px] font-semibold px-2 py-0.5 rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]">{PLAN_LABEL[p]}</button>
+                ))}
+                <button onClick={exportUsersCsv} className="text-[10px] font-semibold px-2 py-0.5 rounded border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1"><Download size={10} /> CSV</button>
+                <button onClick={bulkDelete} className="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-800/40 text-red-400 hover:bg-red-900/20 flex items-center gap-1"><Trash2 size={10} /> Delete</button>
+                <button onClick={() => setSelectedIds(new Set())} className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] ml-auto">Clear</button>
+              </div>
+            )}
+            <table className="w-full text-sm min-w-[860px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
-                  {["Email", "Role", "Plan", "Tenant", "Status", "Actions"].map((h, i) => (
-                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 5 ? "text-right" : "text-left"}`}>{h}</th>
+                  <th className="pl-4 pr-1 py-2.5 w-8">
+                    <button onClick={() => setSelectedIds(selectedIds.size === filteredUsers.length ? new Set() : new Set(filteredUsers.map(u => u.id)))} className="text-[var(--color-muted)] hover:text-[var(--color-primary)]" title="Select all">
+                      {selectedIds.size === filteredUsers.length && filteredUsers.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
+                    </button>
+                  </th>
+                  {["Email", "Role", "Plan", "Tenant", "Last login", "Status", "Actions"].map((h, i) => (
+                    <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -339,8 +470,16 @@ export default function AdminPage() {
                 {filteredUsers.map(u => {
                   const isSelf = u.id === user?.id;
                   return (
-                    <tr key={u.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5">{u.email}{u.role === "owner" && <Crown size={11} className="inline ml-1.5 -mt-0.5 text-[var(--color-primary)]" aria-label="Primary owner" />}{isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)]">(you)</span>}</td>
+                    <tr key={u.id} className={`hover:bg-white/2 ${selectedIds.has(u.id) ? "bg-[var(--color-primary)]/5" : ""}`}>
+                      <td className="pl-4 pr-1 py-2.5">
+                        <button onClick={() => toggleSelect(u.id)} className="text-[var(--color-muted)] hover:text-[var(--color-primary)]">
+                          {selectedIds.has(u.id) ? <CheckSquare size={14} className="text-[var(--color-primary)]" /> : <Square size={14} />}
+                        </button>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={() => setDetailUser(u)} className="hover:text-[var(--color-primary)] text-left">{u.email}</button>
+                        {u.role === "owner" && <Crown size={11} className="inline ml-1.5 -mt-0.5 text-[var(--color-primary)]" aria-label="Primary owner" />}{isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)]">(you)</span>}
+                      </td>
                       <td className="px-4 py-2.5">
                         {isSelf ? (
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${roleBadge(u.role)}`}>{roleLabel(u.role)}</span>
@@ -357,11 +496,13 @@ export default function AdminPage() {
                           {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)] truncate max-w-[160px]">{u.tenant_id}</td>
-                      <td className="px-4 py-2.5">{u.first_login ? <span className="text-yellow-400 text-xs">Pending login</span> : <span className="text-green-400 text-xs">Active</span>}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)] truncate max-w-[150px]">{u.tenant_id}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]" title={u.last_login_at ? new Date(u.last_login_at).toLocaleString("en-IN") : "Never logged in"}>{relTime(u.last_login_at)}</td>
+                      <td className="px-4 py-2.5">{u.status === "suspended" ? <span className="text-red-400 text-xs">Suspended</span> : u.first_login ? <span className="text-yellow-400 text-xs">Pending login</span> : <span className="text-green-400 text-xs">Active</span>}</td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => openTenant(u.tenant_id, u.display_name || u.email)} title="Open this user's data (view & edit)" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={14} /></button>
+                        <div className="flex items-center justify-end gap-2.5">
+                          <button onClick={() => setDetailUser(u)} title="User 360" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={14} /></button>
+                          <button onClick={() => impersonateUser(u)} title="View as this user" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><UserCog size={14} /></button>
                           <button onClick={() => setEditUser(u)} title="Edit user" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={14} /></button>
                           <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={14} /></button>
                           {!isSelf && <button onClick={() => removeUser(u)} title="Delete user" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>}
@@ -376,9 +517,21 @@ export default function AdminPage() {
         )
       )}
 
+      {tab === "metrics" && <MetricsBoard authHeaders={authHeaders} />}
       {tab === "plan-access" && <PlanAccessMatrix />}
       {tab === "invites" && <TeamInvites authHeaders={authHeaders} isSuper={user?.role === "super_admin"} myTenant={user?.tenant_id ?? ""} companies={companies} />}
+      {tab === "admin-actions" && <AdminActionsAudit authHeaders={authHeaders} />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} onSave={saveUserProfile} />}
+      {detailUser && <User360Drawer user={detailUser} isSelf={detailUser.id === user?.id}
+        onClose={() => setDetailUser(null)}
+        onImpersonate={impersonateUser} onOpenTenant={openTenant}
+        onEdit={u => { setDetailUser(null); setEditUser(u); }}
+        onReset={resetPassword} onPlan={setTenantPlan} onRole={changeRole}
+        onDelete={u => { setDetailUser(null); removeUser(u); }} />}
+      {detailCompany && <Company360Drawer company={detailCompany} authHeaders={authHeaders}
+        onClose={() => setDetailCompany(null)}
+        onInspect={inspect} onPlan={setTenantPlan}
+        onSuspend={suspendTenant} onActivate={activateTenant} onOpenUser={u => { setDetailCompany(null); setDetailUser(u); }} />}
       {tab === "ca-workspace" && <CaWorkspace companies={companies} loadCompanies={loadCompanies} />}
       {tab === "usage" && <UsageAnalytics />}
       {tab === "retention" && <RetentionSettings />}
@@ -2655,5 +2808,258 @@ function RateLimitConfig() {
         </table>
       </div>
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Wave 2 super-admin additions: real business metrics (A9), admin-action
+   audit trail (A4), and 360° drawers for a user (A2) and a company (A7).
+   ───────────────────────────────────────────────────────────────────────── */
+
+type Metrics = {
+  mrr: number; arr: number; paidTenants: number;
+  planMix: Record<string, number>; signupsByMonth: { month: string; n: number }[];
+  activeUsers30d: number; pendingInvites: number; currency: string;
+};
+
+function MetricsBoard({ authHeaders }: { authHeaders: () => Record<string, string> }) {
+  const [m, setM] = useState<Metrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch(`${BASE}/api/admin/metrics`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null).then(setM).finally(() => setLoading(false));
+  }, [authHeaders]);
+  if (loading) return <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
+  if (!m) return <p className="text-sm text-[var(--color-muted)] py-8 text-center">Couldn't load metrics.</p>;
+  const planOrder: PlanTier[] = ["free", "starter", "growth", "pro"];
+  const maxSignup = Math.max(1, ...m.signupsByMonth.map(s => s.n));
+  const totalTenants = planOrder.reduce((s, p) => s + (m.planMix[p] || 0), 0);
+  const cards = [
+    { label: "MRR", value: formatCurrency(m.mrr), sub: "ex-GST list price", icon: IndianRupee },
+    { label: "ARR", value: formatCurrency(m.arr), sub: "annualised", icon: TrendingUp },
+    { label: "Paying companies", value: String(m.paidTenants), sub: `of ${totalTenants} total`, icon: Building2 },
+    { label: "Active users (30d)", value: String(m.activeUsers30d), sub: "logged in recently", icon: Activity },
+    { label: "Pending invites", value: String(m.pendingInvites), sub: "awaiting response", icon: Mail },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {cards.map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-1.5 text-[var(--color-muted)] mb-1"><c.icon size={12} /><p className="text-xs">{c.label}</p></div>
+            <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{c.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-3">Plan distribution</p>
+          <div className="space-y-2">
+            {planOrder.map(p => {
+              const n = m.planMix[p] || 0; const pct = totalTenants ? Math.round((n / totalTenants) * 100) : 0;
+              return (
+                <div key={p} className="flex items-center gap-3">
+                  <span className="text-xs w-16 text-[var(--color-muted)]">{PLAN_LABEL[p]}</span>
+                  <div className="flex-1 h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} /></div>
+                  <span className="text-xs tabular-nums w-14 text-right">{n} · {pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <p className="text-sm font-semibold mb-3">New companies / month (12 mo)</p>
+          {m.signupsByMonth.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No signups yet.</p> : (
+            <div className="flex items-end gap-1.5 h-32">
+              {m.signupsByMonth.map(s => (
+                <div key={s.month} className="flex-1 flex flex-col items-center gap-1" title={`${s.month}: ${s.n}`}>
+                  <div className="w-full bg-[var(--color-primary)] rounded-t" style={{ height: `${(s.n / maxSignup) * 100}%`, minHeight: s.n ? 4 : 0 }} />
+                  <span className="text-[8px] text-[var(--color-muted)] rotate-45 origin-left whitespace-nowrap mt-1">{s.month.slice(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AuditRow = { id: string; action: string; entity: string | null; entity_id: string | null; meta: Record<string, unknown> | null; created_at: string; actor_email: string | null; actor_role: string | null };
+
+function AdminActionsAudit({ authHeaders }: { authHeaders: () => Record<string, string> }) {
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${BASE}/api/admin/audit`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(setRows).finally(() => setLoading(false));
+  }, [authHeaders]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[var(--color-muted)]">Every admin & team action — who changed what, when.</p>
+        <button onClick={load} className="text-xs flex items-center gap-1 text-[var(--color-primary)] hover:underline"><RefreshCw size={12} /> Refresh</button>
+      </div>
+      {loading ? <p className="text-sm text-[var(--color-muted)] py-8 text-center">Loading…</p> :
+        rows.length === 0 ? <p className="text-sm text-[var(--color-muted)] py-8 text-center">No actions recorded yet.</p> : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]"><tr>
+              {["When", "Actor", "Action", "Target", "Details"].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">{h}</th>)}
+            </tr></thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap" title={new Date(r.created_at).toLocaleString("en-IN")}>{relTime(r.created_at)}</td>
+                  <td className="px-4 py-2.5 text-xs">{r.actor_email || "—"}</td>
+                  <td className="px-4 py-2.5"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)]">{r.action}</span></td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] font-mono truncate max-w-[160px]">{r.entity}{r.entity_id ? `:${r.entity_id.slice(0, 8)}` : ""}</td>
+                  <td className="px-4 py-2.5 text-[10px] text-[var(--color-muted)] font-mono truncate max-w-[220px]">{r.meta ? JSON.stringify(r.meta) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DrawerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-md h-full overflow-y-auto bg-[var(--color-surface)] border-l border-[var(--color-border)] p-5 space-y-4">
+        <div className="flex items-center justify-between sticky -top-5 -mx-5 px-5 py-3 bg-[var(--color-surface)] border-b border-[var(--color-border)]">
+          <h3 className="text-sm font-bold">{title}</h3>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5 border-b border-[var(--color-border)]/50">
+      <span className="text-[11px] text-[var(--color-muted)] uppercase tracking-wide">{label}</span>
+      <span className={`text-sm text-right ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function User360Drawer({ user, isSelf, onClose, onImpersonate, onOpenTenant, onEdit, onReset, onPlan, onRole, onDelete }: {
+  user: AdminUser; isSelf: boolean; onClose: () => void;
+  onImpersonate: (u: AdminUser) => void; onOpenTenant: (tid: string, label: string) => void;
+  onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void;
+  onPlan: (tid: string, plan: PlanTier) => void; onRole: (u: AdminUser, role: string) => void; onDelete: (u: AdminUser) => void;
+}) {
+  return (
+    <DrawerShell title="User 360" onClose={onClose}>
+      <div className="flex items-center gap-2">
+        <span className="text-base font-semibold">{user.display_name || user.email}</span>
+        {user.role === "owner" && <Crown size={13} className="text-[var(--color-primary)]" />}
+      </div>
+      <div className="space-y-0.5">
+        <Field label="Email" value={user.email} />
+        <Field label="Role" value={<span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleBadge(user.role)}`}>{roleLabel(user.role)}</span>} />
+        <Field label="Plan" value={PLAN_LABEL[user.subscription_plan ?? "free"]} />
+        <Field label="Tenant" value={user.tenant_id} mono />
+        <Field label="Status" value={user.status === "suspended" ? "Suspended" : user.first_login ? "Pending login" : "Active"} />
+        <Field label="Last login" value={user.last_login_at ? new Date(user.last_login_at).toLocaleString("en-IN") : "Never"} />
+        <Field label="Logins" value={String(user.login_count ?? 0)} />
+        <Field label="Joined" value={user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"} />
+      </div>
+      <div className="space-y-2 pt-1">
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => onImpersonate(user)} className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90"><UserCog size={13} /> View as user</button>
+          <button onClick={() => onOpenTenant(user.tenant_id, user.display_name || user.email)} className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]"><Eye size={13} /> Open their data</button>
+          <button onClick={() => onEdit(user)} className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]"><Pencil size={13} /> Edit profile</button>
+          <button onClick={() => onReset(user)} className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]"><KeyRound size={13} /> Reset password</button>
+        </div>
+        <div>
+          <label className="text-[11px] text-[var(--color-muted)] block mb-1">Change plan (whole tenant)</label>
+          <select value={user.subscription_plan ?? "free"} onChange={e => onPlan(user.tenant_id, e.target.value as PlanTier)} className="w-full text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none">
+            {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+          </select>
+        </div>
+        {!isSelf && (
+          <div>
+            <label className="text-[11px] text-[var(--color-muted)] block mb-1">Change role</label>
+            <select value={user.role} onChange={e => onRole(user, e.target.value)} className="w-full text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none">
+              {ALL_ROLE_OPTIONS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </div>
+        )}
+        {!isSelf && <button onClick={() => onDelete(user)} className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold border border-red-800/40 text-red-400 px-3 py-2 rounded-lg hover:bg-red-900/20"><Trash2 size={13} /> Delete user</button>}
+      </div>
+    </DrawerShell>
+  );
+}
+
+type CompanyProfile = { company_name?: string | null; legal_name?: string | null; gstin?: string | null; pan?: string | null; industry?: string | null; company_size?: string | null; city?: string | null; state?: string | null; phone?: string | null; website?: string | null; status?: string };
+
+function Company360Drawer({ company, authHeaders, onClose, onInspect, onPlan, onSuspend, onActivate, onOpenUser }: {
+  company: Company; authHeaders: () => Record<string, string>; onClose: () => void;
+  onInspect: (c: Company) => void; onPlan: (tid: string, plan: PlanTier) => void;
+  onSuspend: (tid: string, label: string) => void; onActivate: (tid: string, label: string) => void;
+  onOpenUser: (u: AdminUser) => void;
+}) {
+  const [members, setMembers] = useState<AdminUser[]>([]);
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const label = company.company_name || company.tenant_id;
+  useEffect(() => {
+    fetch(`${BASE}/api/users`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then((all: AdminUser[]) => setMembers(all.filter(u => u.tenant_id === company.tenant_id)));
+    fetch(`${BASE}/api/company?tenant_id=${encodeURIComponent(company.tenant_id)}`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null).then(setProfile);
+  }, [company.tenant_id, authHeaders]);
+  return (
+    <DrawerShell title="Company 360" onClose={onClose}>
+      <div className="flex items-center justify-between">
+        <span className="text-base font-semibold">{label}</span>
+        {company.status === "suspended"
+          ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-800/40">Suspended</span>
+          : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-800/40">Active</span>}
+      </div>
+      <div className="space-y-0.5">
+        <Field label="Tenant" value={company.tenant_id} mono />
+        <Field label="Owner" value={company.owner_email || "—"} />
+        <Field label="Plan" value={PLAN_LABEL[company.plan ?? "free"]} />
+        <Field label="Members" value={String(company.user_count)} />
+        <Field label="GSTIN" value={profile?.gstin || "—"} mono />
+        <Field label="Industry" value={profile?.industry || "—"} />
+        <Field label="Location" value={[profile?.city, profile?.state].filter(Boolean).join(", ") || "—"} />
+        <Field label="Cash" value={formatCurrency(company.cash)} />
+        <Field label="Revenue" value={formatCurrency(company.revenue)} />
+        <Field label="Open receivables" value={formatCurrency(company.openReceivables)} />
+        <Field label="Last login" value={relTime(company.last_login_at)} />
+      </div>
+      <div className="space-y-2">
+        <button onClick={() => onInspect(company)} className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90"><Eye size={13} /> Open this company's data</button>
+        <div>
+          <label className="text-[11px] text-[var(--color-muted)] block mb-1">Plan</label>
+          <select value={company.plan ?? "free"} onChange={e => onPlan(company.tenant_id, e.target.value as PlanTier)} className="w-full text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none">
+            {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+          </select>
+        </div>
+        {company.status === "suspended"
+          ? <button onClick={() => onActivate(company.tenant_id, label)} className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold border border-green-800/40 text-green-400 px-3 py-2 rounded-lg hover:bg-green-900/20"><Power size={13} /> Re-activate company</button>
+          : <button onClick={() => onSuspend(company.tenant_id, label)} className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold border border-red-800/40 text-red-400 px-3 py-2 rounded-lg hover:bg-red-900/20"><Ban size={13} /> Suspend company</button>}
+      </div>
+      <div>
+        <p className="text-xs font-semibold mb-2">Members ({members.length})</p>
+        <div className="space-y-1">
+          {members.map(u => (
+            <button key={u.id} onClick={() => onOpenUser(u)} className="w-full flex items-center justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-white/5">
+              <span className="text-xs truncate">{u.email}{u.role === "owner" && <Crown size={10} className="inline ml-1 text-[var(--color-primary)]" />}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleBadge(u.role)}`}>{roleLabel(u.role)}</span>
+            </button>
+          ))}
+          {members.length === 0 && <p className="text-xs text-[var(--color-muted)]">No members loaded.</p>}
+        </div>
+      </div>
+    </DrawerShell>
   );
 }
