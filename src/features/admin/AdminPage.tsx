@@ -11,7 +11,7 @@ import {
 import {
   ShieldCheck, Building2, Users as UsersIcon, CreditCard, ScrollText, Server,
   Search, Copy, X, Pencil, KeyRound, Crown, Trash2, LogIn, Zap, Power, UserPlus,
-  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check,
+  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check, Upload, Eye,
 } from "lucide-react";
 
 // BASE is imported per the spec; referenced here so the import is never dropped.
@@ -863,6 +863,8 @@ function UsersSection({
   const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
   const [bulkPlanOpen, setBulkPlanOpen] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   // Apply a preset search coming from another section, then clear it.
   useEffect(() => {
@@ -871,9 +873,6 @@ function UsersSection({
   }, []);
 
   useEffect(() => { setPage(0); }, [q, roleFilter, planFilter, statusFilter]);
-
-  // Available, but kept lightweight — companies feed tenant labels where useful.
-  void companies;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -1010,18 +1009,46 @@ function UsersSection({
 
   const onInvited = (u: AdminUser) => { setUsers((us) => [u, ...us]); };
   const bulkDeletableCount = users.filter((u) => selected.has(u.id) && u.id !== selfId).length;
+  const orgCount = new Set(users.map((u) => u.tenant_id)).size;
+
+  // Export the currently-filtered users (every field) as a CSV download.
+  const CSV_COLS = ["id", "email", "display_name", "role", "tenant_id", "subscription_plan", "status", "first_login", "login_count", "created_at", "last_login_at", "last_active_at"] as const;
+  const exportCsv = () => {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [CSV_COLS.join(",")];
+    for (const u of filtered) {
+      lines.push([u.id, u.email, u.display_name ?? "", u.role, u.tenant_id, u.subscription_plan ?? "free", userStatus(u), u.first_login, u.login_count ?? 0, u.created_at, u.last_login_at ?? "", u.last_active_at ?? ""].map(esc).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `headroom-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success(`Exported ${filtered.length} user(s)`);
+  };
+  const companyFor = (tid: string) => companies.find((c) => c.tenant_id === tid) ?? null;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap text-xs">
           <span className="px-2.5 py-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">Total <strong className="text-[var(--color-text)]">{users.length}</strong></span>
+          <span className="px-2.5 py-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">Orgs <strong className="text-[var(--color-text)]">{orgCount}</strong></span>
           <span className="px-2.5 py-1 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">Pending <strong>{pendingCount}</strong></span>
           <span className="px-2.5 py-1 rounded-full bg-red-900/30 text-red-300 border border-red-700/40">Suspended <strong>{suspendedCount}</strong></span>
         </div>
-        <button onClick={() => setShowInvite(true)} className="flex items-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90">
-          <UserPlus size={13} /> Invite User
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCsv} title="Export filtered users as CSV" className="flex items-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]">
+            <Download size={13} /> Export CSV
+          </button>
+          <button onClick={() => setShowImport(true)} title="Bulk-import users from CSV" className="flex items-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]">
+            <Upload size={13} /> Import CSV
+          </button>
+          <button onClick={() => setShowInvite(true)} className="flex items-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90">
+            <UserPlus size={13} /> Invite User
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -1114,13 +1141,13 @@ function UsersSection({
                         <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} className="accent-[var(--color-primary)]" aria-label="Select user" />
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
+                        <button onClick={() => setDetailUser(u)} title="View full details" className="flex items-center gap-2.5 text-left hover:opacity-80">
                           <span className={`w-7 h-7 rounded-full ${avatarBg(u.email)} text-white text-[11px] font-semibold flex items-center justify-center shrink-0`}>{initials(u)}</span>
                           <div className="min-w-0">
                             <p className="font-semibold truncate max-w-[180px]">{u.display_name || u.email.split("@")[0]}{isSelf && <span className="ml-1.5 text-[10px] text-[var(--color-muted)]">(you)</span>}</p>
                             <p className="text-[11px] text-[var(--color-muted)] truncate max-w-[180px]">{u.email}</p>
                           </div>
-                        </div>
+                        </button>
                       </td>
                       <td className="px-4 py-2.5"><CopyId id={u.id} /></td>
                       <td className="px-4 py-2.5"><CopyId id={u.tenant_id} chars={12} /></td>
@@ -1138,6 +1165,7 @@ function UsersSection({
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-2.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setDetailUser(u)} title="View details" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={14} /></button>
                           <button onClick={() => setEditUser(u)} title="Edit" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={14} /></button>
                           <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={14} /></button>
                           <div className="relative">
@@ -1176,6 +1204,17 @@ function UsersSection({
       {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} onSave={saveEdit} />}
       {resetInfo && <ResetPasswordModal info={resetInfo} onClose={() => setResetInfo(null)} />}
       {showInvite && <InviteUserModal onClose={() => setShowInvite(false)} onInvited={onInvited} />}
+      {showImport && <ImportUsersModal onClose={() => setShowImport(false)} onSetPlan={onSetPlan} onDone={reload} />}
+      {detailUser && (
+        <UserDetailModal
+          user={detailUser}
+          company={companyFor(detailUser.tenant_id)}
+          isSelf={detailUser.id === selfId}
+          onClose={() => setDetailUser(null)}
+          onEdit={(u) => { setDetailUser(null); setEditUser(u); }}
+          onReset={(u) => { setDetailUser(null); resetPassword(u); }}
+        />
+      )}
     </div>
   );
 }
@@ -1273,6 +1312,144 @@ function InviteUserModal({ onClose, onInvited }: { onClose: () => void; onInvite
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="text-sm px-3 py-2 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)]">Cancel</button>
           <button onClick={submit} disabled={busy} className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 disabled:opacity-50">Create</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Full 360° detail for one user — every field, super-admin only.
+function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset }: {
+  user: AdminUser; company: Company | null; isSelf: boolean;
+  onClose: () => void; onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void;
+}) {
+  const st = userStatus(user);
+  const rows: [string, ReactNode][] = [
+    ["User ID", <CopyId id={user.id} chars={36} />],
+    ["Email", user.email],
+    ["Display name", user.display_name || "—"],
+    ["Role", <RolePill role={user.role} />],
+    ["Plan", <PlanPill plan={user.subscription_plan ?? "free"} />],
+    ["Status", st === "active" ? "Active" : st === "pending" ? "Pending setup" : "Suspended"],
+    ["Workspace / Org ID", <CopyId id={user.tenant_id} chars={36} />],
+    ["Company", company?.company_name || "—"],
+    ["First login pending", user.first_login ? "Yes" : "No"],
+    ["Total logins", String(user.login_count ?? 0)],
+    ["Joined", safeFmt(user.created_at)],
+    ["Last login", relTime(user.last_login_at)],
+    ["Last active", relTime(user.last_active_at)],
+  ];
+  return (
+    <Modal title="User details" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <span className={`w-11 h-11 rounded-full ${avatarBg(user.email)} text-white text-sm font-semibold flex items-center justify-center shrink-0`}>{initials(user)}</span>
+          <div className="min-w-0">
+            <p className="font-semibold truncate">{user.display_name || user.email.split("@")[0]}{isSelf && <span className="ml-1.5 text-[10px] text-[var(--color-muted)]">(you)</span>}</p>
+            <p className="text-xs text-[var(--color-muted)] truncate">{user.email}</p>
+          </div>
+        </div>
+        <dl className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] overflow-hidden">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-start justify-between gap-4 px-3 py-2 text-sm">
+              <dt className="text-[var(--color-muted)] shrink-0">{k}</dt>
+              <dd className="text-right min-w-0 break-words">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        {company && (
+          <div className="rounded-lg border border-[var(--color-border)] p-3 text-xs grid grid-cols-2 gap-2">
+            <div><span className="text-[var(--color-muted)]">Org users</span><p className="font-semibold">{company.user_count}</p></div>
+            <div><span className="text-[var(--color-muted)]">Org plan</span><p className="font-semibold">{PLAN_STYLE[company.plan].label}</p></div>
+            <div><span className="text-[var(--color-muted)]">Org cash</span><p className="font-semibold tabular-nums">{fmtINR(company.cash)}</p></div>
+            <div><span className="text-[var(--color-muted)]">Org revenue</span><p className="font-semibold tabular-nums">{fmtINR(company.revenue)}</p></div>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={() => onReset(user)} className="text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1.5"><KeyRound size={13} /> Reset password</button>
+          <button onClick={() => onEdit(user)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 flex items-center gap-1.5"><Pencil size={13} /> Edit</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Minimal quoted-CSV line parser (handles "" escapes inside quoted fields).
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += ch;
+    } else if (ch === ",") { out.push(cur); cur = ""; }
+    else if (ch === '"') inQ = true;
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+// Bulk-import users from CSV (header row required; only `email` is mandatory).
+function ImportUsersModal({ onClose, onSetPlan, onDone }: {
+  onClose: () => void; onSetPlan: (tid: string, plan: PlanTier) => void; onDone: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
+
+  const run = async () => {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) { toast.error("Paste a CSV with a header row + at least one user"); return; }
+    const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+    const col = (n: string) => header.indexOf(n);
+    const ei = col("email");
+    if (ei < 0) { toast.error('CSV must have an "email" column'); return; }
+    const ri = col("role"), ti = col("tenant_id"), ni = col("display_name");
+    const pi = col("subscription_plan") >= 0 ? col("subscription_plan") : col("plan");
+    setBusy(true);
+    let ok = 0, fail = 0; const errors: string[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const c = parseCsvLine(lines[i]);
+      const email = (c[ei] || "").trim().toLowerCase();
+      if (!email) continue;
+      const role = ri >= 0 && c[ri] ? c[ri].trim() : "viewer";
+      const tenant_id = ti >= 0 ? (c[ti] || "").trim() : "";
+      const name = ni >= 0 ? (c[ni] || "").trim() : "";
+      const plan = pi >= 0 ? (c[pi] || "").trim().toLowerCase() : "";
+      try {
+        const body: Record<string, string> = { email, role };
+        if (tenant_id) body.tenant_id = tenant_id;
+        const created = await api.post<AdminUser>("/api/users", body);
+        if (name) await api.patch(`/api/users/${created.id}/profile`, { display_name: name }).catch(() => {});
+        if (["starter", "growth", "pro"].includes(plan) && created.tenant_id) onSetPlan(created.tenant_id, plan as PlanTier);
+        ok++;
+      } catch (err) { fail++; if (errors.length < 8) errors.push(`${email}: ${errMsg(err)}`); }
+    }
+    setBusy(false);
+    setResult({ ok, fail, errors });
+    if (ok) { toast.success(`Imported ${ok} user(s)`); onDone(); }
+    else if (fail) toast.error(`All ${fail} row(s) failed`);
+  };
+
+  return (
+    <Modal title="Import users from CSV" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-[var(--color-muted)]">
+          Header row required. Columns: <code className="text-[var(--color-text)]">email</code> (required), and optionally <code className="text-[var(--color-text)]">role, tenant_id, display_name, plan</code>. Blank <code>tenant_id</code> creates a new org per user.
+        </p>
+        <input type="file" accept=".csv,text/csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setText); }} className="text-xs text-[var(--color-muted)] file:mr-2 file:text-xs file:rounded file:border file:border-[var(--color-border)] file:bg-[var(--color-bg)] file:px-2 file:py-1 file:text-[var(--color-text)]" />
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={7} placeholder={"email,role,tenant_id,display_name,plan\npriya@acme.in,finance_manager,,Priya Shah,growth"} className={`w-full font-mono text-xs ${inputCls}`} />
+        {result && (
+          <div className="text-xs rounded-lg border border-[var(--color-border)] p-2.5 space-y-1">
+            <p><span className="text-green-400 font-semibold">{result.ok} imported</span>{result.fail ? <span className="text-red-400 font-semibold"> · {result.fail} failed</span> : null}</p>
+            {result.errors.map((e, i) => <p key={i} className="text-[var(--color-muted)] truncate">{e}</p>)}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="text-sm px-3 py-2 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)]">Close</button>
+          <button onClick={run} disabled={busy} className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"><Upload size={13} /> {busy ? "Importing…" : "Import"}</button>
         </div>
       </div>
     </Modal>
