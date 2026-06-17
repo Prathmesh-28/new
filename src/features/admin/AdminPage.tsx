@@ -5,7 +5,8 @@ import { formatCurrency } from "@/lib/utils";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Users, Building2, ShieldCheck, Eye, Trash2, KeyRound, UserPlus, Search, Crown, Copy, Briefcase, Activity, DatabaseZap, Plus, Mail, Shield, Clock, Flag, Megaphone, ScrollText, Gauge, HeartPulse, Wrench, Power, SlidersHorizontal, LogIn, Upload, Settings2, Bug, Check, X, Bell, CreditCard, Webhook, ListChecks, Download, UsersRound, Timer, Zap, RefreshCw, Pencil, Lock, History, TrendingUp, IndianRupee, CheckSquare, Square, Ban, UserCog } from "lucide-react";
 import { toast } from "sonner";
-import { ROLE_META, roleLabel, roleBadge } from "@/data/roles";
+import { ROLE_META, roleLabel, roleBadge, TAB_CATALOG } from "@/data/roles";
+import { defaultConfig } from "@/data/defaultConfig";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { format, differenceInCalendarDays } from "date-fns";
 import { FEATURE_ENTITLEMENTS, FEATURE_PITCH, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -48,6 +49,20 @@ const ADMIN_SECTIONS: { label: string; ids: Tab[] }[] = [
   { label: "Data & Ops",        ids: ["usage", "data-export", "bulk-import", "import-jobs", "notify-templates", "api-keys", "scheduled-jobs", "rate-limits", "error-log"] },
 ];
 
+// What a user can actually reach: their role's accessible pages, with the ones
+// their current plan locks flagged. super_admin reaches everything.
+function accessForUser(role: string, plan: PlanTier) {
+  const isSuper = role === "super_admin";
+  const tabs = isSuper ? TAB_CATALOG.map(t => t.tab) : (defaultConfig.roles.find(r => r.id === role)?.accessibleTabs ?? []);
+  const planRank = PLAN_RANK[plan] ?? 0;
+  const pages = tabs.map(tab => {
+    const req = FEATURE_ENTITLEMENTS[tab] as PlanTier | undefined;
+    const locked = !isSuper && req ? (PLAN_RANK[req] ?? 0) > planRank : false;
+    return { tab, label: TAB_CATALOG.find(t => t.tab === tab)?.label ?? tab, locked, req };
+  }).sort((a, b) => Number(a.locked) - Number(b.locked) || a.label.localeCompare(b.label));
+  return { pages, open: pages.filter(p => !p.locked).length, locked: pages.filter(p => p.locked).length };
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const { canAccess, setSelectedClient, setPreviewRole } = useApp();
@@ -88,7 +103,7 @@ export default function AdminPage() {
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => {
     if (tab === "companies") loadCompanies();
-    if (tab === "users") loadUsers();
+    if (tab === "users") { loadUsers(); loadCompanies(); }
   }, [tab, loadCompanies, loadUsers]);
 
   // Guard AFTER hooks so hook order stays stable.
@@ -241,6 +256,7 @@ export default function AdminPage() {
     users: gq.length < 2 ? [] : users.filter(u => u.email.toLowerCase().includes(gq) || u.tenant_id.toLowerCase().includes(gq) || (u.display_name || "").toLowerCase().includes(gq)).slice(0, 6),
     companies: gq.length < 2 ? [] : companies.filter(c => (c.company_name || "").toLowerCase().includes(gq) || c.tenant_id.toLowerCase().includes(gq) || (c.owner_email || "").toLowerCase().includes(gq)).slice(0, 6),
   };
+  const companyName = (tid: string) => companies.find(c => c.tenant_id === tid)?.company_name || null;
 
   return (
     <div className="space-y-6">
@@ -493,7 +509,7 @@ export default function AdminPage() {
                       {selectedIds.size === filteredUsers.length && filteredUsers.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
                     </button>
                   </th>
-                  {["Email", "Role", "Plan", "Tenant", "Last login", "Status", "Actions"].map((h, i) => (
+                  {["Email", "Role", "Plan", "Team", "Last login", "Status", "Actions"].map((h, i) => (
                     <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>
                   ))}
                 </tr>
@@ -528,7 +544,10 @@ export default function AdminPage() {
                           {(Object.keys(PLAN_LABEL) as PlanTier[]).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)] truncate max-w-[150px]">{u.tenant_id}</td>
+                      <td className="px-4 py-2.5 max-w-[170px]">
+                        <p className="truncate text-xs">{companyName(u.tenant_id) || <span className="text-[var(--color-muted)]">—</span>}</p>
+                        <p className="font-mono text-[10px] text-[var(--color-muted)] truncate">{u.tenant_id}</p>
+                      </td>
                       <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]" title={u.last_login_at ? new Date(u.last_login_at).toLocaleString("en-IN") : "Never logged in"}>{relTime(u.last_login_at)}</td>
                       <td className="px-4 py-2.5">{u.status === "suspended" ? <span className="text-red-400 text-xs">Suspended</span> : u.first_login ? <span className="text-yellow-400 text-xs">Pending login</span> : <span className="text-green-400 text-xs">Active</span>}</td>
                       <td className="px-4 py-2.5">
@@ -555,6 +574,7 @@ export default function AdminPage() {
       {tab === "admin-actions" && <AdminActionsAudit authHeaders={authHeaders} />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} onSave={saveUserProfile} />}
       {detailUser && <User360Drawer user={detailUser} isSelf={detailUser.id === user?.id}
+        team={companyName(detailUser.tenant_id)}
         onClose={() => setDetailUser(null)}
         onImpersonate={impersonateUser} onOpenTenant={openTenant}
         onEdit={u => { setDetailUser(null); setEditUser(u); }}
@@ -2985,12 +3005,13 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
   );
 }
 
-function User360Drawer({ user, isSelf, onClose, onImpersonate, onOpenTenant, onEdit, onReset, onPlan, onRole, onDelete }: {
-  user: AdminUser; isSelf: boolean; onClose: () => void;
+function User360Drawer({ user, isSelf, team, onClose, onImpersonate, onOpenTenant, onEdit, onReset, onPlan, onRole, onDelete }: {
+  user: AdminUser; isSelf: boolean; team?: string | null; onClose: () => void;
   onImpersonate: (u: AdminUser) => void; onOpenTenant: (tid: string, label: string) => void;
   onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void;
   onPlan: (tid: string, plan: PlanTier) => void; onRole: (u: AdminUser, role: string) => void; onDelete: (u: AdminUser) => void;
 }) {
+  const access = accessForUser(user.role, user.subscription_plan ?? "free");
   return (
     <DrawerShell title="User 360" onClose={onClose}>
       <div className="flex items-center gap-2">
@@ -2999,13 +3020,30 @@ function User360Drawer({ user, isSelf, onClose, onImpersonate, onOpenTenant, onE
       </div>
       <div className="space-y-0.5">
         <Field label="Email" value={user.email} />
+        <Field label="Team" value={team || user.tenant_id} />
+        <Field label="Workspace id" value={user.tenant_id} mono />
         <Field label="Role" value={<span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleBadge(user.role)}`}>{roleLabel(user.role)}</span>} />
         <Field label="Plan" value={PLAN_LABEL[user.subscription_plan ?? "free"]} />
-        <Field label="Tenant" value={user.tenant_id} mono />
         <Field label="Status" value={user.status === "suspended" ? "Suspended" : user.first_login ? "Pending login" : "Active"} />
         <Field label="Last login" value={user.last_login_at ? new Date(user.last_login_at).toLocaleString("en-IN") : "Never"} />
         <Field label="Logins" value={String(user.login_count ?? 0)} />
         <Field label="Joined" value={user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"} />
+      </div>
+
+      {/* Accessibility — exactly what this user can open */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold flex items-center gap-1.5"><Shield size={12} className="text-[var(--color-primary)]" /> Access</p>
+          <span className="text-[10px] text-[var(--color-muted)]">{user.role === "super_admin" ? "Everything (super admin)" : `${access.open} pages${access.locked ? ` · ${access.locked} plan-locked` : ""}`}</span>
+        </div>
+        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+          {access.pages.map(p => (
+            <span key={p.tab} title={p.locked ? `Needs ${PLAN_LABEL[p.req as PlanTier]} plan` : "Available"}
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${p.locked ? "border-[var(--color-border)] text-[var(--color-muted)]/60 line-through" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
+              {p.locked && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}{p.label}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="space-y-2 pt-1">
         <div className="grid grid-cols-2 gap-2">
