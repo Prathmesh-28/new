@@ -42,6 +42,30 @@ export default function UpsellGate({ feature, requiredPlan }: { feature: string;
           <p className="mt-2 text-sm text-[var(--color-muted)] max-w-md mx-auto leading-relaxed">{pitch.blurb}</p>
         </div>
 
+        {/* Blurred preview — show what they're unlocking, not just describe it */}
+        <div className="relative px-8 pt-6 border-b border-[var(--color-border)] pb-6">
+          <div aria-hidden className="pointer-events-none select-none blur-[3px] opacity-60">
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+                  <div className="h-2 w-12 bg-[var(--color-muted)]/30 rounded mb-2" />
+                  <div className="h-4 w-20 bg-[var(--color-primary)]/40 rounded" />
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 flex items-end gap-1.5 h-24">
+              {[40, 65, 50, 80, 60, 90, 72, 95, 68, 84].map((h, i) => (
+                <div key={i} className="flex-1 bg-[var(--color-primary)]/30 rounded-t" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-muted)] bg-[var(--color-surface)]/85 border border-[var(--color-border)] px-3 py-1 rounded-full backdrop-blur-sm">
+              Preview — upgrade to unlock the live view
+            </span>
+          </div>
+        </div>
+
         {/* Perks + pricing */}
         <div className="px-8 py-8 grid md:grid-cols-2 gap-8 items-center">
           <ul className="space-y-3">

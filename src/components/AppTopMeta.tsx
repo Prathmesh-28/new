@@ -18,7 +18,7 @@ export default function AppTopMeta() {
   const onDashboard = pathname === "/dashboard" || pathname === "/";
   const label = LABELS[pathname] || pathname.replace("/", "").replace(/-/g, " ") || "Home";
   return (
-    <div className="hidden md:flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-4">
       <nav aria-label="Breadcrumb" className="text-xs text-[var(--color-muted)] flex items-center gap-1.5">
         <Link to="/dashboard" className="hover:text-[var(--color-text)]">Home</Link>
         {!onDashboard && <><span>/</span><span className="text-[var(--color-text)] font-medium capitalize">{label}</span></>}

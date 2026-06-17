@@ -551,12 +551,20 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
         <button onClick={() => navigate("/dashboard")} aria-label="Go to dashboard" className="hover:opacity-80 transition-opacity">
           <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
         </button>
-        <button
-          onClick={() => setMobileOpen(v => !v)}
-          className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
-        >
-          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+        <div className="flex items-center gap-1">
+          {onOpenSearch && (
+            <button onClick={onOpenSearch} aria-label="Search" className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
+              <Search size={18} />
+            </button>
+          )}
+          <button
+            onClick={() => setMobileOpen(v => !v)}
+            aria-label="Menu"
+            className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+          >
+            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
       </div>
 
       {/* ── Mobile drawer ────────────────────────────────────────────── */}
