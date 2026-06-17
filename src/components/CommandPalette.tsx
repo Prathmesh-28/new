@@ -62,12 +62,24 @@ const PAGE_INDEX: { label: string; path: string; icon: LucideIcon; desc?: string
 const pageByPath = (p: string) => PAGE_INDEX.find(n => n.path === p);
 
 // Favorites & recents — small, fast personalisation in localStorage (C13).
-const FAV_KEY = "hr_fav_pages", REC_KEY = "hr_recent_pages";
+const FAV_KEY = "hr_fav_pages", REC_KEY = "hr_recent_pages", FREQ_KEY = "hr_page_freq";
 function readList(k: string): string[] { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } }
 function writeList(k: string, v: string[]) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
 export function recordRecentPage(path: string) {
   const next = [path, ...readList(REC_KEY).filter(p => p !== path)].slice(0, 6);
   writeList(REC_KEY, next);
+  try {
+    const freq: Record<string, number> = JSON.parse(localStorage.getItem(FREQ_KEY) || "{}");
+    freq[path] = (freq[path] || 0) + 1;
+    localStorage.setItem(FREQ_KEY, JSON.stringify(freq));
+  } catch { /* ignore */ }
+}
+// Top pages by visit count — powers the sidebar's personalised "Frequent" group.
+export function getFrequentPages(limit = 5): string[] {
+  try {
+    const freq: Record<string, number> = JSON.parse(localStorage.getItem(FREQ_KEY) || "{}");
+    return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, limit).map(([p]) => p);
+  } catch { return []; }
 }
 
 type Result = {

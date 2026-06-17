@@ -16,7 +16,8 @@ import {
   Mic, Smartphone, Blocks, FlaskConical,
 } from "lucide-react";
 
-import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
+import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
+import { getFrequentPages } from "@/components/CommandPalette";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
 interface NavGroup { label: string; items: NavItem[] }
@@ -248,14 +249,27 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
   ],
 };
 
-function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGroup, isLocked }: {
+// Audit #1 — the 6-8 daily-driver pages per role shown up top as "Main"; the rest
+// stay collapsed. The 20% of features used 80% of the time.
+const PRIMARY_NAV: Record<string, string[]> = {
+  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "admin", "settings"],
+  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "settings"],
+  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "forecast", "health"],
+  accountant:         ["dashboard", "transactions", "gst", "tax", "compliance", "statements"],
+  sales:              ["dashboard", "invoices", "receivables", "collections", "analytics"],
+  operations_manager: ["dashboard", "operations", "vendors", "suppliers", "documents"],
+  viewer:             ["dashboard", "analytics", "health", "documents"],
+  investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
+};
+
+function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGroup, lockedPlan }: {
   groups: NavGroup[];
   collapsed: boolean;
   onNavigate?: () => void;
   badges?: Record<string, number>;
   expanded: Set<string>;
   onToggleGroup: (label: string) => void;
-  isLocked: (tab: string) => boolean;
+  lockedPlan: (tab: string) => PlanTier | null;
 }) {
   return (
     <>
@@ -279,7 +293,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
               <div className="flex flex-col gap-0.5">
                 {group.items.map(({ to, label, icon: Icon, tab }) => {
                   const badge = badges?.[tab];
-                  const locked = isLocked(tab);
+                  const lock = lockedPlan(tab);
                   return (
                     <NavLink
                       key={to}
@@ -293,7 +307,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
                         isActive
                           ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
                           : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4",
-                        locked && "opacity-60"
+                        lock && "opacity-60"
                       )}
                     >
                       <div className="relative shrink-0">
@@ -305,8 +319,12 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
                         )}
                       </div>
                       {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                      {!collapsed && locked && <Lock size={11} className="text-[var(--color-muted)]/50 shrink-0" aria-label="Upgrade to unlock" />}
-                      {!collapsed && !locked && badge !== undefined && badge > 0 && (
+                      {!collapsed && lock && (
+                        <span title={`Upgrade to ${PLAN_LABEL[lock]}`} className="flex items-center gap-0.5 text-[8px] font-bold uppercase tracking-wide bg-[var(--color-primary)]/15 text-[var(--color-primary)] px-1.5 py-0.5 rounded-full shrink-0">
+                          <Lock size={8} /> {PLAN_LABEL[lock]}
+                        </span>
+                      )}
+                      {!collapsed && !lock && badge !== undefined && badge > 0 && (
                         <span className="text-[9px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">
                           {badge}
                         </span>
@@ -347,24 +365,41 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   // When previewing "as" another role, render that role's navigation.
   const role   = previewRole ?? user?.role ?? "owner";
   const location = useLocation();
-  const groups = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
+  const groupsRaw = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
     .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
     .filter(g => g.items.length > 0);
 
-  // What's locked behind a higher plan — shown (so the owner sees the upsell) but flagged.
+  // What plan a tab needs if the current plan can't reach it (null = accessible).
   const plan = ((user as { plan?: PlanTier })?.plan) ?? "free";
   const planRank = PLAN_RANK[plan] ?? 0;
-  const isLocked = (tab: string) => {
-    if (role === "super_admin") return false;
+  const lockedPlan = (tab: string): PlanTier | null => {
+    if (role === "super_admin") return null;
     const req = FEATURE_ENTITLEMENTS[tab] as PlanTier | undefined;
-    return req ? (PLAN_RANK[req] ?? 0) > planRank : false;
+    return req && (PLAN_RANK[req] ?? 0) > planRank ? req : null;
   };
 
-  // Collapsible groups so the rail isn't a 60-item wall. Default: open the
-  // daily-driver groups; the rest stay tucked away. The active group always opens.
+  // ── IA (audit #1): a short role-based "Main" + a personalised "Frequent" group,
+  // with the long tail collapsed. Turns a ~60-item wall into ~8 visible by default.
+  const byTab: Record<string, NavItem> = {};
+  const byPath: Record<string, NavItem> = {};
+  groupsRaw.forEach(g => g.items.forEach(it => { byTab[it.tab] = it; byPath[it.to] = it; }));
+  const primaryTabs = (PRIMARY_NAV[role] ?? []).filter(t => byTab[t]);
+  const primarySet = new Set(primaryTabs);
+  const primaryItems = primaryTabs.map(t => byTab[t]);
+  const freqItems = getFrequentPages(8).map(p => byPath[p]).filter(Boolean).filter(it => !primarySet.has(it.tab)).slice(0, 4);
+  const restGroups = groupsRaw
+    .map(g => ({ ...g, items: g.items.filter(it => !primarySet.has(it.tab)) }))
+    .filter(g => g.items.length > 0);
+  const groups: NavGroup[] = [
+    ...(freqItems.length ? [{ label: "Frequent", items: freqItems }] : []),
+    ...(primaryItems.length ? [{ label: "Main", items: primaryItems }] : []),
+    ...restGroups,
+  ];
+
+  // Collapsible groups. Main + Frequent open by default; the rest tucked away.
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem("hr_nav_open"); if (s) return new Set<string>(JSON.parse(s)); } catch { /* ignore */ }
-    return new Set<string>(["Core", "Finance"]);
+    return new Set<string>(["Frequent", "Main"]);
   });
   const toggleGroup = (lbl: string) => setOpenGroups(prev => {
     const n = new Set(prev); n.has(lbl) ? n.delete(lbl) : n.add(lbl);
@@ -441,7 +476,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-          <NavItems groups={groups} collapsed={collapsed} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} isLocked={isLocked} />
+          <NavItems groups={groups} collapsed={collapsed} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} lockedPlan={lockedPlan} />
         </nav>
 
         {/* Search shortcut */}
@@ -554,7 +589,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
             )}
 
             <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} isLocked={isLocked} />
+              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} lockedPlan={lockedPlan} />
             </nav>
 
             <div className="border-t border-[var(--color-border)] px-4 py-3 flex items-center justify-between shrink-0">
