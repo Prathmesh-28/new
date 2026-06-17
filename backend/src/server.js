@@ -342,6 +342,9 @@ app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => 
   res.json({ password: tempPass });
 });
 
+// Super-admin console API (Users / Organisation / Subscription tabs)
+app.use("/api/admin", require("./routes/adminConsole"));
+
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

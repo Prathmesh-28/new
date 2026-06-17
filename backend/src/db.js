@@ -531,6 +531,11 @@ async function initDb() {
       suspend_reason TEXT,
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Workspace settings (admin-console Organisation tab) + role permission matrix
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS timezone          TEXT;
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS fiscal_year_start TEXT;
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS base_currency     TEXT;
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS role_permissions  JSONB NOT NULL DEFAULT '{}';
 
     -- ── Push notification device tokens ──────────────────────────────────────
     CREATE TABLE IF NOT EXISTS push_tokens (
