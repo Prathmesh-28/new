@@ -182,7 +182,7 @@ function AppShell() {
 
   // Auto sign-out after 30 minutes of inactivity (protects unattended sessions).
   useIdleLogout(useCallback(() => {
-    logout().then(() => { toast("Signed out after 30 minutes of inactivity"); navigate("/login"); });
+    logout().then(() => { toast("Signed out after 2 hours of inactivity"); navigate("/login"); });
   }, [logout, navigate]));
 
   useEffect(() => {

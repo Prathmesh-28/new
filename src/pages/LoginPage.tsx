@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Logo from "@/components/Logo";
 
 export default function LoginPage() {
-  const { login, serverReady } = useAuth();
+  const { login } = useAuth();
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
   const [email, setEmail]       = useState("");
@@ -21,7 +21,7 @@ export default function LoginPage() {
       if (u.first_login) {
         navigate("/set-password", { replace: true });
       } else {
-        const defaultHome = u.role === "investor" ? "/capital" : "/dashboard";
+        const defaultHome = u.role === "investor" ? "/investor" : "/dashboard";
         navigate(params.get("redirect") ?? defaultHome, { replace: true });
       }
     } catch (err) {
@@ -42,15 +42,16 @@ export default function LoginPage() {
           <Logo variant="horizontal" size={24} className="text-[var(--color-text)]" />
         </Link>
 
-        <div className="relative">
+        <div className="relative space-y-6">
+          <h2 className="text-2xl font-bold leading-tight max-w-xs">Know your cash. Before it knows you.</h2>
           {[
-            { n: "₹4.2Cr",  l: "Total runway tracked"     },
-            { n: "3 roles",  l: "Granular access control"  },
-            { n: "90 days",  l: "Forecast horizon"         },
-          ].map(({ n, l }) => (
-            <div key={l} className="flex items-center gap-4 py-4 border-b border-[var(--color-border)] last:border-0">
-              <span className="text-2xl font-bold text-[var(--color-primary)] w-24 shrink-0">{n}</span>
-              <span className="text-sm text-[var(--color-muted)]">{l}</span>
+            { t: "Live cash clarity",  d: "Runway, a 13-week forecast and a health score — in one view." },
+            { t: "Built for India",    d: "GST, TDS and compliance baked in, not bolted on." },
+            { t: "Your whole team",    d: "Role-based access for finance, your CA, sales and ops." },
+          ].map(({ t, d }) => (
+            <div key={t} className="border-l-2 border-[var(--color-primary)]/40 pl-4">
+              <p className="text-base font-semibold text-[var(--color-text)]">{t}</p>
+              <p className="text-sm text-[var(--color-muted)] mt-0.5 max-w-xs">{d}</p>
             </div>
           ))}
         </div>
@@ -67,18 +68,6 @@ export default function LoginPage() {
           >
             <ArrowLeft size={12} /> Back to home
           </button>
-
-          {/* Server status pill */}
-          <div className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border mb-6 transition-all ${
-            serverReady
-              ? "bg-green-950/30 border-green-800/30 text-green-400"
-              : "bg-yellow-950/30 border-yellow-800/30 text-yellow-500"
-          }`}>
-            {serverReady
-              ? <><Wifi size={11} /> Server ready</>
-              : <><WifiOff size={11} /> Server waking up — may take ~30 s on first sign-in</>
-            }
-          </div>
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
@@ -127,7 +116,7 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-[var(--color-bg)] border-t-transparent rounded-full animate-spin" />
-                  {serverReady ? "Signing in…" : "Waking server… (~30 s)"}
+                  Signing in…
                 </span>
               ) : "Sign in →"}
             </button>

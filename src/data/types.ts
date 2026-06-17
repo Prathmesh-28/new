@@ -37,16 +37,17 @@ export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
   // Starter — "get paid faster"
   collections:  "starter",
   receivables:  "starter",
+  // Free aha-moment — forecast & cash-health are the core value prop, so they're
+  // ungated (the advanced layers below — scenarios, benchmarks, analytics — gate instead).
+  // forecast: free   ·   health: free
   // Growth — payroll, cash & intelligence
   payroll:          "growth",
   "working-capital": "growth",
-  forecast:         "growth",
   analytics:        "growth",
   "cfo-brief":      "growth",
   predict:          "growth",
   benchmarks:       "growth",
   scenarios:        "growth",
-  health:           "growth",
   spend:            "growth",
   // Pro — capital, treasury, multi-entity, API
   credit:       "pro",
