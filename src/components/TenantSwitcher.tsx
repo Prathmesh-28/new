@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
-import { Building2, ChevronDown, Check, Globe, Search, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { Building2, ChevronDown, Check, Globe, Search, Loader2, Eye, SlidersHorizontal } from "lucide-react";
 import { PLAN_LABEL, type PlanTier } from "@/data/types";
 
 interface Company {
@@ -22,22 +24,19 @@ const PLAN_STYLE: Record<string, string> = {
   starter: "bg-amber-900/40 text-amber-300 border-amber-700/50",
   free:    "bg-white/5 text-[var(--color-muted)] border-[var(--color-border)]",
 };
-const PlanPill = ({ plan }: { plan?: PlanTier }) => (
-  <span className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border shrink-0 ${PLAN_STYLE[plan || "free"]}`}>
-    {PLAN_LABEL[plan || "free"]}
-  </span>
-);
+const PLANS: PlanTier[] = ["free", "starter", "growth", "pro"];
 
 /* Platform super_admin only — switch the whole app to view/manage any company's
-   data. Reuses setSelectedClient (super_admin can read+write any tenant via the
-   KV role gate). Renders nothing for every other role. */
+   data, filter by plan, and change a plan inline. Renders nothing for other roles. */
 export default function TenantSwitcher() {
   const { user } = useAuth();
   const { selectedClientTenantId, selectedClientLabel, setSelectedClient } = useApp();
+  const navigate = useNavigate();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
+  const [planFilter, setPlanFilter] = useState<"all" | PlanTier>("all");
   const isSuper = user?.role === "super_admin";
 
   useEffect(() => {
@@ -49,14 +48,28 @@ export default function TenantSwitcher() {
       .finally(() => setLoading(false));
   }, [isSuper]);
 
-  const filtered = useMemo(() => {
+  const counts = useMemo(() => {
+    const by: Record<string, number> = { all: companies.length, free: 0, starter: 0, growth: 0, pro: 0 };
+    let users = 0, paid = 0;
+    for (const c of companies) {
+      const p = c.plan || "free";
+      by[p] = (by[p] || 0) + 1;
+      users += c.user_count || 0;
+      if (p !== "free") paid += 1;
+    }
+    return { by, users, paid };
+  }, [companies]);
+
+  const visible = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return companies;
-    return companies.filter(c =>
-      (c.company_name || "").toLowerCase().includes(t) ||
-      (c.owner_email || "").toLowerCase().includes(t) ||
-      c.tenant_id.toLowerCase().includes(t));
-  }, [companies, q]);
+    return companies.filter(c => {
+      if (planFilter !== "all" && (c.plan || "free") !== planFilter) return false;
+      if (!t) return true;
+      return (c.company_name || "").toLowerCase().includes(t) ||
+        (c.owner_email || "").toLowerCase().includes(t) ||
+        c.tenant_id.toLowerCase().includes(t);
+    });
+  }, [companies, q, planFilter]);
 
   if (!isSuper) return null;
 
@@ -64,10 +77,16 @@ export default function TenantSwitcher() {
   const current = selectedClientTenantId ? (selectedClientLabel || "Selected company") : "Platform view — all companies";
 
   const pick = (c: Company | null) => {
-    if (c) setSelectedClient(c.tenant_id, label(c));
-    else setSelectedClient(null);
-    setOpen(false);
-    setQ("");
+    if (c) setSelectedClient(c.tenant_id, label(c)); else setSelectedClient(null);
+    setOpen(false); setQ("");
+  };
+  const manage = (c: Company) => { setSelectedClient(c.tenant_id, label(c)); setOpen(false); navigate("/admin"); };
+  const setPlan = async (tid: string, plan: PlanTier) => {
+    try {
+      await api.post(`/api/admin/tenants/${tid}/plan`, { plan });
+      setCompanies(prev => prev.map(c => c.tenant_id === tid ? { ...c, plan } : c));
+      toast.success(`Plan → ${PLAN_LABEL[plan]}`);
+    } catch { toast.error("Failed to set plan"); }
   };
 
   return (
@@ -88,7 +107,8 @@ export default function TenantSwitcher() {
         {open && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-            <div className="absolute left-0 top-full mt-1 z-40 w-80 max-w-[90vw] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-2xl overflow-hidden">
+            <div className="absolute left-0 top-full mt-1 z-40 w-96 max-w-[92vw] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-2xl overflow-hidden">
+              {/* Search */}
               <div className="p-2 border-b border-[var(--color-border)]">
                 <div className="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-2">
                   <Search size={13} className="text-[var(--color-muted)]" />
@@ -99,6 +119,20 @@ export default function TenantSwitcher() {
                   />
                 </div>
               </div>
+
+              {/* Plan filter chips + summary */}
+              <div className="px-2 py-2 border-b border-[var(--color-border)] space-y-1.5">
+                <div className="flex flex-wrap gap-1">
+                  {(["all", ...PLANS] as const).map(p => (
+                    <button key={p} onClick={() => setPlanFilter(p as "all" | PlanTier)}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${planFilter === p ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                      {p === "all" ? "All" : PLAN_LABEL[p as PlanTier]} ({counts.by[p] ?? 0})
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[var(--color-muted)]">{companies.length} companies · {counts.users} users · {counts.paid} on paid plans</p>
+              </div>
+
               <div className="max-h-72 overflow-y-auto">
                 <button onClick={() => pick(null)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-white/5 border-b border-[var(--color-border)]">
@@ -106,24 +140,28 @@ export default function TenantSwitcher() {
                   {!selectedClientTenantId && <Check size={14} className="text-[var(--color-primary)]" />}
                 </button>
                 {loading && <div className="flex items-center gap-2 px-3 py-4 text-xs text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> Loading companies…</div>}
-                {!loading && filtered.length === 0 && <p className="px-3 py-4 text-xs text-[var(--color-muted)]">No companies match.</p>}
-                {filtered.map(c => (
-                  <button key={c.tenant_id} onClick={() => pick(c)}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-white/5">
-                    <span className="min-w-0">
+                {!loading && visible.length === 0 && <p className="px-3 py-4 text-xs text-[var(--color-muted)]">No companies match.</p>}
+                {visible.map(c => (
+                  <div key={c.tenant_id} className={`flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-white/5 ${selectedClientTenantId === c.tenant_id ? "bg-[var(--color-primary)]/5" : ""}`}>
+                    <button onClick={() => pick(c)} className="flex-1 min-w-0 text-left">
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span className="text-sm font-medium truncate text-[var(--color-text)]">{label(c)}</span>
                         {c.status === "suspended" && <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-800/40 shrink-0">Suspended</span>}
+                        {selectedClientTenantId === c.tenant_id && <Check size={12} className="text-[var(--color-primary)] shrink-0" />}
                       </span>
                       <span className="block text-[11px] text-[var(--color-muted)] truncate">
                         {c.owner_email && c.company_name ? c.owner_email + " · " : ""}{c.user_count} user{c.user_count === 1 ? "" : "s"}
                       </span>
+                    </button>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <select value={c.plan || "free"} onClick={e => e.stopPropagation()} onChange={e => setPlan(c.tenant_id, e.target.value as PlanTier)}
+                        title="Set plan" className={`text-[9px] font-semibold uppercase tracking-wide rounded-full border px-1.5 py-0.5 outline-none cursor-pointer ${PLAN_STYLE[c.plan || "free"]}`}>
+                        {PLANS.map(p => <option key={p} value={p} className="bg-[var(--color-surface)] text-[var(--color-text)] normal-case">{PLAN_LABEL[p]}</option>)}
+                      </select>
+                      <button onClick={() => pick(c)} title="Open company" className="p-1 text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={13} /></button>
+                      <button onClick={() => manage(c)} title="Manage in admin console" className="p-1 text-[var(--color-muted)] hover:text-[var(--color-primary)]"><SlidersHorizontal size={13} /></button>
                     </span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <PlanPill plan={c.plan} />
-                      {selectedClientTenantId === c.tenant_id && <Check size={14} className="text-[var(--color-primary)]" />}
-                    </span>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
