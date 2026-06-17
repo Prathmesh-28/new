@@ -1417,7 +1417,24 @@ function metaToString(meta: unknown): string {
 }
 
 function metaToPre(meta: unknown): string {
-  try { return JSON.stringify(meta, null, 2); } catch { return String(meta); }
+  if (meta == null) return "—";
+  try { return JSON.stringify(meta, null, 2) ?? "—"; } catch { return String(meta); }
+}
+
+// Date guards — server timestamps can be null/invalid; never let date-fns throw.
+function safeFmt(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : format(d, "dd MMM, HH:mm");
+}
+function safeIso(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+function tms(iso?: string | null): number {
+  const t = iso ? new Date(iso).getTime() : 0;
+  return Number.isNaN(t) ? 0 : t;
 }
 
 function AuditSection({ rows, loading }: { rows: AuditRow[]; loading: boolean }) {
@@ -1441,7 +1458,7 @@ function AuditSection({ rows, loading }: { rows: AuditRow[]; loading: boolean })
       .filter((r) => {
         if (actor !== "all" && r.actor_email !== actor) return false;
         if (actionType !== "all" && r.action !== actionType) return false;
-        if (cutoff && new Date(r.created_at).getTime() < cutoff) return false;
+        if (cutoff && tms(r.created_at) < cutoff) return false;
         if (!needle) return true;
         return (
           r.action.toLowerCase().includes(needle) ||
@@ -1449,7 +1466,7 @@ function AuditSection({ rows, loading }: { rows: AuditRow[]; loading: boolean })
           (r.actor_email || "").toLowerCase().includes(needle)
         );
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => tms(b.created_at) - tms(a.created_at));
   }, [rows, q, actor, actionType, range]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE));
@@ -1529,7 +1546,7 @@ function AuditRowView({ row, open, onToggle }: { row: AuditRow; open: boolean; o
   return (
     <>
       <tr className="hover:bg-white/5 cursor-pointer" onClick={onToggle}>
-        <td className="px-4 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)]" title={new Date(row.created_at).toISOString()}>{format(new Date(row.created_at), "dd MMM, HH:mm")}</td>
+        <td className="px-4 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)]" title={safeIso(row.created_at)}>{safeFmt(row.created_at)}</td>
         <td className="px-4 py-2.5">
           <div className="flex flex-col gap-1">
             <span className="text-xs">{row.actor_email || "—"}</span>
