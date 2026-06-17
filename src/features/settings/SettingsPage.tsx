@@ -21,7 +21,25 @@ type TeamUser = {
   role: string;
   tenant_id: string;
   first_login: boolean;
+  display_name?: string;
+  status?: string;
+  last_login_at?: string | null;
 };
+
+// "3d ago" / "2h ago" / "Never" — compact last-seen labels.
+function relTime(iso?: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "Never";
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  const days = Math.floor(s / 86400);
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 function landingFor(role: string): string {
   if (role === "investor") return "/investor";
@@ -1443,16 +1461,22 @@ function StatementTemplateCard() {
 }
 
 // ── Team invites (owner-facing): invite teammates in-platform, see pending/sent ──
-type OutInvite = { id: string; invitee_email: string; role: string; status: string; inviter_email: string | null; created_at: string };
+type OutInvite = { id: string; invitee_email: string; role: string; status: string; inviter_email: string | null; created_at: string; tenant_id?: string };
+type Seats = { plan: string; used: number; limit: number; full: boolean; remaining: number; nextPlan: string | null };
+
 function TeamInvitesCard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [list, setList] = useState<OutInvite[]>([]);
+  const [requests, setRequests] = useState<OutInvite[]>([]);
+  const [seats, setSeats] = useState<Seats | null>(null);
   const [invitee, setInvitee] = useState("");
   const [role, setRole] = useState<string>(ASSIGNABLE_ROLES[0]?.id ?? "finance_manager");
   const [busy, setBusy] = useState(false);
   const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
   const load = useCallback(() => {
-    fetch(`${BASE}/api/invites`, { headers: headers() }).then(r => r.ok ? r.json() : { outgoing: [] }).then(d => setList(d.outgoing ?? [])).catch(() => {});
+    fetch(`${BASE}/api/invites`, { headers: headers() }).then(r => r.ok ? r.json() : { outgoing: [], requests: [] }).then(d => { setList(d.outgoing ?? []); setRequests(d.requests ?? []); }).catch(() => {});
+    fetch(`${BASE}/api/company`, { headers: headers() }).then(r => r.ok ? r.json() : null).then(d => setSeats(d?.seats ?? null)).catch(() => {});
   }, [headers]);
   useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, [load]);
 
@@ -1467,12 +1491,20 @@ function TeamInvitesCard() {
     setBusy(true);
     const res = await fetch(`${BASE}/api/invites`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setBusy(false);
-    if (res.ok) { toast.success("Invite sent — they'll see it in-app"); setInvitee(""); load(); }
-    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to send invite");
+    if (res.ok) { toast.success("Invite sent — they'll see it in-app"); setInvitee(""); load(); return; }
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 402) {
+      toast.error(err.error ?? "Your plan is full", { description: err.seat?.nextPlan ? `Upgrade to ${err.seat.nextPlan} for more seats.` : undefined, action: err.seat?.nextPlan ? { label: "Upgrade", onClick: () => navigate("/settings") } : undefined });
+    } else toast.error(err.error ?? "Failed to send invite");
   };
   const cancel = async (id: string) => {
     const res = await fetch(`${BASE}/api/invites/${id}/cancel`, { method: "POST", headers: headers() });
     if (res.ok) { toast.success("Invite cancelled"); load(); } else toast.error("Failed to cancel");
+  };
+  const actRequest = async (id: string, action: "approve" | "decline") => {
+    const res = await fetch(`${BASE}/api/invites/${id}/${action}`, { method: "POST", headers: headers() });
+    if (res.ok) { toast.success(action === "approve" ? "Request approved — they're on your team" : "Request declined"); load(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed");
   };
   const badge = (s: string) => s === "pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"
     : s === "accepted" ? "bg-green-900/30 text-green-400 border-green-800/40"
@@ -1480,8 +1512,23 @@ function TeamInvitesCard() {
 
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-      <div className="flex items-center gap-2 mb-1"><UserPlus size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Invite teammates</h2></div>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+        <div className="flex items-center gap-2"><UserPlus size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Invite teammates</h2></div>
+        {seats && (
+          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border ${seats.full ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
+            {seats.used}/{seats.limit} seats · {seats.plan}
+          </span>
+        )}
+      </div>
       <p className="text-xs text-[var(--color-muted)] mb-4">Invite people to your team by email or user-id. They accept or decline in-app — no email is sent.</p>
+
+      {seats?.full && (
+        <div className="mb-4 p-3 rounded-lg bg-yellow-900/15 border border-yellow-700/40 text-xs text-yellow-300 flex items-center justify-between gap-3 flex-wrap">
+          <span>You've used all {seats.limit} seat{seats.limit === 1 ? "" : "s"} on the {seats.plan} plan.{seats.nextPlan ? ` Upgrade to ${seats.nextPlan} for more.` : ""}</span>
+          {seats.nextPlan && <button onClick={() => { const el = document.getElementById("billing-card"); el ? el.scrollIntoView({ behavior: "smooth" }) : navigate("/settings"); }} className="font-semibold px-2.5 py-1 rounded border border-yellow-700/40 hover:bg-yellow-900/20">Upgrade</button>}
+        </div>
+      )}
+
       <form onSubmit={send} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mb-5">
         <div className="md:col-span-1">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Email or user-id</label>
@@ -1493,10 +1540,29 @@ function TeamInvitesCard() {
             {ASSIGNABLE_ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
         </div>
-        <button type="submit" disabled={busy} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"><Send size={14} /> Send invite</button>
+        <button type="submit" disabled={busy || seats?.full} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"><Send size={14} /> Send invite</button>
       </form>
+
+      {requests.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs font-semibold mb-2 flex items-center gap-1.5"><BellRing size={12} className="text-[var(--color-primary)]" /> Requests to join your team ({requests.length})</p>
+          <div className="space-y-2">
+            {requests.map(rq => (
+              <div key={rq.id} className="flex items-center justify-between gap-3 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                <span className="truncate"><span className="font-medium">{rq.invitee_email}</span> <span className="text-[var(--color-muted)]">wants to join as {roleLabel(rq.role)}</span></span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => actRequest(rq.id, "approve")} className="text-[10px] font-semibold px-2.5 py-1 rounded bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90">Approve</button>
+                  <button onClick={() => actRequest(rq.id, "decline")} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] hover:border-red-400 hover:text-red-400">Decline</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {list.length > 0 && (
         <div className="space-y-2">
+          <p className="text-xs font-semibold mb-1 text-[var(--color-muted)]">Sent invites</p>
           {list.map(inv => (
             <div key={inv.id} className="flex items-center justify-between gap-3 text-sm border-t border-[var(--color-border)] pt-2 first:border-0 first:pt-0">
               <span className="truncate"><span className="font-medium">{inv.invitee_email}</span> <span className="text-[var(--color-muted)]">· {roleLabel(inv.role)}</span></span>
@@ -1508,6 +1574,158 @@ function TeamInvitesCard() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// B3 — anyone can search for their company and request to join it (in-platform).
+function JoinCompanyCard() {
+  const { user } = useAuth();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ tenant_id: string; company_name: string | null; owner_email: string | null; member_count: number }[]>([]);
+  const [mine, setMine] = useState<OutInvite[]>([]);
+  const [searching, setSearching] = useState(false);
+  const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+  const loadMine = useCallback(() => {
+    fetch(`${BASE}/api/invites`, { headers: headers() }).then(r => r.ok ? r.json() : { myRequests: [] }).then(d => setMine(d.myRequests ?? [])).catch(() => {});
+  }, [headers]);
+  useEffect(() => { loadMine(); const t = setInterval(loadMine, 20000); return () => clearInterval(t); }, [loadMine]);
+
+  // Only show to people who could plausibly want to join another org (not super-admin).
+  if (!user || user.role === "super_admin") return null;
+
+  const search = async () => {
+    if (q.trim().length < 2) return;
+    setSearching(true);
+    const res = await fetch(`${BASE}/api/invites/companies?q=${encodeURIComponent(q.trim())}`, { headers: headers() });
+    setResults(res.ok ? await res.json() : []);
+    setSearching(false);
+  };
+  const request = async (tenant_id: string) => {
+    const res = await fetch(`${BASE}/api/invites/request`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id }) });
+    if (res.ok) { toast.success("Request sent — the owner will approve or decline it in-app"); loadMine(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to send request");
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2 mb-1"><GitBranch size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Join an existing company</h2></div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Already have a team on Headroom? Find your company and request to join — the owner approves it. No email needed.</p>
+      <div className="flex gap-2 mb-3">
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} placeholder="Search by company name or workspace id…" className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        <button onClick={search} disabled={searching} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">Search</button>
+      </div>
+      {results.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {results.map(c => (
+            <div key={c.tenant_id} className="flex items-center justify-between gap-3 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+              <span className="truncate min-w-0"><span className="font-medium">{c.company_name || c.tenant_id}</span> <span className="text-[var(--color-muted)] text-xs">· {c.member_count} member{c.member_count === 1 ? "" : "s"}</span></span>
+              <button onClick={() => request(c.tenant_id)} className="text-[10px] font-semibold px-2.5 py-1 rounded bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 shrink-0">Request to join</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="space-y-1.5 border-t border-[var(--color-border)] pt-3">
+          <p className="text-xs font-semibold text-[var(--color-muted)]">Your requests</p>
+          {mine.map(rq => (
+            <div key={rq.id} className="flex items-center justify-between gap-3 text-xs">
+              <span className="truncate font-mono text-[var(--color-muted)]">{rq.tenant_id ?? "company"} · {roleLabel(rq.role)}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${rq.status === "pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" : rq.status === "accepted" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{rq.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// B5 — company identity (legal name, GSTIN, industry, address…) → /api/company.
+const COMPANY_FIELDS: [string, string, string][] = [
+  ["company_name", "Company name", "Acme Traders Pvt Ltd"],
+  ["legal_name", "Legal / registered name", "Acme Traders Private Limited"],
+  ["gstin", "GSTIN", "27ABCDE1234F1Z5"],
+  ["pan", "PAN", "ABCDE1234F"],
+  ["industry", "Industry", "Wholesale / Retail / SaaS…"],
+  ["company_size", "Team size", "1-10"],
+  ["phone", "Phone", "+91 98XXXXXX21"],
+  ["website", "Website", "acme.in"],
+  ["address", "Address", "Street / building"],
+  ["city", "City", "Pune"],
+  ["state", "State", "Maharashtra"],
+  ["pincode", "PIN code", "411001"],
+];
+
+function CompanyProfileCard() {
+  const { user } = useAuth();
+  const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+  const [f, setF] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    fetch(`${BASE}/api/company`, { headers: headers() }).then(r => r.ok ? r.json() : null).then(d => { if (d) setF(Object.fromEntries(COMPANY_FIELDS.map(([k]) => [k, d[k] ?? ""]))); });
+  }, [headers]);
+  if (!user || !["owner", "super_admin"].includes(user.role)) return null;
+  const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
+  const save = async () => {
+    setSaving(true);
+    const res = await fetch(`${BASE}/api/company`, { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(f) });
+    setSaving(false);
+    if (res.ok) toast.success("Company profile saved"); else toast.error("Failed to save");
+  };
+  return (
+    <div id="company-profile" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2 mb-1"><Landmark size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Company profile</h2></div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Your business identity — used on invoices, statements and compliance. Only an owner can edit this.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {COMPANY_FIELDS.map(([k, label, ph]) => (
+          <div key={k}>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
+            <input value={f[k] ?? ""} onChange={e => set(k, e.target.value)} placeholder={ph} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving} className="mt-4 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+        <Save size={14} /> {saving ? "Saving…" : "Save profile"}
+      </button>
+    </div>
+  );
+}
+
+// B6 / B10 — owner first-run guide: the few things that make Headroom useful on day one.
+function OwnerOnboardingCard({ users, firmName }: { users: TeamUser[]; firmName?: string }) {
+  const { user } = useAuth();
+  const { store } = useApp();
+  const navigate = useNavigate();
+  const [dismissed, setDismissed] = useFeatureState<boolean>("ownerOnboardingDismissed", false);
+  if (!user || user.role !== "owner" || dismissed) return null;
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  const hasBank = Array.isArray((store as { bankAccounts?: unknown[] }).bankAccounts) && (store as { bankAccounts: unknown[] }).bankAccounts.length > 0;
+  const hasInvoice = Array.isArray((store as { invoices?: unknown[] }).invoices) && (store as { invoices: unknown[] }).invoices.length > 0;
+  const steps = [
+    { done: !!firmName, label: "Name your company", hint: "Set your business identity & GSTIN", act: () => scrollTo("company-profile") },
+    { done: users.length > 1, label: "Invite your team", hint: "Bring in your CA, finance or ops person", act: () => scrollTo("billing-card") },
+    { done: hasBank, label: "Add your bank balance", hint: "So cash & runway are real", act: () => navigate("/accounts") },
+    { done: hasInvoice, label: "Create your first invoice", hint: "Start tracking receivables", act: () => navigate("/invoices") },
+  ];
+  const doneCount = steps.filter(s => s.done).length;
+  return (
+    <div className="bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent border border-[var(--color-primary)]/30 rounded-lg p-6">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-2"><ClipboardList size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Get started ({doneCount}/{steps.length})</h2></div>
+        <button onClick={() => setDismissed(true)} className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)]">Dismiss</button>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mb-4">A few quick steps to make Headroom useful for your business.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {steps.map(s => (
+          <button key={s.label} onClick={s.act} disabled={s.done} className={`flex items-start gap-2.5 text-left px-3 py-2.5 rounded-lg border transition-colors ${s.done ? "border-[var(--color-border)] opacity-60" : "border-[var(--color-border)] hover:border-[var(--color-primary)]"}`}>
+            {s.done ? <CheckCircle2 size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" /> : <span className="w-[15px] h-[15px] rounded-full border-2 border-[var(--color-muted)] mt-0.5 shrink-0" />}
+            <span className="min-w-0">
+              <span className={`text-sm font-medium block ${s.done ? "line-through" : ""}`}>{s.label}</span>
+              <span className="text-[11px] text-[var(--color-muted)]">{s.hint}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1680,12 +1898,38 @@ export default function SettingsPage() {
     }
   };
 
+  // B9 — promote a teammate to (co-)owner; continuity if the primary owner leaves.
+  const makeOwner = async (u: TeamUser) => {
+    if (!window.confirm(`Make ${u.email} an owner too? They'll get full control of this workspace.`)) return;
+    const res = await fetch(`${BASE}/api/users/${u.id}/make-owner`, { method: "POST", headers: { Authorization: `Bearer ${token()}` } });
+    if (res.ok) { toast.success(`${u.email} is now an owner`); loadUsers(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed");
+  };
+  // B9 — leave this workspace (gets a fresh solo one); blocked if last owner.
+  const leaveTeam = async () => {
+    if (!window.confirm("Leave this workspace? You'll get a fresh empty one of your own. Your team's data stays with them.")) return;
+    const res = await fetch(`${BASE}/api/users/leave`, { method: "POST", headers: { Authorization: `Bearer ${token()}` } });
+    if (res.ok) { toast.success("You've left. Reloading your new workspace…"); setTimeout(() => window.location.reload(), 800); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to leave");
+  };
+
+  const isOwner = user?.role === "owner" || user?.role === "super_admin";
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">Settings</h1>
 
+      {/* Owner first-run onboarding (B6/B10) */}
+      <OwnerOnboardingCard users={users} firmName={store.firm.name} />
+
       {/* Plan & Billing */}
-      <BillingCard />
+      <div id="billing-card"><BillingCard /></div>
+
+      {/* Company profile (B5) */}
+      <CompanyProfileCard />
+
+      {/* Join an existing company (B3) */}
+      <JoinCompanyCard />
 
       {/* App lock */}
       <AppLockCard />
@@ -1768,63 +2012,12 @@ export default function SettingsPage() {
               <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your finance person, CA, sales and ops staff in — each sees only their part of Headroom.</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90"
-          >
-            <UserPlus size={13} /> Invite Member
-          </button>
+          {user?.role !== "super_admin" && (
+            <button onClick={leaveTeam} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 hover:border-red-400/50 px-3 py-1.5 rounded-lg font-semibold transition-colors">
+              <LogIn size={13} className="rotate-180" /> Leave team
+            </button>
+          )}
         </div>
-
-        {showForm && (
-          <form onSubmit={handleInvite} className="mb-6 p-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg space-y-3">
-            <h3 className="text-sm font-semibold">Invite a team member</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input
-                type="email" required placeholder="name@yourbusiness.com"
-                value={email} onChange={e => setEmail(e.target.value)}
-                className="md:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
-              />
-              <select
-                value={role} onChange={e => setRole(e.target.value)}
-                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none"
-              >
-                {ASSIGNABLE_ROLES.map(r => (
-                  <option key={r.id} value={r.id}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Live preview of what the chosen role can do */}
-            <div className="p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleBadge(role)}`}>{roleLabel(role)}</span>
-                <span className="text-xs text-[var(--color-muted)]">{ROLE_META[role as keyof typeof ROLE_META]?.blurb}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(ROLE_META[role as keyof typeof ROLE_META]?.scope ?? []).map(s => (
-                  <span key={s} className="text-[11px] text-[var(--color-muted)] flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-[var(--color-primary)]/60 shrink-0" />{s}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-3 bg-[var(--color-accent)] rounded-lg text-xs text-[var(--color-muted)]">
-              <strong className="text-[var(--color-text)]">What happens:</strong> they get an in-app invite to accept — no email is sent. Once they accept, they join your team and only ever see the parts of Headroom their role allows.
-            </div>
-            <div className="flex gap-2">
-              <button type="submit" disabled={inviting}
-                className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
-                <UserPlus size={13} /> {inviting ? "Sending…" : "Send Invite"}
-              </button>
-              <button type="button" onClick={() => setShowForm(false)}
-                className="text-sm text-[var(--color-muted)] px-4 py-2 rounded-lg hover:bg-[var(--color-accent)]">
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
 
         {loading ? (
           <div className="flex justify-center py-10">
@@ -1841,14 +2034,18 @@ export default function SettingsPage() {
                       {u.email[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {u.email}
-                        {isSelf && <span className="ml-2 text-[10px] text-[var(--color-muted)] font-normal">(you)</span>}
+                      <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                        {u.display_name || u.email}
+                        {u.role === "owner" && <CheckCircle2 size={12} className="text-[var(--color-primary)]" aria-label="Primary owner" />}
+                        {isSelf && <span className="text-[10px] text-[var(--color-muted)] font-normal">(you)</span>}
                       </p>
-                      <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">
-                        {u.first_login
-                          ? <span className="text-yellow-500">Awaiting first login</span>
-                          : ROLE_META[u.role as keyof typeof ROLE_META]?.blurb ?? "Active"}
+                      <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate flex items-center gap-2">
+                        {u.status === "suspended"
+                          ? <span className="text-red-400">Suspended</span>
+                          : u.first_login
+                            ? <span className="text-yellow-500">Awaiting first login</span>
+                            : <span className="text-green-500">Active</span>}
+                        <span>· last seen {relTime(u.last_login_at)}</span>
                       </p>
                     </div>
                   </div>
@@ -1869,6 +2066,11 @@ export default function SettingsPage() {
                           <option key={r.id} value={r.id} className="bg-[var(--color-surface)] text-[var(--color-text)]">{r.label}</option>
                         ))}
                       </select>
+                    )}
+                    {isOwner && !isSelf && u.role !== "owner" && u.role !== "super_admin" && (
+                      <button onClick={() => makeOwner(u)} className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors p-1" title="Make owner (backup admin)">
+                        <CheckCircle2 size={14} />
+                      </button>
                     )}
                     {!isSelf && (
                       <button
