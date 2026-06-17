@@ -2,14 +2,18 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
+import { TAB_CATALOG } from "@/data/roles";
 import {
   Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
   Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
   Landmark, FilePlus, Calculator, Wallet, Receipt, Rocket, PlugZap, PiggyBank, ShieldCheck,
   HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch, FileSpreadsheet, ScrollText, Database,
+  Star, Clock, Grid3x3,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+type LucideIcon = typeof Search;
+
+const NAV_ITEMS: { label: string; path: string; icon: LucideIcon; desc?: string }[] = [
   { label: "Dashboard",    path: "/dashboard",    icon: LayoutDashboard, desc: "Overview & health score" },
   { label: "Transactions", path: "/transactions", icon: ArrowRightLeft,  desc: "All bank transactions" },
   { label: "Forecast",     path: "/forecast",     icon: TrendingUp,      desc: "90-day cash projection" },
@@ -39,16 +43,39 @@ const NAV_ITEMS = [
   { label: "Connectors",   path: "/connectors",   icon: PlugZap,         desc: "Integrations & data sources" },
   { label: "Alerts",       path: "/alerts",       icon: Bell,            desc: "Notifications & alerts" },
   { label: "Advisor",      path: "/advisor",      icon: Users,           desc: "CA/CFO client portal" },
-  { label: "Capital",      path: "/capital",      icon: Briefcase,       desc: "Investor portfolio" },
   { label: "Settings",     path: "/settings",     icon: Settings,        desc: "Account preferences" },
   { label: "Profile",      path: "/profile",      icon: Settings,        desc: "Your profile" },
 ];
+
+// Complete page index: the curated NAV_ITEMS (rich icons/descriptions) plus every
+// page in the canonical TAB_CATALOG that isn't already listed — so search reaches
+// all ~60 pages, not just the popular ones.
+const PAGE_INDEX: { label: string; path: string; icon: LucideIcon; desc?: string }[] = (() => {
+  const byPath = new Map<string, { label: string; path: string; icon: LucideIcon; desc?: string }>();
+  NAV_ITEMS.forEach(n => byPath.set(n.path, n));
+  TAB_CATALOG.forEach(t => {
+    const p = `/${t.tab}`;
+    if (!byPath.has(p)) byPath.set(p, { label: t.label, path: p, icon: Grid3x3, desc: t.group });
+  });
+  return [...byPath.values()];
+})();
+const pageByPath = (p: string) => PAGE_INDEX.find(n => n.path === p);
+
+// Favorites & recents — small, fast personalisation in localStorage (C13).
+const FAV_KEY = "hr_fav_pages", REC_KEY = "hr_recent_pages";
+function readList(k: string): string[] { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } }
+function writeList(k: string, v: string[]) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
+export function recordRecentPage(path: string) {
+  const next = [path, ...readList(REC_KEY).filter(p => p !== path)].slice(0, 6);
+  writeList(REC_KEY, next);
+}
 
 type Result = {
   id: string;
   label: string;
   sub?: string;
-  type: "nav" | "transaction" | "alert";
+  type: "fav" | "recent" | "nav" | "transaction" | "alert";
+  path?: string;
   action: () => void;
 };
 
@@ -62,49 +89,48 @@ export function CommandPalette({ open, onClose }: Props) {
   const { store } = useApp();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const [favs, setFavs] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
-    if (open) { setQuery(""); setCursor(0); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQuery(""); setCursor(0); setFavs(readList(FAV_KEY)); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
+
+  const toggleFav = (path: string) => {
+    setFavs(prev => {
+      const next = prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path];
+      writeList(FAV_KEY, next);
+      return next;
+    });
+  };
 
   const results: Result[] = useMemo(() => {
     const q = query.toLowerCase().trim();
-    const go = (path: string) => { navigate(path); onClose(); };
+    const go = (path: string) => { recordRecentPage(path); navigate(path); onClose(); };
 
-    if (!q) return NAV_ITEMS.slice(0, 10).map(n => ({ id: n.path, label: n.label, sub: n.desc, type: "nav" as const, action: () => go(n.path) }));
+    if (!q) {
+      const out: Result[] = [];
+      favs.map(pageByPath).filter(Boolean).forEach(n => out.push({ id: `fav${n!.path}`, label: n!.label, sub: n!.desc, type: "fav", path: n!.path, action: () => go(n!.path) }));
+      readList(REC_KEY).filter(p => !favs.includes(p)).map(pageByPath).filter(Boolean).slice(0, 5).forEach(n => out.push({ id: `rec${n!.path}`, label: n!.label, sub: n!.desc, type: "recent", path: n!.path, action: () => go(n!.path) }));
+      PAGE_INDEX.filter(n => !favs.includes(n.path)).slice(0, 8).forEach(n => out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", path: n.path, action: () => go(n.path) }));
+      return out.slice(0, 16);
+    }
 
     const out: Result[] = [];
-
-    // Nav
-    NAV_ITEMS.filter(n => n.label.toLowerCase().includes(q) || n.desc?.toLowerCase().includes(q)).forEach(n =>
-      out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", action: () => go(n.path) })
+    PAGE_INDEX.filter(n => n.label.toLowerCase().includes(q) || n.desc?.toLowerCase().includes(q) || n.path.includes(q)).forEach(n =>
+      out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", path: n.path, action: () => go(n.path) })
     );
-
-    // Transactions
     store.transactions.filter(t =>
       t.description.toLowerCase().includes(q) || t.counterparty.toLowerCase().includes(q)
     ).slice(0, 6).forEach(t =>
-      out.push({
-        id: t.id, label: t.description,
-        sub: `${t.date} · ${formatCurrency(t.amount)} · ${t.category}`,
-        type: "transaction",
-        action: () => { navigate("/transactions"); onClose(); },
-      })
+      out.push({ id: t.id, label: t.description, sub: `${t.date} · ${formatCurrency(t.amount)} · ${t.category}`, type: "transaction", action: () => { navigate("/transactions"); onClose(); } })
     );
-
-    // Alerts
     store.alerts.filter(a => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q)).slice(0, 4).forEach(a =>
-      out.push({
-        id: a.id, label: a.title, sub: a.message.slice(0, 60),
-        type: "alert",
-        action: () => { navigate("/alerts"); onClose(); },
-      })
+      out.push({ id: a.id, label: a.title, sub: a.message.slice(0, 60), type: "alert", action: () => { navigate("/alerts"); onClose(); } })
     );
-
-    return out.slice(0, 12);
-  }, [query, store.transactions, store.alerts, navigate, onClose]);
+    return out.slice(0, 16);
+  }, [query, favs, store.transactions, store.alerts, navigate, onClose]);
 
   useEffect(() => { setCursor(0); }, [results.length]);
 
@@ -122,7 +148,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const typeLabel: Record<string, string> = { nav: "Pages", transaction: "Transactions", alert: "Alerts" };
+  const typeLabel: Record<string, string> = { fav: "Favorites", recent: "Recent", nav: "Pages", transaction: "Transactions", alert: "Alerts" };
   let lastType = "";
 
   return (
@@ -132,7 +158,6 @@ export function CommandPalette({ open, onClose }: Props) {
         className="relative w-full max-w-lg bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
           <Search size={15} className="text-[var(--color-muted)] shrink-0" />
           <input
@@ -151,7 +176,6 @@ export function CommandPalette({ open, onClose }: Props) {
           <kbd className="text-[10px] font-mono text-[var(--color-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] px-1.5 py-0.5 rounded shrink-0">esc</kbd>
         </div>
 
-        {/* Results */}
         <ul ref={listRef} className="max-h-72 overflow-y-auto py-1">
           {results.length === 0 && (
             <li className="px-4 py-6 text-center text-sm text-[var(--color-muted)]">No results for "{query}"</li>
@@ -159,7 +183,9 @@ export function CommandPalette({ open, onClose }: Props) {
           {results.map((r, i) => {
             const showHeader = r.type !== lastType;
             lastType = r.type;
-            const NavIcon = r.type === "nav" ? (NAV_ITEMS.find(n => n.path === r.id && n.label === r.label)?.icon ?? NAV_ITEMS.find(n => n.path === r.id)?.icon ?? Search) : null;
+            const isPage = r.type === "fav" || r.type === "recent" || r.type === "nav";
+            const NavIcon = isPage && r.path ? (pageByPath(r.path)?.icon ?? (r.type === "recent" ? Clock : Search)) : null;
+            const isFav = r.path ? favs.includes(r.path) : false;
             return (
               <li key={r.id}>
                 {showHeader && (
@@ -167,28 +193,30 @@ export function CommandPalette({ open, onClose }: Props) {
                     {typeLabel[r.type]}
                   </p>
                 )}
-                <button
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === cursor ? "bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "hover:bg-white/3 text-[var(--color-text)]"}`}
-                  onMouseEnter={() => setCursor(i)}
-                  onClick={r.action}
-                >
-                  {NavIcon && <NavIcon size={14} className="shrink-0 text-[var(--color-primary)]" />}
-                  {r.type !== "nav" && <span className="w-3.5 shrink-0" />}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{r.label}</p>
-                    {r.sub && <p className="text-[11px] text-[var(--color-muted)] truncate">{r.sub}</p>}
-                  </div>
-                  {i === cursor && <span className="ml-auto text-[10px] text-[var(--color-muted)] font-mono shrink-0">↵</span>}
-                </button>
+                <div className={`group w-full flex items-center gap-3 px-4 py-2.5 ${i === cursor ? "bg-[var(--color-primary)]/10" : "hover:bg-white/3"}`}>
+                  <button className="flex items-center gap-3 text-left flex-1 min-w-0" onMouseEnter={() => setCursor(i)} onClick={r.action}>
+                    {NavIcon ? <NavIcon size={14} className="shrink-0 text-[var(--color-primary)]" /> : <span className="w-3.5 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{r.label}</p>
+                      {r.sub && <p className="text-[11px] text-[var(--color-muted)] truncate">{r.sub}</p>}
+                    </div>
+                  </button>
+                  {isPage && r.path && (
+                    <button onClick={() => toggleFav(r.path!)} title={isFav ? "Unpin" : "Pin to favorites"} className={`shrink-0 ${isFav ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]/40 hover:text-[var(--color-muted)] opacity-0 group-hover:opacity-100"}`}>
+                      <Star size={13} fill={isFav ? "currentColor" : "none"} />
+                    </button>
+                  )}
+                  {i === cursor && <span className="text-[10px] text-[var(--color-muted)] font-mono shrink-0">↵</span>}
+                </div>
               </li>
             );
           })}
         </ul>
 
-        {/* Footer hint */}
         <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-muted)]">
           <span><kbd className="font-mono">↑↓</kbd> navigate</span>
           <span><kbd className="font-mono">↵</kbd> open</span>
+          <span><Star size={9} className="inline" /> pin</span>
           <span><kbd className="font-mono">esc</kbd> close</span>
         </div>
       </div>

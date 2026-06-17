@@ -9,6 +9,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import UpsellGate from "@/components/UpsellGate";
 import InviteBanner from "@/components/InviteBanner";
+import AppTopMeta from "@/components/AppTopMeta";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import AppLockGate from "@/components/AppLockGate";
@@ -206,6 +207,7 @@ function AppShell() {
         <NotificationBell />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
         <main className="flex-1 px-5 py-5 pt-16 md:p-6 md:pt-6 overflow-auto">
+          <AppTopMeta />
           <InviteBanner />
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>

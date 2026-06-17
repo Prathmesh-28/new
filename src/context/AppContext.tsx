@@ -40,6 +40,7 @@ interface AppCtx {
   selectedClientLabel: string;
   setSelectedClient: (tenantId: string | null, label?: string) => void;
   isReadOnly: boolean;
+  syncStatus: "saved" | "saving" | "error";
   // CRUD helpers
   addBankAccount:          (x: AppStore["bankAccounts"][0])        => void;
   updateBankAccount:       (x: AppStore["bankAccounts"][0])        => void;
@@ -155,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "error">("saved");
 
   const persist = useCallback(async (s: AppStore, clientId: string | null) => {
     // Only cache OWN data locally — never clobber it with an inspected tenant's data.
@@ -166,7 +168,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       namespaces.map(ns => api.put(kvUrl(ns, clientId), { value: split[ns] ?? {} }))
     );
     if (results.some(r => r.status === "rejected")) {
+      setSyncStatus("error");
       toast.error("Changes saved locally but failed to sync to server.", { id: "sync-error", duration: 4000 });
+    } else {
+      setSyncStatus("saved");
     }
   }, [currentRole]);
 
@@ -187,6 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const next = fn(prev);
       if (cid === null) localStorage.setItem(LS_KEY, JSON.stringify(next));
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      setSyncStatus("saving");
       debounceRef.current = setTimeout(() => persist(next, cid), DEBOUNCE);
       return next;
     });
@@ -348,7 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppCtx = {
     store, loading, currentRole, setCurrentRole, canAccess, canExport, canEdit, setStore,
     previewRole, setPreviewRole, effectiveRole, roleTabs, setRoleTabs, resetRole,
-    selectedClientTenantId, selectedClientLabel, setSelectedClient, isReadOnly,
+    selectedClientTenantId, selectedClientLabel, setSelectedClient, isReadOnly, syncStatus,
     addBankAccount:          add("bankAccounts"),
     updateBankAccount:       update("bankAccounts"),
     deleteBankAccount:       del("bankAccounts"),
