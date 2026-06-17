@@ -40,6 +40,14 @@ function relTime(iso?: string | null): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+// Django-style grouped left-rail for the console. Every Tab belongs to one group.
+const ADMIN_SECTIONS: { label: string; ids: Tab[] }[] = [
+  { label: "Platform",          ids: ["overview", "metrics", "health", "config-snapshot", "maintenance", "flags", "announce"] },
+  { label: "Customers",         ids: ["companies", "users", "plan-access", "plan-usage", "quotas", "invites", "ca-workspace", "onboarding"] },
+  { label: "Access & Security", ids: ["permissions", "admin-actions", "audit-log", "login-history", "retention"] },
+  { label: "Data & Ops",        ids: ["usage", "data-export", "bulk-import", "import-jobs", "notify-templates", "api-keys", "scheduled-jobs", "rate-limits", "error-log"] },
+];
+
 export default function AdminPage() {
   const { user } = useAuth();
   const { canAccess, setSelectedClient, setPreviewRole } = useApp();
@@ -221,6 +229,7 @@ export default function AdminPage() {
     { id: "scheduled-jobs", label: "Scheduled Jobs",   icon: Timer },
     { id: "rate-limits",  label: "Rate Limits",        icon: Zap },
   ] as const satisfies { id: Tab; label: string; icon: React.ElementType }[];
+  const tabMeta = Object.fromEntries(TABS.map(t => [t.id, t])) as Record<Tab, (typeof TABS)[number]>;
   const Spinner = () => <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
   const filteredUsers = users.filter(u =>
@@ -287,22 +296,45 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Tabs (searchable — there are 30+) */}
-      <div className="space-y-2">
-        <div className="relative max-w-xs">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input value={tabQ} onChange={e => setTabQ(e.target.value)} placeholder="Filter tools…"
-            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-7 pr-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
-        </div>
-        <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {TABS.filter(t => !tabQ || t.label.toLowerCase().includes(tabQ.toLowerCase())).map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); setQ(""); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium whitespace-nowrap transition-colors ${tab === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <t.icon size={13} /> {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Django-style console: grouped left rail + content panel */}
+      <div className="flex gap-6 items-start">
+        <aside className="w-52 shrink-0 hidden md:block sticky top-4 self-start">
+          <div className="relative mb-3">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+            <input value={tabQ} onChange={e => setTabQ(e.target.value)} placeholder="Filter…"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-7 pr-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+          </div>
+          <nav className="space-y-4">
+            {ADMIN_SECTIONS.map(sec => {
+              const items = sec.ids.map(id => tabMeta[id]).filter(Boolean).filter(t => !tabQ || t.label.toLowerCase().includes(tabQ.toLowerCase()));
+              if (!items.length) return null;
+              return (
+                <div key={sec.label}>
+                  <p className="px-2.5 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]/70">{sec.label}</p>
+                  <div className="space-y-0.5">
+                    {items.map(t => (
+                      <button key={t.id} onClick={() => { setTab(t.id); setQ(""); }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-lg font-medium text-left transition-colors ${tab === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5"}`}>
+                        <t.icon size={14} className="shrink-0" /> <span className="truncate">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <div className="flex-1 min-w-0 space-y-6">
+          {/* Mobile: horizontal section picker (rail is hidden on small screens) */}
+          <div className="md:hidden flex gap-1 overflow-x-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 -mx-1">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => { setTab(t.id); setQ(""); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium whitespace-nowrap ${tab === t.id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)]"}`}>
+                <t.icon size={12} /> {t.label}
+              </button>
+            ))}
+          </div>
 
       {/* ── OVERVIEW (platform-wide) ── */}
       {tab === "overview" && (
@@ -554,6 +586,8 @@ export default function AdminPage() {
       {tab === "bulk-import" && <BulkUserImport loadUsers={loadUsers} loadStats={loadStats} />}
       {tab === "scheduled-jobs" && <ScheduledJobsBoard />}
       {tab === "rate-limits" && <RateLimitConfig />}
+        </div>{/* /content panel */}
+      </div>{/* /console flex */}
     </div>
   );
 }
