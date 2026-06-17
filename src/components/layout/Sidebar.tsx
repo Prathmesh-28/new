@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
 import {
-  Eye, ChevronLeft, ChevronRight, LogOut, Menu, X, Search, User,
+  Eye, ChevronLeft, ChevronRight, ChevronDown, Lock, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
   Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
   FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
@@ -15,6 +15,8 @@ import {
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
   Mic, Smartphone, Blocks, FlaskConical,
 } from "lucide-react";
+
+import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
 interface NavGroup { label: string; items: NavItem[] }
@@ -246,59 +248,77 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
   ],
 };
 
-function NavItems({ groups, collapsed, onNavigate, badges }: {
+function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGroup, isLocked }: {
   groups: NavGroup[];
   collapsed: boolean;
   onNavigate?: () => void;
   badges?: Record<string, number>;
+  expanded: Set<string>;
+  onToggleGroup: (label: string) => void;
+  isLocked: (tab: string) => boolean;
 }) {
   return (
     <>
-      {groups.map(group => (
-        <div key={group.label || "default"} className="px-2">
-          {group.label && !collapsed && (
-            <p className="text-[10px] font-semibold text-[var(--color-muted)]/50 uppercase tracking-widest px-2 mb-1 mt-1 select-none">
-              {group.label}
-            </p>
-          )}
-          <div className="flex flex-col gap-0.5">
-            {group.items.map(({ to, label, icon: Icon, tab }) => {
-              const badge = badges?.[tab];
-              return (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={tab === "dashboard"}
-                  title={collapsed ? label : undefined}
-                  onClick={onNavigate}
-                  className={({ isActive }) => cn(
-                    "flex items-center gap-2.5 px-2 py-2 rounded-md text-sm font-medium transition-colors",
-                    collapsed && "justify-center",
-                    isActive
-                      ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
-                      : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4"
-                  )}
-                >
-                  <div className="relative shrink-0">
-                    <Icon size={15} />
-                    {badge !== undefined && badge > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
-                        {badge > 9 ? "9+" : badge}
-                      </span>
-                    )}
-                  </div>
-                  {!collapsed && <span className="flex-1">{label}</span>}
-                  {!collapsed && badge !== undefined && badge > 0 && (
-                    <span className="text-[9px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">
-                      {badge}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
+      {groups.map(group => {
+        // Headers (and therefore collapsing) only when the rail is expanded.
+        const hasHeader = !!group.label && !collapsed;
+        const isOpen = !hasHeader || expanded.has(group.label);
+        return (
+          <div key={group.label || "default"} className="px-2">
+            {hasHeader && (
+              <button
+                onClick={() => onToggleGroup(group.label)}
+                className="w-full flex items-center gap-1 px-2 mb-1 mt-1 text-[10px] font-semibold text-[var(--color-muted)]/50 uppercase tracking-widest select-none hover:text-[var(--color-muted)] transition-colors"
+              >
+                <ChevronDown size={11} className={cn("transition-transform shrink-0", !isOpen && "-rotate-90")} />
+                <span className="flex-1 text-left">{group.label}</span>
+                <span className="font-sans normal-case tracking-normal text-[var(--color-muted)]/40">{group.items.length}</span>
+              </button>
+            )}
+            {isOpen && (
+              <div className="flex flex-col gap-0.5">
+                {group.items.map(({ to, label, icon: Icon, tab }) => {
+                  const badge = badges?.[tab];
+                  const locked = isLocked(tab);
+                  return (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={tab === "dashboard"}
+                      title={collapsed ? label : undefined}
+                      onClick={onNavigate}
+                      className={({ isActive }) => cn(
+                        "flex items-center gap-2.5 px-2 py-2 rounded-md text-sm font-medium transition-colors",
+                        collapsed && "justify-center",
+                        isActive
+                          ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
+                          : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/4",
+                        locked && "opacity-60"
+                      )}
+                    >
+                      <div className="relative shrink-0">
+                        <Icon size={15} />
+                        {badge !== undefined && badge > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                            {badge > 9 ? "9+" : badge}
+                          </span>
+                        )}
+                      </div>
+                      {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                      {!collapsed && locked && <Lock size={11} className="text-[var(--color-muted)]/50 shrink-0" aria-label="Upgrade to unlock" />}
+                      {!collapsed && !locked && badge !== undefined && badge > 0 && (
+                        <span className="text-[9px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full">
+                          {badge}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -326,9 +346,34 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
   // When previewing "as" another role, render that role's navigation.
   const role   = previewRole ?? user?.role ?? "owner";
+  const location = useLocation();
   const groups = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
     .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
     .filter(g => g.items.length > 0);
+
+  // What's locked behind a higher plan — shown (so the owner sees the upsell) but flagged.
+  const plan = ((user as { plan?: PlanTier })?.plan) ?? "free";
+  const planRank = PLAN_RANK[plan] ?? 0;
+  const isLocked = (tab: string) => {
+    if (role === "super_admin") return false;
+    const req = FEATURE_ENTITLEMENTS[tab] as PlanTier | undefined;
+    return req ? (PLAN_RANK[req] ?? 0) > planRank : false;
+  };
+
+  // Collapsible groups so the rail isn't a 60-item wall. Default: open the
+  // daily-driver groups; the rest stay tucked away. The active group always opens.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem("hr_nav_open"); if (s) return new Set<string>(JSON.parse(s)); } catch { /* ignore */ }
+    return new Set<string>(["Core", "Finance"]);
+  });
+  const toggleGroup = (lbl: string) => setOpenGroups(prev => {
+    const n = new Set(prev); n.has(lbl) ? n.delete(lbl) : n.add(lbl);
+    localStorage.setItem("hr_nav_open", JSON.stringify([...n]));
+    return n;
+  });
+  const activeGroupLabel = groups.find(g => g.items.some(it => it.to === location.pathname))?.label;
+  const shownGroups = new Set(openGroups);
+  if (activeGroupLabel) shownGroups.add(activeGroupLabel);
 
   const unreadAlerts = store.alerts.filter(a => !a.isRead).length;
   const today        = new Date().toISOString().split("T")[0];
@@ -396,7 +441,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-          <NavItems groups={groups} collapsed={collapsed} badges={badges} />
+          <NavItems groups={groups} collapsed={collapsed} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} isLocked={isLocked} />
         </nav>
 
         {/* Search shortcut */}
@@ -509,7 +554,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
             )}
 
             <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} />
+              <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} isLocked={isLocked} />
             </nav>
 
             <div className="border-t border-[var(--color-border)] px-4 py-3 flex items-center justify-between shrink-0">
