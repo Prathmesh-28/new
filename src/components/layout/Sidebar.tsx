@@ -429,6 +429,9 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   });
   const activeGroupLabel = groups.find(g => g.items.some(it => it.to === location.pathname))?.label;
   const shownGroups = new Set(openGroups);
+  // "Main" (the curated primary nav — incl. Admin for super_admin) and "Frequent"
+  // are always shown; a stale saved state can never hide them.
+  shownGroups.add("Main"); shownGroups.add("Frequent");
   if (activeGroupLabel) shownGroups.add(activeGroupLabel);
 
   const unreadAlerts = store.alerts.filter(a => !a.isRead).length;
