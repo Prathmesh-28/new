@@ -180,6 +180,251 @@ async function cashFlow(tenantId, from, to) {
   return { from, to, operating: toRupees(buckets.OPERATING), investing: toRupees(buckets.INVESTING), financing: toRupees(buckets.FINANCING), netCashFlow: toRupees(net) };
 }
 
+// §10.7 — Branch-scoped closings. Same shape as _ledgerClosings but every movement
+// is filtered to vouchers whose branch_id matches `branchId` (book_vouchers.branch_id,
+// added in schema §M7). Used for per-branch / per-GSTIN P&L and Trial Balance — today
+// no other report filters by branch. The prior-FY carry-forward column is also scoped
+// to the branch so a branch's permanent ledgers carry only that branch's history.
+async function _branchLedgerClosings(tenantId, fy, branchId, asOf) {
+  const params = [tenantId, fy, branchId];
+  let dateClause = "";
+  if (asOf) { params.push(asOf); dateClause = ` AND v.voucher_date <= $${params.length}`; }
+  const { rows } = await pool.query(
+    `SELECT l.id, l.name, l.opening_balance, l.opening_is_debit, g.nature, g.affects_pl,
+            COALESCE(SUM(CASE WHEN v.financial_year=$2 AND v.is_cancelled=false${dateClause} THEN e.debit  ELSE 0 END),0) AS dr,
+            COALESCE(SUM(CASE WHEN v.financial_year=$2 AND v.is_cancelled=false${dateClause} THEN e.credit ELSE 0 END),0) AS cr,
+            COALESCE(SUM(CASE WHEN v.financial_year<$2 AND v.is_cancelled=false THEN e.debit  ELSE 0 END),0) AS prior_dr,
+            COALESCE(SUM(CASE WHEN v.financial_year<$2 AND v.is_cancelled=false THEN e.credit ELSE 0 END),0) AS prior_cr
+       FROM book_ledgers l
+       JOIN book_account_groups g ON g.id = l.group_id
+       LEFT JOIN book_voucher_entries e ON e.ledger_id = l.id AND e.tenant_id = l.tenant_id
+       LEFT JOIN book_vouchers v ON v.id = e.voucher_id AND v.branch_id = $3
+      WHERE l.tenant_id = $1
+      GROUP BY l.id, l.name, l.opening_balance, l.opening_is_debit, g.nature, g.affects_pl
+      ORDER BY g.nature, l.name`,
+    params
+  );
+  return rows.map((r) => {
+    // Per-branch view: opening balances are book-level (not split per branch), so a
+    // branch ledger's "opening" is the book opening plus that branch's prior-FY movement.
+    const bookOpening = r.opening_is_debit ? money(r.opening_balance) : money(r.opening_balance).neg();
+    const opening = r.affects_pl
+      ? bookOpening
+      : bookOpening.plus(money(r.prior_dr)).minus(money(r.prior_cr));
+    const signed = opening.plus(money(r.dr)).minus(money(r.cr));
+    return { ledgerId: r.id, name: r.name, nature: r.nature, affectsPl: r.affects_pl, dr: money(r.dr), cr: money(r.cr), signed };
+  });
+}
+
+// §10.7 — Per-branch Trial Balance. Same return shape as trialBalance, scoped to one
+// branch_id (per-GSTIN if branches map to GSTINs). Total debit MUST equal total credit
+// for the branch only if the branch's books self-balance; we still report `balanced`.
+async function branchTrialBalance(tenantId, fy, branchId, asOf) {
+  const cls = await _branchLedgerClosings(tenantId, fy, branchId, asOf);
+  let td = money(0), tc = money(0);
+  const ledgers = cls
+    .filter((c) => !c.dr.isZero() || !c.cr.isZero() || !c.signed.isZero())
+    .map((c) => {
+      const debit = c.signed.greaterThan(0) ? c.signed : money(0);
+      const credit = c.signed.lessThan(0) ? c.signed.neg() : money(0);
+      td = td.plus(debit); tc = tc.plus(credit);
+      return { ledgerId: c.ledgerId, name: c.name, nature: c.nature, debit: toRupees(debit), credit: toRupees(credit) };
+    });
+  return { financialYear: fy, branchId, asOf: asOf || null, ledgers, totalDebit: toRupees(td), totalCredit: toRupees(tc), balanced: eq(td, tc) };
+}
+
+// §10.7 — Per-branch Profit & Loss. Same return shape as profitLoss, scoped to branch_id.
+async function branchPL(tenantId, fy, branchId, asOf) {
+  const cls = (await _branchLedgerClosings(tenantId, fy, branchId, asOf)).filter((c) => c.affectsPl);
+  let income = money(0), expense = money(0);
+  const incomeRows = [], expenseRows = [];
+  for (const c of cls) {
+    if (c.nature === "INCOME") { const amt = c.signed.neg(); if (amt.isZero()) continue; income = income.plus(amt); incomeRows.push({ name: c.name, amount: toRupees(amt) }); }
+    else if (c.nature === "EXPENSE") { const amt = c.signed; if (amt.isZero()) continue; expense = expense.plus(amt); expenseRows.push({ name: c.name, amount: toRupees(amt) }); }
+  }
+  const net = income.minus(expense);
+  return { financialYear: fy, branchId, asOf: asOf || null, income: incomeRows, expense: expenseRows, totalIncome: toRupees(income), totalExpense: toRupees(expense), netProfit: toRupees(net) };
+}
+
+// §10.8 — Companies Act, 2013 Schedule III financial statements. Ported from ERPNext's
+// Schedule-III layout: the Balance Sheet is presented as Equity & Liabilities
+// (Shareholders' funds, Non-current liabilities, Current liabilities) and Assets
+// (Non-current assets, Current assets), and the Statement of Profit & Loss as
+// Revenue from operations, Other income, and Expenses. Mapping is driven by the
+// account-group name/nature/hierarchy seeded in §5.1. A prior-year comparative column
+// is produced by re-running the closings for the previous FY, reusing the same prior-FY
+// carry-forward logic already in _ledgerClosings (permanent ledgers carry forward; P&L
+// resets). Returns { balanceSheet, statementOfPL, priorYear } with rupee strings.
+
+// Schedule III heads, keyed by the seeded group name. A ledger is classified by walking
+// its group up to a head we recognise; unmatched balance-sheet groups fall to a sensible
+// default by nature so nothing is silently dropped.
+const SCH3_BS_HEAD = {
+  // Equity & Liabilities — Shareholders' funds
+  "Capital Account": ["equityAndLiabilities", "shareholdersFunds"],
+  "Reserves & Surplus": ["equityAndLiabilities", "shareholdersFunds"],
+  // Non-current liabilities
+  "Loans (Liability)": ["equityAndLiabilities", "nonCurrentLiabilities"],
+  "Secured Loans": ["equityAndLiabilities", "nonCurrentLiabilities"],
+  "Unsecured Loans": ["equityAndLiabilities", "nonCurrentLiabilities"],
+  // Current liabilities
+  "Current Liabilities": ["equityAndLiabilities", "currentLiabilities"],
+  "Sundry Creditors": ["equityAndLiabilities", "currentLiabilities"],
+  "Duties & Taxes": ["equityAndLiabilities", "currentLiabilities"],
+  "Provisions": ["equityAndLiabilities", "currentLiabilities"],
+  "Bank OD A/c": ["equityAndLiabilities", "currentLiabilities"],
+  "Suspense Account": ["equityAndLiabilities", "currentLiabilities"],
+  // Assets — Non-current
+  "Fixed Assets": ["assets", "nonCurrentAssets"],
+  "Investments": ["assets", "nonCurrentAssets"],
+  "Misc. Expenses (Asset)": ["assets", "nonCurrentAssets"],
+  "Branch / Divisions": ["assets", "nonCurrentAssets"],
+  // Assets — Current
+  "Current Assets": ["assets", "currentAssets"],
+  "Bank Accounts": ["assets", "currentAssets"],
+  "Cash-in-hand": ["assets", "currentAssets"],
+  "Deposits (Asset)": ["assets", "currentAssets"],
+  "Loans & Advances (Asset)": ["assets", "currentAssets"],
+  "Stock-in-hand": ["assets", "currentAssets"],
+  "Sundry Debtors": ["assets", "currentAssets"],
+};
+function _sch3BsHead(groupName, nature) {
+  if (SCH3_BS_HEAD[groupName]) return SCH3_BS_HEAD[groupName];
+  if (nature === "ASSET") return ["assets", "currentAssets"];
+  if (nature === "EQUITY") return ["equityAndLiabilities", "shareholdersFunds"];
+  return ["equityAndLiabilities", "currentLiabilities"]; // LIABILITY default
+}
+// P&L heads. Revenue from operations = Sales + Direct Incomes; Other income = Indirect
+// Incomes; everything on the EXPENSE side is an expense line.
+function _sch3PlHead(groupName, nature) {
+  if (nature === "INCOME") {
+    return (groupName === "Sales Accounts" || groupName === "Direct Incomes")
+      ? "revenueFromOperations" : "otherIncome";
+  }
+  return "expenses";
+}
+
+// Build one period's Schedule III balances. Returns the grouped maps + the period's
+// net profit (income − expense) so the caller can land it in Reserves & Surplus and
+// surface the comparative column.
+async function _scheduleIIIPeriod(tenantId, fy, asOf) {
+  // Group name per ledger (closings only carry nature); fetch the name→group map once.
+  const { rows: gmap } = await pool.query(
+    `SELECT l.id AS ledger_id, g.name AS group_name
+       FROM book_ledgers l JOIN book_account_groups g ON g.id = l.group_id
+      WHERE l.tenant_id = $1`,
+    [tenantId]
+  );
+  const groupByLedger = new Map(gmap.map((r) => [r.ledger_id, r.group_name]));
+  const cls = await _ledgerClosings(tenantId, fy, asOf);
+
+  const bs = {
+    equityAndLiabilities: { shareholdersFunds: [], nonCurrentLiabilities: [], currentLiabilities: [] },
+    assets: { nonCurrentAssets: [], currentAssets: [] },
+  };
+  const pl = { revenueFromOperations: [], otherIncome: [], expenses: [] };
+  let income = money(0), expense = money(0);
+
+  for (const c of cls) {
+    const groupName = groupByLedger.get(c.ledgerId) || "";
+    if (c.affectsPl) {
+      const head = _sch3PlHead(groupName, c.nature);
+      // INCOME naturally credit (signed<0) → positive amount = signed.neg();
+      // EXPENSE naturally debit (signed>0) → positive amount = signed.
+      const amt = c.nature === "INCOME" ? c.signed.neg() : c.signed;
+      if (amt.isZero()) continue;
+      if (c.nature === "INCOME") income = income.plus(amt); else expense = expense.plus(amt);
+      pl[head].push({ name: c.name, group: groupName, amount: amt });
+    } else {
+      const [section, head] = _sch3BsHead(groupName, c.nature);
+      // Liabilities & equity are naturally credit → present as positive (signed.neg());
+      // assets are naturally debit → present signed as-is.
+      const amt = c.nature === "ASSET" ? c.signed : c.signed.neg();
+      if (amt.isZero()) continue;
+      bs[section][head].push({ name: c.name, group: groupName, amount: amt });
+    }
+  }
+  const netProfit = income.minus(expense);
+  return { bs, pl, income, expense, netProfit };
+}
+
+function _sch3SumRows(rows) { return rows.reduce((s, r) => s.plus(r.amount), money(0)); }
+function _sch3Rupees(rows) { return rows.map((r) => ({ name: r.name, group: r.group, amount: toRupees(r.amount) })); }
+
+async function scheduleIII(tenantId, fy, asOf) {
+  const cur = await _scheduleIIIPeriod(tenantId, fy, asOf);
+  const prevFy = prevFyOf(fy);
+  // Comparative column: prior FY closing (no asOf — full prior year). Reuses the same
+  // carry-forward already in _ledgerClosings via _scheduleIIIPeriod.
+  const prev = await _scheduleIIIPeriod(tenantId, prevFy).catch(() => null);
+
+  // Net profit for the period lands in Reserves & Surplus (Shareholders' funds).
+  cur.bs.equityAndLiabilities.shareholdersFunds.push({ name: "Profit & Loss A/c (current period)", group: "Reserves & Surplus", amount: cur.netProfit });
+  if (prev) prev.bs.equityAndLiabilities.shareholdersFunds.push({ name: "Profit & Loss A/c (current period)", group: "Reserves & Surplus", amount: prev.netProfit });
+
+  const bsSection = (sec) => {
+    const heads = sec === "equityAndLiabilities"
+      ? ["shareholdersFunds", "nonCurrentLiabilities", "currentLiabilities"]
+      : ["nonCurrentAssets", "currentAssets"];
+    const out = {};
+    let total = money(0);
+    for (const h of heads) {
+      const rows = cur.bs[sec][h];
+      const subtotal = _sch3SumRows(rows);
+      total = total.plus(subtotal);
+      out[h] = { lines: _sch3Rupees(rows), subtotal: toRupees(subtotal) };
+    }
+    return { ...out, total: toRupees(total), _totalDec: total };
+  };
+  const eAndL = bsSection("equityAndLiabilities");
+  const assetsSec = bsSection("assets");
+  const balanceSheet = {
+    financialYear: fy, asOf: asOf || null,
+    equityAndLiabilities: { shareholdersFunds: eAndL.shareholdersFunds, nonCurrentLiabilities: eAndL.nonCurrentLiabilities, currentLiabilities: eAndL.currentLiabilities, total: eAndL.total },
+    assets: { nonCurrentAssets: assetsSec.nonCurrentAssets, currentAssets: assetsSec.currentAssets, total: assetsSec.total },
+    balanced: eq(eAndL._totalDec, assetsSec._totalDec),
+  };
+
+  const revOps = _sch3SumRows(cur.pl.revenueFromOperations);
+  const othInc = _sch3SumRows(cur.pl.otherIncome);
+  const totalRevenue = revOps.plus(othInc);
+  const totalExpenses = _sch3SumRows(cur.pl.expenses);
+  const profitBeforeTax = totalRevenue.minus(totalExpenses);
+  const statementOfPL = {
+    financialYear: fy, asOf: asOf || null,
+    revenueFromOperations: { lines: _sch3Rupees(cur.pl.revenueFromOperations), subtotal: toRupees(revOps) },
+    otherIncome: { lines: _sch3Rupees(cur.pl.otherIncome), subtotal: toRupees(othInc) },
+    totalRevenue: toRupees(totalRevenue),
+    expenses: { lines: _sch3Rupees(cur.pl.expenses), subtotal: toRupees(totalExpenses) },
+    totalExpenses: toRupees(totalExpenses),
+    profitBeforeTax: toRupees(profitBeforeTax),
+  };
+
+  // Prior-year comparative (flat totals; full statement rerun is available via scheduleIII(prevFy)).
+  let priorYear = { financialYear: prevFy, available: false };
+  if (prev) {
+    const pEL = ["shareholdersFunds", "nonCurrentLiabilities", "currentLiabilities"].reduce((s, h) => s.plus(_sch3SumRows(prev.bs.equityAndLiabilities[h])), money(0));
+    const pAS = ["nonCurrentAssets", "currentAssets"].reduce((s, h) => s.plus(_sch3SumRows(prev.bs.assets[h])), money(0));
+    const pRevOps = _sch3SumRows(prev.pl.revenueFromOperations);
+    const pOth = _sch3SumRows(prev.pl.otherIncome);
+    const pExp = _sch3SumRows(prev.pl.expenses);
+    priorYear = {
+      financialYear: prevFy, available: true,
+      balanceSheet: {
+        equityAndLiabilities: { shareholdersFunds: _sch3Rupees(prev.bs.equityAndLiabilities.shareholdersFunds), nonCurrentLiabilities: _sch3Rupees(prev.bs.equityAndLiabilities.nonCurrentLiabilities), currentLiabilities: _sch3Rupees(prev.bs.equityAndLiabilities.currentLiabilities), total: toRupees(pEL) },
+        assets: { nonCurrentAssets: _sch3Rupees(prev.bs.assets.nonCurrentAssets), currentAssets: _sch3Rupees(prev.bs.assets.currentAssets), total: toRupees(pAS) },
+      },
+      statementOfPL: {
+        revenueFromOperations: toRupees(pRevOps), otherIncome: toRupees(pOth),
+        totalRevenue: toRupees(pRevOps.plus(pOth)), totalExpenses: toRupees(pExp),
+        profitBeforeTax: toRupees(pRevOps.plus(pOth).minus(pExp)),
+      },
+    };
+  }
+
+  return { balanceSheet, statementOfPL, priorYear };
+}
+
 function prevFyOf(fy) { const [a] = String(fy).split("-").map(Number); return `${a - 1}-${String(a % 100).padStart(2, "0")}`; }
 async function comparativePL(tenantId, fy) {
   const cur = await profitLoss(tenantId, fy);
@@ -428,4 +673,4 @@ async function stockSummary(tenantId, fromDate, toDate) {
   };
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary };
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary, scheduleIII, branchTrialBalance, branchPL };

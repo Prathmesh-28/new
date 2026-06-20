@@ -626,6 +626,18 @@ async function initDb() {
     ALTER TABLE book_stock_lots  ADD COLUMN IF NOT EXISTS expiry_date DATE;
     ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS uom_conversions JSONB;
 
+    -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
+    CREATE TABLE IF NOT EXISTS book_fx_rates (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id  TEXT NOT NULL,
+      currency   TEXT NOT NULL,
+      rate_date  DATE NOT NULL,
+      rate       NUMERIC(18,6) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, currency, rate_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_fx_rates ON book_fx_rates(tenant_id, currency, rate_date DESC);
+
     -- Vendor master (vendors page): a real profile per vendor, not just a txn string.
     CREATE TABLE IF NOT EXISTS vendor_master (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

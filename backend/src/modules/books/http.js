@@ -10,6 +10,8 @@ const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCredi
 const billwise = require("./billwise");
 const tds = require("./tds");
 const ewb = require("./ewaybill");
+const importer = require("./importer");
+const closing = require("./closing");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -207,6 +209,9 @@ router.post("/documents/receipt", canPost, async (req, res) => {
 router.get("/reports/trial-balance", async (req, res) => { try { res.json(await reports.trialBalance(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/profit-loss", async (req, res) => { try { res.json(await reports.profitLoss(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/balance-sheet", async (req, res) => { try { res.json(await reports.balanceSheet(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/schedule-iii", async (req, res) => { try { res.json(await reports.scheduleIII(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/branch-trial-balance", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchTrialBalance(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/branch-pl", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchPL(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/day-book", async (req, res) => { try { res.json(await reports.dayBook(tenantOf(req), req.query.from || "1900-01-01", req.query.to || "2999-12-31")); } catch (e) { fail(res, e); } });
 router.get("/ledgers/:id/statement", async (req, res) => {
   try { const r = await reports.ledgerStatement(tenantOf(req), req.params.id, fyOf(req)); if (!r) return res.status(404).json({ error: "Ledger not found" }); res.json(r); } catch (e) { fail(res, e); }
@@ -605,6 +610,18 @@ router.post("/branches", canPost, async (req, res) => { try { const b = req.body
 router.get("/branches", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_branches WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 router.get("/fx/convert", async (req, res) => { try { res.json({ base: fx.fxConvert(req.query.amount || 0, req.query.rate || 1).toFixed(2) }); } catch (e) { fail(res, e); } });
 router.post("/fx/settlement", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await fx.postFxSettlement(tenantOf(req), req.user.id, { partyLedgerId: b.partyLedgerId, gainLoss: b.gainLoss, date: b.date || new Date().toISOString().slice(0, 10) })); } catch (e) { fail(res, e); } });
+// Exchange-rate master + revaluation (multi-currency).
+router.post("/fx/rates", canPost, async (req, res) => { try { res.status(201).json(await fx.setRate(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/fx/rates", async (req, res) => { try { if (!req.query.currency) return res.status(400).json({ error: "currency required" }); res.json(await fx.listRates(tenantOf(req), req.query.currency)); } catch (e) { fail(res, e); } });
+router.post("/fx/revalue", canPost, async (req, res) => { try { res.json(await fx.revalue(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── Bulk import (onboarding/migration) ───────────────────────────────────────
+router.post("/import/ledgers", canPost, async (req, res) => { try { res.json(await importer.importLedgers(tenantOf(req), (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/import/items", canPost, async (req, res) => { try { res.json(await importer.importItems(tenantOf(req), (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/import/opening-balances", canPost, async (req, res) => { try { res.json(await importer.importOpeningBalances(tenantOf(req), (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+
+// ── Year-end closing (posts a closing voucher + locks the FY) ────────────────
+router.post("/period/close", canPost, async (req, res) => { try { res.status(201).json(await closing.yearEndClose(tenantOf(req), req.user.id, (req.body || {}).fy || fyOf(req))); } catch (e) { fail(res, e); } });
 router.post("/assets", canPost, async (req, res) => { try { res.status(201).json(await assets.createAsset(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/assets", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res.json(await assets.runDepreciation(tenantOf(req), req.user.id, (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
