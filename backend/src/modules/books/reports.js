@@ -127,4 +127,104 @@ async function ledgerStatement(tenantId, ledgerId, fy) {
   return { ledger: lg[0].name, financialYear: fy, openingBalance: toRupees(lg[0].opening_is_debit ? money(lg[0].opening_balance) : money(lg[0].opening_balance).neg()), entries: out, closingBalance: toRupees(running) };
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement };
+// §10 (M6) — Cash Flow Statement (direct, activity-classified). Cash/bank movement
+// in the period, each voucher's cash leg attributed to Operating/Investing/Financing
+// by its counter legs' groups. Reconciles to the net change in cash.
+const INVESTING_GROUPS = new Set(["Fixed Assets", "Investments"]);
+const FINANCING_GROUPS = new Set(["Capital Account", "Reserves & Surplus", "Loans (Liability)", "Secured Loans", "Unsecured Loans", "Bank OD A/c"]);
+function cashFlowActivity(groupName) {
+  if (INVESTING_GROUPS.has(groupName)) return "INVESTING";
+  if (FINANCING_GROUPS.has(groupName)) return "FINANCING";
+  return "OPERATING";
+}
+const isCashRow = (r) => r.is_bank || r.group_name === "Cash-in-hand";
+
+async function cashFlow(tenantId, from, to) {
+  const { rows: vids } = await pool.query(
+    `SELECT DISTINCT v.id FROM book_vouchers v
+       JOIN book_voucher_entries e ON e.voucher_id=v.id
+       JOIN book_ledgers l ON l.id=e.ledger_id
+       LEFT JOIN book_account_groups g ON g.id=l.group_id
+      WHERE v.tenant_id=$1 AND v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3 AND (l.is_bank OR g.name='Cash-in-hand')`,
+    [tenantId, from, to]
+  );
+  const buckets = { OPERATING: money(0), INVESTING: money(0), FINANCING: money(0) };
+  let net = money(0);
+  if (vids.length) {
+    const { rows } = await pool.query(
+      `SELECT e.voucher_id, e.debit, e.credit, l.is_bank, g.name AS group_name
+         FROM book_voucher_entries e JOIN book_ledgers l ON l.id=e.ledger_id LEFT JOIN book_account_groups g ON g.id=l.group_id
+        WHERE e.voucher_id = ANY($1::uuid[])`,
+      [vids.map((v) => v.id)]
+    );
+    const byV = new Map();
+    for (const r of rows) { const a = byV.get(r.voucher_id) || []; a.push(r); byV.set(r.voucher_id, a); }
+    for (const [, ents] of byV) {
+      const cashDelta = ents.filter(isCashRow).reduce((s, r) => s.plus(money(r.debit)).minus(money(r.credit)), money(0));
+      if (cashDelta.isZero()) continue;
+      net = net.plus(cashDelta);
+      const counters = ents.filter((r) => !isCashRow(r)).map((r) => ({ activity: cashFlowActivity(r.group_name), weight: money(r.debit).plus(money(r.credit)) }));
+      const total = counters.reduce((s, c) => s.plus(c.weight), money(0));
+      if (total.isZero()) { buckets.OPERATING = buckets.OPERATING.plus(cashDelta); continue; }
+      for (const c of counters) buckets[c.activity] = buckets[c.activity].plus(cashDelta.mul(c.weight).div(total));
+    }
+  }
+  return { from, to, operating: toRupees(buckets.OPERATING), investing: toRupees(buckets.INVESTING), financing: toRupees(buckets.FINANCING), netCashFlow: toRupees(net) };
+}
+
+function prevFyOf(fy) { const [a] = String(fy).split("-").map(Number); return `${a - 1}-${String(a % 100).padStart(2, "0")}`; }
+async function comparativePL(tenantId, fy) {
+  const cur = await profitLoss(tenantId, fy);
+  const prevFy = prevFyOf(fy);
+  const prev = await profitLoss(tenantId, prevFy);
+  return {
+    current: { fy, totalIncome: cur.totalIncome, totalExpense: cur.totalExpense, netProfit: cur.netProfit },
+    previous: { fy: prevFy, totalIncome: prev.totalIncome, totalExpense: prev.totalExpense, netProfit: prev.netProfit },
+  };
+}
+
+// Reporting tags / dimensions — net profit grouped by a tag dimension (project/location/class).
+async function byTag(tenantId, fy, dimension) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(e.tags->>$3,'(untagged)') AS tag,
+            COALESCE(SUM(e.debit),0) AS dr, COALESCE(SUM(e.credit),0) AS cr
+       FROM book_voucher_entries e
+       JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false AND v.financial_year=$2
+       JOIN book_ledgers l ON l.id=e.ledger_id
+       JOIN book_account_groups g ON g.id=l.group_id AND g.affects_pl=true
+      WHERE e.tenant_id=$1
+      GROUP BY tag`,
+    [tenantId, fy, dimension]
+  );
+  return { financialYear: fy, dimension, rows: rows.map((r) => ({ tag: r.tag, netProfit: toRupees(money(r.dr).minus(money(r.cr)).neg()) })) };
+}
+
+// Budgets.
+async function createTag(tenantId, dimension, value) {
+  const { rows } = await pool.query("INSERT INTO book_tags(tenant_id,dimension,value) VALUES($1,$2,$3) ON CONFLICT(tenant_id,dimension,value) DO NOTHING RETURNING *", [tenantId, dimension, value]);
+  return rows[0] || { tenant_id: tenantId, dimension, value };
+}
+async function createBudget(tenantId, b) {
+  const { rows } = await pool.query(
+    "INSERT INTO book_budgets(tenant_id,financial_year,ledger_id,period_month,amount) VALUES($1,$2,$3,$4,$5) ON CONFLICT(tenant_id,financial_year,ledger_id,period_month) DO UPDATE SET amount=EXCLUDED.amount RETURNING *",
+    [tenantId, b.financialYear, b.ledgerId, b.periodMonth || 0, toDb(b.amount)]
+  );
+  return rows[0];
+}
+async function budgetVsActual(tenantId, fy) {
+  const { rows } = await pool.query(
+    `SELECT bg.ledger_id, l.name, bg.amount AS budget,
+            COALESCE((SELECT SUM(e.debit)-SUM(e.credit) FROM book_voucher_entries e
+                        JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false AND v.financial_year=$2
+                       WHERE e.ledger_id=bg.ledger_id),0) AS actual_signed
+       FROM book_budgets bg JOIN book_ledgers l ON l.id=bg.ledger_id
+      WHERE bg.tenant_id=$1 AND bg.financial_year=$2 AND bg.period_month=0 ORDER BY l.name`,
+    [tenantId, fy]
+  );
+  return {
+    financialYear: fy,
+    rows: rows.map((r) => { const actual = money(r.actual_signed).abs(); const budget = money(r.budget); return { ledger: r.name, budget: toRupees(budget), actual: toRupees(actual), variance: toRupees(budget.minus(actual)) }; }),
+  };
+}
+
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual };

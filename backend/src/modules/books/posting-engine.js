@@ -90,8 +90,8 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   let order = 0;
   for (const e of entries) {
     await client.query(
-      "INSERT INTO book_voucher_entries(tenant_id, voucher_id, ledger_id, debit, credit, entry_order, cost_centre_id) VALUES($1,$2,$3,$4,$5,$6,$7)",
-      [tenantId, voucherId, e.ledgerId, toDb(e.debit || 0), toDb(e.credit || 0), order++, e.costCentreId || null]
+      "INSERT INTO book_voucher_entries(tenant_id, voucher_id, ledger_id, debit, credit, entry_order, cost_centre_id, tags) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      [tenantId, voucherId, e.ledgerId, toDb(e.debit || 0), toDb(e.credit || 0), order++, e.costCentreId || null, e.tags ? JSON.stringify(e.tags) : null]
     );
   }
 

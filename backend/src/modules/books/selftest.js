@@ -9,6 +9,7 @@ const { NEXT } = require("./documents");
 const { applyInwardWAvg, applyOutwardWAvg, consumeFifo } = require("./inventory");
 const { monthRange } = require("./gst");
 const { classifyLine, daysBetween, lineMatches } = require("./recon");
+const { cashFlowActivity } = require("./reports");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -89,5 +90,11 @@ assert.strictEqual(daysBetween("2026-06-15", "2026-06-12"), 3); ok("daysBetween 
 assert.ok(lineMatches({ amount: "500", txn_date: "2026-06-15" }, { debit: "500", credit: "0" }, "2026-06-14", 3)); ok("inflow matches a 500 debit within tolerance");
 assert.ok(!lineMatches({ amount: "500", txn_date: "2026-06-15" }, { debit: "500", credit: "0" }, "2026-06-01", 3)); ok("match rejected when out of date tolerance");
 assert.ok(lineMatches({ amount: "-500", txn_date: "2026-06-15" }, { debit: "0", credit: "500" }, "2026-06-15", 3)); ok("outflow matches a 500 credit");
+
+// 14. M6 — cash-flow activity classification.
+assert.strictEqual(cashFlowActivity("Fixed Assets"), "INVESTING"); ok("Fixed Assets → Investing");
+assert.strictEqual(cashFlowActivity("Loans (Liability)"), "FINANCING"); ok("Loans → Financing");
+assert.strictEqual(cashFlowActivity("Sundry Debtors"), "OPERATING"); ok("Debtors → Operating");
+assert.strictEqual(cashFlowActivity("Sales Accounts"), "OPERATING"); ok("Sales → Operating");
 
 console.log(`\n${n} checks passed.`);

@@ -330,6 +330,31 @@ const BOOKS_SCHEMA = `
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_paylinks ON book_payment_links(tenant_id, status);
+
+  -- ── M6: reporting depth (dimensions + budgets) ────────────────────────────
+  -- Dimensional tags on each line (class/location/project): {"project":"X",...}
+  ALTER TABLE book_voucher_entries ADD COLUMN IF NOT EXISTS tags JSONB;
+  CREATE INDEX IF NOT EXISTS idx_book_entries_tags ON book_voucher_entries USING GIN (tags);
+
+  CREATE TABLE IF NOT EXISTS book_tags (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  TEXT NOT NULL,
+    dimension  TEXT NOT NULL,        -- 'project' | 'location' | 'class' | ...
+    value      TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, dimension, value)
+  );
+
+  CREATE TABLE IF NOT EXISTS book_budgets (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      TEXT NOT NULL,
+    financial_year TEXT NOT NULL,
+    ledger_id      UUID NOT NULL REFERENCES book_ledgers(id),
+    period_month   INT NOT NULL DEFAULT 0,   -- 0 = whole year, else 1..12 (Apr=1)
+    amount         NUMERIC(19,4) NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, financial_year, ledger_id, period_month)
+  );
 `;
 
 module.exports = { BOOKS_SCHEMA };

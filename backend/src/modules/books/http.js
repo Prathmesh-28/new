@@ -270,4 +270,12 @@ router.post("/payments/links", canPost, async (req, res) => { try { res.status(2
 router.post("/payments/links/:id/paid", canPost, async (req, res) => { try { res.status(201).json(await payments.markPaid(tenantOf(req), req.user.id, req.params.id, (req.body || {}).bankLedgerId)); } catch (e) { fail(res, e); } });
 router.get("/payments/links", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_payment_links WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 
+// ── M6: reporting depth ──────────────────────────────────────────────────────
+router.get("/reports/cash-flow", async (req, res) => { try { res.json(await reports.cashFlow(tenantOf(req), req.query.from || "1900-01-01", req.query.to || "2999-12-31")); } catch (e) { fail(res, e); } });
+router.get("/reports/profit-loss/comparative", async (req, res) => { try { res.json(await reports.comparativePL(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.get("/reports/by-tag", async (req, res) => { try { if (!req.query.dimension) return res.status(400).json({ error: "dimension required" }); res.json(await reports.byTag(tenantOf(req), fyOf(req), String(req.query.dimension))); } catch (e) { fail(res, e); } });
+router.get("/reports/budget-vs-actual", async (req, res) => { try { res.json(await reports.budgetVsActual(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.post("/budgets", canPost, async (req, res) => { try { res.status(201).json(await reports.createBudget(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/tags", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await reports.createTag(tenantOf(req), b.dimension, b.value)); } catch (e) { fail(res, e); } });
+
 module.exports = router;
