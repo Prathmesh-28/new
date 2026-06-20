@@ -602,6 +602,8 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS bnpl_tenant          ON bnpl_drawdowns(tenant_id, disbursed_at DESC);
     CREATE INDEX IF NOT EXISTS merchant_cat_tenant  ON merchant_categories(tenant_id);
   `);
+  // books module (double-entry GL) — §5 data model
+  await pool.query(require("./modules/books/schema").BOOKS_SCHEMA);
 }
 
 module.exports = { pool, initDb };

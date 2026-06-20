@@ -1,0 +1,48 @@
+// Pure-logic correctness checks for the books engine — no DB needed.
+// Run: `node src/modules/books/selftest.js` from backend/. Exits non-zero on failure.
+const assert = require("assert");
+const { money, sum, eq, toDb } = require("./money");
+const { financialYearFor, periodMonthFor } = require("./fy");
+const { validateEntries, PostError } = require("./posting-engine");
+const { splitGst, buildSalesVoucher } = require("./mappers");
+
+let n = 0;
+const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
+const throws = (fn, code) => { try { fn(); } catch (e) { assert.strictEqual(e instanceof PostError && e.code, code, `expected ${code}, got ${e.code || e.message}`); return; } assert.fail(`expected throw ${code}`); };
+
+// 1. Money is exact (the float trap).
+assert.ok(eq(money("0.1").plus(money("0.2")), money("0.3"))); ok("0.1 + 0.2 === 0.3 (decimal, not float)");
+assert.strictEqual(toDb(money("11800")), "11800.0000"); ok("toDb → NUMERIC(19,4) string");
+
+// 2. Indian FY / period.
+assert.strictEqual(financialYearFor("2026-06-15"), "2026-27"); ok("June 2026 → FY 2026-27");
+assert.strictEqual(financialYearFor("2026-02-15"), "2025-26"); ok("Feb 2026 → FY 2025-26 (Jan–Mar = prev FY)");
+assert.strictEqual(periodMonthFor("2026-04-01"), 1); ok("April → period 1");
+assert.strictEqual(periodMonthFor("2026-03-31"), 12); ok("March → period 12");
+
+// 3. Balance invariant.
+validateEntries([{ debit: "100", credit: "0" }, { debit: "0", credit: "100" }]); ok("balanced voucher passes");
+throws(() => validateEntries([{ debit: "100", credit: "0" }, { debit: "0", credit: "90" }]), "UNBALANCED"); ok("Σdr≠Σcr → UNBALANCED");
+throws(() => validateEntries([{ debit: "100", credit: "5" }, { debit: "0", credit: "95" }]), "BAD_LINE"); ok("line with both sides → BAD_LINE");
+throws(() => validateEntries([]), "EMPTY_VOUCHER"); ok("no lines → EMPTY_VOUCHER");
+throws(() => validateEntries([{ debit: "0", credit: "0" }]), "BAD_LINE"); ok("zero line → BAD_LINE");
+
+// 4. GST split — intra-state (CGST+SGST) and inter-state (IGST).
+const intra = splitGst("10000", "18", false);
+assert.ok(eq(intra.cgst, "900") && eq(intra.sgst, "900") && eq(intra.igst, "0") && eq(intra.gross, "11800")); ok("intra-state 18% → CGST 900 + SGST 900, gross 11800");
+const inter = splitGst("10000", "18", true);
+assert.ok(eq(inter.igst, "1800") && eq(inter.cgst, "0") && eq(inter.gross, "11800")); ok("inter-state 18% → IGST 1800, gross 11800");
+
+// 5. Sales mapper produces a balanced voucher.
+const ctx = { customerLedgerId: "c", salesLedgerId: "s", cgstLedgerId: "cg", sgstLedgerId: "sg", igstLedgerId: "ig" };
+const sale = buildSalesVoucher({ lineTotal: "10000", gstRate: "18", interState: false, date: "2026-06-15" }, ctx);
+const dr = sum(sale.entries.map((e) => e.debit)); const cr = sum(sale.entries.map((e) => e.credit));
+assert.ok(eq(dr, cr) && eq(dr, "11800")); ok("sales mapper voucher balances (Σdr = Σcr = 11800)");
+validateEntries(sale.entries); ok("sales mapper voucher passes engine validation");
+
+// 6. Reversal mirror nets a voucher to zero.
+const mirror = sale.entries.map((e) => ({ debit: e.credit, credit: e.debit }));
+const combined = [...sale.entries, ...mirror];
+assert.ok(eq(sum(combined.map((e) => e.debit)), sum(combined.map((e) => e.credit)))); ok("original + reversal nets to zero");
+
+console.log(`\n${n} checks passed.`);

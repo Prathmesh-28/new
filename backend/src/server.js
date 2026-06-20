@@ -105,6 +105,7 @@ app.use("/api/users",              require("./routes/users"));
 app.use("/api/invites",            require("./routes/invites"));   // team invites: request/accept/reject
 app.use("/api/company",            require("./routes/company"));    // tenant/company profile (identity)
 app.use("/api/org",                require("./routes/org"));        // owner-scoped org views (own tenant)
+app.use("/api/books",              require("./modules/books/http")); // double-entry GL engine (§books)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));
