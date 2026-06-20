@@ -4,6 +4,7 @@
 const { money, toDb, ZERO } = require("./money");
 
 // §9.1 place-of-supply: intra-state → CGST+SGST (rate/2 each); inter-state → IGST.
+// REGULAR (taxable) supply only — see splitGstFor for the supply-type aware split.
 function splitGst(net, rate, interState) {
   const n = money(net), r = money(rate);
   if (interState) {
@@ -13,6 +14,30 @@ function splitGst(net, rate, interState) {
   const half = r.div(2);
   const cgst = n.mul(half).div(100);
   return { taxable: n, cgst, sgst: cgst, igst: money(0), gross: n.plus(cgst).plus(cgst) };
+}
+
+// Supply types that carry NO tax on the invoice (GST portal / ERPNext-india):
+//  - EXPORT, SEZ → ZERO-RATED (taxable recorded, tax 0; may be WPAY/WOPAY but we
+//    model the common LUT/bond route = without payment of tax → tax 0).
+//  - NIL, EXEMPT → no tax by nature of the goods/service.
+// REGULAR (and any unknown/blank) → ordinary taxable supply, charged via splitGst.
+const ZERO_RATED = new Set(["EXPORT", "SEZ"]);
+const NO_TAX = new Set(["EXPORT", "SEZ", "NIL", "EXEMPT"]);
+function normalizeSupplyType(t) {
+  return String(t || "REGULAR").toUpperCase();
+}
+
+// §9.1b supply-type aware split. For EXPORT/SEZ (zero-rated) and NIL/EXEMPT the
+// taxable value is still recorded but the tax is 0 and gross === taxable; the
+// returned `supplyType` is the normalized tag to stamp on tax side-records so
+// GSTR-1 groups them correctly. REGULAR is byte-for-byte identical to splitGst.
+function splitGstFor(supplyType, net, rate, interState) {
+  const st = normalizeSupplyType(supplyType);
+  if (NO_TAX.has(st)) {
+    const n = money(net);
+    return { taxable: n, cgst: money(0), sgst: money(0), igst: money(0), gross: n, supplyType: st, zeroRated: ZERO_RATED.has(st), taxed: false };
+  }
+  return Object.assign(splitGst(net, rate, interState), { supplyType: st, zeroRated: false, taxed: true });
 }
 
 // §7.x LINE-ITEMISED GST. Frappe Books / Zoho compute tax PER LINE at that
@@ -51,20 +76,28 @@ function computeLineGst(lines, interState, opts = {}) {
 }
 
 // ctx: { customerLedgerId, salesLedgerId, cgstLedgerId, sgstLedgerId, igstLedgerId }
+// input.supplyType (optional, default REGULAR): REGULAR charges GST as before;
+// EXPORT/SEZ are zero-rated (taxable booked, tax 0); NIL/EXEMPT book taxable only.
+// For non-taxable supplies no GST ledger entries are made and a single zero-tax
+// side-record is emitted (tagged with supplyType) so GSTR-1 can classify it.
 function buildSalesVoucher(input, ctx) {
-  const { taxable, cgst, sgst, igst, gross } = splitGst(input.lineTotal, input.gstRate, !!input.interState);
+  const s = splitGstFor(input.supplyType, input.lineTotal, input.gstRate, !!input.interState);
+  const { taxable, cgst, sgst, igst, gross } = s;
   const entries = [{ ledgerId: ctx.customerLedgerId, debit: toDb(gross), credit: "0" }];
   const taxes = [];
   entries.push({ ledgerId: ctx.salesLedgerId, debit: "0", credit: toDb(taxable) });
-  if (input.interState) {
+  if (!s.taxed) {
+    // Zero-rated / nil / exempt: no GST ledger entry; record taxable @ tax 0.
+    taxes.push({ taxKind: input.interState ? "IGST" : "CGST", rate: "0", taxableValue: toDb(taxable), taxAmount: "0", hsnSac: input.hsn, placeOfSupply: input.placeOfSupply, supplyType: s.supplyType, counterpartyGstin: input.counterpartyGstin });
+  } else if (input.interState) {
     entries.push({ ledgerId: ctx.igstLedgerId, debit: "0", credit: toDb(igst) });
-    taxes.push({ taxKind: "IGST", rate: toDb(input.gstRate), taxableValue: toDb(taxable), taxAmount: toDb(igst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply });
+    taxes.push({ taxKind: "IGST", rate: toDb(input.gstRate), taxableValue: toDb(taxable), taxAmount: toDb(igst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply, supplyType: s.supplyType, counterpartyGstin: input.counterpartyGstin });
   } else {
     entries.push({ ledgerId: ctx.cgstLedgerId, debit: "0", credit: toDb(cgst) });
     entries.push({ ledgerId: ctx.sgstLedgerId, debit: "0", credit: toDb(sgst) });
     const half = toDb(money(input.gstRate).div(2));
-    taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(cgst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply });
-    taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(sgst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply });
+    taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(cgst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply, supplyType: s.supplyType, counterpartyGstin: input.counterpartyGstin });
+    taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(sgst), hsnSac: input.hsn, placeOfSupply: input.placeOfSupply, supplyType: s.supplyType, counterpartyGstin: input.counterpartyGstin });
   }
   return {
     voucher: { voucherType: "SALES", voucherDate: input.date, reference: input.reference, partyLedgerId: ctx.customerLedgerId, narration: input.narration, source: "invoice" },
@@ -136,6 +169,50 @@ function buildPurchaseVoucherLines(input, ctx) {
   }
   entries.push({ ledgerId: ctx.vendorLedgerId, debit: "0", credit: toDb(g.gross) });
   return { voucher: { voucherType: "PURCHASE", voucherDate: input.date, reference: input.reference, partyLedgerId: ctx.vendorLedgerId, narration: input.narration, source: "bill" }, entries, taxes: g.taxes, totals: g };
+}
+
+// PURCHASE under Reverse Charge Mechanism (ERPNext india RCM). The vendor does
+// NOT charge GST, so the bill PAYABLE is the taxable value only — there is no
+// input GST on the bill itself. The recipient self-assesses the GST and must pay
+// it in CASH: we book it as an OUTPUT liability (Cr CGST/SGST/IGST Output) and at
+// the same time book the claimable ITC (Dr CGST/SGST/IGST Input). The Input ↔
+// Output legs net within the books (no P&L impact) but are tracked via two tax
+// side-records per head, both tagged supplyType:'RCM':
+//   - OUTPUT (isInput:false) → the self-assessed liability, surfaces in GSTR-3B 3.1(d)
+//   - INPUT  (isInput:true)  → the matching ITC, surfaces in GSTR-3B 4(A)(3)
+// ctx ledgers: { vendorLedgerId, purchaseLedgerId,
+//   cgstInputLedgerId, sgstInputLedgerId, igstInputLedgerId,
+//   cgstOutputLedgerId, sgstOutputLedgerId, igstOutputLedgerId }
+function buildRcmBill(input, ctx) {
+  const interState = !!input.interState;
+  const { taxable, cgst, sgst, igst } = splitGst(input.lineTotal, input.gstRate, interState);
+  const half = toDb(money(input.gstRate).div(2));
+  // 1) Vendor bill WITHOUT GST: Dr Purchases (taxable) / Cr Vendor (taxable).
+  const entries = [
+    { ledgerId: ctx.purchaseLedgerId, debit: toDb(taxable), credit: "0" },
+    { ledgerId: ctx.vendorLedgerId, debit: "0", credit: toDb(taxable) },
+  ];
+  const taxes = [];
+  // 2) Self-assessed GST: Dr Input (ITC) + Cr Output (liability) — nets to zero.
+  if (interState) {
+    entries.push({ ledgerId: ctx.igstInputLedgerId, debit: toDb(igst), credit: "0" });
+    entries.push({ ledgerId: ctx.igstOutputLedgerId, debit: "0", credit: toDb(igst) });
+    taxes.push({ taxKind: "IGST", rate: toDb(input.gstRate), taxableValue: toDb(taxable), taxAmount: toDb(igst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+    taxes.push({ taxKind: "IGST", rate: toDb(input.gstRate), taxableValue: toDb(taxable), taxAmount: toDb(igst), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+  } else {
+    entries.push({ ledgerId: ctx.cgstInputLedgerId, debit: toDb(cgst), credit: "0" });
+    entries.push({ ledgerId: ctx.sgstInputLedgerId, debit: toDb(sgst), credit: "0" });
+    entries.push({ ledgerId: ctx.cgstOutputLedgerId, debit: "0", credit: toDb(cgst) });
+    entries.push({ ledgerId: ctx.sgstOutputLedgerId, debit: "0", credit: toDb(sgst) });
+    taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(cgst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+    taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(sgst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+    taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(cgst), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+    taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(taxable), taxAmount: toDb(sgst), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply, supplyType: "RCM", counterpartyGstin: input.counterpartyGstin });
+  }
+  return {
+    voucher: { voucherType: "PURCHASE", voucherDate: input.date, reference: input.reference, partyLedgerId: ctx.vendorLedgerId, narration: input.narration, source: "bill" },
+    entries, taxes,
+  };
 }
 
 // Sales return (CREDIT_NOTE): Dr Sales Returns + Dr Output-GST (reversal) / Cr Customer.
@@ -212,4 +289,4 @@ function buildPaymentVoucher(input, ctx) {
   };
 }
 
-module.exports = { splitGst, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildCreditNote, buildPaymentVoucher, buildDebitNote, buildRefund };
+module.exports = { splitGst, splitGstFor, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildRcmBill, buildCreditNote, buildPaymentVoucher, buildDebitNote, buildRefund };

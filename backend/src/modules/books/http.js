@@ -6,8 +6,10 @@ const { pool } = require("../../db");
 const { postVoucher, reverseVoucher, PostError } = require("./posting-engine");
 const reports = require("./reports");
 const { seedBooks, ledgerIdByName } = require("./seed");
-const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst, buildDebitNote, buildRefund } = require("./mappers");
+const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst, buildDebitNote, buildRefund, buildRcmBill } = require("./mappers");
 const billwise = require("./billwise");
+const tds = require("./tds");
+const ewb = require("./ewaybill");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -253,6 +255,22 @@ router.post("/documents/payment", canPost, async (req, res) => {
     if (!b.bankLedgerId || !b.partyLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "bankLedgerId, partyLedgerId, amount, date required" });
     const m = buildPaymentVoucher(b, { bankLedgerId: b.bankLedgerId, partyLedgerId: b.partyLedgerId });
     const r = await postVoucher(tenantOf(req), req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// RCM bill (reverse charge) — vendor billed at taxable only; GST self-assessed as
+// output liability + matching ITC, tagged supplyType:'RCM'.
+router.post("/documents/rcm-bill", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.vendorLedgerId || b.lineTotal == null || b.gstRate == null || !b.date) return res.status(400).json({ error: "vendorLedgerId, lineTotal, gstRate, date required" });
+    const ctx = await docs.purchaseCtx(t, b.vendorLedgerId);
+    ctx.cgstOutputLedgerId = await ledgerIdByName(t, "CGST Output");
+    ctx.sgstOutputLedgerId = await ledgerIdByName(t, "SGST Output");
+    ctx.igstOutputLedgerId = await ledgerIdByName(t, "IGST Output");
+    if (!ctx.cgstOutputLedgerId || !ctx.igstOutputLedgerId) return res.status(422).json({ error: "GST Output ledgers missing — seed first", code: "NOT_SEEDED" });
+    const m = buildRcmBill(b, ctx);
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
@@ -541,6 +559,19 @@ router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const 
 router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
 router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });
+// GSTR-1 statutory sections, HSN summary, portal JSON.
+router.get("/gst/gstr1-sections", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1Sections(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.get("/gst/hsn-summary",    async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.hsnSummary(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr1-json",     async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1Json(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+
+// ── TDS at source ────────────────────────────────────────────────────────────
+router.get("/tds/sections", async (_req, res) => { res.json(tds.TDS_SECTIONS); });
+router.post("/tds/compute", async (req, res) => { try { res.json(tds.computeTds(req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── E-way bill ───────────────────────────────────────────────────────────────
+router.get("/documents/:id/eway/payload", async (req, res) => { try { res.json(await ewb.buildEwbPayload(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/eway/generate", canPost, async (req, res) => { try { res.json(await ewb.generateEwayBill(tenantOf(req), req.user.id, req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/documents/:id/eway/status", async (req, res) => { try { res.json(await ewb.ewbStatus(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });
