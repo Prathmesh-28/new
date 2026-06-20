@@ -13,6 +13,7 @@ const assets = require("./assets");
 const automation = require("./automation");
 const ops = require("./ops");
 const costcentres = require("./costcentres");
+const billwise = require("./billwise");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -33,6 +34,7 @@ module.exports = {
   ...automation,
   ...ops,
   ...costcentres,
+  ...billwise,
   payments,
   fx,
   einvoice,

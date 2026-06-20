@@ -6,7 +6,8 @@ const { pool } = require("../../db");
 const { postVoucher, reverseVoucher, PostError } = require("./posting-engine");
 const reports = require("./reports");
 const { seedBooks, ledgerIdByName } = require("./seed");
-const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst } = require("./mappers");
+const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst, buildDebitNote, buildRefund } = require("./mappers");
+const billwise = require("./billwise");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -208,6 +209,18 @@ router.get("/reports/day-book", async (req, res) => { try { res.json(await repor
 router.get("/ledgers/:id/statement", async (req, res) => {
   try { const r = await reports.ledgerStatement(tenantOf(req), req.params.id, fyOf(req)); if (!r) return res.status(404).json({ error: "Ledger not found" }); res.json(r); } catch (e) { fail(res, e); }
 });
+// AR/AP aging (buckets, per party, as-of date) + date-range party statement.
+router.get("/reports/ar-aging", async (req, res) => { try { res.json(await reports.arAging(tenantOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/ap-aging", async (req, res) => { try { res.json(await reports.apAging(tenantOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/party-statement", async (req, res) => {
+  try {
+    if (!req.query.ledgerId) return res.status(400).json({ error: "ledgerId required" });
+    res.json(await reports.partyStatement(tenantOf(req), req.query.ledgerId, req.query.from || "1900-01-01", req.query.to || "2999-12-31"));
+  } catch (e) { fail(res, e); }
+});
+// Bill-wise outstanding + validated settlement (book_allocations).
+router.get("/parties/:id/open-bills", async (req, res) => { try { res.json(await billwise.openBills(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/allocations", canPost, async (req, res) => { try { res.status(201).json(await billwise.allocateBill(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 
 // ── M2: Purchase (bill), credit note, payment documents ──────────────────────
 router.post("/documents/purchase", canPost, async (req, res) => {
@@ -239,6 +252,27 @@ router.post("/documents/payment", canPost, async (req, res) => {
     const b = req.body || {};
     if (!b.bankLedgerId || !b.partyLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "bankLedgerId, partyLedgerId, amount, date required" });
     const m = buildPaymentVoucher(b, { bankLedgerId: b.bankLedgerId, partyLedgerId: b.partyLedgerId });
+    const r = await postVoucher(tenantOf(req), req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// Vendor debit note / purchase return — Dr vendor, Cr Purchases + reverse GST Input.
+router.post("/documents/debit-note", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.vendorLedgerId || b.lineTotal == null || b.gstRate == null || !b.date) return res.status(400).json({ error: "vendorLedgerId, lineTotal, gstRate, date required" });
+    const ctx = await docs.purchaseCtx(t, b.vendorLedgerId);
+    const m = buildDebitNote(b, ctx);
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// Customer refund of an advance / unapplied credit — Dr customer, Cr bank/cash.
+router.post("/documents/refund", canPost, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.partyLedgerId || !b.paidFromLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "partyLedgerId, paidFromLedgerId, amount, date required" });
+    const m = buildRefund(b);
     const r = await postVoucher(tenantOf(req), req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }

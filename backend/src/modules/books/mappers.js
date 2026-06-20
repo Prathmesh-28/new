@@ -157,6 +157,49 @@ function buildCreditNote(input, ctx) {
   return { voucher: { voucherType: "CREDIT_NOTE", voucherDate: input.date, reference: input.reference, partyLedgerId: ctx.customerLedgerId, narration: input.narration, source: "manual" }, entries, taxes };
 }
 
+// Purchase return (DEBIT_NOTE): Dr Vendor / Cr Purchases + Cr GST-Input (reversal).
+// Mirror of buildCreditNote on the purchase side: we owe the vendor less, so debit
+// the party; and we reverse the Input GST (ITC) the original bill claimed by
+// crediting the same GST Input ledgers and emitting NEGATIVE isInput tax records
+// (so GSTR-2 / ITC summary reduces by the returned amount).
+// ctx: { vendorLedgerId/partyLedgerId, purchasesLedgerId/purchaseLedgerId, cgstInputLedgerId, sgstInputLedgerId, igstInputLedgerId }
+function buildDebitNote(input, ctx) {
+  const partyLedgerId = ctx.partyLedgerId || ctx.vendorLedgerId;
+  const purchasesLedgerId = ctx.purchasesLedgerId || ctx.purchaseLedgerId;
+  const { taxable, cgst, sgst, igst, gross } = splitGst(input.lineTotal, input.gstRate, !!input.interState);
+  const entries = [{ ledgerId: partyLedgerId, debit: toDb(gross), credit: "0" }];
+  const taxes = [];
+  entries.push({ ledgerId: purchasesLedgerId, debit: "0", credit: toDb(taxable) });
+  if (input.interState) {
+    entries.push({ ledgerId: ctx.igstInputLedgerId, debit: "0", credit: toDb(igst) });
+    taxes.push({ taxKind: "IGST", rate: toDb(input.gstRate), taxableValue: toDb(money(taxable).neg()), taxAmount: toDb(money(igst).neg()), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply });
+  } else {
+    entries.push({ ledgerId: ctx.cgstInputLedgerId, debit: "0", credit: toDb(cgst) });
+    entries.push({ ledgerId: ctx.sgstInputLedgerId, debit: "0", credit: toDb(sgst) });
+    const half = toDb(money(input.gstRate).div(2));
+    taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(money(taxable).neg()), taxAmount: toDb(money(cgst).neg()), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply });
+    taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(money(taxable).neg()), taxAmount: toDb(money(sgst).neg()), hsnSac: input.hsn, isInput: true, placeOfSupply: input.placeOfSupply });
+  }
+  return { voucher: { voucherType: "DEBIT_NOTE", voucherDate: input.date, reference: input.reference, partyLedgerId, narration: input.narration, source: "manual" }, entries, taxes };
+}
+
+// Refund of a customer's advance / unapplied credit: Dr Customer / Cr Bank/Cash.
+// A PAYMENT out of the business; the orchestrator links sourceVoucherId via an
+// allocation so the original advance/credit is drawn down (ERPNext Payment Entry
+// "Pay" against an outstanding credit). ctx OR input may carry the ledgers.
+// input: { partyLedgerId, amount, paidFromLedgerId, date, sourceVoucherId? }
+function buildRefund(input, ctx = {}) {
+  const partyLedgerId = input.partyLedgerId || ctx.partyLedgerId;
+  const paidFromLedgerId = input.paidFromLedgerId || ctx.paidFromLedgerId || ctx.bankLedgerId;
+  return {
+    voucher: { voucherType: "PAYMENT", voucherDate: input.date, reference: input.reference, partyLedgerId, narration: input.narration, source: "refund", sourceVoucherId: input.sourceVoucherId || null },
+    entries: [
+      { ledgerId: partyLedgerId, debit: toDb(input.amount), credit: "0" },
+      { ledgerId: paidFromLedgerId, debit: "0", credit: toDb(input.amount) },
+    ],
+  };
+}
+
 // Payment out: Dr Vendor/Expense / Cr Bank/Cash. ctx: { bankLedgerId, partyLedgerId }
 function buildPaymentVoucher(input, ctx) {
   return {
@@ -169,4 +212,4 @@ function buildPaymentVoucher(input, ctx) {
   };
 }
 
-module.exports = { splitGst, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildCreditNote, buildPaymentVoucher };
+module.exports = { splitGst, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildCreditNote, buildPaymentVoucher, buildDebitNote, buildRefund };

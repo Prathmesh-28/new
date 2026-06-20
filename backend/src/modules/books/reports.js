@@ -2,7 +2,7 @@
 // vouchers excluded) so reports always reconcile to the ledger. Signed balances
 // are debit-positive (§10.1): >0 = net debit, <0 = net credit.
 const { pool } = require("../../db");
-const { money, toRupees, eq } = require("./money");
+const { money, toRupees, eq, gt } = require("./money");
 
 // Per-ledger closing (opening ± movement) for an FY, optionally as-of a date.
 async function _ledgerClosings(tenantId, fy, asOf) {
@@ -235,4 +235,101 @@ async function budgetVsActual(tenantId, fy) {
   };
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual };
+// §10 (M9) — Receivables / Payables aging. Outstanding per open invoice/bill is the
+// gross movement against the PARTY ledger on its own voucher minus allocations booked
+// against that voucher (same shape as automation.overdue). We bucket the OUTSTANDING
+// (not the gross) by age computed from the due date (voucher_date + credit_period_days)
+// vs asOf, then aggregate per party ledger. Direction differs only in which side of the
+// party ledger holds the balance: debit for debtors (SALES), credit for creditors (PURCHASE).
+const AGING_BUCKETS = () => ({ notDue: money(0), d0_30: money(0), d31_60: money(0), d61_90: money(0), d90plus: money(0) });
+function _bucketFor(dueMs, asOfMs) {
+  if (asOfMs <= dueMs) return "notDue";
+  const days = Math.round((asOfMs - dueMs) / 86400000);
+  if (days <= 30) return "d0_30";
+  if (days <= 60) return "d31_60";
+  if (days <= 90) return "d61_90";
+  return "d90plus";
+}
+async function _aging(tenantId, asOf, voucherType, groupName, partySide) {
+  const today = asOf || new Date().toISOString().slice(0, 10);
+  const asOfMs = new Date(today).getTime();
+  // movementExpr: debit-credit for debtors (debit-positive), credit-debit for creditors.
+  const movementExpr = partySide === "debit"
+    ? "SUM(e.debit) - SUM(e.credit)"
+    : "SUM(e.credit) - SUM(e.debit)";
+  const { rows } = await pool.query(
+    `SELECT v.id, v.voucher_date, v.party_ledger_id AS ledger_id, pl.name AS party_name,
+            COALESCE(pl.credit_period_days, 0) AS credit_period_days,
+            COALESCE((SELECT ${movementExpr} FROM book_voucher_entries e
+                        WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS gross,
+            COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.target_voucher_id=v.id),0) AS allocated
+       FROM book_vouchers v
+       JOIN book_ledgers pl ON pl.id=v.party_ledger_id AND pl.tenant_id=v.tenant_id
+       JOIN book_account_groups g ON g.id=pl.group_id
+      WHERE v.tenant_id=$1 AND v.voucher_type=$2 AND v.is_cancelled=false
+        AND v.voucher_date <= $3 AND v.party_ledger_id IS NOT NULL AND g.name=$4`,
+    [tenantId, voucherType, today, groupName]
+  );
+  const byParty = new Map();
+  const totals = AGING_BUCKETS();
+  for (const r of rows) {
+    const outstanding = money(r.gross).minus(money(r.allocated));
+    if (!gt(outstanding, 0)) continue;
+    const creditDays = Number(r.credit_period_days) || 0;
+    const dueMs = new Date(r.voucher_date).getTime() + creditDays * 86400000;
+    const bucket = _bucketFor(dueMs, asOfMs);
+    let p = byParty.get(r.ledger_id);
+    if (!p) { p = { ledgerId: r.ledger_id, name: r.party_name, ...AGING_BUCKETS() }; byParty.set(r.ledger_id, p); }
+    p[bucket] = p[bucket].plus(outstanding);
+    totals[bucket] = totals[bucket].plus(outstanding);
+  }
+  const parties = [...byParty.values()]
+    .map((p) => {
+      const total = p.notDue.plus(p.d0_30).plus(p.d31_60).plus(p.d61_90).plus(p.d90plus);
+      return { ledgerId: p.ledgerId, name: p.name, notDue: toRupees(p.notDue), d0_30: toRupees(p.d0_30), d31_60: toRupees(p.d31_60), d61_90: toRupees(p.d61_90), d90plus: toRupees(p.d90plus), total: toRupees(total) };
+    })
+    .sort((a, b) => money(b.total).comparedTo(money(a.total)));
+  const grand = totals.notDue.plus(totals.d0_30).plus(totals.d31_60).plus(totals.d61_90).plus(totals.d90plus);
+  return {
+    asOf: today,
+    parties,
+    totals: { notDue: toRupees(totals.notDue), d0_30: toRupees(totals.d0_30), d31_60: toRupees(totals.d31_60), d61_90: toRupees(totals.d61_90), d90plus: toRupees(totals.d90plus), total: toRupees(grand) },
+  };
+}
+async function arAging(tenantId, asOf) { return _aging(tenantId, asOf, "SALES", "Sundry Debtors", "debit"); }
+async function apAging(tenantId, asOf) { return _aging(tenantId, asOf, "PURCHASE", "Sundry Creditors", "credit"); }
+
+// §10 (M9) — Party statement: date-range ledger statement for one party. Opening is the
+// signed balance (debit-positive) as of the day before `from`; lines are every voucher
+// entry hitting this ledger within from..to with a running balance; closing is the final
+// running balance. Modeled on ledgerStatement but bounded by date range, not FY.
+async function partyStatement(tenantId, ledgerId, from, to) {
+  const { rows: lg } = await pool.query("SELECT id, name, opening_balance, opening_is_debit FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, ledgerId]);
+  if (!lg[0]) return null;
+  const bookOpening = lg[0].opening_is_debit ? money(lg[0].opening_balance) : money(lg[0].opening_balance).neg();
+  // Opening as of `from` = book opening + net movement of everything strictly before `from`.
+  const { rows: pre } = await pool.query(
+    `SELECT COALESCE(SUM(e.debit),0) AS dr, COALESCE(SUM(e.credit),0) AS cr
+       FROM book_voucher_entries e
+       JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false
+      WHERE e.tenant_id=$1 AND e.ledger_id=$2 AND v.voucher_date < $3`,
+    [tenantId, ledgerId, from]
+  );
+  const opening = bookOpening.plus(money(pre[0].dr)).minus(money(pre[0].cr));
+  const { rows } = await pool.query(
+    `SELECT v.voucher_date, v.voucher_type, v.voucher_number, v.narration, e.debit, e.credit
+       FROM book_voucher_entries e
+       JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false
+      WHERE e.tenant_id=$1 AND e.ledger_id=$2 AND v.voucher_date BETWEEN $3 AND $4
+      ORDER BY v.voucher_date, v.voucher_number`,
+    [tenantId, ledgerId, from, to]
+  );
+  let running = opening;
+  const lines = rows.map((r) => {
+    running = running.plus(money(r.debit)).minus(money(r.credit));
+    return { date: r.voucher_date, voucherType: r.voucher_type, number: r.voucher_number, narration: r.narration, debit: toRupees(r.debit), credit: toRupees(r.credit), balance: toRupees(running) };
+  });
+  return { ledger: { id: lg[0].id, name: lg[0].name }, from, to, opening: toRupees(opening), lines, closing: toRupees(running) };
+}
+
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement };
