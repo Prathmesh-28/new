@@ -12,6 +12,10 @@ const fx = require("./fx");
 const assets = require("./assets");
 const automation = require("./automation");
 const ops = require("./ops");
+const einvoice = require("./einvoice");
+const ocr = require("./ocr");
+const gsp = require("./gsp");
+const portal = require("./portal");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -29,6 +33,11 @@ module.exports = {
   ...ops,
   payments,
   fx,
+  einvoice,
+  ocr,
+  gsp,
+  signPortalToken: portal.signToken,
+  verifyPortalToken: portal.verifyToken,
   seedBooks,
   ledgerIdByName,
   router: require("./http"),

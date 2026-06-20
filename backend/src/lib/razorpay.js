@@ -65,4 +65,38 @@ function verifyPaymentSignature({ orderId, paymentId, signature }) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { keyId, isConfigured, configProblem, createOrder, verifyPaymentSignature };
+// Create a hosted Payment Link (Razorpay Payment Links API). amount in paise.
+async function createPaymentLink({ amount, description, customer, notes, referenceId, callbackUrl }) {
+  if (!isConfigured()) throw new Error("Razorpay not configured");
+  const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch("https://api.razorpay.com/v1/payment_links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ amount, currency: "INR", description, customer, notes, reference_id: referenceId, callback_url: callbackUrl, callback_method: callbackUrl ? "get" : undefined }),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay — please try again.");
+    throw new Error(`Couldn't reach Razorpay: ${err.message}`);
+  } finally { clearTimeout(timer); }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) { const e = new Error(data?.error?.description || `Razorpay payment link failed (${resp.status})`); e.statusCode = resp.status; throw e; }
+  return data; // { id, short_url, status, ... }
+}
+
+// Authoritatively fetch a payment link's state (the webhook confirms "paid" via
+// this before posting a receipt — never trusts an unverified payload).
+async function getPaymentLink(id) {
+  if (!isConfigured()) throw new Error("Razorpay not configured");
+  const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
+  const resp = await fetch(`https://api.razorpay.com/v1/payment_links/${encodeURIComponent(id)}`, { headers: { Authorization: `Basic ${auth}` } });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) { const e = new Error(data?.error?.description || `Razorpay link fetch failed (${resp.status})`); e.statusCode = resp.status; throw e; }
+  return data;
+}
+
+module.exports = { keyId, isConfigured, configProblem, createOrder, verifyPaymentSignature, createPaymentLink, getPaymentLink };

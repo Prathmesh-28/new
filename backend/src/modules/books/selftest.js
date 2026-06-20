@@ -13,6 +13,9 @@ const { cashFlowActivity } = require("./reports");
 const { fxConvert, realizedFx } = require("./fx");
 const { depreciationMonthly } = require("./assets");
 const { formatDocNumber, computeLateFee, ruleRequiresApproval } = require("./automation");
+const { signToken, verifyToken } = require("./portal");
+const { buildIrpPayload } = require("./einvoice");
+const ocrMod = require("./ocr");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -113,5 +116,18 @@ assert.strictEqual(toRupees(computeLateFee("10000", 30, "18")), "147.95"); ok("l
 assert.strictEqual(toRupees(computeLateFee("10000", 0, "18")), "0.00"); ok("late fee 0 days → 0");
 assert.ok(ruleRequiresApproval([{ entity_type: "PAYMENT", min_amount: "100000" }], "PAYMENT", "150000")); ok("payment ≥ ₹1L needs approval");
 assert.ok(!ruleRequiresApproval([{ entity_type: "PAYMENT", min_amount: "100000" }], "PAYMENT", "50000")); ok("payment < ₹1L auto-ok");
+
+// 17. M10 — portal HMAC tokens.
+const tok = signToken({ kind: "invoice", tenant: "acme-1", voucherId: "v123" });
+const decoded = verifyToken(tok);
+assert.ok(decoded && decoded.kind === "invoice" && decoded.voucherId === "v123"); ok("portal token signs + verifies (round-trip)");
+assert.strictEqual(verifyToken(tok.slice(0, -2) + "xx"), null); ok("tampered portal token rejected");
+assert.strictEqual(verifyToken("garbage"), null); ok("garbage token rejected");
+
+// 18. M10 — e-invoice IRP payload shape + OCR fallback.
+const irp = buildIrpPayload({ voucher_type: "SALES", voucher_number: 7, voucher_date: "2026-06-15" }, [{ tax_kind: "CGST", taxable_value: "10000", tax_amount: "900", hsn_sac: "1234", rate: "9" }], { gstin: "27ABCDE1234F1Z5" }, { name: "Gupta Traders" });
+assert.strictEqual(irp.docNo, "SALES-7"); ok("IRP payload docNo → SALES-7");
+assert.ok(irp.seller.gstin === "27ABCDE1234F1Z5" && irp.items.length === 1); ok("IRP payload carries seller GSTIN + items");
+assert.strictEqual(ocrMod.isConfigured(), false); ok("OCR not configured by default (manual-entry fallback)");
 
 console.log(`\n${n} checks passed.`);

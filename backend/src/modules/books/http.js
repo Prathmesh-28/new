@@ -17,6 +17,9 @@ const fx = require("./fx");
 const assets = require("./assets");
 const auto = require("./automation");
 const ops = require("./ops");
+const einvoice = require("./einvoice");
+const ocr = require("./ocr");
+const portal = require("./portal");
 
 router.use(authenticate);
 
@@ -306,5 +309,13 @@ router.post("/timesheets", canPost, async (req, res) => { try { res.status(201).
 router.get("/projects/:id/billable", async (req, res) => { try { res.json(await ops.billableSummary(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/attachments", canPost, async (req, res) => { try { res.status(201).json(await ops.addAttachment(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/attachments", async (req, res) => { try { res.json(await ops.listAttachments(tenantOf(req), req.query.entityType, req.query.entityId)); } catch (e) { fail(res, e); } });
+
+// ── M10: e-invoice, OCR, portal-link minting ─────────────────────────────────
+router.post("/einvoice/:voucherId", canPost, async (req, res) => { try { res.status(202).json(await einvoice.enqueue(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
+router.get("/einvoice/:voucherId", async (req, res) => { try { res.json(await einvoice.status(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
+router.post("/expenses/ocr", canPost, async (req, res) => { try { res.json(await ocr.parseReceipt({ imageUrl: (req.body || {}).imageUrl })); } catch (e) { fail(res, e); } });
+// Mint a public portal link (the owner shares the returned URL with a customer/vendor).
+router.post("/portal/invoice-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.voucherId) return res.status(400).json({ error: "voucherId required" }); const token = portal.signToken({ kind: "invoice", tenant: tenantOf(req), voucherId: b.voucherId }); res.status(201).json({ token, path: `/api/portal/invoice/${token}` }); } catch (e) { fail(res, e); } });
+router.post("/portal/vendor-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.vendorLedgerId) return res.status(400).json({ error: "vendorLedgerId required" }); const token = portal.signToken({ kind: "vendor", tenant: tenantOf(req), vendorLedgerId: b.vendorLedgerId }); res.status(201).json({ token, path: `/api/portal/vendor-bill/${token}` }); } catch (e) { fail(res, e); } });
 
 module.exports = router;

@@ -172,4 +172,15 @@ async function runRecurringDue(tenantId, actorId, asOf) {
   return { asOf: today, generated };
 }
 
-module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, salesCtx, purchaseCtx, NEXT };
+// Run recurring for every tenant that has an active template (the daily cron uses this).
+async function runAllRecurring(asOf) {
+  const { rows } = await pool.query("SELECT DISTINCT tenant_id FROM book_recurring WHERE active=true");
+  const out = [];
+  for (const r of rows) {
+    try { const res = await runRecurringDue(r.tenant_id, null, asOf); out.push({ tenant: r.tenant_id, generated: res.generated.length }); }
+    catch (e) { out.push({ tenant: r.tenant_id, error: e.message }); }
+  }
+  return { tenants: rows.length, results: out };
+}
+
+module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, salesCtx, purchaseCtx, NEXT };

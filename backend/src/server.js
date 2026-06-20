@@ -106,6 +106,7 @@ app.use("/api/invites",            require("./routes/invites"));   // team invit
 app.use("/api/company",            require("./routes/company"));    // tenant/company profile (identity)
 app.use("/api/org",                require("./routes/org"));        // owner-scoped org views (own tenant)
 app.use("/api/books",              require("./modules/books/http")); // double-entry GL engine (§books)
+app.use("/api/portal",             require("./modules/books/portal").router); // PUBLIC customer/vendor portals + gateway webhook
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));
@@ -414,6 +415,12 @@ initDb()
     cron.schedule("30 2 * * 1", () => {
       sendMondayBrief().catch(err => console.error("[brief]", err.message));
     }, { timezone: "UTC" });
-    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST");
+    // Books: generate due recurring invoices/bills/journals daily at 07:30 IST.
+    cron.schedule("0 2 * * *", () => {
+      require("./modules/books/documents").runAllRecurring().catch(err => console.error("[books-recurring]", err.message));
+    }, { timezone: "UTC" });
+    // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
+    require("./modules/books/einvoice").startWorker();
+    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · e-invoice worker on");
   })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

@@ -465,6 +465,21 @@ const BOOKS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_book_ts ON book_timesheets(tenant_id, project_id);
 
+  -- ── M10: e-invoice / e-way IRN tracking (GSP-backed, async) ───────────────
+  CREATE TABLE IF NOT EXISTS book_einvoices (
+    voucher_id   UUID PRIMARY KEY REFERENCES book_vouchers(id),
+    tenant_id    TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'QUEUED',  -- QUEUED | REGISTERED | FAILED | PENDING_CONFIG
+    irn          TEXT,
+    ack_no       TEXT,
+    ack_date     TEXT,
+    signed_qr    TEXT,
+    eway_bill_no TEXT,
+    error        TEXT,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_einv_queue ON book_einvoices(status) WHERE status='QUEUED';
+
   CREATE TABLE IF NOT EXISTS book_expenses (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       TEXT NOT NULL,
