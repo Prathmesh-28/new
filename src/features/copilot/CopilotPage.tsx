@@ -4,12 +4,13 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, type FinancialSnapshot } from "@/lib/finance";
 import { formatCurrency, formatAmount } from "@/lib/utils";
+import { api } from "@/lib/api";
 import {
   Bot, Sparkles, ListChecks, Send, MessageSquareText, Target, Bell,
   ShieldCheck, ToggleRight, ScrollText, CalendarRange, ArrowRight, Info,
   TrendingDown, AlertTriangle, CheckCircle2, Plus, Search, Wand2,
   ClipboardCheck, Calculator, Wallet, CalendarClock, ShieldAlert,
-  Scissors, Gauge, Presentation, Circle,
+  Scissors, Gauge, Presentation, Circle, Loader2,
   LineChart, HandCoins, FilePlus2, Timer, ListTodo, Lightbulb, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -401,40 +402,92 @@ function answerQuestion(q: string, s: Signals): string {
   return `I answer from your live metrics. Try: “what's my runway?”, “why is cash down?”, “how much is overdue?”, “what's my health score?” or “how's my debt coverage?”.`;
 }
 
+// A compact, grounding snapshot the LLM must reason over — no outside data.
+function buildSnapshotBlock(s: Signals): string {
+  return [
+    `Cash on hand: ${formatCurrency(Math.round(s.cash))}`,
+    `Runway: ${runwayLabel(s.runwayDays)} (${s.runwayDays} days) at current burn`,
+    `Monthly net cash flow: ${s.monthlyNet >= 0 ? "+" : ""}${formatCurrency(Math.round(s.monthlyNet))}`,
+    `Monthly expenses: ${formatCurrency(Math.round(s.monthlyExpense))}`,
+    `Overdue receivables: ${formatCurrency(Math.round(s.overdueReceivable))} across ${s.overdueInvoiceCount} invoice(s)`,
+    `Total open receivables: ${formatCurrency(Math.round(s.accountsReceivable))}`,
+    `Due today: ${s.dueTodayCount} item(s) worth ${formatCurrency(Math.round(s.dueToday))}`,
+    `Obligations due within 90 days: ${formatCurrency(Math.round(s.obligationsDue90))}`,
+    `Top customer concentration: ${s.topCustomerPct.toFixed(0)}% of revenue`,
+    `DSCR (debt-service coverage): ${s.dscr === null ? "no active debt" : s.dscr.toFixed(2) + "x"}`,
+    `Financial health score: ${Math.round(s.healthScore)}/100 (grade ${s.healthGrade})`,
+  ].join("\n");
+}
+
+interface QaEntry { q: string; a: string; source: "ai" | "offline" }
+
 function CopilotQA({ signals }: { signals: Signals }) {
   const [q, setQ] = useState("");
-  const [log, setLog] = useState<{ q: string; a: string }[]>([]);
-  const ask = () => {
-    const question = q.trim();
-    if (!question) return;
-    setLog(prev => [{ q: question, a: answerQuestion(question, signals) }, ...prev]);
+  const [log, setLog] = useState<QaEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Calls the grounded backend (POST /api/ai/ask). On any failure — offline,
+  // AI not configured, API error — falls back to the local rule-based answer so
+  // the box always returns something useful and never crashes.
+  const ask = async (raw?: string) => {
+    const question = (raw ?? q).trim();
+    if (!question || loading) return;
     setQ("");
+    setLoading(true);
+    try {
+      const result = await api.post<{ content: string }>("/api/ai/ask", {
+        messages: [{
+          role: "user",
+          content: `Here is the business's current financial snapshot (the only data you may use — do not invent numbers):\n\n${buildSnapshotBlock(signals)}\n\nQuestion: ${question}`,
+        }],
+        system: "You are an AI CFO copilot for an Indian SMB owner. Answer ONLY from the financial snapshot provided — never invent figures. Be concise (2-4 sentences), specific, and actionable. Use Indian rupee formatting (₹, L for lakhs, Cr for crores). If the snapshot can't answer the question, say so plainly.",
+      });
+      const answer = (result.content || "").trim();
+      setLog(prev => [{ q: question, a: answer || answerQuestion(question, signals), source: answer ? "ai" : "offline" }, ...prev]);
+    } catch (err) {
+      // Graceful degradation to the deterministic, rule-based answer.
+      toast.error(err instanceof Error && err.message.startsWith("503") ? "AI not configured — using offline answer" : "Couldn't reach the AI — using offline answer");
+      setLog(prev => [{ q: question, a: answerQuestion(question, signals), source: "offline" }, ...prev]);
+    } finally {
+      setLoading(false);
+    }
   };
+
   const suggestions = ["What's my runway?", "Why is cash down?", "How much is overdue?", "What's my health score?", "How's my debt coverage?"];
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><MessageSquareText size={14} className="text-[var(--color-primary)]" /> Ask the Copilot</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Plain-language answers grounded only in your stored metrics — no outside data, no guessing. Pattern-matched, so keep questions about cash, runway, receivables, debt or health.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Ask anything in plain language. The AI reasons over <strong className="text-[var(--color-text)]">only your live financial snapshot</strong> — cash, runway, receivables, debt and health. If the AI is unavailable, you'll get an instant offline answer from the same numbers.</p>
         <div className="flex gap-2">
-          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask()} placeholder="Ask about your finances…" className={INP} />
-          <button onClick={ask} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0"><Send size={13} /> Ask</button>
+          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask()} disabled={loading} placeholder="Ask about your finances…" className={INP} />
+          <button onClick={() => ask()} disabled={loading} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0 disabled:opacity-60">
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} {loading ? "Thinking…" : "Ask"}
+          </button>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {suggestions.map(sug => (
-            <button key={sug} onClick={() => { setLog(prev => [{ q: sug, a: answerQuestion(sug, signals) }, ...prev]); }}
-              className="text-[10px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40">
+            <button key={sug} onClick={() => ask(sug)} disabled={loading}
+              className="text-[10px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 disabled:opacity-50">
               {sug}
             </button>
           ))}
         </div>
       </div>
+      {loading && (
+        <div className={`${CARD} p-4 flex items-center gap-2 text-sm text-[var(--color-muted)]`}>
+          <Loader2 size={14} className="animate-spin text-[var(--color-primary)]" /> Reasoning over your live numbers…
+        </div>
+      )}
       {log.length > 0 && (
         <div className="space-y-3">
           {log.map((entry, i) => (
             <div key={i} className={`${CARD} p-4`}>
               <p className="text-sm font-medium flex items-start gap-2"><MessageSquareText size={13} className="text-[var(--color-primary)] mt-0.5 shrink-0" /> {entry.q}</p>
-              <p className="text-sm text-[var(--color-muted)] mt-2 pl-5">{entry.a}</p>
+              <p className="text-sm text-[var(--color-muted)] mt-2 pl-5 whitespace-pre-wrap">{entry.a}</p>
+              {entry.source === "offline" && (
+                <p className="text-[10px] text-[var(--color-muted)] mt-2 pl-5 flex items-center gap-1"><Info size={10} /> Offline answer — computed from your metrics without the AI.</p>
+              )}
             </div>
           ))}
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, generateId } from "@/lib/utils";
 import {
   Wifi, WifiOff, RefreshCw, Calculator, MapPin, Truck, Gauge, ClipboardList,
   Sun, Route, Camera, CloudUpload, CheckCircle2, Plus, Trash2, Signal, Smartphone,
@@ -27,6 +27,12 @@ interface QueueItem {
   at: string;          // ISO timestamp captured
   synced: boolean;
   meta?: string;       // optional extra context (gps, customer, note)
+  // ── Real-sync fields (flushed to the ledger on "Sync now") ──────────────────────
+  customer?: string;   // resolved customer name (matched to the store master list where possible)
+  mode?: "cash" | "upi"; // money mode for a collection
+  syncError?: string;  // last flush error — when present the item is still pending + retryable
+  syncedAt?: string;   // ISO timestamp the item actually hit the ledger
+  ledgerRef?: string;  // short human ref shown in the "synced to ledger" confirmation
 }
 
 // Narrow, typed access to navigator extras without `any`.
@@ -264,12 +270,25 @@ function ConnectivityStatus({ online }: { online: boolean }) {
 
 // ── #2 Offline action queue ──────────────────────────────────────────────────────────
 function OfflineQueue({ online }: { online: boolean }) {
+  const { store, addTransaction, updateInvoice } = useApp();
   const [queue, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
   const [kind, setKind] = useState<QueueKind>("sale");
+  const [syncing, setSyncing] = useState(false);
 
   const pending = queue.filter(q => !q.synced);
+  const bankAccountId = store.bankAccounts[0]?.id ?? "";
+
+  // Match a queued entry's free-text customer back to a real customer in the store
+  // master list (case-insensitive). Returns the canonical stored name when found so
+  // the ledger entry + invoice settlement reference the same account.
+  const resolveCustomer = (raw?: string): string | undefined => {
+    if (!raw) return undefined;
+    const want = raw.trim().toLowerCase();
+    const hit = store.invoices.find(i => i.customer.trim().toLowerCase() === want);
+    return hit?.customer ?? raw.trim();
+  };
 
   const capture = () => {
     if (!label.trim()) { toast.error("Add a short description for the entry"); return; }
@@ -282,12 +301,99 @@ function OfflineQueue({ online }: { online: boolean }) {
     toast.success("Captured offline — queued for sync");
   };
 
-  const syncNow = () => {
+  // Flush ONE queued item to the real books. Money entries become a transaction in
+  // the cash book; a collection additionally settles the customer's oldest open
+  // invoice so their outstanding balance actually drops. Throws on failure so the
+  // caller can keep the item pending + retryable.
+  const flushOne = (q: QueueItem): { ledgerRef: string } => {
+    const when = (q.at || new Date().toISOString()).slice(0, 10);
+
+    if (q.kind === "collection") {
+      const customer = resolveCustomer(q.customer) ?? "Field collection";
+      if (q.amount <= 0) throw new Error("collection has no amount");
+      // 1) Cash book: money in is positive revenue.
+      addTransaction({
+        id: generateId(), date: when, amount: Math.abs(q.amount),
+        description: `Field collection${q.mode ? ` (${q.mode.toUpperCase()})` : ""} — ${customer}`,
+        category: "revenue", counterparty: customer, isRecurring: false,
+        bankAccountId, notes: q.meta,
+      });
+      // 2) Outstanding: apply against the customer's oldest unpaid invoice.
+      const open = store.invoices
+        .filter(i => i.customer.trim().toLowerCase() === customer.trim().toLowerCase() && i.status !== "paid")
+        .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+      const target = open[0];
+      if (target && q.amount >= target.amount) {
+        updateInvoice({ ...target, status: "paid" });
+        return { ledgerRef: `Cash book + ${target.invoiceNumber ?? "invoice"} settled` };
+      }
+      if (target) {
+        return { ledgerRef: `Cash book · part-payment on ${target.invoiceNumber ?? "invoice"}` };
+      }
+      return { ledgerRef: "Cash book (no open invoice to settle)" };
+    }
+
+    if (q.kind === "sale" || q.kind === "daysheet") {
+      if (q.amount <= 0) throw new Error("sale has no amount");
+      const customer = resolveCustomer(q.customer) ?? "Counter sale";
+      addTransaction({
+        id: generateId(), date: when, amount: Math.abs(q.amount),
+        description: q.label, category: "revenue", counterparty: customer,
+        isRecurring: false, bankAccountId, notes: q.meta,
+      });
+      return { ledgerRef: "Cash book (revenue)" };
+    }
+
+    // visits / receipts carry no money — nothing to post to the ledger; mark done.
+    return { ledgerRef: "Logged (no ledger impact)" };
+  };
+
+  const syncNow = async () => {
     if (pending.length === 0) { toast.error("Nothing pending to sync"); return; }
     if (!online) { toast.error("Still offline — entries stay queued until the network returns"); return; }
-    setQueue(prev => prev.map(q => ({ ...q, synced: true })));
-    toast.success(`Flushed ${pending.length} entr${pending.length === 1 ? "y" : "ies"} to the books`);
+    setSyncing(true);
+    let ok = 0, failed = 0;
+    const results: Record<string, Partial<QueueItem>> = {};
+    for (const q of pending) {
+      try {
+        const { ledgerRef } = flushOne(q);
+        results[q.id] = { synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined };
+        ok++;
+      } catch (e) {
+        results[q.id] = { synced: false, syncError: e instanceof Error ? e.message : "Sync failed" };
+        failed++;
+      }
+    }
+    setQueue(prev => prev.map(q => results[q.id] ? { ...q, ...results[q.id] } : q));
+    setSyncing(false);
+    if (ok > 0 && failed === 0) toast.success(`Synced ${ok} entr${ok === 1 ? "y" : "ies"} to the ledger`);
+    else if (ok > 0 && failed > 0) toast.warning(`${ok} synced to ledger · ${failed} kept pending to retry`);
+    else toast.error(`Could not sync ${failed} entr${failed === 1 ? "y" : "ies"} — kept pending to retry`);
   };
+
+  const retryOne = (id: string) => {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    if (!online) { toast.error("Still offline — retry once the network returns"); return; }
+    try {
+      const { ledgerRef } = flushOne(item);
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined } : q));
+      toast.success("Synced to ledger");
+    } catch (e) {
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, synced: false, syncError: e instanceof Error ? e.message : "Sync failed" } : q));
+      toast.error("Retry failed — still pending");
+    }
+  };
+
+  // Auto-flush to the ledger the moment the network comes back (false → true), so a
+  // field user who reconnects doesn't have to remember to tap "Sync now".
+  const syncRef = useRef(syncNow);
+  syncRef.current = syncNow;
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current && pending.length > 0) { void syncRef.current(); }
+    wasOnline.current = online;
+  }, [online, pending.length]);
 
   return (
     <div className="space-y-4">
@@ -324,9 +430,9 @@ function OfflineQueue({ online }: { online: boolean }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button onClick={syncNow} disabled={pending.length === 0}
+        <button onClick={syncNow} disabled={pending.length === 0 || syncing || !online}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/25 disabled:opacity-40">
-          <RefreshCw size={12} /> Sync now ({pending.length})
+          <RefreshCw size={12} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : `Sync now (${pending.length})`}
         </button>
         {queue.length > 0 && (
           <button onClick={() => { setQueue([]); toast.success("Queue cleared"); }} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Clear all</button>
@@ -351,11 +457,21 @@ function OfflineQueue({ online }: { online: boolean }) {
                   <td className="px-4 py-2.5 text-xs font-medium">{q.label}{q.meta && <span className="block text-[10px] text-[var(--color-muted)]">{q.meta}</span>}</td>
                   <td className="px-4 py-2.5 tabular-nums text-xs">{q.amount > 0 ? formatCurrency(q.amount) : "—"}</td>
                   <td className="px-4 py-2.5">
-                    {q.synced
-                      ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Synced</span>
-                      : <span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><CloudUpload size={11} /> Pending</span>}
+                    {q.synced ? (
+                      <span className="inline-flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Synced to ledger</span>
+                        {q.ledgerRef && <span className="text-[10px] text-[var(--color-muted)]">{q.ledgerRef}{q.syncedAt ? ` · ${format(new Date(q.syncedAt), "h:mm a")}` : ""}</span>}
+                      </span>
+                    ) : q.syncError ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-semibold" title={q.syncError}><AlertTriangle size={11} /> Failed — pending</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><CloudUpload size={11} /> Pending</span>
+                    )}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {!q.synced && (
+                      <button onClick={() => retryOne(q.id)} className="text-[var(--color-primary)] hover:opacity-70 mr-2" title="Retry sync to ledger"><RefreshCw size={13} /></button>
+                    )}
                     <button onClick={() => setQueue(prev => prev.filter(x => x.id !== q.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
                 </tr>
@@ -365,8 +481,10 @@ function OfflineQueue({ online }: { online: boolean }) {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">
-        Honest note: “Sync now” marks queued items as committed locally to simulate the flush. Real server sync happens
-        automatically through the app's sync engine once you're back online — this view lets you stage entries in the meantime.
+        “Sync now” flushes each pending entry to the real books: a collection posts to the cash book as revenue and settles
+        the customer's oldest open invoice (so their outstanding actually drops); a sale / day-sheet posts as revenue. Entries
+        are matched to your customer master list where the name lines up. Anything that fails stays pending with a retry — it is
+        never silently marked done. Captures still work fully offline and hold safely until the network returns.
       </p>
     </div>
   );
@@ -485,8 +603,15 @@ function KiranaQuickBill() {
 
 // ── #4 Field collection capture (with optional GPS) ──────────────────────────────────
 function FieldCollection() {
+  const { store } = useApp();
   const [, setQueue] = useFeatureState<QueueItem[]>("field-queue", []);
   const [customer, setCustomer] = useState("");
+  // Real customer master list, derived from outstanding invoices in the store, so a
+  // field collection can be matched back to the right ledger account on sync.
+  const customerNames = useMemo(
+    () => Array.from(new Set(store.invoices.map(i => i.customer).filter(Boolean))).sort(),
+    [store.invoices],
+  );
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<"cash" | "upi">("cash");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -514,6 +639,7 @@ function FieldCollection() {
       id: crypto.randomUUID(), kind: "collection",
       label: `${mode.toUpperCase()} from ${customer.trim()}`, amount: Math.round(amt),
       at: new Date().toISOString(), synced: false,
+      customer: customer.trim(), mode,
       meta: coords ? `GPS ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : "No GPS stamp",
     }, ...prev]);
     setCustomer(""); setAmount(""); setCoords(null);
@@ -527,7 +653,13 @@ function FieldCollection() {
         <p className="text-xs text-[var(--color-muted)]">Record a doorstep collection with a verifiable timestamp and an optional GPS stamp — useful proof against fake-collection disputes.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
-          <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Stores" className={INP} />
+          <input value={customer} onChange={e => setCustomer(e.target.value)} list="field-customer-master" placeholder="Sharma Stores" className={INP} />
+          <datalist id="field-customer-master">
+            {customerNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+          {customerNames.length > 0 && (
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">Pick from your {customerNames.length} known customer{customerNames.length === 1 ? "" : "s"} so the collection posts against the right ledger account.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

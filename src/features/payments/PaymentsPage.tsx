@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import {
@@ -336,6 +337,21 @@ function UpiQrGenerator() {
 }
 
 // ── Payment-link builder ───────────────────────────────────────────────────────────
+// ── Live payment-link API shapes (backend: modules/books/payments.js) ──────────────
+type LedgerLite = { id: string; name: string; is_party: boolean; is_bank: boolean; is_active: boolean };
+type PaymentLink = {
+  id: string;
+  invoice_voucher_id: string | null;
+  party_ledger_id: string | null;
+  provider: string;
+  provider_ref?: string | null;
+  amount: string;
+  status: "CREATED" | "PAID" | string;
+  link_url: string | null;
+  created_at?: string;
+  note?: string;
+};
+
 function PaymentLinkBuilder() {
   const { store } = useApp();
   const [title, setTitle] = useState("");
@@ -345,6 +361,44 @@ function PaymentLinkBuilder() {
   const [allowPartial, setAllowPartial] = useState(false);
   const [expiryDays, setExpiryDays] = useState("7");
   const [vpa, setVpa] = useState("");
+
+  // Live backend wiring: real hosted links + settlement reconciliation.
+  const [ledgers, setLedgers] = useState<LedgerLite[]>([]);
+  const [links, setLinks] = useState<PaymentLink[]>([]);
+  const [partyLedgerId, setPartyLedgerId] = useState("");
+  const [bankLedgerId, setBankLedgerId] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [apiAvailable, setApiAvailable] = useState(true);
+
+  const partyLedgers = useMemo(() => ledgers.filter(l => l.is_party && l.is_active), [ledgers]);
+  const bankLedgers = useMemo(() => ledgers.filter(l => l.is_bank && l.is_active), [ledgers]);
+
+  const refreshLinks = useCallback(async () => {
+    setLoadingLinks(true);
+    try {
+      const rows = await api.get<PaymentLink[]>("/api/books/payments/links");
+      setLinks(Array.isArray(rows) ? rows : []);
+      setApiAvailable(true);
+    } catch {
+      setApiAvailable(false);
+    } finally {
+      setLoadingLinks(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const l = await api.get<LedgerLite[]>("/api/books/ledgers");
+        if (alive) setLedgers(Array.isArray(l) ? l : []);
+      } catch { /* books not set up / offline — manual UPI link still works */ }
+    })();
+    refreshLinks();
+    return () => { alive = false; };
+  }, [refreshLinks]);
 
   const base = parseFloat(amount) || 0;
   const gst = includeGst ? Math.round(base * (parseFloat(gstPct) || 0) / 100) : 0;
@@ -371,7 +425,59 @@ function PaymentLinkBuilder() {
     return lines.join("\n");
   }, [store.firm, title, total, gst, allowPartial, expiryDate, upiLink, vpaValid]);
 
+  async function generateLink() {
+    if (!(total > 0)) { toast.error("Enter a base amount first"); return; }
+    setCreating(true);
+    try {
+      const link = await api.post<PaymentLink>("/api/books/payments/links", {
+        amount: total,
+        partyLedgerId: partyLedgerId || undefined,
+        provider: "razorpay",
+      });
+      if (link?.link_url && !link.link_url.startsWith("pending-gateway://")) {
+        toast.success("Live payment link created");
+      } else {
+        toast.success(link?.note ? "Link created — mark paid manually" : "Link created");
+        if (link?.note) toast.message(link.note);
+      }
+      setApiAvailable(true);
+      await refreshLinks();
+    } catch (e) {
+      setApiAvailable(false);
+      toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not create link — books may not be set up");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function markPaid(linkId: string) {
+    if (!bankLedgerId) { toast.error("Pick the bank/UPI ledger that received the money"); return; }
+    setPayingId(linkId);
+    try {
+      await api.post(`/api/books/payments/links/${linkId}/paid`, { bankLedgerId });
+      toast.success("Marked paid — receipt posted & allocated");
+      await refreshLinks();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not mark paid");
+    } finally {
+      setPayingId(null);
+    }
+  }
+
+  function shareLinkText(link: PaymentLink) {
+    const url = link.link_url && !link.link_url.startsWith("pending-gateway://") ? link.link_url : "";
+    return [
+      `${store.firm?.name ?? "We"} — payment request${title ? `: ${title}` : ""}`,
+      `Amount: ${formatCurrency(Number(link.amount) || 0)}`,
+      url ? `Pay securely: ${url}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  const liveUrlFor = (link: PaymentLink) =>
+    link.link_url && !link.link_url.startsWith("pending-gateway://") ? link.link_url : "";
+
   return (
+    <div className="space-y-4">
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Branded Payment Link</h2>
@@ -408,6 +514,24 @@ function PaymentLinkBuilder() {
             Allow partial payment
           </label>
         </div>
+
+        <div className="pt-3 mt-1 border-t border-[var(--color-border)] space-y-2">
+          <p className="text-xs font-medium flex items-center gap-1.5"><Zap size={12} className="text-[var(--color-primary)]" /> Generate a real hosted link</p>
+          {partyLedgers.length > 0 && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Bill to (party ledger) — optional, enables auto-allocation</label>
+              <select value={partyLedgerId} onChange={e => setPartyLedgerId(e.target.value)} className={INP}>
+                <option value="">— Account-level (no party) —</option>
+                {partyLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          )}
+          <button onClick={generateLink} disabled={creating || !(total > 0)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-50">
+            {creating ? <RefreshCw size={12} className="animate-spin" /> : <Link2 size={12} />} {creating ? "Creating…" : "Create live payment link"}
+          </button>
+          <p className="text-[10px] text-[var(--color-muted)]">Mints a Razorpay hosted link when gateway keys are set; otherwise records a trackable link you mark paid manually. Posts a receipt against the party on settlement.</p>
+        </div>
       </div>
 
       <div className={`${CARD} p-5 space-y-3`}>
@@ -439,6 +563,71 @@ function PaymentLinkBuilder() {
         </div>
         {!vpaValid && <p className="text-[10px] text-orange-400">Add a valid VPA to embed a tappable UPI link in the request.</p>}
       </div>
+    </div>
+
+    <div className={`${CARD} p-5 space-y-3`}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Live payment links</h3>
+        <button onClick={refreshLinks} disabled={loadingLinks}
+          className="flex items-center gap-1 text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">
+          <RefreshCw size={11} className={loadingLinks ? "animate-spin" : ""} /> Refresh
+        </button>
+      </div>
+      {bankLedgers.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-xs text-[var(--color-muted)]">Settle into</label>
+          <select value={bankLedgerId} onChange={e => setBankLedgerId(e.target.value)} className={`${INP} max-w-[260px]`}>
+            <option value="">— Pick bank / UPI ledger —</option>
+            {bankLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+      )}
+      {!apiAvailable ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Books backend unavailable — manual UPI links above still work. Links will appear here once you're online and the chart of accounts is set up.</p>
+      ) : links.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No live links yet. Create one on the left — it'll show here with a copyable URL and a mark-paid action.</p>
+      ) : (
+        <div className="space-y-2">
+          {links.map(link => {
+            const url = liveUrlFor(link);
+            const paid = link.status === "PAID";
+            return (
+              <div key={link.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(link.amount) || 0)}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${paid ? "bg-green-500/15 text-green-400" : "bg-yellow-500/15 text-yellow-400"}`}>{paid ? "Paid" : "Awaiting"}</span>
+                    <span className="text-[10px] text-[var(--color-muted)] uppercase">{link.provider}</span>
+                  </div>
+                  {url
+                    ? <a href={url} target="_blank" rel="noreferrer" className="text-[11px] text-[var(--color-primary)] hover:underline break-all">{url}</a>
+                    : <span className="text-[11px] text-[var(--color-muted)]">{link.note ? link.note : "No hosted URL — mark paid manually."}</span>}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {url && (
+                    <>
+                      <button onClick={() => copy(url, "Payment link copied")} className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] hover:underline">
+                        <Copy size={11} /> Copy
+                      </button>
+                      <a href={`https://wa.me/?text=${encodeURIComponent(shareLinkText(link))}`} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1 text-[11px] text-[var(--color-text)] hover:text-[var(--color-primary)]">
+                        <MessageCircle size={11} /> Share
+                      </a>
+                    </>
+                  )}
+                  {!paid && (
+                    <button onClick={() => markPaid(link.id)} disabled={payingId === link.id}
+                      className="flex items-center gap-1 text-[11px] bg-[var(--color-primary)] text-[var(--color-bg)] px-2.5 py-1 rounded-md font-medium disabled:opacity-50">
+                      {payingId === link.id ? <RefreshCw size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Mark paid
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
     </div>
   );
 }

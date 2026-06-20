@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import EmptyState from "@/components/EmptyState";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
 import {
   Briefcase, KanbanSquare, FileText, ShoppingCart, Coins, UserCircle2,
   TrendingUp, BellRing, Trophy, Target, ClipboardList, Plus, Trash2,
@@ -146,10 +147,32 @@ const STAGE_PROB: Record<Stage, number> = {
 type Deal = {
   id: string; title: string; customer: string; rep: string;
   value: number; stage: Stage; source: string; expectedClose: string;
+  crmId?: string; // backend /api/crm deal id once persisted (optimistic cache otherwise)
 };
 
 function useDeals() {
   return useFeatureState<Deal[]>("sales-deals", []);
+}
+
+// ── CRM backend bridge (/api/crm) ─────────────────────────────────────────────────
+// The page's local pipeline model uses lowercase stages; the CRM backend
+// (modules/crm) uses its own vocabulary. Map between them so local state stays the
+// optimistic cache while create / stage-move / convert hit the real endpoints.
+const STAGE_TO_CRM: Record<Stage, string> = {
+  enquiry: "QUALIFICATION", quoted: "PROPOSAL", negotiation: "NEGOTIATION", won: "WON", lost: "LOST",
+};
+const CRM_TO_STAGE: Record<string, Stage> = {
+  QUALIFICATION: "enquiry", DEMO: "quoted", PROPOSAL: "quoted", NEGOTIATION: "negotiation", WON: "won", LOST: "lost",
+};
+type CrmDeal = { id: string; title: string; value: number | string; stage: string; status: string; source: string | null };
+type CrmLead = { id: string; name: string; phone: string | null; source: string | null; status: string; converted_deal_id: string | null };
+
+function crmDealToLocal(d: CrmDeal): Deal {
+  return {
+    id: d.id, crmId: d.id, title: d.title || "Untitled deal", customer: "—", rep: "Unassigned",
+    value: Number(d.value || 0), stage: CRM_TO_STAGE[(d.stage || "").toUpperCase()] || "enquiry",
+    source: d.source || "—", expectedClose: new Date().toISOString().split("T")[0],
+  };
 }
 
 // ── #3 Pipeline Board (Kanban) ───────────────────────────────────────────────────
@@ -161,28 +184,68 @@ function PipelineBoard() {
   const [value, setValue] = useState("");
   const [source, setSource] = useState("WhatsApp");
   const [expectedClose] = useState(() => new Date().toISOString().split("T")[0]);
+  const [saving, setSaving] = useState(false);
+  const loadedRef = useRef(false);
 
-  const addDeal = () => {
+  // Load the real pipeline from /api/crm once and merge into the optimistic cache:
+  // CRM-backed deals are keyed by crmId so they don't duplicate local-only rows.
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    api.get<CrmDeal[]>("/api/crm/deals")
+      .then(remote => {
+        if (!Array.isArray(remote) || remote.length === 0) return;
+        setDeals(prev => {
+          const localOnly = prev.filter(d => !d.crmId);
+          const mapped = remote.map(crmDealToLocal);
+          return [...mapped, ...localOnly];
+        });
+      })
+      .catch(() => { /* offline / error → keep local cache, page still works */ });
+  }, [setDeals]);
+
+  const addDeal = async () => {
     const v = parseFloat(value);
     if (!title.trim() || !customer.trim() || isNaN(v) || v <= 0) {
       toast.error("Enter a deal title, customer and a positive value");
       return;
     }
-    setDeals([...deals, {
-      id: crypto.randomUUID(), title: title.trim(), customer: customer.trim(),
+    const localId = crypto.randomUUID();
+    const optimistic: Deal = {
+      id: localId, title: title.trim(), customer: customer.trim(),
       rep: rep.trim() || "Unassigned", value: v, stage: "enquiry", source, expectedClose,
-    }]);
+    };
+    setDeals([...deals, optimistic]);
     setTitle(""); setCustomer(""); setValue("");
-    toast.success("Deal added to the pipeline");
+    setSaving(true);
+    try {
+      const created = await api.post<CrmDeal>("/api/crm/deals", {
+        title: optimistic.title, value: v, source, stage: "QUALIFICATION",
+      });
+      setDeals(prev => prev.map(d => d.id === localId ? { ...d, crmId: created.id } : d));
+      toast.success("Deal added to the pipeline");
+    } catch {
+      toast.message("Deal saved locally — couldn't reach the CRM (will stay on this device)");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const move = (id: string, dir: 1 | -1) => {
-    setDeals(deals.map(d => {
-      if (d.id !== id) return d;
-      const i = STAGES.indexOf(d.stage);
-      const next = STAGES[Math.min(STAGES.length - 1, Math.max(0, i + dir))];
-      return { ...d, stage: next };
-    }));
+  const move = async (id: string, dir: 1 | -1) => {
+    const target = deals.find(d => d.id === id);
+    if (!target) return;
+    const i = STAGES.indexOf(target.stage);
+    const next = STAGES[Math.min(STAGES.length - 1, Math.max(0, i + dir))];
+    if (next === target.stage) return;
+    setDeals(deals.map(d => d.id === id ? { ...d, stage: next } : d));
+    if (!target.crmId) return; // local-only deal: optimistic cache is the source of truth
+    try {
+      await api.post(`/api/crm/deals/${target.crmId}/stage`, { stage: STAGE_TO_CRM[next] });
+    } catch {
+      // revert on failure so the board reflects the server
+      setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: target.stage } : d));
+      toast.error("Couldn't move the deal — reverted");
+    }
   };
 
   const columnTotal = (s: Stage) => deals.filter(d => d.stage === s).reduce((sum, d) => sum + d.value, 0);
@@ -216,7 +279,7 @@ function PipelineBoard() {
               {["WhatsApp", "IndiaMART", "JustDial", "Referral", "Walk-in", "Website"].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <button onClick={addDeal} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+          <button onClick={addDeal} disabled={saving} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
             <Plus size={13} /> Add
           </button>
         </div>
@@ -275,6 +338,18 @@ function DealTracker() {
   const [deals, setDeals] = useDeals();
   const today = new Date();
 
+  // Inline stage change persists to /api/crm for backend-linked deals (optimistic).
+  const changeStage = async (d: Deal, next: Stage) => {
+    setDeals(deals.map(x => x.id === d.id ? { ...x, stage: next } : x));
+    if (!d.crmId) return;
+    try {
+      await api.post(`/api/crm/deals/${d.crmId}/stage`, { stage: STAGE_TO_CRM[next] });
+    } catch {
+      setDeals(prev => prev.map(x => x.id === d.id ? { ...x, stage: d.stage } : x));
+      toast.error("Couldn't update the stage — reverted");
+    }
+  };
+
   if (deals.length === 0) {
     return <p className="text-xs text-[var(--color-muted)] px-1">No deals yet. Add deals in the Pipeline tab — they appear here as a sortable list with aging.</p>;
   }
@@ -304,7 +379,7 @@ function DealTracker() {
                   <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.rep}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(d.value)}</td>
                   <td className="px-4 py-2.5">
-                    <select value={d.stage} onChange={e => setDeals(deals.map(x => x.id === d.id ? { ...x, stage: e.target.value as Stage } : x))} className={`${INP} py-1 max-w-[140px]`}>
+                    <select value={d.stage} onChange={e => changeStage(d, e.target.value as Stage)} className={`${INP} py-1 max-w-[140px]`}>
                       {STAGES.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
                     </select>
                   </td>
@@ -324,6 +399,9 @@ function DealTracker() {
 
 // ── #4 / #5 Quote Builder → Sales Order (GST-correct, UPI-ready) ─────────────────
 type LineItem = { id: string; name: string; qty: number; rate: number; gstPct: number };
+// Company profile shape we read back from GET /api/company. The profile FIELDS list
+// doesn't (yet) include a UPI column, so we read every plausible key defensively.
+type CompanyProfile = { company_name?: string | null; upi_id?: string | null; upiId?: string | null; vpa?: string | null };
 function QuoteToOrder() {
   const { store } = useApp();
   const [buyer, setBuyer] = useState("");
@@ -331,6 +409,18 @@ function QuoteToOrder() {
   const [discountPct, setDiscountPct] = useState("0");
   const [lines, setLines] = useState<LineItem[]>([{ id: crypto.randomUUID(), name: "", qty: 1, rate: 0, gstPct: 18 }]);
   const [converted, setConverted] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [orderRef, setOrderRef] = useState<string | null>(null);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
+
+  // Pull the firm's real UPI/VPA from the company profile. Fall back to a firm-store
+  // field if present; otherwise leave it null so we can prompt instead of faking one.
+  useEffect(() => {
+    api.get<CompanyProfile>("/api/company").then(setCompany).catch(() => setCompany(null));
+  }, []);
+  const firmUpi =
+    (company?.upi_id || company?.upiId || company?.vpa
+      || (store.firm as unknown as { upiId?: string }).upiId || "").trim();
 
   const updateLine = (id: string, patch: Partial<LineItem>) =>
     setLines(lines.map(l => l.id === id ? { ...l, ...patch } : l));
@@ -352,14 +442,49 @@ function QuoteToOrder() {
     return { rows, subtotal, taxable, totalGst, grand };
   }, [lines, disc]);
 
-  const upiLink = `upi://pay?pa=merchant@upi&pn=${encodeURIComponent(store.firm?.name ?? "Merchant")}&am=${calc.grand.toFixed(2)}&cu=INR`;
+  // Real UPI collect link built from the firm's own VPA (no hardcoded merchant@upi).
+  const upiLink = firmUpi
+    ? `upi://pay?pa=${encodeURIComponent(firmUpi)}&pn=${encodeURIComponent(company?.company_name || store.firm?.name || "Merchant")}&am=${calc.grand.toFixed(2)}&cu=INR`
+    : null;
   const gstinValid = gstin === "" || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$/.test(gstin.toUpperCase());
 
-  const convert = () => {
+  // Blended GST rate for the invoice (the invoices API takes one gst_rate); lines
+  // carry their own slab too. Taxable-weighted so the recorded GST matches the quote.
+  const blendedGstRate = calc.taxable > 0 ? Math.round((calc.totalGst / calc.taxable) * 100) : 18;
+
+  const convert = async () => {
     if (!buyer.trim() || calc.grand <= 0) { toast.error("Add a buyer and at least one priced line"); return; }
     if (!gstinValid) { toast.error("GSTIN format looks invalid (15 chars)"); return; }
-    setConverted(true);
-    toast.success(`Sales order created for ${buyer.trim()} — ${formatCurrency(Math.round(calc.grand))}`);
+    setCreating(true);
+    try {
+      // Create a REAL invoice via the invoices API. Each priced line becomes an
+      // invoice item; discount is folded into the unit price so totals reconcile.
+      const items = calc.rows
+        .filter(r => r.qty > 0 && r.rate > 0 && r.name.trim())
+        .map(r => ({
+          description: r.name.trim(),
+          quantity: r.qty,
+          unit_price: r.afterDisc / r.qty, // discounted unit price
+          gst_rate: r.gstPct,
+        }));
+      if (items.length === 0) { toast.error("Add at least one named, priced line item"); setCreating(false); return; }
+      const inv = await api.post<{ invoice_number: string }>("/api/invoices", {
+        customer_name: buyer.trim(),
+        customer_gstin: gstin.trim() || undefined,
+        gst_rate: blendedGstRate,
+        items,
+      });
+      setConverted(true);
+      setOrderRef(inv.invoice_number || null);
+      toast.success(`Invoice ${inv.invoice_number || ""} created for ${buyer.trim()} — ${formatCurrency(Math.round(calc.grand))}`);
+    } catch (e) {
+      const msg = e instanceof Error && e.message.startsWith("403")
+        ? "Only an owner/admin can raise invoices — ask them to convert this order"
+        : "Couldn't create the invoice — try again";
+      toast.error(msg);
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -423,17 +548,30 @@ function QuoteToOrder() {
 
         <div className={`${CARD} p-4 space-y-3`}>
           <p className="text-sm font-semibold flex items-center gap-2"><ShoppingCart size={14} className="text-[var(--color-primary)]" /> Convert to Sales Order</p>
-          <p className="text-xs text-[var(--color-muted)]">Accept the quote to lock it as an order. A UPI collect link is generated so the buyer can pay on acceptance.</p>
-          <button onClick={convert} disabled={converted}
+          <p className="text-xs text-[var(--color-muted)]">Accept the quote to raise a real GST invoice. A UPI collect link from your firm&apos;s VPA is attached so the buyer can pay on acceptance.</p>
+          <button onClick={convert} disabled={converted || creating}
             className="w-full text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium flex items-center justify-center gap-1.5 disabled:opacity-50">
-            {converted ? <><CheckCircle2 size={13} /> Order created</> : <>Accept &amp; create order <ArrowRight size={13} /></>}
+            {converted ? <><CheckCircle2 size={13} /> Invoice created</> : creating ? <>Creating invoice…</> : <>Accept &amp; create order <ArrowRight size={13} /></>}
           </button>
           {converted && (
             <div className="bg-green-950/20 border border-green-800/40 rounded-lg p-3 text-xs space-y-1.5">
-              <p className="text-green-400 font-semibold">Sales order for {buyer} — {formatCurrency(Math.round(calc.grand))}</p>
-              <p className="text-[var(--color-muted)] break-all">UPI link: {upiLink}</p>
-              <p className="text-[10px] text-[var(--color-muted)]">Share this payment link over WhatsApp; the buyer pays on any UPI app.</p>
+              <p className="text-green-400 font-semibold">Invoice {orderRef ? `${orderRef} ` : ""}for {buyer} — {formatCurrency(Math.round(calc.grand))}</p>
+              {upiLink ? (
+                <>
+                  <p className="text-[var(--color-muted)] break-all">UPI link: {upiLink}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">Share this payment link over WhatsApp; the buyer pays on any UPI app.</p>
+                </>
+              ) : (
+                <p className="text-[10px] text-yellow-400 flex items-center gap-1.5">
+                  <BellRing size={12} /> No UPI ID set for your firm — add one in Company settings to attach a real payment link.
+                </p>
+              )}
             </div>
+          )}
+          {!converted && !firmUpi && company !== null && (
+            <p className="text-[10px] text-yellow-400 flex items-center gap-1.5">
+              <BellRing size={12} /> No firm UPI ID found — set it in Company settings so accepted orders carry a real payment link.
+            </p>
           )}
         </div>
       </div>
@@ -705,7 +843,22 @@ function SalesForecast() {
 }
 
 // ── #7 / #38 Lead Capture & Follow-up Reminders ──────────────────────────────────
-type Lead = { id: string; name: string; phone: string; source: string; status: "new" | "contacted" | "qualified" | "dropped"; nextFollowUp: string; note: string };
+type Lead = { id: string; name: string; phone: string; source: string; status: "new" | "contacted" | "qualified" | "dropped"; nextFollowUp: string; note: string; crmId?: string; converted?: boolean };
+// Local lead status → CRM lead status vocabulary (modules/crm LEAD_STATUSES).
+const LEAD_STATUS_TO_CRM: Record<Lead["status"], string> = {
+  new: "NEW", contacted: "CONTACTED", qualified: "QUALIFIED", dropped: "JUNK",
+};
+function crmLeadToLocal(l: CrmLead): Lead {
+  const st = (l.status || "").toUpperCase();
+  const status: Lead["status"] = st === "CONTACTED" ? "contacted"
+    : st === "QUALIFIED" || st === "CONVERTED" ? "qualified"
+    : st === "UNQUALIFIED" || st === "JUNK" ? "dropped" : "new";
+  return {
+    id: l.id, crmId: l.id, name: l.name || "Unnamed lead", phone: l.phone || "",
+    source: l.source || "—", status, nextFollowUp: new Date().toISOString().split("T")[0],
+    note: "", converted: !!l.converted_deal_id || st === "CONVERTED",
+  };
+}
 function LeadFollowUps() {
   const [leads, setLeads] = useFeatureState<Lead[]>("sales-leads", []);
   const [name, setName] = useState("");
@@ -713,16 +866,64 @@ function LeadFollowUps() {
   const [source, setSource] = useState("WhatsApp");
   const [nextFollowUp, setNextFollowUp] = useState(() => new Date().toISOString().split("T")[0]);
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
   const today = new Date();
+  const loadedRef = useRef(false);
 
-  const add = () => {
+  // Load real leads from /api/crm/leads once; merge with local-only captures.
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    api.get<CrmLead[]>("/api/crm/leads")
+      .then(remote => {
+        if (!Array.isArray(remote) || remote.length === 0) return;
+        setLeads(prev => {
+          const localOnly = prev.filter(l => !l.crmId);
+          return [...remote.map(crmLeadToLocal), ...localOnly];
+        });
+      })
+      .catch(() => { /* keep local cache offline */ });
+  }, [setLeads]);
+
+  const add = async () => {
     if (!name.trim()) { toast.error("Enter a lead name"); return; }
-    setLeads([...leads, { id: crypto.randomUUID(), name: name.trim(), phone: phone.trim(), source, status: "new", nextFollowUp, note: note.trim() }]);
+    const localId = crypto.randomUUID();
+    setLeads([...leads, { id: localId, name: name.trim(), phone: phone.trim(), source, status: "new", nextFollowUp, note: note.trim() }]);
+    const payload = { name: name.trim(), phone: phone.trim() || undefined, source };
     setName(""); setPhone(""); setNote("");
-    toast.success("Lead captured");
+    setSaving(true);
+    try {
+      const created = await api.post<CrmLead>("/api/crm/leads", payload);
+      setLeads(prev => prev.map(l => l.id === localId ? { ...l, crmId: created.id } : l));
+      toast.success("Lead captured");
+    } catch {
+      toast.message("Lead saved locally — couldn't reach the CRM");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const setStatus = (id: string, status: Lead["status"]) => setLeads(leads.map(l => l.id === id ? { ...l, status } : l));
+  const setStatus = (id: string, status: Lead["status"]) => {
+    const target = leads.find(l => l.id === id);
+    setLeads(leads.map(l => l.id === id ? { ...l, status } : l));
+    if (target?.crmId) {
+      api.post(`/api/crm/leads/${target.crmId}/status`, { status: LEAD_STATUS_TO_CRM[status] })
+        .catch(() => toast.error("Couldn't sync the lead status to the CRM"));
+    }
+  };
+
+  // Convert a qualified lead into a pipeline deal via the real endpoint.
+  const convert = async (l: Lead) => {
+    if (!l.crmId) { toast.error("This lead isn't synced to the CRM yet — try again in a moment"); return; }
+    if (l.converted) { toast.message("Lead already converted to a deal"); return; }
+    try {
+      await api.post(`/api/crm/leads/${l.crmId}/convert`, {});
+      setLeads(prev => prev.map(x => x.id === l.id ? { ...x, status: "qualified", converted: true } : x));
+      toast.success(`${l.name} converted to a deal — see the Pipeline tab`);
+    } catch {
+      toast.error("Couldn't convert the lead");
+    }
+  };
   const overdueCount = leads.filter(l => l.status !== "dropped" && l.status !== "qualified" && differenceInCalendarDays(parseISO(l.nextFollowUp), today) < 0).length;
 
   return (
@@ -752,7 +953,7 @@ function LeadFollowUps() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
             <input value={note} onChange={e => setNote(e.target.value)} placeholder="Wants bulk pricing" className={INP} />
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
+          <button onClick={add} disabled={saving} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
             <Plus size={13} /> Add
           </button>
         </div>
@@ -791,6 +992,11 @@ function LeadFollowUps() {
                         <div className="flex items-center gap-2">
                           {l.phone && <a href={`tel:${l.phone}`} className="text-[var(--color-muted)] hover:text-[var(--color-primary)]" title="Call"><Phone size={13} /></a>}
                           {l.phone && <a href={`https://wa.me/91${l.phone.replace(/\D/g, "").slice(-10)}`} target="_blank" rel="noreferrer" className="text-[var(--color-muted)] hover:text-green-400" title="WhatsApp"><MessageCircle size={13} /></a>}
+                          {l.status !== "dropped" && (
+                            l.converted
+                              ? <span className="text-[10px] text-green-400 flex items-center gap-1" title="Converted to a deal"><CheckCircle2 size={12} /> deal</span>
+                              : <button onClick={() => convert(l)} className="text-[var(--color-muted)] hover:text-[var(--color-primary)] flex items-center gap-1 text-[10px]" title="Convert to a pipeline deal"><ArrowRight size={13} /> convert</button>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setLeads(leads.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>

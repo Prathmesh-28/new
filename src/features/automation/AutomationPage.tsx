@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Transaction } from "@/data/types";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
 import {
   Workflow, Zap, GitBranch, CheckSquare, BookOpen, Layers, BellRing,
   CalendarClock, ScrollText, Webhook, LayoutTemplate, Plus, Play,
@@ -521,6 +522,16 @@ function ReminderScheduler() {
 // ── #4 Approval-Chain Builder ──────────────────────────────────────────────────
 type ApprovalStep = { id: string; approver: string; mode: "any" | "all" };
 type ApprovalChain = { id: string; name: string; threshold: number; steps: ApprovalStep[] };
+
+// Server-backed shapes (books §M8 automation). Local copies so we don't touch shared types.
+type ServerApprovalRule = { id: string; entity_type: string; min_amount: string | number; approver_role: string };
+type ServerApproval = {
+  id: string; entity_type: string; entity_id: string | null; amount: string | number;
+  status: "PENDING" | "APPROVED" | "REJECTED"; requested_by: string | null; decided_by: string | null;
+  note: string | null; created_at: string; decided_at: string | null;
+};
+const autoErr = (e: unknown) => (e instanceof Error && e.message ? e.message : "Request failed");
+
 function ApprovalChains() {
   const { store } = useApp();
   const [chains, setChains] = useFeatureState<ApprovalChain[]>("auto-approval-chains", []);
@@ -553,10 +564,140 @@ function ApprovalChains() {
     [store.transactions],
   );
 
+  // ── Live, server-backed approval engine (books §M8) ──────────────────────────
+  const [serverRules, setServerRules] = useState<ServerApprovalRule[]>([]);
+  const [pending, setPending] = useState<ServerApproval[]>([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [ruleEntity, setRuleEntity] = useState("PAYMENT");
+  const [ruleMin, setRuleMin] = useState("100000");
+  const [ruleRole, setRuleRole] = useState("owner");
+  const [savingRule, setSavingRule] = useState(false);
+
+  // The backend has GET /approvals but no GET for rules; we keep created rules in
+  // local view state and refresh the live pending queue from the server.
+  const refreshPending = async () => {
+    setLoadingApprovals(true);
+    try {
+      const rows = await api.get<ServerApproval[]>("/api/books/approvals?status=PENDING");
+      setPending(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      toast.error(`Couldn't load pending approvals — ${autoErr(e)}`);
+    } finally {
+      setLoadingApprovals(false);
+    }
+  };
+  useEffect(() => { void refreshPending(); }, []);
+
+  const createServerRule = async () => {
+    const min = parseFloat(ruleMin);
+    if (!ruleEntity.trim() || isNaN(min) || min < 0) { toast.error("Enter an entity type and a non-negative minimum amount"); return; }
+    setSavingRule(true);
+    try {
+      const created = await api.post<ServerApprovalRule>("/api/books/approval-rules", {
+        entityType: ruleEntity.trim(), minAmount: min, approverRole: ruleRole.trim() || "owner",
+      });
+      setServerRules(prev => [created, ...prev]);
+      pushActivity({ tool: "Approval Chains", kind: "create", message: `Server rule: ${created.entity_type} ≥ ${formatCurrency(Number(created.min_amount))} → ${created.approver_role}` });
+      toast.success(`Approval rule created (#${String(created.id).slice(0, 8)})`);
+    } catch (e) {
+      toast.error(`Couldn't create rule — ${autoErr(e)}`);
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  const decide = async (a: ServerApproval, approve: boolean) => {
+    setBusyId(a.id);
+    try {
+      const res = await api.post<ServerApproval>(`/api/books/approvals/${a.id}/decide`, { approve });
+      pushActivity({ tool: "Approval Chains", kind: "run", message: `Approval #${String(a.id).slice(0, 8)} ${res.status}` });
+      toast.success(`Approval ${res.status.toLowerCase()}`);
+      await refreshPending();
+    } catch (e) {
+      toast.error(`Couldn't record decision — ${autoErr(e)}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><CheckSquare size={14} className="text-[var(--color-primary)]" /> Approval-Chain Builder</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Live Approval Engine <span className="text-[10px] font-normal text-green-400 bg-green-900/30 border border-green-800/40 rounded-full px-2 py-0.5">connected to Books</span></h3>
+        <p className="text-xs text-[var(--color-muted)]">Real approval rules and the pending-approval queue, persisted in your books ledger. Rules created here gate document posting server-side; decisions below are recorded immediately.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Entity type</label>
+            <select value={ruleEntity} onChange={e => setRuleEntity(e.target.value)} className={INP}>
+              {["PAYMENT", "SALES", "PURCHASE", "JOURNAL", "EXPENSE"].map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Requires approval ≥ (₹)</label>
+            <input type="number" value={ruleMin} onChange={e => setRuleMin(e.target.value)} placeholder="100000" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Approver role</label>
+            <select value={ruleRole} onChange={e => setRuleRole(e.target.value)} className={INP}>
+              {["owner", "admin", "finance", "accountant"].map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </div>
+          <button onClick={createServerRule} disabled={savingRule} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+            <Plus size={13} /> {savingRule ? "Saving…" : "Create rule"}
+          </button>
+        </div>
+        {serverRules.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            {serverRules.map(r => (
+              <span key={r.id} className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5">
+                {r.entity_type} ≥ {formatCurrency(Number(r.min_amount))} <span className="text-[var(--color-muted)]">→ {r.approver_role}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold flex items-center gap-2"><Clock size={13} className="text-[var(--color-primary)]" /> Pending approvals <span className="text-[var(--color-muted)] font-normal">({pending.length})</span></p>
+          <button onClick={() => void refreshPending()} disabled={loadingApprovals} className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] hover:underline disabled:opacity-50">
+            <RefreshCw size={11} className={loadingApprovals ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
+        {loadingApprovals && pending.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">Loading from your books…</p>
+        ) : pending.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">No pending approvals. Posting a document above its rule threshold will queue one here.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)]">
+              <tr>{["Entity", "Amount", "Requested", "Note", ""].map(h =>
+                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {pending.map(a => (
+                <tr key={a.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-medium">{a.entity_type}<span className="text-[10px] text-[var(--color-muted)] ml-1">#{String(a.id).slice(0, 8)}</span></td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Number(a.amount))}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs tabular-nums">{a.created_at ? format(parseISO(a.created_at), "d MMM, HH:mm") : "—"}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs max-w-[180px] truncate">{a.note || "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => void decide(a, true)} disabled={busyId === a.id} className="flex items-center gap-1 text-[11px] bg-green-900/30 text-green-400 border border-green-800/40 rounded px-2 py-1 disabled:opacity-50"><CheckCircle2 size={11} /> Approve</button>
+                      <button onClick={() => void decide(a, false)} disabled={busyId === a.id} className="flex items-center gap-1 text-[11px] bg-red-950/30 text-red-400 border border-red-800/40 rounded px-2 py-1 disabled:opacity-50"><AlertTriangle size={11} /> Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className={`${CARD} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CheckSquare size={14} className="text-[var(--color-primary)]" /> Approval-Chain Builder <span className="text-[10px] font-normal text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] rounded-full px-2 py-0.5">design / preview</span></h3>
         <p className="text-xs text-[var(--color-muted)]">Define who must sign off above a spend threshold. The preview counts how many current outflows would route through this chain.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
@@ -1286,8 +1427,93 @@ function EscalationMatrix() {
 
   const bucketFor = (age: number) => [...tiers].reverse().find(t => age >= t.afterDays);
 
+  // ── Live overdue + late-fee posting (books §M8) ──────────────────────────────
+  type OverdueInvoice = { voucherId: string; number: string; reference: string | null; partyLedgerId: string; outstanding: number; daysOverdue: number; suggestedLateFee: number };
+  type OverdueResp = { asOf: string; ratePerAnnum: number; invoices: OverdueInvoice[] };
+  const [rate, setRate] = useState("18");
+  const [serverOverdue, setServerOverdue] = useState<OverdueInvoice[]>([]);
+  const [loadingOverdue, setLoadingOverdue] = useState(false);
+  const [postingId, setPostingId] = useState<string | null>(null);
+
+  const loadOverdue = async () => {
+    setLoadingOverdue(true);
+    try {
+      const r = parseFloat(rate);
+      const resp = await api.get<OverdueResp>(`/api/books/overdue?ratePerAnnum=${isNaN(r) ? 0 : r}`);
+      setServerOverdue(Array.isArray(resp?.invoices) ? resp.invoices : []);
+    } catch (e) {
+      toast.error(`Couldn't load overdue invoices — ${autoErr(e)}`);
+    } finally {
+      setLoadingOverdue(false);
+    }
+  };
+  useEffect(() => { void loadOverdue(); }, []);
+
+  const postLateFee = async (inv: OverdueInvoice) => {
+    const amount = Number(inv.suggestedLateFee);
+    if (!amount || amount <= 0) { toast.error("Suggested late fee is zero — set a rate and refresh first"); return; }
+    setPostingId(inv.voucherId);
+    try {
+      const res = await api.post<{ voucherId: string; voucherNumber?: string }>("/api/books/late-fee", {
+        partyLedgerId: inv.partyLedgerId, amount,
+      });
+      pushActivity({ tool: "Escalation Matrix", kind: "run", message: `Late fee ${formatCurrency(amount)} posted on ${inv.number} (voucher ${res.voucherNumber || String(res.voucherId).slice(0, 8)})` });
+      toast.success(`Late fee posted — voucher ${res.voucherNumber || String(res.voucherId).slice(0, 8)}`);
+      await loadOverdue();
+    } catch (e) {
+      toast.error(`Couldn't post late fee — ${autoErr(e)}`);
+    } finally {
+      setPostingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <div className={`${CARD} overflow-hidden`}>
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm font-semibold flex items-center gap-2"><FileClock size={13} className="text-[var(--color-primary)]" /> Live overdue + late fee <span className="text-[10px] font-normal text-green-400 bg-green-900/30 border border-green-800/40 rounded-full px-2 py-0.5">connected to Books</span></p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[var(--color-muted)]">Rate % p.a.</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <button onClick={() => void loadOverdue()} disabled={loadingOverdue} className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] hover:underline disabled:opacity-50">
+              <RefreshCw size={11} className={loadingOverdue ? "animate-spin" : ""} /> Recalculate
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] px-4 pt-3">Outstanding sales invoices from your books ledger, with a late fee suggested at the rate above. Posting raises a real journal (debit party, credit Late Fee Income) on the server.</p>
+        {loadingOverdue && serverOverdue.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">Loading from your books…</p>
+        ) : serverOverdue.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)] p-4">No outstanding invoices in your books. (If you expect some, seed/post sales in Books first.)</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Invoice", "Days overdue", "Outstanding", "Suggested fee", ""].map(h =>
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {serverOverdue.map(inv => (
+                  <tr key={inv.voucherId} className="hover:bg-white/2">
+                    <td className="px-4 py-2.5 font-medium">{inv.number}{inv.reference ? <span className="text-[10px] text-[var(--color-muted)] ml-1">{inv.reference}</span> : null}</td>
+                    <td className="px-4 py-2.5 tabular-nums"><span className={inv.daysOverdue > 0 ? "text-orange-400" : "text-[var(--color-muted)]"}>{inv.daysOverdue}d</span></td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Number(inv.outstanding))}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Number(inv.suggestedLateFee))}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => void postLateFee(inv)} disabled={postingId === inv.voucherId || Number(inv.suggestedLateFee) <= 0}
+                        className="flex items-center gap-1 ml-auto text-[11px] bg-[var(--color-primary)] text-[var(--color-bg)] rounded px-2.5 py-1 font-medium disabled:opacity-40">
+                        <Send size={11} /> {postingId === inv.voucherId ? "Posting…" : "Post late fee"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> Escalation-Matrix Builder</h3>
         <p className="text-xs text-[var(--color-muted)]">Define who owns an overdue account as it ages (30 / 60 / 90 days). The preview buckets your live overdue invoices into each tier — assignment is illustrative, no one is paged.</p>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, generateId } from "@/lib/utils";
 import {
   Mic, Languages, Volume2, BookOpen, Eye, Hash, AudioLines, Fingerprint, NotebookPen,
   AlertTriangle, CheckCircle2, Play, Square, Trash2, Copy, Plus,
@@ -249,13 +249,63 @@ function parseEntry(text: string): DraftTxn | null {
   return { direction, amount, party: party ? party.replace(/\b\w/g, c => c.toUpperCase()) : "Unknown party", raw: text.trim() };
 }
 
+// store-side transaction category union (matches data/types Transaction.category
+// and the AddTransactionModal save path on the Dashboard).
+type LedgerCategory = "revenue" | "expense" | "payroll" | "loan" | "tax" | "transfer";
+const LEDGER_CATEGORIES: LedgerCategory[] = ["revenue", "expense", "payroll", "loan", "tax", "transfer"];
+
+// Map an EXPENSE_CATEGORIES-style hint to one of the store's ledger categories.
+function suggestLedgerCategory(direction: "in" | "out", raw: string): LedgerCategory {
+  if (direction === "in") return "revenue";
+  const t = raw.toLowerCase();
+  if (/\b(salary|salaries|wages|labour|labor|staff|worker|payroll)\b/.test(t)) return "payroll";
+  if (/\b(tax|gst|tds|cess|duty)\b/.test(t)) return "tax";
+  if (/\b(loan|emi|repayment|interest|instal?ment)\b/.test(t)) return "loan";
+  if (/\b(transfer|moved|move to|own account|self)\b/.test(t)) return "transfer";
+  return "expense";
+}
+
 function VoiceCapture() {
-  const { store } = useApp();
+  const { store, addTransaction, isReadOnly } = useApp();
   const [listening, setListening] = useState(false);
   const [text, setText] = useState("");
   const recRef = useRef<SpeechRecognitionLike | null>(null);
 
   const draft = useMemo(() => parseEntry(text), [text]);
+
+  // Editable confirm fields, seeded from the parse and resettable when the draft changes.
+  const [category, setCategory] = useState<LedgerCategory>("expense");
+  const [party, setParty] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [posting, setPosting] = useState(false);
+  const seedKey = draft ? `${draft.direction}|${draft.amount}|${draft.party}|${draft.raw}` : "";
+  const lastSeed = useRef<string>("");
+  useEffect(() => {
+    if (draft && seedKey !== lastSeed.current) {
+      lastSeed.current = seedKey;
+      setCategory(suggestLedgerCategory(draft.direction, draft.raw));
+      setParty(draft.party === "Unknown party" ? "" : draft.party);
+      setDate(new Date().toISOString().split("T")[0]);
+    }
+  }, [draft, seedKey]);
+
+  // Known parties already in the store (transactions + invoices + orders) for matching.
+  const knownParties = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of store.transactions ?? []) if (t.counterparty?.trim()) set.add(t.counterparty.trim());
+    for (const inv of store.invoices ?? []) if (inv.customer?.trim()) set.add(inv.customer.trim());
+    for (const o of store.orders ?? []) if (o.buyerName?.trim()) set.add(o.buyerName.trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [store.transactions, store.invoices, store.orders]);
+
+  // Case-insensitive match of the parsed/typed party against the known list.
+  const matchedParty = useMemo(() => {
+    const p = party.trim().toLowerCase();
+    if (!p) return null;
+    return knownParties.find(k => k.toLowerCase() === p)
+      ?? knownParties.find(k => k.toLowerCase().includes(p) || p.includes(k.toLowerCase()))
+      ?? null;
+  }, [party, knownParties]);
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
@@ -279,12 +329,42 @@ function VoiceCapture() {
 
   useEffect(() => () => { recRef.current?.stop(); }, []);
 
+  const post = () => {
+    if (!draft) return;
+    if (isReadOnly) { toast.error("Read-only view — switch to your own books to post entries"); return; }
+    setPosting(true);
+    try {
+      // Prefer an existing known party (so the new entry reconciles against the
+      // same counterparty already on file); else use what the owner typed.
+      const counterparty = matchedParty ?? party.trim();
+      // Same shape AddTransactionModal hands to store.addTransaction on the Dashboard.
+      const defaultAccount = (store.bankAccounts ?? [])[0]?.id ?? "";
+      addTransaction({
+        id: generateId(),
+        date,
+        amount: draft.direction === "in" ? Math.abs(draft.amount) : -Math.abs(draft.amount),
+        description: draft.raw,
+        category,
+        counterparty,
+        isRecurring: false,
+        bankAccountId: defaultAccount,
+      });
+      toast.success(`Posted ${formatCurrency(draft.amount)} ${draft.direction === "in" ? "in" : "out"}${counterparty ? ` · ${counterparty}` : ""} to the ledger`);
+      setText("");
+      lastSeed.current = "";
+    } catch (err) {
+      toast.error(`Couldn't post entry${err instanceof Error ? `: ${err.message}` : ""} — it stays here so you don't lose it`);
+    } finally {
+      setPosting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Mic size={14} className="text-[var(--color-primary)]" /> Voice note → transaction draft</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Say or type a line like <em className="text-[var(--color-text)]">&ldquo;received 5000 from Sharma&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;paid 1200 to electricity&rdquo;</em>. We parse it into a draft you can review.
+          Say or type a line like <em className="text-[var(--color-text)]">&ldquo;received 5000 from Sharma&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;paid 1200 to electricity&rdquo;</em>. We parse it into a draft you can review and post straight to your ledger.
         </p>
         {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available in this browser. Type the line in the box below — parsing works exactly the same.</FallbackNote>}
         <div className="flex gap-2">
@@ -299,23 +379,67 @@ function VoiceCapture() {
 
       {text.trim() && (
         <div className={`${CARD} p-5`}>
-          <p className="text-sm font-semibold mb-3">Parsed draft</p>
+          <p className="text-sm font-semibold mb-3">Confirm &amp; post</p>
           {draft ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {[
-                  { label: "Direction", value: draft.direction === "in" ? "Money in" : "Money out", color: draft.direction === "in" ? "text-green-400" : "text-red-400" },
-                  { label: "Amount", value: formatCurrency(draft.amount), color: "text-[var(--color-text)]" },
-                  { label: "Party", value: draft.party, color: "text-[var(--color-text)]" },
-                ].map(k => (
-                  <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                    <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
-                    <p className={`text-base font-bold tabular-nums ${k.color}`}>{k.value}</p>
-                  </div>
-                ))}
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Direction</p>
+                  <p className={`text-base font-bold tabular-nums ${draft.direction === "in" ? "text-green-400" : "text-red-400"}`}>{draft.direction === "in" ? "Money in" : "Money out"}</p>
+                </div>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Amount</p>
+                  <p className="text-base font-bold tabular-nums text-[var(--color-text)]">{formatCurrency(draft.amount)}</p>
+                </div>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Date</p>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                    className="w-full bg-transparent text-sm font-bold tabular-nums text-[var(--color-text)] outline-none" />
+                </div>
               </div>
-              <p className="text-[11px] text-[var(--color-muted)] mt-3">
-                Preview only — this draft is not posted. Take it to <strong className="text-[var(--color-text)]">Transactions</strong> to confirm and save against the right ledger.
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Party</p>
+                  <input value={party} onChange={e => setParty(e.target.value)} list="voice-known-parties" placeholder="Unknown party"
+                    className="w-full bg-transparent text-sm font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-muted)]" />
+                  <datalist id="voice-known-parties">
+                    {knownParties.map(k => <option key={k} value={k} />)}
+                  </datalist>
+                  {matchedParty && matchedParty.toLowerCase() !== party.trim().toLowerCase() && (
+                    <button type="button" onClick={() => setParty(matchedParty)}
+                      className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-[var(--color-primary)] hover:underline">
+                      <CheckCircle2 size={11} /> Match existing: {matchedParty}
+                    </button>
+                  )}
+                  {matchedParty && matchedParty.toLowerCase() === party.trim().toLowerCase() && (
+                    <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-green-400">
+                      <CheckCircle2 size={11} /> Known counterparty
+                    </p>
+                  )}
+                </div>
+                <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Category</p>
+                  <select value={category} onChange={e => setCategory(e.target.value as LedgerCategory)}
+                    className="w-full bg-transparent text-sm font-semibold text-[var(--color-text)] outline-none capitalize">
+                    {LEDGER_CATEGORIES.map(c => <option key={c} value={c} className="bg-[var(--color-surface)]">{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <button onClick={post} disabled={posting || isReadOnly}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] disabled:opacity-50">
+                  <CheckCircle2 size={14} /> {posting ? "Posting…" : "Post to ledger"}
+                </button>
+                <button onClick={() => { setText(""); lastSeed.current = ""; }} disabled={posting}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">
+                  <X size={13} /> Discard
+                </button>
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)] mt-2">
+                Posts a real transaction to your ledger via the same path as the Dashboard — it appears instantly in <strong className="text-[var(--color-text)]">Transactions</strong>.
+                {isReadOnly && " Posting is disabled in this read-only client view."}
                 {store.transactions.length > 0 && ` You currently have ${store.transactions.length} recorded transaction(s).`}
               </p>
             </>

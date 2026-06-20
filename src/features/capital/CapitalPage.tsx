@@ -1,16 +1,47 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { Plus, Rocket, Gauge, FileSignature, Landmark, Wallet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { CapitalRaise } from "@/data/types";
 
-const TRACK_LABEL: Record<CapitalRaise["track"], string> = {
-  rev_share:  "Revenue Share ($10K–$500K)",
-  reg_cf:     "Reg CF Equity (up to $5M)",
-  reg_a_plus: "Reg A+ Mini-IPO (up to $75M)",
+// ── Backend-shaped types (rows from /api/capital/raises) ──────────────────────
+// Defined locally to avoid touching the shared data/types.ts. The Raises tab now
+// persists against the Node backend instead of the local store.
+type RaiseType = "equity" | "ccps" | "safe" | "convertible_note" | "rbf";
+
+interface ApiRaise {
+  id: string;
+  name: string;
+  raise_type: string;            // RaiseType, but backend stores free text
+  target_amount: number | string;
+  raised_amount: number | string;
+  status: "draft" | "active" | "closed" | "funded";
+  closes_at?: string | null;
+  created_at?: string;
+}
+
+interface ApiInvestor {
+  id: string;
+  raise_id: string;
+  name: string;
+  email?: string | null;
+  amount: number | string;
+  status: string;
+}
+
+// India-relevant fundraising instruments (₹). Replaces the US Reg CF / Reg A+ tracks.
+const RAISE_TYPE_LABEL: Record<RaiseType, string> = {
+  equity:           "Equity (priced round)",
+  ccps:             "CCPS (Compulsorily Convertible Pref. Shares)",
+  safe:             "SAFE (India / iSAFE)",
+  convertible_note: "Convertible Note",
+  rbf:              "Revenue-Based Financing",
 };
+const RAISE_TYPES = Object.keys(RAISE_TYPE_LABEL) as RaiseType[];
+// Instruments where issuing equity now needs a pre-money valuation to compute dilution.
+const PRICED_TYPES: RaiseType[] = ["equity", "ccps"];
 
 const STATUS_COLOR: Record<string, string> = {
   draft:  "bg-[var(--color-accent)] text-[var(--color-muted)]",
@@ -19,44 +50,125 @@ const STATUS_COLOR: Record<string, string> = {
   funded: "bg-purple-900/30 text-purple-400",
 };
 
+const num = (v: number | string | null | undefined): number => {
+  const n = typeof v === "string" ? parseFloat(v) : (v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+const raiseTypeLabel = (t: string): string => RAISE_TYPE_LABEL[t as RaiseType] ?? t;
+
+// The backend `capital_raises` table has no pre-money column, so we stash the
+// pre-money valuation inside the raise name as a machine-readable suffix and
+// strip it for display. Real equity % = amount / (preMoney + amount).
+const PM_RE = /\s*⟨pm:(\d+(?:\.\d+)?)⟩$/;
+const encodeName = (name: string, preMoney: number): string =>
+  preMoney > 0 ? `${name} ⟨pm:${preMoney}⟩` : name;
+const decodeName = (raw: string): string => raw.replace(PM_RE, "").trim();
+const decodePreMoney = (raw: string): number => {
+  const m = raw.match(PM_RE);
+  return m ? parseFloat(m[1]) : 0;
+};
+// equity% for a single ₹amount against a pre-money valuation (post-money method)
+const equityPctOf = (amount: number, preMoney: number): number =>
+  preMoney + amount > 0 ? (amount / (preMoney + amount)) * 100 : 0;
+
 export default function CapitalPage() {
-  const { store, addCapitalRaise, updateCapitalRaise, addCapitalInvestment } = useApp();
-  const { capitalRaises, capitalInvestments } = store;
   const [capTab, setCapTab] = useState<"raises" | "runway" | "safe" | "grants" | "use-of-funds">("raises");
   const [showRaiseForm,   setShowRaiseForm]   = useState(false);
   const [showInvestForm,  setShowInvestForm]  = useState<string | null>(null);
-  const [track,           setTrack]           = useState<CapitalRaise["track"]>("reg_cf");
+  const [raiseType,       setRaiseType]       = useState<RaiseType>("equity");
+  const [raiseName,       setRaiseName]       = useState("");
   const [target,          setTarget]          = useState("");
+  const [preMoney,        setPreMoney]        = useState("");
+  const [investorName,    setInvestorName]    = useState("");
   const [investorEmail,   setInvestorEmail]   = useState("");
   const [investAmount,    setInvestAmount]    = useState("");
+  const [busy,            setBusy]            = useState(false);
 
-  const handleCreateRaise = () => {
-    if (!target) { toast.error("Enter a target amount"); return; }
+  // Backend-backed state, with optimistic local updates.
+  const [raises, setRaises] = useState<ApiRaise[]>([]);
+  const [investorsByRaise, setInvestorsByRaise] = useState<Record<string, ApiInvestor[]>>({});
+
+  // Load raises from the backend on mount; fall back to empty list if offline.
+  useEffect(() => {
+    let alive = true;
+    api.get<ApiRaise[]>("/api/capital/raises")
+      .then(rows => { if (alive) setRaises(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) toast.error("Couldn't load capital raises — working offline"); });
+    return () => { alive = false; };
+  }, []);
+
+  // Lazy-load investors for a raise the first time its panel needs them.
+  const loadInvestors = (raiseId: string) => {
+    if (investorsByRaise[raiseId]) return;
+    api.get<{ raise: ApiRaise; investors: ApiInvestor[] }>(`/api/capital/raises/${raiseId}`)
+      .then(res => setInvestorsByRaise(prev => ({ ...prev, [raiseId]: res.investors ?? [] })))
+      .catch(() => {/* non-fatal: list still renders without investor detail */});
+  };
+
+  const handleCreateRaise = async () => {
+    const name = raiseName.trim();
+    if (!name) { toast.error("Enter a name for the raise"); return; }
     const amt = parseFloat(target);
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid target amount"); return; }
-    addCapitalRaise({ id: generateId(), track, targetAmount: amt, raisedAmount: 0, status: "draft", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-    toast.success("Capital raise created");
-    setShowRaiseForm(false); setTarget("");
+    const pm = parseFloat(preMoney) || 0;
+    if (PRICED_TYPES.includes(raiseType) && pm <= 0) {
+      toast.error("Enter a pre-money valuation to compute equity"); return;
+    }
+    setBusy(true);
+    try {
+      const created = await api.post<ApiRaise>("/api/capital/raises", {
+        name: encodeName(name, pm),
+        raise_type: raiseType,
+        target_amount: amt,
+      });
+      setRaises(prev => [created, ...prev]);
+      toast.success("Capital raise created");
+      setShowRaiseForm(false); setRaiseName(""); setTarget(""); setPreMoney("");
+    } catch {
+      toast.error("Couldn't save the raise — check your connection");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handlePublish = (r: CapitalRaise) => {
-    updateCapitalRaise({ ...r, status: "active", updatedAt: new Date().toISOString() });
-    toast.success("Raise published — investor portal live");
+  const handlePublish = async (r: ApiRaise) => {
+    const prev = raises;
+    setRaises(rs => rs.map(x => x.id === r.id ? { ...x, status: "active" } : x)); // optimistic
+    try {
+      const updated = await api.patch<ApiRaise>(`/api/capital/raises/${r.id}`, { status: "active" });
+      setRaises(rs => rs.map(x => x.id === r.id ? updated : x));
+      toast.success("Raise published — now accepting investors");
+    } catch {
+      setRaises(prev); // rollback
+      toast.error("Couldn't publish the raise");
+    }
   };
 
-  const handleInvest = (raiseId: string) => {
-    if (!investorEmail || !investAmount) { toast.error("Enter investor email and amount"); return; }
+  const handleInvest = async (raiseId: string) => {
+    const name = investorName.trim();
     const amt = parseFloat(investAmount);
+    if (!name) { toast.error("Enter the investor's name"); return; }
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid investment amount"); return; }
-    const raise = capitalRaises.find(r => r.id === raiseId)!;
-    const equityPct = (amt / raise.targetAmount) * 10;
-    addCapitalInvestment({ id: generateId(), raiseId, investorEmail, amount: amt, equityPct, status: "pending", createdAt: new Date().toISOString() });
-    updateCapitalRaise({ ...raise, raisedAmount: raise.raisedAmount + amt, updatedAt: new Date().toISOString() });
-    toast.success(`Investment of ${formatCurrency(amt)} recorded`);
-    setShowInvestForm(null); setInvestorEmail(""); setInvestAmount("");
+    setBusy(true);
+    try {
+      const inv = await api.post<ApiInvestor>(`/api/capital/raises/${raiseId}/investors`, {
+        name, email: investorEmail.trim() || undefined, amount: amt, status: "committed",
+      });
+      setInvestorsByRaise(prev => ({ ...prev, [raiseId]: [inv, ...(prev[raiseId] ?? [])] }));
+      // Reflect new raised_amount optimistically (backend recomputes the sum).
+      setRaises(rs => rs.map(x => x.id === raiseId ? { ...x, raised_amount: num(x.raised_amount) + amt } : x));
+      toast.success(`Commitment of ${formatCurrency(amt)} recorded`);
+      setShowInvestForm(null); setInvestorName(""); setInvestorEmail(""); setInvestAmount("");
+    } catch {
+      toast.error("Couldn't record the investor — check your connection");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const totalRaised = capitalRaises.reduce((a, r) => a + r.raisedAmount, 0);
+  const totalInvestors = Object.values(investorsByRaise).reduce((a, list) => a + list.length, 0);
+  const totalRaised = raises.reduce((a, r) => a + num(r.raised_amount), 0);
+  const showPreMoney = PRICED_TYPES.includes(raiseType);
 
   return (
     <div className="space-y-6">
@@ -87,12 +199,12 @@ export default function CapitalPage() {
 
       {capTab === "raises" && <>
       {/* Empty state */}
-      {capitalRaises.length === 0 && !showRaiseForm && (
+      {raises.length === 0 && !showRaiseForm && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Rocket size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No capital raises yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
-            Choose a fundraising track — Revenue Share, Reg CF equity, or Reg A+ Mini-IPO — and start accepting investors.
+            Pick an instrument — Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing — set a target in ₹, and start tracking investor commitments.
           </p>
           <button onClick={() => setShowRaiseForm(true)}
             className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
@@ -102,12 +214,12 @@ export default function CapitalPage() {
       )}
 
       {/* Stats — only when data exists */}
-      {capitalRaises.length > 0 && (
+      {raises.length > 0 && (
         <div className="grid grid-cols-3 gap-3 md:gap-4">
           {[
-            { label: "Active Raises",   value: capitalRaises.filter(r => r.status === "active").length.toString() },
+            { label: "Active Raises",   value: raises.filter(r => r.status === "active").length.toString() },
             { label: "Total Raised",    value: formatCurrency(totalRaised) },
-            { label: "Total Investors", value: capitalInvestments.length.toString() },
+            { label: "Total Investors", value: totalInvestors.toString() },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -121,14 +233,30 @@ export default function CapitalPage() {
       {showRaiseForm && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <h2 className="text-sm font-semibold">New Capital Raise</h2>
-          <select value={track} onChange={e => setTrack(e.target.value as CapitalRaise["track"])}
+          <input placeholder="Raise name (e.g. Seed 2026)" value={raiseName} onChange={e => setRaiseName(e.target.value)}
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <select value={raiseType} onChange={e => setRaiseType(e.target.value as RaiseType)}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
-            {(Object.entries(TRACK_LABEL) as [CapitalRaise["track"], string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {RAISE_TYPES.map(v => <option key={v} value={v}>{RAISE_TYPE_LABEL[v]}</option>)}
           </select>
           <input placeholder="Target amount (₹)" type="number" min="1" value={target} onChange={e => setTarget(e.target.value)}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          {showPreMoney && (
+            <div>
+              <input placeholder="Pre-money valuation (₹)" type="number" min="1" value={preMoney} onChange={e => setPreMoney(e.target.value)}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              {(parseFloat(target) > 0 && parseFloat(preMoney) > 0) && (
+                <p className="text-[11px] text-[var(--color-muted)] mt-1">
+                  At target, investors take <span className="font-semibold text-[var(--color-text)]">{equityPctOf(parseFloat(target), parseFloat(preMoney)).toFixed(2)}%</span> equity (post-money {formatCurrency(parseFloat(preMoney) + parseFloat(target))}).
+                </p>
+              )}
+            </div>
+          )}
+          {!showPreMoney && (
+            <p className="text-[11px] text-[var(--color-muted)]">{raiseTypeLabel(raiseType)} — no equity issued upfront, so no pre-money needed here.</p>
+          )}
           <div className="flex gap-2">
-            <button onClick={handleCreateRaise} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">Create Raise</button>
+            <button onClick={handleCreateRaise} disabled={busy} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{busy ? "Saving…" : "Create Raise"}</button>
             <button onClick={() => setShowRaiseForm(false)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
           </div>
         </div>
@@ -136,50 +264,65 @@ export default function CapitalPage() {
 
       {/* Raises list */}
       <div className="space-y-4">
-        {capitalRaises.map(r => {
-          const pct = r.targetAmount > 0 ? Math.min(100, (r.raisedAmount / r.targetAmount) * 100) : 0;
-          const investors = capitalInvestments.filter(i => i.raiseId === r.id);
+        {raises.map(r => {
+          const targetAmount = num(r.target_amount);
+          const raisedAmount = num(r.raised_amount);
+          const pm = decodePreMoney(r.name);
+          const isPriced = PRICED_TYPES.includes(r.raise_type as RaiseType);
+          const pct = targetAmount > 0 ? Math.min(100, (raisedAmount / targetAmount) * 100) : 0;
+          const investors = investorsByRaise[r.id] ?? [];
           return (
             <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <div>
+                <div className="min-w-0">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mr-2 ${STATUS_COLOR[r.status]}`}>{r.status}</span>
-                  <span className="text-xs text-[var(--color-muted)]">{TRACK_LABEL[r.track]}</span>
+                  <span className="text-sm font-medium">{decodeName(r.name)}</span>
+                  <span className="text-xs text-[var(--color-muted)] ml-2">{raiseTypeLabel(r.raise_type)}</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   {r.status === "draft" && (
                     <button onClick={() => handlePublish(r)} className="text-xs bg-green-900/40 text-green-400 border border-green-800/40 px-2 py-1 rounded hover:bg-green-900/60">Publish</button>
                   )}
                   {r.status === "active" && (
-                    <button onClick={() => setShowInvestForm(showInvestForm === r.id ? null : r.id)} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">+ Investor</button>
+                    <button onClick={() => { const next = showInvestForm === r.id ? null : r.id; setShowInvestForm(next); if (next) loadInvestors(r.id); }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">+ Investor</button>
                   )}
                 </div>
               </div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="font-bold text-[var(--color-primary)]">{formatCurrency(r.raisedAmount)}</span>
-                <span className="text-[var(--color-muted)]">of {formatCurrency(r.targetAmount)}</span>
+                <span className="font-bold text-[var(--color-primary)]">{formatCurrency(raisedAmount)}</span>
+                <span className="text-[var(--color-muted)]">of {formatCurrency(targetAmount)}</span>
               </div>
               <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
                 <div className="h-full bg-[var(--color-primary)] rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
-              <p className="text-xs text-[var(--color-muted)] mt-1">{pct.toFixed(0)}% funded · {investors.length} investors</p>
+              <p className="text-xs text-[var(--color-muted)] mt-1">
+                {pct.toFixed(0)}% funded · {investors.length} investor{investors.length === 1 ? "" : "s"}
+                {isPriced && pm > 0 && <> · pre-money {formatCurrency(pm)} · {equityPctOf(targetAmount, pm).toFixed(2)}% equity at target</>}
+              </p>
 
               {showInvestForm === r.id && (
                 <div className="mt-3 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
-                  <input placeholder="Investor email" type="email" value={investorEmail} onChange={e => setInvestorEmail(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
-                  <input placeholder="Investment (₹)" type="number" min="1" value={investAmount} onChange={e => setInvestAmount(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
-                  <button onClick={() => handleInvest(r.id)} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-1.5 rounded text-sm hover:opacity-90">Record Investment</button>
+                  <input placeholder="Investor name" value={investorName} onChange={e => setInvestorName(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
+                  <input placeholder="Investor email (optional)" type="email" value={investorEmail} onChange={e => setInvestorEmail(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
+                  <input placeholder="Commitment (₹)" type="number" min="1" value={investAmount} onChange={e => setInvestAmount(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
+                  {isPriced && pm > 0 && parseFloat(investAmount) > 0 && (
+                    <p className="text-[11px] text-[var(--color-muted)]">≈ {equityPctOf(parseFloat(investAmount), pm).toFixed(2)}% equity (at {formatCurrency(pm)} pre-money).</p>
+                  )}
+                  <button onClick={() => handleInvest(r.id)} disabled={busy} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-1.5 rounded text-sm hover:opacity-90 disabled:opacity-50">{busy ? "Saving…" : "Record Commitment"}</button>
                 </div>
               )}
 
               {investors.length > 0 && (
                 <div className="mt-3 space-y-1">
-                  {investors.map(i => (
-                    <div key={i.id} className="flex items-center justify-between text-xs text-[var(--color-muted)]">
-                      <span>{i.investorEmail}</span>
-                      <span>{formatCurrency(i.amount)} · {i.equityPct.toFixed(2)}% · <span className={i.status === "confirmed" ? "text-green-400" : "text-yellow-400"}>{i.status}</span></span>
-                    </div>
-                  ))}
+                  {investors.map(i => {
+                    const amt = num(i.amount);
+                    return (
+                      <div key={i.id} className="flex items-center justify-between text-xs text-[var(--color-muted)]">
+                        <span>{i.name}{i.email ? ` · ${i.email}` : ""}</span>
+                        <span>{formatCurrency(amt)}{isPriced && pm > 0 ? ` · ${equityPctOf(amt, pm).toFixed(2)}%` : ""} · <span className={i.status === "confirmed" ? "text-green-400" : "text-yellow-400"}>{i.status}</span></span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
