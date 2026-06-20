@@ -6,7 +6,7 @@ const { pool } = require("../../db");
 const { money, toDb } = require("./money");
 const { financialYearFor } = require("./fy");
 const { postVoucher, PostError } = require("./posting-engine");
-const { buildSalesVoucher, buildPurchaseVoucher } = require("./mappers");
+const { buildSalesVoucher, buildPurchaseVoucher, buildSalesVoucherLines, buildPurchaseVoucherLines } = require("./mappers");
 const { ledgerIdByName } = require("./seed");
 
 // Allowed conversions. "INVOICE"/"BILL" are terminal (they post a voucher).
@@ -78,10 +78,23 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
   if (!(NEXT[doc.doc_kind] || []).includes(toKind)) throw new PostError("BAD_TRANSITION", `Cannot convert ${doc.doc_kind} → ${toKind}`, 422);
 
   if (toKind === "INVOICE" || toKind === "BILL") {
-    const input = { lineTotal: doc.subtotal, gstRate: doc.gst_rate, interState: doc.inter_state, hsn: doc.hsn_sac, date: opts.date || doc.doc_date, reference: doc.reference || `${doc.doc_kind} #${doc.doc_number}` };
+    // Line-itemised path when the document carries a non-empty lines[] array;
+    // otherwise the exact legacy single-rate (subtotal + gst_rate) behaviour.
+    const lines = Array.isArray(doc.lines) ? doc.lines : null;
+    const hasLines = lines && lines.length > 0;
+    const ref = doc.reference || `${doc.doc_kind} #${doc.doc_number}`;
+    const base = { interState: doc.inter_state, date: opts.date || doc.doc_date, reference: ref, narration: doc.narration };
+    const input = hasLines
+      ? { ...base, lines }
+      : { ...base, lineTotal: doc.subtotal, gstRate: doc.gst_rate, hsn: doc.hsn_sac };
     let m;
-    if (toKind === "INVOICE") m = buildSalesVoucher(input, await salesCtx(tenantId, doc.party_ledger_id));
-    else m = buildPurchaseVoucher(input, await purchaseCtx(tenantId, doc.party_ledger_id));
+    if (toKind === "INVOICE") {
+      const ctx = await salesCtx(tenantId, doc.party_ledger_id);
+      m = hasLines ? buildSalesVoucherLines(input, ctx) : buildSalesVoucher(input, ctx);
+    } else {
+      const ctx = await purchaseCtx(tenantId, doc.party_ledger_id);
+      m = hasLines ? buildPurchaseVoucherLines(input, ctx) : buildPurchaseVoucher(input, ctx);
+    }
     const r = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
     await pool.query("UPDATE book_documents SET status='CONVERTED', converted_voucher_id=$2 WHERE id=$1", [docId, r.voucherId]);
     return { document: docId, voucher: r };

@@ -6,8 +6,11 @@ const { pool } = require("../../db");
 const { postVoucher, reverseVoucher, PostError } = require("./posting-engine");
 const reports = require("./reports");
 const { seedBooks, ledgerIdByName } = require("./seed");
-const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher } = require("./mappers");
+const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst } = require("./mappers");
 const { financialYearFor } = require("./fy");
+const { money, toRupees } = require("./money");
+const email = require("../../lib/email");
+const whatsapp = require("../../lib/whatsapp");
 const docs = require("./documents");
 const inv = require("./inventory");
 const gst = require("./gst");
@@ -22,6 +25,15 @@ const ocr = require("./ocr");
 const portal = require("./portal");
 const cc = require("./costcentres");
 
+// GET /documents/:id/print is opened in a new browser tab (window.open) which can't
+// set an Authorization header — accept the short-lived access token as ?token= for
+// that print GET only, promoting it into the header the auth middleware expects.
+router.use((req, _res, next) => {
+  if (req.method === "GET" && /\/print$/.test(req.path) && !req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+});
 router.use(authenticate);
 
 // §12.2 RBAC — who may post to the books.
@@ -244,6 +256,205 @@ router.post("/documents/:id/convert", canPost, async (req, res) => {
 });
 router.post("/documents/:id/cancel", canPost, async (req, res) => {
   try { res.json(await docs.cancelDocument(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+
+// ── M2: document PRINT (branded HTML, client print-to-PDF) + SEND ────────────
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const inr = (m) => "₹" + Number(toRupees(m)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Indian-system amount in words (rupees + paise). Pure, no deps.
+function rupeesInWords(amount) {
+  const a = money(amount);
+  const whole = a.floor();
+  const paise = a.minus(whole).mul(100).round();
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const two = (n) => n < 20 ? ones[n] : tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  const three = (n) => (n >= 100 ? ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + two(n % 100) : "") : two(n));
+  function conv(num) {
+    num = Number(num);
+    if (num === 0) return "Zero";
+    let out = "";
+    const crore = Math.floor(num / 10000000); num %= 10000000;
+    const lakh = Math.floor(num / 100000); num %= 100000;
+    const thousand = Math.floor(num / 1000); num %= 1000;
+    if (crore) out += three(crore) + " Crore ";
+    if (lakh) out += two(lakh) + " Lakh ";
+    if (thousand) out += two(thousand) + " Thousand ";
+    if (num) out += three(num);
+    return out.trim();
+  }
+  let words = conv(whole.toNumber()) + " Rupees";
+  if (paise.greaterThan(0)) words += " and " + conv(paise.toNumber()) + " Paise";
+  return words + " Only";
+}
+
+async function tenantCompany(tenantId) {
+  const { rows } = await pool.query("SELECT company_name, legal_name, gstin, pan, address, city, state, pincode, phone, website, logo_url, upi_id FROM tenant_profile WHERE tenant_id=$1", [tenantId]);
+  return rows[0] || {};
+}
+async function partyLedger(tenantId, ledgerId) {
+  if (!ledgerId) return {};
+  const { rows } = await pool.query("SELECT name, gstin, state_code, billing_address, account_number, ifsc FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, ledgerId]);
+  return rows[0] || {};
+}
+
+// Build the printable HTML for a document (estimate/invoice/etc). Tenant-scoped.
+async function renderDocumentHtml(tenantId, docId) {
+  const { rows: dr } = await pool.query("SELECT * FROM book_documents WHERE tenant_id=$1 AND id=$2", [tenantId, docId]);
+  const doc = dr[0];
+  if (!doc) return null;
+  const co = await tenantCompany(tenantId);
+  const party = await partyLedger(tenantId, doc.party_ledger_id);
+  const interState = !!doc.inter_state;
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  const hasLines = lines.length > 0;
+
+  // Compute totals: line-itemised when lines[] present, else single-rate fallback.
+  let detail, taxable, cgst, sgst, igst, gross;
+  if (hasLines) {
+    const g = computeLineGst(lines, interState);
+    detail = g.lines; taxable = g.taxable; cgst = g.cgst; sgst = g.sgst; igst = g.igst; gross = g.gross;
+  } else {
+    const g = computeLineGst([{ description: doc.narration || "Goods/Services", qty: 1, rate: doc.subtotal, discount: 0, hsn: doc.hsn_sac, gst_rate: doc.gst_rate }], interState);
+    detail = g.lines; taxable = g.taxable; cgst = g.cgst; sgst = g.sgst; igst = g.igst; gross = g.gross;
+  }
+
+  const titleMap = { ESTIMATE: "Estimate / Quotation", SALES_ORDER: "Sales Order", DELIVERY_CHALLAN: "Delivery Challan", PURCHASE_ORDER: "Purchase Order", GRN: "Goods Receipt Note" };
+  const title = titleMap[doc.doc_kind] || "Invoice";
+  const companyName = co.company_name || co.legal_name || "Your Company";
+  const companyAddr = [co.address, co.city, [co.state, co.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+
+  const rows = detail.map((l, i) => `
+      <tr>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee">${i + 1}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee">${esc(l.description)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${esc(l.hsn || "")}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${esc(toRupees(l.qty))}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${inr(l.rate)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${money(l.discount).greaterThan(0) ? inr(l.discount) : "—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${esc(toRupees(l.gstRate))}%</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${inr(l.net)}</td>
+      </tr>`).join("");
+
+  const taxRows = interState
+    ? `<tr><td style="padding:4px 0;color:#555">IGST</td><td style="padding:4px 0;text-align:right">${inr(igst)}</td></tr>`
+    : `<tr><td style="padding:4px 0;color:#555">CGST</td><td style="padding:4px 0;text-align:right">${inr(cgst)}</td></tr>
+       <tr><td style="padding:4px 0;color:#555">SGST</td><td style="padding:4px 0;text-align:right">${inr(sgst)}</td></tr>`;
+
+  const bankFooter = (co.upi_id || party.account_number) ? `
+    <div style="margin-top:24px;padding:14px 16px;background:#faf8f0;border:1px solid #e7e0c8;border-radius:8px;font-size:12px;color:#555">
+      <strong style="color:#333">Payment details</strong><br>
+      ${co.upi_id ? `UPI: <strong>${esc(co.upi_id)}</strong><br>` : ""}
+      ${co.gstin ? `GSTIN: ${esc(co.gstin)}` : ""}
+    </div>` : "";
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)} #${esc(doc.doc_number)} — ${esc(companyName)}</title>
+<style>@media print{.no-print{display:none}}body{margin:0}</style></head>
+<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;background:#f4f4f0;margin:0;padding:24px">
+  <div class="no-print" style="max-width:820px;margin:0 auto 16px;text-align:right">
+    <button onclick="window.print()" style="background:#C9A227;color:#0d0d09;border:0;font-weight:700;font-size:13px;padding:10px 20px;border-radius:8px;cursor:pointer">Print / Save as PDF</button>
+  </div>
+  <div style="max-width:820px;margin:0 auto;background:#fff;border:1px solid #e2e2d8;border-radius:12px;padding:40px">
+    <table width="100%" style="border-collapse:collapse"><tr>
+      <td style="vertical-align:top">
+        ${co.logo_url ? `<img src="${esc(co.logo_url)}" alt="logo" style="max-height:56px;max-width:200px;margin-bottom:8px">` : ""}
+        <div style="font-size:22px;font-weight:800;color:#0d0d09">${esc(companyName)}</div>
+        ${companyAddr ? `<div style="font-size:12px;color:#666;margin-top:4px;max-width:320px">${esc(companyAddr)}</div>` : ""}
+        ${co.gstin ? `<div style="font-size:12px;color:#666;margin-top:2px">GSTIN: ${esc(co.gstin)}</div>` : ""}
+        ${co.phone ? `<div style="font-size:12px;color:#666">Ph: ${esc(co.phone)}</div>` : ""}
+      </td>
+      <td style="vertical-align:top;text-align:right">
+        <div style="font-size:26px;font-weight:800;letter-spacing:1px;color:#C9A227;text-transform:uppercase">${esc(title)}</div>
+        <div style="font-size:13px;color:#444;margin-top:8px"># <strong>${esc(doc.doc_number)}</strong></div>
+        <div style="font-size:13px;color:#444">Date: ${esc(String(doc.doc_date).slice(0, 10))}</div>
+        ${doc.reference ? `<div style="font-size:12px;color:#888;margin-top:2px">Ref: ${esc(doc.reference)}</div>` : ""}
+      </td>
+    </tr></table>
+
+    <div style="margin:28px 0 16px;padding:14px 16px;background:#fafaf7;border:1px solid #ececdf;border-radius:8px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#999">Bill to</div>
+      <div style="font-size:15px;font-weight:700;margin-top:4px">${esc(party.name || "—")}</div>
+      ${party.billing_address ? `<div style="font-size:12px;color:#666;margin-top:2px">${esc(party.billing_address)}</div>` : ""}
+      ${party.gstin ? `<div style="font-size:12px;color:#666;margin-top:2px">GSTIN: ${esc(party.gstin)}</div>` : ""}
+      <div style="font-size:11px;color:#999;margin-top:4px">${interState ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)"}</div>
+    </div>
+
+    <table width="100%" style="border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#0d0d09;color:#fff;text-align:left">
+        <th style="padding:9px 10px">#</th><th style="padding:9px 10px">Description</th>
+        <th style="padding:9px 10px;text-align:center">HSN/SAC</th><th style="padding:9px 10px;text-align:right">Qty</th>
+        <th style="padding:9px 10px;text-align:right">Rate</th><th style="padding:9px 10px;text-align:right">Disc</th>
+        <th style="padding:9px 10px;text-align:center">GST%</th><th style="padding:9px 10px;text-align:right">Amount</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <table width="100%" style="margin-top:20px;border-collapse:collapse"><tr>
+      <td style="vertical-align:top;width:55%">
+        <div style="font-size:12px;color:#777">Amount in words</div>
+        <div style="font-size:13px;font-weight:600;margin-top:4px;max-width:380px">${esc(rupeesInWords(gross))}</div>
+        ${bankFooter}
+      </td>
+      <td style="vertical-align:top">
+        <table width="100%" style="border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:4px 0;color:#555">Subtotal</td><td style="padding:4px 0;text-align:right">${inr(taxable)}</td></tr>
+          ${taxRows}
+          <tr style="border-top:2px solid #0d0d09"><td style="padding:8px 0;font-weight:800;font-size:15px">Total</td><td style="padding:8px 0;text-align:right;font-weight:800;font-size:15px">${inr(gross)}</td></tr>
+        </table>
+      </td>
+    </tr></table>
+
+    <div style="margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:14px">
+      This is a computer-generated document. Generated via Headroom.
+    </div>
+  </div>
+</body></html>`;
+  return { doc, html, title, gross, companyName, party };
+}
+
+router.get("/documents/:id/print", async (req, res) => {
+  try {
+    const r = await renderDocumentHtml(tenantOf(req), req.params.id);
+    if (!r) return res.status(404).json({ error: "Document not found" });
+    res.set("Content-Type", "text/html; charset=utf-8").send(r.html);
+  } catch (e) { fail(res, e); }
+});
+
+router.post("/documents/:id/send", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    const r = await renderDocumentHtml(t, req.params.id);
+    if (!r) return res.status(404).json({ error: "Document not found" });
+    const to = b.email || null;
+    const phone = b.phone || null;
+    const link = b.link || null; // optional public link the caller already minted
+    const subject = b.subject || `${r.title} #${r.doc.doc_number} from ${r.companyName} — ${inr(r.gross)}`;
+    const channels = [];
+
+    // EMAIL — reuse lib/email.sendMail({to,subject,html}). Honest about config.
+    if (to) {
+      if (process.env.SMTP_USER) {
+        await email.sendMail({ to, subject, html: r.html });
+        channels.push({ channel: "email", to, delivered: true });
+      } else {
+        channels.push({ channel: "email", to, delivered: false, reason: "SMTP not configured (SMTP_USER unset)" });
+      }
+    }
+
+    // WHATSAPP — reuse lib/whatsapp.sendWhatsApp(to, body). It returns false when
+    // Twilio isn't configured (logs a mock); surface that truthfully.
+    if (phone) {
+      const body = `${r.companyName}: ${r.title} #${r.doc.doc_number} for ${inr(r.gross)}.` + (link ? ` View/pay: ${link}` : "");
+      const delivered = await whatsapp.sendWhatsApp(phone, body);
+      channels.push({ channel: "whatsapp", to: phone, delivered, ...(delivered ? {} : { reason: "Twilio WhatsApp not configured" }) });
+    }
+
+    if (!channels.length) return res.status(400).json({ error: "Provide email and/or phone to send to" });
+    const anyDelivered = channels.some((c) => c.delivered);
+    res.status(anyDelivered ? 200 : 202).json({ ok: anyDelivered, document: r.doc.id, subject, channels });
+  } catch (e) { fail(res, e); }
 });
 
 // ── M2: allocations, deposits, recurring ─────────────────────────────────────

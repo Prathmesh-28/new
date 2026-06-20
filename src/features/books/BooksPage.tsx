@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import {
   BookOpen, LayoutGrid, ListTree, FilePlus2, BarChart3, Repeat,
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
+  FileText, Trash2, Printer, Send,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +86,28 @@ interface ReconLine {
   suggestion: { kind: string } | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "reports" | "reconcile";
+interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string | null;
+  hsn_sac: string | null;
+  gst_rate: string | null;
+}
+
+interface DocumentRow {
+  id: string;
+  doc_kind: string;
+  doc_number: number | string;
+  doc_date: string;
+  status: string;
+  subtotal: string;
+  gst_rate: string;
+  inter_state: boolean;
+  reference: string | null;
+  party_ledger_id: string | null;
+}
+
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +145,58 @@ const NATURE_STYLE: Record<Nature, string> = {
 
 const GST_RATES = [0, 5, 12, 18, 28] as const;
 const WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager", "accountant"]);
+
+const DOC_KINDS = [
+  { id: "INVOICE", label: "Tax Invoice" },
+  { id: "ESTIMATE", label: "Estimate / Quote" },
+] as const;
+type DocKindId = (typeof DOC_KINDS)[number]["id"];
+
+// ── Line-item editor types + math (mirrors backend mappers.splitGst) ──────────
+interface LineDraft {
+  key: string;
+  itemId: string;
+  description: string;
+  qty: string;       // user string
+  rate: string;      // user string (per-unit, pre-tax)
+  discount: string;  // user string (absolute amount off the line)
+  hsn: string;
+  gstRate: number;   // per-line GST %
+}
+
+interface LineCalc {
+  taxable: number;   // qty*rate - discount (>= 0)
+  cgst: number;
+  sgst: number;
+  igst: number;
+  gross: number;
+}
+
+function newLine(): LineDraft {
+  return {
+    key: Math.random().toString(36).slice(2),
+    itemId: "", description: "", qty: "1", rate: "", discount: "", hsn: "", gstRate: 18,
+  };
+}
+
+// Round HALF_UP to 2dp — display value; backend keeps 4dp at posting time.
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+// Per-line split. Intra-state: CGST = SGST = taxable*rate/200; inter-state: IGST = taxable*rate/100.
+function computeLine(l: LineDraft, interState: boolean): LineCalc {
+  const qty = Number(l.qty) || 0;
+  const rate = Number(l.rate) || 0;
+  const disc = Number(l.discount) || 0;
+  const taxable = Math.max(0, qty * rate - disc);
+  const tax = (taxable * l.gstRate) / 100;
+  if (interState) {
+    return { taxable, cgst: 0, sgst: 0, igst: tax, gross: taxable + tax };
+  }
+  const half = tax / 2;
+  return { taxable, cgst: half, sgst: half, igst: 0, gross: taxable + tax };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SMALL REUSABLE PIECES
@@ -249,6 +324,7 @@ export default function BooksPage() {
     { id: "overview",  label: "Overview",          icon: <LayoutGrid size={14} /> },
     { id: "coa",       label: "Chart of Accounts", icon: <ListTree size={14} /> },
     { id: "entry",     label: "New entry",         icon: <FilePlus2 size={14} /> },
+    { id: "invoices",  label: "Invoices",          icon: <FileText size={14} /> },
     { id: "reports",   label: "Reports",           icon: <BarChart3 size={14} /> },
     { id: "reconcile", label: "Reconcile",         icon: <Repeat size={14} /> },
   ];
@@ -307,6 +383,9 @@ export default function BooksPage() {
             )}
             {tab === "entry" && (
               <NewEntryTab ledgers={ledgers} canWrite={canWrite} />
+            )}
+            {tab === "invoices" && (
+              <InvoicesTab ledgers={ledgers} canWrite={canWrite} />
             )}
             {tab === "reports" && <ReportsTab />}
             {tab === "reconcile" && (
@@ -971,6 +1050,404 @@ function ReceiptPaymentCard({
         {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
         Post {title.toLowerCase()}
       </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICES TAB — real multi-line document editor (estimate / tax invoice)
+// ─────────────────────────────────────────────────────────────────────────────
+function InvoicesTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: boolean }) {
+  const partyLedgers = ledgers.filter((l) => l.is_party);
+  const customerOptions = partyLedgers.length > 0 ? partyLedgers : ledgers;
+
+  const [docs, setDocs] = useState<DocumentRow[]>([]);
+  const [listBusy, setListBusy] = useState(true);
+
+  const loadDocs = useCallback(async () => {
+    setListBusy(true);
+    try {
+      const rows = await api.get<DocumentRow[]>("/api/books/documents");
+      setDocs(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setListBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDocs();
+  }, [loadDocs]);
+
+  if (!canWrite) {
+    return (
+      <p className="text-sm text-[var(--color-muted)] text-center py-10 border border-dashed border-[var(--color-border)] rounded-lg">
+        You need an owner / finance / accountant role to create documents.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <DocumentEditor customers={customerOptions} onSaved={loadDocs} />
+      <DocumentList docs={docs} busy={listBusy} onReload={loadDocs} />
+    </div>
+  );
+}
+
+// Open an authenticated GET in a new tab by passing the bearer token as a query
+// param (the print/PDF endpoint can't see the Authorization header on window.open).
+function openAuthed(path: string) {
+  const token = localStorage.getItem("hr_access");
+  const url = `${API_BASE}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token ?? "")}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function DocumentList({ docs, busy, onReload }: { docs: DocumentRow[]; busy: boolean; onReload: () => Promise<void> }) {
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  const send = async (d: DocumentRow) => {
+    setSendingId(d.id);
+    try {
+      await api.post<{ ok: boolean }>(`/api/books/documents/${d.id}/send`, {});
+      toast.success(`Sent ${d.doc_kind} #${d.doc_number}`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Documents</h3>
+        <button type="button" onClick={() => void onReload()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+          <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              <Th>Date</Th>
+              <Th>Kind</Th>
+              <Th>Number</Th>
+              <Th>Status</Th>
+              <Th right>Subtotal</Th>
+              <Th right>Actions</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <SkeletonRows cols={6} rows={5} />
+            ) : docs.length === 0 ? (
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No documents yet — create one above.</td></tr>
+            ) : (
+              docs.map((d) => (
+                <tr key={d.id} className="border-b border-[var(--color-border)] last:border-b-0">
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{d.doc_date}</td>
+                  <td className="px-3 py-2.5 capitalize">{String(d.doc_kind).toLowerCase().replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{d.doc_number}</td>
+                  <td className="px-3 py-2.5 text-xs">{d.status}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(d.subtotal)}</td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => openAuthed(`/api/books/documents/${d.id}/print`)}
+                      className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] mr-3"
+                      title="Print / PDF"
+                    >
+                      <Printer size={13} /> Print
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => send(d)}
+                      disabled={sendingId === d.id}
+                      className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] disabled:opacity-40"
+                      title="Send by email / WhatsApp"
+                    >
+                      {sendingId === d.id ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Send
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const thLine = "px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted)] text-left";
+const tdLineInput =
+  "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]";
+
+function DocumentEditor({ customers, onSaved }: { customers: Ledger[]; onSaved: () => Promise<void> }) {
+  const [docKind, setDocKind] = useState<DocKindId>("INVOICE");
+  const [partyLedgerId, setPartyLedgerId] = useState("");
+  const [docDate, setDocDate] = useState(todayIso());
+  const [interState, setInterState] = useState(false);
+  const [reference, setReference] = useState("");
+  const [narration, setNarration] = useState("");
+  const [lines, setLines] = useState<LineDraft[]>([newLine()]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Load the inventory items for the item picker (optional — silent if unavailable).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.get<InventoryItem[]>("/api/books/inventory/items");
+        if (!cancelled) setItems(Array.isArray(rows) ? rows : []);
+      } catch {
+        /* items list optional; ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const setLine = (key: string, patch: Partial<LineDraft>) =>
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const addLine = () => setLines((ls) => [...ls, newLine()]);
+  const removeLine = (key: string) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.key !== key) : ls));
+
+  const pickItem = (key: string, itemId: string) => {
+    const it = items.find((i) => i.id === itemId);
+    if (!it) { setLine(key, { itemId: "" }); return; }
+    const rate = Number(it.gst_rate);
+    setLine(key, {
+      itemId,
+      description: it.name,
+      hsn: it.hsn_sac ?? "",
+      gstRate: GST_RATES.includes(rate as (typeof GST_RATES)[number]) ? rate : 18,
+    });
+  };
+
+  // Live per-line + document totals (rounded once per line, then summed — mirrors
+  // how the backend posts each line at full precision and presents at 2dp).
+  const calcs = useMemo(() => lines.map((l) => computeLine(l, interState)), [lines, interState]);
+  const totals = useMemo(() => {
+    const t = calcs.reduce(
+      (a, c) => ({
+        taxable: a.taxable + c.taxable,
+        cgst: a.cgst + c.cgst,
+        sgst: a.sgst + c.sgst,
+        igst: a.igst + c.igst,
+        gross: a.gross + c.gross,
+      }),
+      { taxable: 0, cgst: 0, sgst: 0, igst: 0, gross: 0 },
+    );
+    return {
+      taxable: round2(t.taxable),
+      cgst: round2(t.cgst),
+      sgst: round2(t.sgst),
+      igst: round2(t.igst),
+      grand: round2(t.gross),
+    };
+  }, [calcs]);
+
+  // A single representative GST rate for the legacy single-rate posting path.
+  const uniformRate = useMemo(() => {
+    const rates = new Set(lines.map((l) => l.gstRate));
+    return rates.size === 1 ? [...rates][0] : null;
+  }, [lines]);
+
+  const fmt = (n: number) => `₹${n.toFixed(2)}`;
+
+  const submit = async () => {
+    if (!partyLedgerId) { toast.error("Pick a customer"); return; }
+    const filled = lines.filter((l) => (Number(l.qty) || 0) > 0 && (Number(l.rate) || 0) > 0);
+    if (filled.length === 0) { toast.error("Add at least one line with qty and rate"); return; }
+    if (filled.some((l) => !l.description.trim())) { toast.error("Each line needs a description"); return; }
+    setSaving(true);
+    try {
+      // BACKWARD-COMPATIBLE payload: always send subtotal (sum of taxable) +
+      // gst_rate (uniform rate, else 0) + inter_state — the exact single-line
+      // shape today's backend posts from. lines[] is extra detail it stores as-is.
+      const payload = {
+        docKind,
+        docDate,
+        partyLedgerId,
+        subtotal: totals.taxable,
+        gstRate: uniformRate ?? 0,
+        interState,
+        hsn: filled[0]?.hsn || undefined,
+        reference: reference.trim() || undefined,
+        narration: narration.trim() || undefined,
+        lines: filled.map((l, i) => {
+          const c = calcs[lines.indexOf(l)];
+          return {
+            itemId: l.itemId || undefined,
+            description: l.description.trim(),
+            qty: Number(l.qty) || 0,
+            rate: Number(l.rate) || 0,
+            discount: Number(l.discount) || 0,
+            hsn: l.hsn || undefined,
+            gstRate: l.gstRate,
+            taxable: round2(c.taxable),
+            cgst: round2(c.cgst),
+            sgst: round2(c.sgst),
+            igst: round2(c.igst),
+            amount: round2(c.gross),
+            lineNo: i + 1,
+          };
+        }),
+      };
+      const res = await api.post<{ id?: string; doc_number?: number | string }>("/api/books/documents", payload);
+      toast.success(res?.doc_number ? `Saved ${docKind} #${res.doc_number}` : "Document saved");
+      setLines([newLine()]);
+      setReference("");
+      setNarration("");
+      await onSaved();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <FileText size={15} className="text-[var(--color-primary)]" /> New document
+        </h3>
+      </div>
+
+      {/* HEADER FIELDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label className={labelCls}>Document type</label>
+          <select value={docKind} onChange={(e) => setDocKind(e.target.value as DocKindId)} className={inputCls}>
+            {DOC_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Customer</label>
+          <select value={partyLedgerId} onChange={(e) => setPartyLedgerId(e.target.value)} className={inputCls}>
+            <option value="">Select customer…</option>
+            {customers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Date</label>
+          <input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Reference (optional)</label>
+          <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="PO / note" className={inputCls} />
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={interState} onChange={(e) => setInterState(e.target.checked)} className="accent-[var(--color-primary)] w-4 h-4" />
+        Inter-state supply (IGST)
+      </label>
+
+      {/* LINE ITEMS */}
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[820px]">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/40">
+              <th className={thLine}>Item / Description</th>
+              <th className={thLine}>HSN/SAC</th>
+              <th className={`${thLine} text-right`}>Qty</th>
+              <th className={`${thLine} text-right`}>Rate</th>
+              <th className={`${thLine} text-right`}>Disc</th>
+              <th className={`${thLine} text-right`}>GST%</th>
+              <th className={`${thLine} text-right`}>Amount</th>
+              <th className={thLine}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l) => {
+              const c = computeLine(l, interState);
+              return (
+                <tr key={l.key} className="border-b border-[var(--color-border)] last:border-b-0 align-top">
+                  <td className="px-2 py-2 min-w-[220px]">
+                    {items.length > 0 && (
+                      <select
+                        value={l.itemId}
+                        onChange={(e) => pickItem(l.key, e.target.value)}
+                        className={`${tdLineInput} mb-1`}
+                      >
+                        <option value="">Pick item (optional)…</option>
+                        {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                      </select>
+                    )}
+                    <input
+                      value={l.description}
+                      onChange={(e) => setLine(l.key, { description: e.target.value })}
+                      placeholder="Description"
+                      className={tdLineInput}
+                    />
+                  </td>
+                  <td className="px-2 py-2 w-[100px]">
+                    <input value={l.hsn} onChange={(e) => setLine(l.key, { hsn: e.target.value })} placeholder="HSN" className={`${tdLineInput} font-mono`} />
+                  </td>
+                  <td className="px-2 py-2 w-[80px]">
+                    <input value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} inputMode="decimal" className={`${tdLineInput} text-right tabular-nums`} />
+                  </td>
+                  <td className="px-2 py-2 w-[100px]">
+                    <input value={l.rate} onChange={(e) => setLine(l.key, { rate: e.target.value })} inputMode="decimal" placeholder="0.00" className={`${tdLineInput} text-right tabular-nums`} />
+                  </td>
+                  <td className="px-2 py-2 w-[90px]">
+                    <input value={l.discount} onChange={(e) => setLine(l.key, { discount: e.target.value })} inputMode="decimal" placeholder="0" className={`${tdLineInput} text-right tabular-nums`} />
+                  </td>
+                  <td className="px-2 py-2 w-[80px]">
+                    <select value={l.gstRate} onChange={(e) => setLine(l.key, { gstRate: Number(e.target.value) })} className={`${tdLineInput} text-right`}>
+                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap w-[110px]">{fmt(round2(c.gross))}</td>
+                  <td className="px-2 py-2 text-right w-[36px]">
+                    <button type="button" onClick={() => removeLine(l.key)} className="text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30" disabled={lines.length <= 1} title="Remove line">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <button type="button" onClick={addLine} className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)]">
+        <Plus size={14} /> Add line
+      </button>
+
+      {/* TOTALS + NARRATION */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div>
+          <label className={labelCls}>Narration (optional)</label>
+          <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={3} placeholder="Notes shown on the document" className={`${inputCls} resize-y`} />
+        </div>
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm space-y-1">
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">Subtotal (taxable)</span><span className="tabular-nums">{fmt(totals.taxable)}</span></div>
+          {interState ? (
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">IGST</span><span className="tabular-nums">{fmt(totals.igst)}</span></div>
+          ) : (
+            <>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">CGST</span><span className="tabular-nums">{fmt(totals.cgst)}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">SGST</span><span className="tabular-nums">{fmt(totals.sgst)}</span></div>
+            </>
+          )}
+          <div className="flex justify-between border-t border-[var(--color-border)] pt-1 mt-1 font-semibold text-base">
+            <span>Grand total</span><span className="tabular-nums text-[var(--color-primary)]">{fmt(totals.grand)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+          Save {docKind === "INVOICE" ? "invoice" : "estimate"}
+        </button>
+      </div>
     </div>
   );
 }
