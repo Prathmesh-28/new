@@ -4,6 +4,7 @@ const engine = require("./posting-engine");
 const reports = require("./reports");
 const mappers = require("./mappers");
 const documents = require("./documents");
+const inventory = require("./inventory");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -13,6 +14,7 @@ module.exports = {
   ...reports,
   ...mappers,
   ...documents,
+  ...inventory,
   seedBooks,
   ledgerIdByName,
   router: require("./http"),

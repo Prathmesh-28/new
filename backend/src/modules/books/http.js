@@ -9,6 +9,7 @@ const { seedBooks, ledgerIdByName } = require("./seed");
 const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher } = require("./mappers");
 const { financialYearFor } = require("./fy");
 const docs = require("./documents");
+const inv = require("./inventory");
 
 router.use(authenticate);
 
@@ -227,5 +228,21 @@ router.get("/recurring", async (req, res) => {
 router.post("/recurring/run", canPost, async (req, res) => {
   try { res.json(await docs.runRecurringDue(tenantOf(req), req.user.id, (req.body || {}).asOf)); } catch (e) { fail(res, e); }
 });
+
+// ── M3: items + inventory ────────────────────────────────────────────────────
+router.post("/inventory/items", canPost, async (req, res) => { try { res.status(201).json(await inv.createItem(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/inventory/items", async (req, res) => {
+  try { const { rows } = await pool.query("SELECT id,name,unit,hsn_sac,gst_rate,valuation_method,reorder_level,current_qty,current_value,is_active FROM book_stock_items WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); }
+});
+router.get("/inventory/items/:id/ledger", async (req, res) => { try { res.json(await inv.itemLedger(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/inventory/low-stock", async (req, res) => { try { res.json(await inv.lowStock(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/inventory/warehouses", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await inv.createWarehouse(tenantOf(req), b.name, b.address)); } catch (e) { fail(res, e); } });
+router.get("/inventory/warehouses", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_warehouses WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
+router.post("/inventory/price-lists", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await inv.createPriceList(tenantOf(req), b.name, b.currency)); } catch (e) { fail(res, e); } });
+router.post("/inventory/price-lists/:id/items", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await inv.setPrice(tenantOf(req), req.params.id, b.itemId, b.price)); } catch (e) { fail(res, e); } });
+router.post("/inventory/receive", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.itemId || b.qty == null || b.rate == null) return res.status(400).json({ error: "itemId, qty, rate required" }); res.json(await inv.receive(tenantOf(req), b.itemId, b.qty, b.rate, { warehouseId: b.warehouseId, voucherId: b.voucherId, date: b.date })); } catch (e) { fail(res, e); } });
+router.post("/inventory/issue", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.itemId || b.qty == null) return res.status(400).json({ error: "itemId, qty required" }); res.json(await inv.issue(tenantOf(req), b.itemId, b.qty, { warehouseId: b.warehouseId, voucherId: b.voucherId })); } catch (e) { fail(res, e); } });
+router.post("/inventory/transfer", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await inv.transfer(tenantOf(req), b.itemId, b.fromWh, b.toWh, b.qty)); } catch (e) { fail(res, e); } });
+router.post("/inventory/stock-journal", canPost, async (req, res) => { try { res.json(await inv.postStockValueJournal(tenantOf(req), req.user.id, (req.body || {}).date || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
 
 module.exports = router;

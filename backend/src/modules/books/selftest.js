@@ -6,6 +6,7 @@ const { financialYearFor, periodMonthFor } = require("./fy");
 const { validateEntries, PostError } = require("./posting-engine");
 const { splitGst, buildSalesVoucher, buildPurchaseVoucher, buildCreditNote } = require("./mappers");
 const { NEXT } = require("./documents");
+const { applyInwardWAvg, applyOutwardWAvg, consumeFifo } = require("./inventory");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -61,5 +62,17 @@ assert.ok(eq(sum(cn.entries.map((e) => e.debit)), sum(cn.entries.map((e) => e.cr
 assert.ok(NEXT.ESTIMATE.includes("SALES_ORDER") && NEXT.ESTIMATE.includes("INVOICE")); ok("estimate → sales-order/invoice allowed");
 assert.ok(!(NEXT.ESTIMATE || []).includes("GRN")); ok("estimate → GRN rejected (wrong pipeline)");
 assert.ok(NEXT.PURCHASE_ORDER.includes("BILL") && NEXT.GRN.includes("BILL")); ok("PO/GRN → bill allowed");
+
+// 10. M3 — weighted-average valuation.
+let st = { qty: "0", value: "0" };
+st = applyInwardWAvg(st, "10", "100"); assert.ok(eq(st.qty, "10") && eq(st.value, "1000") && eq(st.avg, "100")); ok("WAvg inward 10@100 → avg 100");
+st = applyInwardWAvg(st, "10", "120"); assert.ok(eq(st.qty, "20") && eq(st.value, "2200") && eq(st.avg, "110")); ok("WAvg inward 10@120 → avg 110");
+const outw = applyOutwardWAvg(st, "5"); assert.ok(eq(outw.cogs, "550") && eq(outw.qty, "15") && eq(outw.value, "1650")); ok("WAvg issue 5 → COGS 550 @ avg 110");
+
+// 11. M3 — FIFO consumption oldest-first.
+const fifo = consumeFifo([{ id: "a", qtyRemaining: "10", rate: "100" }, { id: "b", qtyRemaining: "10", rate: "120" }], "15");
+assert.ok(eq(fifo.cogs, "1600") && eq(fifo.remaining, "0")); ok("FIFO issue 15 → COGS 1600 (10@100 + 5@120)");
+const short = consumeFifo([{ id: "a", qtyRemaining: "10", rate: "100" }], "15");
+assert.ok(eq(short.remaining, "5")); ok("FIFO short stock surfaces remaining 5");
 
 console.log(`\n${n} checks passed.`);

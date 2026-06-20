@@ -248,6 +248,51 @@ const BOOKS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_book_alloc_src ON book_allocations(tenant_id, source_voucher_id);
   CREATE INDEX IF NOT EXISTS idx_book_alloc_tgt ON book_allocations(tenant_id, target_voucher_id);
+
+  -- ── M3: items + inventory depth ───────────────────────────────────────────
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS reorder_level   NUMERIC(19,4) NOT NULL DEFAULT 0;
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS current_qty     NUMERIC(19,4) NOT NULL DEFAULT 0;
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS current_value   NUMERIC(19,4) NOT NULL DEFAULT 0;
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS item_group      TEXT;
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS parent_item_id  UUID;  -- composite/variant parent
+  ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS allow_negative  BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id UUID;
+
+  CREATE TABLE IF NOT EXISTS book_warehouses (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    address    TEXT,
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS book_price_lists (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    currency   TEXT NOT NULL DEFAULT 'INR',
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS book_price_list_items (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    price_list_id UUID NOT NULL REFERENCES book_price_lists(id),
+    item_id       UUID NOT NULL REFERENCES book_stock_items(id),
+    price         NUMERIC(19,4) NOT NULL,
+    UNIQUE (price_list_id, item_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_pli ON book_price_list_items(tenant_id, item_id);
+  -- per-warehouse stock balance (qty per godown; value tracked at item level for WAvg)
+  CREATE TABLE IF NOT EXISTS book_stock_balances (
+    tenant_id    TEXT NOT NULL,
+    item_id      UUID NOT NULL REFERENCES book_stock_items(id),
+    warehouse_id UUID NOT NULL REFERENCES book_warehouses(id),
+    qty          NUMERIC(19,4) NOT NULL DEFAULT 0,
+    PRIMARY KEY (tenant_id, item_id, warehouse_id)
+  );
 `;
 
 module.exports = { BOOKS_SCHEMA };
