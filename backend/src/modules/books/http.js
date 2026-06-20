@@ -97,7 +97,7 @@ router.post("/ledgers", canPost, async (req, res) => {
 });
 router.patch("/ledgers/:id", canPost, async (req, res) => {
   try {
-    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit"];
+    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit", "gst_registration_type", "credit_limit"];
     const sets = [], vals = [];
     for (const k of allowed) if (k in (req.body || {})) { sets.push(`${k}=$${sets.length + 1}`); vals.push(req.body[k]); }
     if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
@@ -634,6 +634,7 @@ router.post("/approvals/:id/decide", canPost, async (req, res) => { try { const 
 router.post("/number-formats", canPost, async (req, res) => { try { res.status(201).json(await auto.setNumberFormat(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/overdue", async (req, res) => { try { res.json(await auto.overdue(tenantOf(req), req.query.asOf, Number(req.query.ratePerAnnum) || 0)); } catch (e) { fail(res, e); } });
 router.post("/late-fee", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await auto.postLateFee(tenantOf(req), req.user.id, b)); } catch (e) { fail(res, e); } });
+router.get("/dunning/due", async (req, res) => { try { res.json(await auto.dunningDue(tenantOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/projects", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_projects WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });

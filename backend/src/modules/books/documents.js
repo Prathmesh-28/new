@@ -8,6 +8,7 @@ const { financialYearFor } = require("./fy");
 const { postVoucher, PostError } = require("./posting-engine");
 const { buildSalesVoucher, buildPurchaseVoucher, buildSalesVoucherLines, buildPurchaseVoucherLines } = require("./mappers");
 const { ledgerIdByName } = require("./seed");
+const auto = require("./automation");
 
 // Allowed conversions. "INVOICE"/"BILL" are terminal (they post a voucher).
 const NEXT = {
@@ -94,6 +95,26 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
     } else {
       const ctx = await purchaseCtx(tenantId, doc.party_ledger_id);
       m = hasLines ? buildPurchaseVoucherLines(input, ctx) : buildPurchaseVoucher(input, ctx);
+    }
+    // Gross = the party-ledger movement on this voucher (customer debit / vendor credit).
+    const gross = Math.abs(m.entries.filter((e) => e.ledgerId === doc.party_ledger_id).reduce((s, e) => s + Number(e.debit || 0) - Number(e.credit || 0), 0));
+    // Approval gate — when a rule for this entity exists and the amount crosses its
+    // threshold, the document can only post once an APPROVED record exists for it.
+    const entityType = toKind === "INVOICE" ? "invoice" : "bill";
+    if (!opts.skipApproval && (await auto.requiresApproval(tenantId, entityType, gross))) {
+      const { rows: ap } = await pool.query("SELECT 1 FROM book_approvals WHERE tenant_id=$1 AND entity_type='document' AND entity_id=$2 AND status='APPROVED' LIMIT 1", [tenantId, docId]);
+      if (!ap[0]) throw new PostError("NEEDS_APPROVAL", `This ${entityType} (₹${gross.toFixed(0)}) needs approval before posting — request approval first`, 409);
+    }
+    // Credit-limit gate (sales) — block if the customer's outstanding + this invoice
+    // would exceed their credit limit, unless explicitly overridden.
+    if (toKind === "INVOICE" && !opts.overrideCreditLimit) {
+      const { rows: cl } = await pool.query("SELECT credit_limit FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, doc.party_ledger_id]);
+      const limit = cl[0] && cl[0].credit_limit ? Number(cl[0].credit_limit) : 0;
+      if (limit > 0) {
+        const { rows: o } = await pool.query("SELECT COALESCE(SUM(e.debit-e.credit),0) AS bal FROM book_voucher_entries e JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false WHERE e.tenant_id=$1 AND e.ledger_id=$2", [tenantId, doc.party_ledger_id]);
+        const outstanding = Number(o[0].bal || 0);
+        if (outstanding + gross > limit) throw new PostError("CREDIT_LIMIT_EXCEEDED", `Credit limit ₹${limit.toFixed(0)} exceeded — outstanding ₹${outstanding.toFixed(0)} + ₹${gross.toFixed(0)}. Override to proceed.`, 409);
+      }
     }
     const r = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
     await pool.query("UPDATE book_documents SET status='CONVERTED', converted_voucher_id=$2 WHERE id=$1", [docId, r.voucherId]);

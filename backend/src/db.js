@@ -626,6 +626,10 @@ async function initDb() {
     ALTER TABLE book_stock_lots  ADD COLUMN IF NOT EXISTS expiry_date DATE;
     ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS uom_conversions JSONB;
 
+    -- Books must-haves: party GST registration type + credit limit on the ledger.
+    ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS gst_registration_type TEXT;
+    ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(19,4);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

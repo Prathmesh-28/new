@@ -90,4 +90,20 @@ async function postLateFee(tenantId, actorId, { partyLedgerId, amount, date }) {
     [{ ledgerId: partyLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: lf, debit: "0", credit: toDb(amount) }]);
 }
 
-module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee };
+// Dunning — reads the book_reminders cadence (which was previously dead config) and
+// returns the overdue invoices that have crossed a reminder stage, with the stage name
+// and the suggested late fee. The owner-facing "who to chase" list; channel delivery
+// (email/WhatsApp to the customer) is layered on top where contact + transport exist.
+async function dunningDue(tenantId, asOf) {
+  const { rows: rem } = await pool.query("SELECT * FROM book_reminders WHERE tenant_id=$1 ORDER BY days_after_due", [tenantId]);
+  if (!rem.length) return { reminders: [], due: [] };
+  const maxRate = Math.max(0, ...rem.map((r) => Number(r.fee_percent_pa) || 0));
+  const od = await overdue(tenantId, asOf, maxRate);
+  const due = od.invoices.map((inv) => {
+    const stage = rem.filter((r) => inv.daysOverdue >= Number(r.days_after_due)).sort((a, b) => b.days_after_due - a.days_after_due)[0];
+    return stage ? { ...inv, reminderStage: stage.name, daysAfterDue: stage.days_after_due } : null;
+  }).filter(Boolean);
+  return { asOf: od.asOf, reminders: rem, due };
+}
+
+module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee, dunningDue };
