@@ -7,6 +7,7 @@ const { validateEntries, PostError } = require("./posting-engine");
 const { splitGst, buildSalesVoucher, buildPurchaseVoucher, buildCreditNote } = require("./mappers");
 const { NEXT } = require("./documents");
 const { applyInwardWAvg, applyOutwardWAvg, consumeFifo } = require("./inventory");
+const { monthRange } = require("./gst");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -74,5 +75,10 @@ const fifo = consumeFifo([{ id: "a", qtyRemaining: "10", rate: "100" }, { id: "b
 assert.ok(eq(fifo.cogs, "1600") && eq(fifo.remaining, "0")); ok("FIFO issue 15 → COGS 1600 (10@100 + 5@120)");
 const short = consumeFifo([{ id: "a", qtyRemaining: "10", rate: "100" }], "15");
 assert.ok(eq(short.remaining, "5")); ok("FIFO short stock surfaces remaining 5");
+
+// 12. M4 — GST period range (UTC-safe month boundaries).
+assert.deepStrictEqual(monthRange("2026-02"), { from: "2026-02-01", to: "2026-02-28" }); ok("monthRange Feb 2026 → 01..28 (non-leap)");
+assert.deepStrictEqual(monthRange("2024-02"), { from: "2024-02-01", to: "2024-02-29" }); ok("monthRange Feb 2024 → 01..29 (leap)");
+assert.deepStrictEqual(monthRange("2026-12"), { from: "2026-12-01", to: "2026-12-31" }); ok("monthRange Dec → 01..31");
 
 console.log(`\n${n} checks passed.`);

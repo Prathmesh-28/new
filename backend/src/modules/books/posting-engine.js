@@ -98,9 +98,9 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   // 8. Tax side-records (authoritative breakdown captured at posting time).
   for (const t of opts.taxes || []) {
     await client.query(
-      `INSERT INTO book_tax_entries(tenant_id, voucher_id, line_entry_id, tax_kind, rate, taxable_value, tax_amount, hsn_sac, is_input, place_of_supply)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [tenantId, voucherId, t.lineEntryId || null, t.taxKind, toDb(t.rate), toDb(t.taxableValue), toDb(t.taxAmount), t.hsnSac || null, !!t.isInput, t.placeOfSupply || null]
+      `INSERT INTO book_tax_entries(tenant_id, voucher_id, line_entry_id, tax_kind, rate, taxable_value, tax_amount, hsn_sac, is_input, place_of_supply, supply_type, counterparty_gstin)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [tenantId, voucherId, t.lineEntryId || null, t.taxKind, toDb(t.rate), toDb(t.taxableValue), toDb(t.taxAmount), t.hsnSac || null, !!t.isInput, t.placeOfSupply || null, t.supplyType || "REGULAR", t.counterpartyGstin || null]
     );
   }
 

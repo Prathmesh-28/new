@@ -293,6 +293,11 @@ const BOOKS_SCHEMA = `
     qty          NUMERIC(19,4) NOT NULL DEFAULT 0,
     PRIMARY KEY (tenant_id, item_id, warehouse_id)
   );
+
+  -- ── M4: GST classification on tax entries (for GSTR bucketing) ─────────────
+  ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS supply_type        TEXT NOT NULL DEFAULT 'REGULAR';
+    -- REGULAR | RCM | SEZ | EXPORT | NIL | EXEMPT | COMPOSITION
+  ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS counterparty_gstin TEXT;
 `;
 
 module.exports = { BOOKS_SCHEMA };

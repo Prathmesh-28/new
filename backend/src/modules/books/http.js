@@ -10,6 +10,7 @@ const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCredi
 const { financialYearFor } = require("./fy");
 const docs = require("./documents");
 const inv = require("./inventory");
+const gst = require("./gst");
 
 router.use(authenticate);
 
@@ -244,5 +245,14 @@ router.post("/inventory/receive", canPost, async (req, res) => { try { const b =
 router.post("/inventory/issue", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.itemId || b.qty == null) return res.status(400).json({ error: "itemId, qty required" }); res.json(await inv.issue(tenantOf(req), b.itemId, b.qty, { warehouseId: b.warehouseId, voucherId: b.voucherId })); } catch (e) { fail(res, e); } });
 router.post("/inventory/transfer", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await inv.transfer(tenantOf(req), b.itemId, b.fromWh, b.toWh, b.qty)); } catch (e) { fail(res, e); } });
 router.post("/inventory/stock-journal", canPost, async (req, res) => { try { res.json(await inv.postStockValueJournal(tenantOf(req), req.user.id, (req.body || {}).date || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
+
+// ── M4: GST returns ──────────────────────────────────────────────────────────
+const reqPeriod = (req, res) => { const p = req.query.period; if (!p || !/^\d{4}-\d{2}$/.test(p)) { res.status(400).json({ error: "period=YYYY-MM required" }); return null; } return p; };
+router.get("/gst/gstr1", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr3b", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr3b(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bReconcile(tenantOf(req), b.period, b.rows || [])); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
+router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });
 
 module.exports = router;

@@ -5,6 +5,7 @@ const reports = require("./reports");
 const mappers = require("./mappers");
 const documents = require("./documents");
 const inventory = require("./inventory");
+const gst = require("./gst");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -15,6 +16,7 @@ module.exports = {
   ...mappers,
   ...documents,
   ...inventory,
+  ...gst,
   seedBooks,
   ledgerIdByName,
   router: require("./http"),
