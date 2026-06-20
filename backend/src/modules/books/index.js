@@ -25,6 +25,7 @@ const taxfiling = require("./taxfiling");
 const incometax = require("./incometax");
 const pricing = require("./pricing");
 const payterms = require("./payterms");
+const subscriptions = require("./subscriptions");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -56,6 +57,7 @@ module.exports = {
   ...incometax,
   ...pricing,
   ...payterms,
+  ...subscriptions,
   ewaybill,
   payments,
   fx,

@@ -432,6 +432,20 @@ initDb()
         .then(n => { if (n) console.log(`[reminders] raised ${n} overdue-invoice alert(s)`); })
         .catch(err => console.error("[reminders]", err.message));
     }, { timezone: "UTC" });
-    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · e-invoice worker on");
+    // Subscriptions: generate due recurring invoices daily at 07:45 IST (02:15 UTC).
+    cron.schedule("15 2 * * *", async () => {
+      try {
+        const { rows } = await require("./db").pool.query("SELECT DISTINCT tenant_id FROM book_subscriptions WHERE status IN ('active','trial') AND next_invoice_date <= CURRENT_DATE");
+        const books = require("./modules/books");
+        const today = new Date().toISOString().slice(0, 10);
+        let n = 0;
+        for (const r of rows) {
+          const made = await books.generateDueInvoices(r.tenant_id, today).catch((e) => { console.error("[subscriptions]", r.tenant_id, e.message); return null; });
+          if (made) n += (Array.isArray(made) ? made.length : (made.created?.length || made.invoices?.length || 0));
+        }
+        if (n) console.log(`[subscriptions] generated ${n} due invoice(s)`);
+      } catch (e) { console.error("[subscriptions-cron]", e.message); }
+    }, { timezone: "UTC" });
+    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · subscriptions 07:45 IST · e-invoice worker on");
   })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

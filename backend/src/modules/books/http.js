@@ -19,6 +19,14 @@ const taxfiling = require("./taxfiling");
 const incometax = require("./incometax");
 const pricing = require("./pricing");
 const payterms = require("./payterms");
+const subs = require("./subscriptions");
+const validators = require("../../lib/validators");
+// Reject a malformed GSTIN/PAN (checksum-verified) before it hits the ledger.
+const badId = (b) => {
+  if (b.gstin && !validators.isValidGstin(String(b.gstin).toUpperCase())) return "Invalid GSTIN (checksum failed)";
+  if (b.pan && !validators.isValidPan(String(b.pan).toUpperCase())) return "Invalid PAN";
+  return null;
+};
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -94,6 +102,7 @@ router.post("/ledgers", canPost, async (req, res) => {
   try {
     const b = req.body || {};
     if (!b.name || !b.group_id) return res.status(400).json({ error: "name and group_id required" });
+    const idErr = badId(b); if (idErr) return res.status(400).json({ error: idErr });
     const { rows } = await pool.query(
       `INSERT INTO book_ledgers(tenant_id,name,group_id,opening_balance,opening_is_debit,is_party,gstin,pan,state_code,billing_address,credit_period_days,is_bank,account_number,ifsc,ext_account_id,ext_party_id)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
@@ -104,6 +113,7 @@ router.post("/ledgers", canPost, async (req, res) => {
 });
 router.patch("/ledgers/:id", canPost, async (req, res) => {
   try {
+    const idErr = badId(req.body || {}); if (idErr) return res.status(400).json({ error: idErr });
     const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit", "gst_registration_type", "credit_limit", "email", "phone", "maintain_billwise"];
     const sets = [], vals = [];
     for (const k of allowed) if (k in (req.body || {})) { sets.push(`${k}=$${sets.length + 1}`); vals.push(req.body[k]); }
@@ -662,6 +672,19 @@ const reqPeriod = (req, res) => { const p = req.query.period; if (!p || !/^\d{4}
 router.get("/gst/gstr1", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1(tenantOf(req), p)); } catch (e) { fail(res, e); } });
 router.get("/gst/gstr3b", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr3b(tenantOf(req), p)); } catch (e) { fail(res, e); } });
 router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bReconcile(tenantOf(req), b.period, b.rows || [])); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr2b/match", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bMatch(tenantOf(req), b.period, b.portalInvoices || b.rows || [])); } catch (e) { fail(res, e); } });
+// Identifier validation (GSTIN/PAN/Aadhaar/IFSC/… checksums).
+router.get("/validate", async (req, res) => { try { res.json(validators.validate(req.query.kind, req.query.value)); } catch (e) { fail(res, e); } });
+router.get("/validate/gstin", async (req, res) => { try { res.json(validators.gstinInfo(String(req.query.value || ""))); } catch (e) { fail(res, e); } });
+
+// ── Subscriptions (recurring billing) ────────────────────────────────────────
+router.post("/subscription-plans", canPost, async (req, res) => { try { res.status(201).json(await subs.createPlan(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/subscription-plans", async (req, res) => { try { res.json(await subs.listPlans(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/subscriptions", canPost, async (req, res) => { try { res.status(201).json(await subs.createSubscription(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/subscriptions", async (req, res) => { try { res.json(await subs.listSubscriptions(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+router.post("/subscriptions/:id/change-plan", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await subs.changePlan(tenantOf(req), { subscriptionId: req.params.id, newPlanId: b.newPlanId, prorate: b.prorate !== false })); } catch (e) { fail(res, e); } });
+router.post("/subscriptions/:id/cancel", canPost, async (req, res) => { try { res.json(await subs.cancelSubscription(tenantOf(req), req.params.id, (req.body || {}).atPeriodEnd !== false)); } catch (e) { fail(res, e); } });
+router.post("/subscriptions/run", canPost, async (req, res) => { try { res.status(201).json(await subs.generateDueInvoices(tenantOf(req), (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
 router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
 router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });

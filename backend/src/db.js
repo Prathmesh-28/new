@@ -823,6 +823,35 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_book_pay_sched ON book_payment_schedule(tenant_id, voucher_id, due_date);
 
+    -- Subscription billing (ported from Lago/KillBill concepts).
+    CREATE TABLE IF NOT EXISTS book_subscription_plans (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      price           NUMERIC(19,4) NOT NULL DEFAULT 0,
+      interval        TEXT NOT NULL DEFAULT 'monthly',
+      interval_count  INT NOT NULL DEFAULT 1,
+      gst_rate        NUMERIC(9,4) NOT NULL DEFAULT 0,
+      hsn_sac         TEXT,
+      is_active       BOOLEAN NOT NULL DEFAULT true,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS book_subscriptions (
+      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id            TEXT NOT NULL,
+      party_ledger_id      UUID NOT NULL,
+      plan_id              UUID NOT NULL,
+      qty                  NUMERIC(19,4) NOT NULL DEFAULT 1,
+      status               TEXT NOT NULL DEFAULT 'active',
+      trial_end            DATE,
+      current_period_start DATE,
+      next_invoice_date    DATE,
+      started_at           DATE,
+      cancelled_at         DATE,
+      created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_subs ON book_subscriptions(tenant_id, status, next_invoice_date);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

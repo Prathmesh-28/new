@@ -77,6 +77,223 @@ async function gstr2bReconcile(tenantId, period, portalRows = []) {
   return { period, matched, mismatched, missingInBooks, missingInPortal };
 }
 
+// ── GSTR-2B INVOICE-LEVEL matching ───────────────────────────────────────────
+// Re-implemented from resilient-tech/india-compliance's purchase-reconciliation
+// Reconciler (MIT/GPL — own code here). The portal furnishes 2B invoices; we
+// match each against our INWARD (is_input=true) booked invoices for the period
+// by (supplier GSTIN + fuzzy invoice-no + amount-within-tolerance), in passes:
+//   1. EXACT     — GSTIN + invoice-no equal + taxable & tax equal
+//   2. SUGGESTED — GSTIN + (fuzzy invoice-no OR rounding-diff ≤ ₹1 on amounts)
+// Anything matched on GSTIN+amount but with a differing invoice-no is bucketed
+// as PROBABLE. Leftovers: portal-only → missingInBooks (booked nowhere, ITC
+// can't be claimed / should be booked); books-only → missingInPortal (we
+// claimed ITC the supplier hasn't filed → ITC at risk).
+//
+// Bill-no cleaner (india-compliance get_cleaner_bill_no): drop FY tokens, strip
+// "/" and "-", collapse whitespace, strip leading zeros, uppercase.
+const ITC_AMOUNT_TOLERANCE = money(1); // ≤ ₹1 rounding difference, per source
+
+function billFyTokens(fy) {
+  // fy = "YYYY-YYYY"; build the same replace-list india-compliance uses.
+  const p = String(fy || "").split("-");
+  if (p.length !== 2) return [];
+  const [a, b] = p;
+  return [
+    `${a}-${b}`, `${a}/${b}`, `${a}${b}`,
+    `${a}-${b.slice(2)}`, `${a}/${b.slice(2)}`, `${a}${b.slice(2)}`,
+    `${a.slice(2)}-${b.slice(2)}`, `${a.slice(2)}/${b.slice(2)}`, `${a.slice(2)}${b.slice(2)}`,
+  ];
+}
+
+function cleanerBillNo(billNo, fy) {
+  let inv = String(billNo || "");
+  for (const tok of [...billFyTokens(fy), "/", "-"]) {
+    if (tok) inv = inv.split(tok).join(" ");
+  }
+  inv = inv.split(/\s+/).filter(Boolean).join(" ").replace(/^0+/, "");
+  return inv.toUpperCase();
+}
+
+// India GST financial year from a date: Apr–Mar, "YYYY-YYYY".
+function fyOfDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt)) return "";
+  const y = dt.getUTCFullYear();
+  return dt.getUTCMonth() < 3 ? `${y - 1}-${y}` : `${y}-${y + 1}`;
+}
+
+function daysApart(a, b) {
+  const da = a instanceof Date ? a : new Date(a);
+  const db = b instanceof Date ? b : new Date(b);
+  if (isNaN(da) || isNaN(db)) return Infinity;
+  return Math.abs(Math.round((da - db) / 86400000));
+}
+
+// Levenshtein → normalised ratio (0..100), the basis of rapidfuzz's fuzz.ratio.
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let cur = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+// rapidfuzz fuzz.ratio: 100 * (1 - dist / (len(a)+len(b))) — standard form.
+function ratio(a, b) {
+  if (!a.length && !b.length) return 100;
+  const dist = levenshtein(a, b);
+  const total = a.length + b.length;
+  return total ? (1 - dist / total) * 100 : 100;
+}
+// partial_ratio: best ratio of the shorter string against every same-length
+// window of the longer (rapidfuzz's substring alignment, simplified).
+function partialRatio(a, b) {
+  if (!a.length || !b.length) return 0;
+  let [s, l] = a.length <= b.length ? [a, b] : [b, a];
+  let best = 0;
+  for (let i = 0; i + s.length <= l.length; i++) {
+    const r = ratio(s, l.slice(i, i + s.length));
+    if (r > best) best = r;
+    if (best === 100) break;
+  }
+  return best;
+}
+
+// Fuzzy bill-no match (Reconciler.fuzzy_match): dates within 10 days, then a
+// 100% partial ratio OR a ≥90% best ratio on the cleaned bill numbers.
+function fuzzyBillMatch(p, b) {
+  if (!p._bill || !b._bill) return false;
+  if (daysApart(p.invoiceDate, b.invoiceDate) > 10) return false;
+  if (partialRatio(p._bill, b._bill) === 100) return true;
+  return ratio(p._bill, b._bill) >= 90;
+}
+
+function amountWithinTolerance(p, b) {
+  const dTaxable = money(p.taxable).minus(money(b.taxable)).abs();
+  const dTax = money(p.tax).minus(money(b.tax)).abs();
+  return dTaxable.lessThanOrEqualTo(ITC_AMOUNT_TOLERANCE) && dTax.lessThanOrEqualTo(ITC_AMOUNT_TOLERANCE);
+}
+function amountExact(p, b) {
+  return money(p.taxable).equals(money(b.taxable)) && money(p.tax).equals(money(b.tax));
+}
+
+async function gstr2bMatch(tenantId, period, portalInvoices = []) {
+  const { from, to } = monthRange(period);
+  // Our INWARD (ITC) book invoices for the period, one row per voucher, with the
+  // supplier GSTIN, invoice no/date and aggregated taxable + total tax.
+  const { rows } = await pool.query(
+    `SELECT v.id AS voucher_id,
+            COALESCE(NULLIF(v.reference,''), v.voucher_number::text) AS invoice_no,
+            v.voucher_date AS invoice_date, te.counterparty_gstin AS gstin,
+            COALESCE(SUM(te.taxable_value) FILTER (WHERE te.tax_kind IN ('CGST','IGST')),0) AS taxable,
+            COALESCE(SUM(te.tax_amount),0) AS tax
+       FROM book_tax_entries te
+       JOIN book_vouchers v ON v.id=te.voucher_id AND v.is_cancelled=false
+      WHERE te.tenant_id=$1 AND te.is_input=true AND v.voucher_date BETWEEN $2 AND $3
+      GROUP BY v.id, v.reference, v.voucher_number, v.voucher_date, te.counterparty_gstin`,
+    [tenantId, from, to]
+  );
+
+  // Normalise both sides into { gstin, invoiceNo, invoiceDate, taxable, tax, _bill, _id }.
+  const mkBook = (r, i) => {
+    const fy = fyOfDate(r.invoice_date);
+    return {
+      _id: r.voucher_id || `book-${i}`, gstin: (r.gstin || "").toUpperCase().trim(),
+      invoiceNo: r.invoice_no || "", invoiceDate: r.invoice_date,
+      taxable: toRupees(r.taxable), tax: toRupees(r.tax),
+      _bill: cleanerBillNo(r.invoice_no, fy), _matched: false,
+    };
+  };
+  const mkPortal = (r, i) => {
+    const fy = fyOfDate(r.invoiceDate);
+    return {
+      _id: `portal-${i}`, gstin: (r.gstin || "").toUpperCase().trim(),
+      invoiceNo: r.invoiceNo || "", invoiceDate: r.invoiceDate,
+      taxable: toRupees(r.taxable || 0), tax: toRupees(r.tax || 0),
+      _bill: cleanerBillNo(r.invoiceNo, fy), _matched: false,
+    };
+  };
+  const books = rows.map(mkBook);
+  const portal = (portalInvoices || []).map(mkPortal);
+
+  // Index books by GSTIN so passes only compare same-supplier invoices.
+  const booksByGstin = new Map();
+  for (const b of books) {
+    if (!booksByGstin.has(b.gstin)) booksByGstin.set(b.gstin, []);
+    booksByGstin.get(b.gstin).push(b);
+  }
+
+  const matched = [], probable = [];
+  const rec = (p, b, status) => {
+    p._matched = b._matched = true;
+    const out = {
+      gstin: p.gstin, status,
+      portal: { invoiceNo: p.invoiceNo, invoiceDate: p.invoiceDate, taxable: p.taxable, tax: p.tax },
+      books: { voucherId: b._id, invoiceNo: b.invoiceNo, invoiceDate: b.invoiceDate, taxable: b.taxable, tax: b.tax },
+      taxDiff: toRupees(money(p.tax).minus(money(b.tax))),
+    };
+    (status === "EXACT" ? matched : probable).push(out);
+  };
+
+  // Pass 1 — EXACT: same GSTIN, same cleaned invoice-no, equal taxable & tax.
+  for (const p of portal) {
+    if (p._matched) continue;
+    for (const b of booksByGstin.get(p.gstin) || []) {
+      if (b._matched) continue;
+      if (p._bill && b._bill && p._bill === b._bill && amountExact(p, b)) { rec(p, b, "EXACT"); break; }
+    }
+  }
+  // Pass 2 — SUGGESTED (matched bucket): same GSTIN, fuzzy invoice-no, amounts
+  // within ₹1 tolerance. A strong match → counts as matched/reconciled.
+  for (const p of portal) {
+    if (p._matched) continue;
+    for (const b of booksByGstin.get(p.gstin) || []) {
+      if (b._matched) continue;
+      if (fuzzyBillMatch(p, b) && amountWithinTolerance(p, b)) { rec(p, b, "SUGGESTED"); break; }
+    }
+  }
+  // Pass 3 — PROBABLE: same GSTIN + amounts within tolerance but invoice-no
+  // differs (no fuzzy hit). Likely the same invoice keyed differently.
+  for (const p of portal) {
+    if (p._matched) continue;
+    for (const b of booksByGstin.get(p.gstin) || []) {
+      if (b._matched) continue;
+      if (amountWithinTolerance(p, b)) { rec(p, b, "PROBABLE"); break; }
+    }
+  }
+
+  // Leftovers.
+  const missingInBooks = portal.filter((p) => !p._matched).map((p) => ({
+    gstin: p.gstin, invoiceNo: p.invoiceNo, invoiceDate: p.invoiceDate, taxable: p.taxable, tax: p.tax,
+  }));
+  const missingInPortal = books.filter((b) => !b._matched).map((b) => ({
+    gstin: b.gstin, voucherId: b._id, invoiceNo: b.invoiceNo, invoiceDate: b.invoiceDate, taxable: b.taxable, tax: b.tax,
+  }));
+
+  // ITC at risk = total tax we've booked (claimed) that isn't in 2B.
+  const itcAtRisk = toRupees(missingInPortal.reduce((a, b) => a.plus(money(b.tax)), money(0)));
+
+  return {
+    period, matched, probable, missingInBooks, missingInPortal,
+    summary: {
+      counts: {
+        matched: matched.length, probable: probable.length,
+        missingInBooks: missingInBooks.length, missingInPortal: missingInPortal.length,
+        portalTotal: portal.length, booksTotal: books.length,
+      },
+      itcAtRisk,
+    },
+  };
+}
+
 // GSTR-9 — annual summary (outward + ITC) for an FY.
 async function gstr9(tenantId, fy) {
   const { rows } = await pool.query(
@@ -308,4 +525,4 @@ async function blockedItcSummary(tenantId, period, voucherIds = null) {
   };
 }
 
-module.exports = { monthRange, gstr1, gstr3b, gstr2bReconcile, gstr9, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, gstr1Json, setGstRate, getGstRate, listGstRates, recordChallan, listChallans, gstLiabilityVsPaid, blockedItcSummary };
+module.exports = { monthRange, gstr1, gstr3b, gstr2bReconcile, gstr2bMatch, gstr9, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, gstr1Json, setGstRate, getGstRate, listGstRates, recordChallan, listChallans, gstLiabilityVsPaid, blockedItcSummary };
