@@ -28,7 +28,8 @@ const DEFAULT_LEDGERS = [
   ["Cash", "Cash-in-hand"], ["Sales", "Sales Accounts"], ["Purchases", "Purchase Accounts"],
   ["CGST Output", "Duties & Taxes"], ["SGST Output", "Duties & Taxes"], ["IGST Output", "Duties & Taxes"],
   ["CGST Input", "Duties & Taxes"], ["SGST Input", "Duties & Taxes"], ["IGST Input", "Duties & Taxes"],
-  ["TDS Payable", "Duties & Taxes"], ["Round Off", "Indirect Expenses"],
+  ["TDS Payable", "Duties & Taxes"], ["TCS Payable", "Duties & Taxes"], ["Round Off", "Indirect Expenses"],
+  ["Bad Debts", "Indirect Expenses"], ["Reserves & Surplus", "Reserves & Surplus"],
   // M2: holding + returns ledgers
   ["Undeposited Funds", "Current Assets"], ["Sales Returns", "Sales Accounts"], ["Purchase Returns", "Purchase Accounts"],
   // M3: inventory GL ledgers

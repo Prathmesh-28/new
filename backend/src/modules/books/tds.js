@@ -154,4 +154,125 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
   };
 }
 
-module.exports = { TDS_SECTIONS, computeTds, buildTdsDeduction, NO_PAN_RATE };
+// §TCS — Tax Collected at Source (Income-Tax Act §206C). The mirror of TDS: here
+// WE are the SELLER and COLLECT an extra slice of tax FROM the buyer on top of the
+// sale value, then remit it to the government against a TCS Payable liability. So a
+// sale invoice's receivable from the customer is *grossed up* by the TCS, unlike
+// TDS which *reduces* what we pay a vendor.
+//
+// Sections per §206C. `rate` is a percentage on the sale value (206C(1H) collects
+// only on the amount above the ₹50,00,000 aggregate to a single buyer — the caller
+// applies that aggregate test, same convention as 194Q above). `noPan` is the
+// §206CC penal rate: twice the normal rate, or 5%, whichever is HIGHER, applied
+// when the buyer has no PAN.
+const TCS_SECTIONS = {
+  "206C(1H)": {
+    section: "206C(1H)",
+    description: "Sale of goods to a buyer above the ₹50,00,000 aggregate",
+    rate: 0.1,
+    threshold: 5000000,            // collect only on value above ₹50,00,000
+    aggregateThreshold: 5000000,
+    label: "TCS on sale of goods",
+  },
+  "206C-SCRAP": {
+    section: "206C-SCRAP",
+    description: "Sale of scrap",
+    rate: 1,
+    threshold: 0,
+    label: "TCS on scrap",
+  },
+  "206C-TENDU": {
+    section: "206C-TENDU",
+    description: "Sale of tendu leaves",
+    rate: 5,
+    threshold: 0,
+    label: "TCS on tendu leaves",
+  },
+  "206C-TIMBER": {
+    section: "206C-TIMBER",
+    description: "Sale of timber / other forest produce (not tendu)",
+    rate: 2.5,
+    threshold: 0,
+    label: "TCS on timber / forest produce",
+  },
+};
+
+function _tcsSection(section) {
+  const s = TCS_SECTIONS[String(section || "").toUpperCase()];
+  if (!s) {
+    throw new PostError("UNKNOWN_TCS_SECTION", `Unknown TCS section "${section}"`, 422);
+  }
+  return s;
+}
+
+// (2) Pure rate→amount computation for TCS. No DB, no aggregate test (caller owns
+// that). When the buyer has no PAN, §206CC applies the HIGHER of twice the section
+// rate or 5%. tcsAmount is rounded to the nearest rupee (same CBDT convention as
+// TDS); totalCollectible is the sale amount grossed up by the collected tax.
+function computeTcs({ section, amount, panAvailable = true } = {}) {
+  const s = _tcsSection(section);
+  const amt = money(amount);
+  if (amt.lessThan(0)) throw new PostError("BAD_TCS_AMOUNT", "TCS amount cannot be negative", 422);
+
+  let rate = money(s.rate);
+  if (!panAvailable) {
+    // §206CC: higher of 2× section rate or 5%.
+    const penal = rate.times(2);
+    rate = penal.greaterThan(money(5)) ? penal : money(5);
+  }
+
+  const tcsAmount = amt.times(rate).div(100).toDecimalPlaces(0);
+  const totalCollectible = amt.plus(tcsAmount);
+  return {
+    section: s.section,
+    rate: toRupees(rate),
+    tcsAmount: toDb(tcsAmount),
+    totalCollectible: toDb(totalCollectible),
+  };
+}
+
+// (3) The extra voucher lines to splice onto a SALE so the customer is billed for
+// the TCS on top and the collected tax sits in a liability awaiting remittance.
+//
+// In a normal sale the customer is debited (receivable) the full gross. To collect
+// TCS we ADD tcsAmount to that customer debit and credit TCS Payable — the credit
+// side (sales income + output GST) is unchanged, so the voucher still balances. We
+// emit only the TWO extra lines so the caller appends them on top of its sale.
+//
+//   Dr  Customer                  + tcsAmount   ← appended here (extra receivable)
+//   Cr  TCS Payable                 tcsAmount   ← appended here
+//   Cr  (sales + output GST)        gross + gst ← caller, unchanged
+function buildTcsCollection({ customerLedgerId, tcsPayableLedgerId, amount, section, panAvailable = true } = {}) {
+  if (!customerLedgerId) throw new PostError("BAD_INPUT", "customerLedgerId required", 422);
+  if (!tcsPayableLedgerId) throw new PostError("BAD_INPUT", "tcsPayableLedgerId required", 422);
+
+  const amt = money(amount);
+  if (!amt.greaterThan(0)) throw new PostError("BAD_INPUT", "amount must be positive", 422);
+
+  const tcs = computeTcs({ section, amount: amt, panAvailable });
+  const tcsAmount = money(tcs.tcsAmount);
+
+  // Extra lines to append. Customer receivable grows by the TCS; TCS Payable is
+  // credited the collected tax. The caller's own sale lines balance the base.
+  const entries = [
+    { ledgerId: customerLedgerId, debit: toDb(tcsAmount), credit: "0" },
+    { ledgerId: tcsPayableLedgerId, debit: "0", credit: toDb(tcsAmount) },
+  ];
+
+  return {
+    tcs: {
+      section: tcs.section,
+      rate: tcs.rate,
+      amount: toDb(amt),
+      tcsAmount: toDb(tcsAmount),
+      totalCollectible: tcs.totalCollectible,
+      panAvailable: !!panAvailable,
+    },
+    entries,
+  };
+}
+
+module.exports = {
+  TDS_SECTIONS, computeTds, buildTdsDeduction, NO_PAN_RATE,
+  TCS_SECTIONS, computeTcs, buildTcsCollection,
+};

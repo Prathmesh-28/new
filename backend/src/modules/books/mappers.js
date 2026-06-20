@@ -5,15 +5,21 @@ const { money, toDb, ZERO } = require("./money");
 
 // §9.1 place-of-supply: intra-state → CGST+SGST (rate/2 each); inter-state → IGST.
 // REGULAR (taxable) supply only — see splitGstFor for the supply-type aware split.
-function splitGst(net, rate, interState) {
+// 4th arg is OPTIONAL and backward-compatible: pass a number/string for cessRate,
+// or an options object { cessRate }. Default cessRate 0 → byte-identical output,
+// PLUS a `cess` field (0 by default) added to the gross when cessRate>0. Existing
+// callers that ignore `cess`/omit the arg get the exact same numbers as before.
+function splitGst(net, rate, interState, opts) {
+  const cessRate = money(opts == null ? 0 : (typeof opts === "object" ? (opts.cessRate == null ? 0 : opts.cessRate) : opts));
   const n = money(net), r = money(rate);
+  const cess = n.mul(cessRate).div(100);
   if (interState) {
     const igst = n.mul(r).div(100);
-    return { taxable: n, cgst: money(0), sgst: money(0), igst, gross: n.plus(igst) };
+    return { taxable: n, cgst: money(0), sgst: money(0), igst, cess, gross: n.plus(igst).plus(cess) };
   }
   const half = r.div(2);
   const cgst = n.mul(half).div(100);
-  return { taxable: n, cgst, sgst: cgst, igst: money(0), gross: n.plus(cgst).plus(cgst) };
+  return { taxable: n, cgst, sgst: cgst, igst: money(0), cess, gross: n.plus(cgst).plus(cgst).plus(cess) };
 }
 
 // Supply types that carry NO tax on the invoice (GST portal / ERPNext-india):
@@ -289,4 +295,72 @@ function buildPaymentVoucher(input, ctx) {
   };
 }
 
-module.exports = { splitGst, splitGstFor, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildRcmBill, buildCreditNote, buildPaymentVoucher, buildDebitNote, buildRefund };
+// Bad-debt write-off: an uncollectable receivable is removed from the books by
+// recognising an expense. Dr Bad Debts (expense) / Cr Customer (clears the AR).
+// Modelled as a manual JOURNAL (ERPNext writes this off via a Journal Entry).
+// ctx: { badDebtsLedgerId }   input: { partyLedgerId, amount, date, ... }
+function buildBadDebt(input, ctx) {
+  return {
+    voucher: { voucherType: "JOURNAL", voucherDate: input.date, reference: input.reference, partyLedgerId: input.partyLedgerId, narration: input.narration, source: "manual" },
+    entries: [
+      { ledgerId: ctx.badDebtsLedgerId, debit: toDb(input.amount), credit: "0" },
+      { ledgerId: input.partyLedgerId, debit: "0", credit: toDb(input.amount) },
+    ],
+  };
+}
+
+// §9.x GST on a customer ADVANCE (GST is payable on receipt of an advance for a
+// supply of services). The money RECEIVED is tax-inclusive: Dr Bank input.amount.
+// We back out the GST embedded in that gross — net = gross / (1 + rate/100) — so
+// Cr Customer (the advance liability we still owe to fulfil) = net, and Cr GST
+// Output = the tax now payable. Intra-state → CGST+SGST; inter-state → IGST.
+// Tax side-records are emitted is_input:false, supplyType 'ADVANCE' so they land
+// in GSTR-1 11A (advances received) and reverse on adjustment against the invoice.
+// If gstRate is 0/absent the whole receipt is the advance (no tax split).
+// ctx: { bankLedgerId, cgstLedgerId, sgstLedgerId, igstLedgerId }
+// input: { partyLedgerId, amount, gstRate?, interState?, hsn?, placeOfSupply?, counterpartyGstin?, date, ... }
+function buildAdvanceReceipt(input, ctx) {
+  const interState = !!input.interState;
+  const rate = money(input.gstRate == null ? 0 : input.gstRate);
+  const gross = money(input.amount);
+  const entries = [{ ledgerId: ctx.bankLedgerId, debit: toDb(gross), credit: "0" }];
+  const taxes = [];
+  if (rate.greaterThan(0)) {
+    // Tax-inclusive: derive net from gross, then split tax off the net.
+    const net = gross.div(money(1).plus(rate.div(100)));
+    const s = splitGst(net, rate, interState);
+    entries.push({ ledgerId: input.partyLedgerId, debit: "0", credit: toDb(s.taxable) });
+    if (interState) {
+      entries.push({ ledgerId: ctx.igstLedgerId, debit: "0", credit: toDb(s.igst) });
+      taxes.push({ taxKind: "IGST", rate: toDb(rate), taxableValue: toDb(s.taxable), taxAmount: toDb(s.igst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "ADVANCE", counterpartyGstin: input.counterpartyGstin });
+    } else {
+      entries.push({ ledgerId: ctx.cgstLedgerId, debit: "0", credit: toDb(s.cgst) });
+      entries.push({ ledgerId: ctx.sgstLedgerId, debit: "0", credit: toDb(s.sgst) });
+      const half = toDb(rate.div(2));
+      taxes.push({ taxKind: "CGST", rate: half, taxableValue: toDb(s.taxable), taxAmount: toDb(s.cgst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "ADVANCE", counterpartyGstin: input.counterpartyGstin });
+      taxes.push({ taxKind: "SGST", rate: half, taxableValue: toDb(s.taxable), taxAmount: toDb(s.sgst), hsnSac: input.hsn, isInput: false, placeOfSupply: input.placeOfSupply, supplyType: "ADVANCE", counterpartyGstin: input.counterpartyGstin });
+    }
+  } else {
+    entries.push({ ledgerId: input.partyLedgerId, debit: "0", credit: toDb(gross) });
+  }
+  return {
+    voucher: { voucherType: "RECEIPT", voucherDate: input.date, reference: input.reference, partyLedgerId: input.partyLedgerId, narration: input.narration, source: "manual" },
+    entries, taxes,
+  };
+}
+
+// Advance PAID to a supplier (prepayment before the bill). Dr Vendor Advance (the
+// receivable/advance against the party) / Cr Bank — money out, so a PAYMENT.
+// ctx: { bankLedgerId }   input: { partyLedgerId, amount, date, ... }
+function buildVendorAdvance(input, ctx) {
+  return {
+    voucher: { voucherType: "PAYMENT", voucherDate: input.date, reference: input.reference, partyLedgerId: input.partyLedgerId, narration: input.narration, source: "manual" },
+    entries: [
+      { ledgerId: input.partyLedgerId, debit: toDb(input.amount), credit: "0" },
+      { ledgerId: ctx.bankLedgerId, debit: "0", credit: toDb(input.amount) },
+    ],
+    taxes: [],
+  };
+}
+
+module.exports = { splitGst, splitGstFor, computeLineGst, buildSalesVoucher, buildSalesVoucherLines, buildReceiptVoucher, buildPurchaseVoucher, buildPurchaseVoucherLines, buildRcmBill, buildCreditNote, buildPaymentVoucher, buildDebitNote, buildRefund, buildBadDebt, buildAdvanceReceipt, buildVendorAdvance };

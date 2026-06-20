@@ -6,7 +6,7 @@ const { pool } = require("../../db");
 const { postVoucher, reverseVoucher, PostError } = require("./posting-engine");
 const reports = require("./reports");
 const { seedBooks, ledgerIdByName } = require("./seed");
-const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst, buildDebitNote, buildRefund, buildRcmBill } = require("./mappers");
+const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher, computeLineGst, buildDebitNote, buildRefund, buildRcmBill, buildBadDebt, buildAdvanceReceipt, buildVendorAdvance } = require("./mappers");
 const billwise = require("./billwise");
 const tds = require("./tds");
 const ewb = require("./ewaybill");
@@ -327,6 +327,42 @@ router.post("/documents/refund", canPost, async (req, res) => {
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
+// Bad-debt write-off — Dr Bad Debts, Cr customer.
+router.post("/documents/write-off", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.partyLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "partyLedgerId, amount, date required" });
+    const badDebtsLedgerId = await ledgerIdByName(t, "Bad Debts");
+    if (!badDebtsLedgerId) return res.status(422).json({ error: "Bad Debts ledger missing — seed first", code: "NOT_SEEDED" });
+    const m = buildBadDebt(b, { badDebtsLedgerId });
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// GST-compliant customer advance receipt — Dr bank, Cr customer (advance) + GST output.
+router.post("/documents/advance-receipt", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.partyLedgerId || !b.bankLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "partyLedgerId, bankLedgerId, amount, date required" });
+    const ctx = { bankLedgerId: b.bankLedgerId, cgstLedgerId: await ledgerIdByName(t, "CGST Output"), sgstLedgerId: await ledgerIdByName(t, "SGST Output"), igstLedgerId: await ledgerIdByName(t, "IGST Output") };
+    const m = buildAdvanceReceipt(b, ctx);
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// Advance paid to a supplier — Dr vendor (advance), Cr bank.
+router.post("/documents/vendor-advance", canPost, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.partyLedgerId || !b.bankLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "partyLedgerId, bankLedgerId, amount, date required" });
+    const m = buildVendorAdvance(b, { bankLedgerId: b.bankLedgerId });
+    const r = await postVoucher(tenantOf(req), req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+// TCS (tax collected at source).
+router.get("/tcs/sections", async (_req, res) => { res.json(tds.TCS_SECTIONS); });
+router.post("/tcs/compute", async (req, res) => { try { res.json(tds.computeTcs(req.body || {})); } catch (e) { fail(res, e); } });
 
 // ── M2: non-posting document pipelines ───────────────────────────────────────
 router.post("/documents", canPost, async (req, res) => {
