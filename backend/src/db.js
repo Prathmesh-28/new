@@ -751,6 +751,78 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_book_26as ON book_26as_entries(tenant_id, period);
 
+    -- Selling/pricing: pricing rules (+ BXGY schemes), coupons, shipping (freight) rules.
+    CREATE TABLE IF NOT EXISTS book_pricing_rules (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id   TEXT NOT NULL,
+      title       TEXT NOT NULL,
+      applies_on  TEXT NOT NULL DEFAULT 'all',
+      scope_value TEXT,
+      party_scope TEXT NOT NULL DEFAULT 'all',
+      party_value TEXT,
+      min_qty     NUMERIC(19,4) DEFAULT 0,
+      max_qty     NUMERIC(19,4),
+      min_amount  NUMERIC(19,4) DEFAULT 0,
+      action      TEXT NOT NULL DEFAULT 'discount_pct',
+      value       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      scheme      TEXT NOT NULL DEFAULT 'none',
+      free_item_id UUID,
+      free_qty    NUMERIC(19,4) DEFAULT 0,
+      priority    INT NOT NULL DEFAULT 0,
+      valid_from  DATE,
+      valid_to    DATE,
+      is_active   BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_pricing_rules ON book_pricing_rules(tenant_id, is_active, priority DESC);
+    CREATE TABLE IF NOT EXISTS book_coupons (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id   TEXT NOT NULL,
+      code        TEXT NOT NULL,
+      disc_type   TEXT NOT NULL DEFAULT 'pct',
+      value       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      valid_from  DATE,
+      valid_to    DATE,
+      max_redemptions INT,
+      redeemed    INT NOT NULL DEFAULT 0,
+      once_per_customer BOOLEAN NOT NULL DEFAULT false,
+      is_active   BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, code)
+    );
+    CREATE TABLE IF NOT EXISTS book_shipping_rules (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id        TEXT NOT NULL,
+      name             TEXT NOT NULL,
+      basis            TEXT NOT NULL DEFAULT 'amount',
+      slabs            JSONB NOT NULL DEFAULT '[]'::jsonb,
+      account_ledger_id UUID,
+      is_active        BOOLEAN NOT NULL DEFAULT true,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- AR/AP: payment-terms templates + per-invoice installment schedule.
+    CREATE TABLE IF NOT EXISTS book_payment_terms (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      installments JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS book_payment_schedule (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id   TEXT NOT NULL,
+      voucher_id  UUID NOT NULL,
+      installment INT NOT NULL DEFAULT 1,
+      due_date    DATE,
+      amount      NUMERIC(19,4) NOT NULL DEFAULT 0,
+      paid_amount NUMERIC(19,4) NOT NULL DEFAULT 0,
+      status      TEXT NOT NULL DEFAULT 'PENDING',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_pay_sched ON book_payment_schedule(tenant_id, voucher_id, due_date);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

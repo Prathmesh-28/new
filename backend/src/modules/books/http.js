@@ -17,6 +17,8 @@ const items = require("./items");
 const vt = require("./vouchertools");
 const taxfiling = require("./taxfiling");
 const incometax = require("./incometax");
+const pricing = require("./pricing");
+const payterms = require("./payterms");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -756,6 +758,24 @@ router.get("/pdc", async (req, res) => { try { res.json(await vt.listPdc(tenantO
 router.post("/pdc/:id/clear", canPost, async (req, res) => { try { res.json(await vt.clearPdc(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/pdc/:id/bounce", canPost, async (req, res) => { try { res.json(await vt.bouncePdc(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/documents/:id/post-stock", canPost, async (req, res) => { try { res.status(201).json(await docs.postDocumentStock(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
+
+// ── Pricing rules + promo schemes + coupons + shipping rules ─────────────────
+router.post("/pricing-rules", canPost, async (req, res) => { try { res.status(201).json(await pricing.createPricingRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/pricing-rules", async (req, res) => { try { res.json(await pricing.listPricingRules(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.delete("/pricing-rules/:id", canPost, async (req, res) => { try { res.json(await pricing.deletePricingRule(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/pricing/apply", async (req, res) => { try { res.json(await pricing.applyPricing(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/coupons", canPost, async (req, res) => { try { res.status(201).json(await pricing.createCoupon(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/coupons/redeem", canPost, async (req, res) => { try { res.json(await pricing.redeemCoupon(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/shipping-rules", canPost, async (req, res) => { try { res.status(201).json(await pricing.createShippingRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/shipping/charge", async (req, res) => { try { res.json(await pricing.shippingCharge(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── Payment terms / installment schedule + bulk payment reconciliation ───────
+router.post("/payment-terms", canPost, async (req, res) => { try { res.status(201).json(await payterms.savePaymentTerms(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/payment-terms", async (req, res) => { try { res.json(await payterms.listPaymentTerms(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/schedule", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await payterms.buildSchedule(tenantOf(req), { voucherId: req.params.id, total: b.total, invoiceDate: b.invoiceDate, templateName: b.templateName, installments: b.installments })); } catch (e) { fail(res, e); } });
+router.get("/documents/:id/schedule", async (req, res) => { try { res.json(await payterms.scheduleStatus(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/parties/:id/unapplied", async (req, res) => { try { res.json(await payterms.unappliedForParty(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/parties/:id/auto-apply", canPost, async (req, res) => { try { res.status(201).json(await payterms.autoApply(tenantOf(req), req.user.id, { partyLedgerId: req.params.id })); } catch (e) { fail(res, e); } });
 router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/projects", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_projects WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });

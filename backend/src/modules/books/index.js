@@ -23,6 +23,8 @@ const items = require("./items");
 const vouchertools = require("./vouchertools");
 const taxfiling = require("./taxfiling");
 const incometax = require("./incometax");
+const pricing = require("./pricing");
+const payterms = require("./payterms");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -52,6 +54,8 @@ module.exports = {
   ...vouchertools,
   ...taxfiling,
   ...incometax,
+  ...pricing,
+  ...payterms,
   ewaybill,
   payments,
   fx,
