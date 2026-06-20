@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, Link } from "react-router-dom";
 import SyncIndicator from "./SyncIndicator";
+import FeatureGuide from "./FeatureGuide";
 import { recordRecentPage } from "./CommandPalette";
 import { TAB_CATALOG } from "@/data/roles";
 
@@ -24,7 +25,10 @@ export default function AppTopMeta() {
         <Link to="/dashboard" className="hover:text-[var(--color-text)]">Home</Link>
         {!onDashboard && <><span>/</span><span className="text-[var(--color-text)] font-medium capitalize">{label}</span></>}
       </nav>
-      <SyncIndicator />
+      <div className="flex items-center gap-2">
+        <FeatureGuide />
+        <SyncIndicator />
+      </div>
     </div>
   );
 }
