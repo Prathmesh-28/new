@@ -293,6 +293,20 @@ const BOOKS_SCHEMA = `
     qty          NUMERIC(19,4) NOT NULL DEFAULT 0,
     PRIMARY KEY (tenant_id, item_id, warehouse_id)
   );
+  -- FIFO cost layers (consumed oldest-first). The feature INSERTs/SELECTs this on
+  -- every receive/issue of a FIFO item; without the table those calls throw.
+  CREATE TABLE IF NOT EXISTS book_stock_lots (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      TEXT NOT NULL,
+    item_id        UUID NOT NULL REFERENCES book_stock_items(id),
+    warehouse_id   UUID,
+    in_movement_id UUID,
+    qty_remaining  NUMERIC(19,4) NOT NULL DEFAULT 0,
+    rate           NUMERIC(19,4) NOT NULL DEFAULT 0,
+    received_on    DATE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_stock_lots ON book_stock_lots(tenant_id, item_id, received_on, id);
 
   -- ── M4: GST classification on tax entries (for GSTR bucketing) ─────────────
   ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS supply_type        TEXT NOT NULL DEFAULT 'REGULAR';

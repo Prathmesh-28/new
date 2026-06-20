@@ -88,7 +88,7 @@ async function receive(tenantId, itemId, qty, rate, opts = {}) {
     const next = applyInwardWAvg({ qty: item.current_qty, value: item.current_value }, qty, rate);
     await client.query("UPDATE book_stock_items SET current_qty=$2, current_value=$3 WHERE id=$1", [itemId, toDb(next.qty), toDb(next.value)]);
     if (item.valuation_method === "FIFO") {
-      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,in_movement_id,qty_remaining,rate,received_on) VALUES($1,$2,gen_random_uuid(),$3,$4,$5)", [tenantId, itemId, toDb(qty), toDb(rate), opts.date || new Date().toISOString().slice(0, 10)]);
+      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,warehouse_id,in_movement_id,qty_remaining,rate,received_on) VALUES($1,$2,$3,gen_random_uuid(),$4,$5,$6)", [tenantId, itemId, opts.warehouseId || null, toDb(qty), toDb(rate), opts.date || new Date().toISOString().slice(0, 10)]);
     }
     await _movement(client, tenantId, itemId, { qtyIn: qty, rate, value: money(qty).mul(rate), voucherId: opts.voucherId, warehouseId: opts.warehouseId });
     await client.query("COMMIT");
@@ -104,6 +104,13 @@ async function issue(tenantId, itemId, qty, opts = {}) {
     const item = ir[0];
     if (!item) throw new PostError("NOT_FOUND", "Item not found", 404);
     if (gt(qty, item.current_qty) && !item.allow_negative) throw new PostError("NEGATIVE_STOCK", `Only ${item.current_qty} ${item.unit} of ${item.name} on hand`, 409);
+    // Per-warehouse negative-stock guard (the global current_qty check above can't
+    // catch issuing more than a *specific* warehouse holds).
+    if (opts.warehouseId && !item.allow_negative) {
+      const { rows: wb } = await client.query("SELECT qty FROM book_stock_balances WHERE tenant_id=$1 AND item_id=$2 AND warehouse_id=$3 FOR UPDATE", [tenantId, itemId, opts.warehouseId]);
+      const whQty = wb[0] ? wb[0].qty : 0;
+      if (gt(qty, whQty)) throw new PostError("NEGATIVE_STOCK", `Only ${whQty} ${item.unit} of ${item.name} in that warehouse`, 409);
+    }
 
     let cogs;
     if (item.valuation_method === "FIFO") {

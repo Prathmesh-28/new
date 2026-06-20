@@ -26,8 +26,8 @@ export const defaultConfig: AppStore = {
     {
       id: "owner",
       label: "Business Owner",
-      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights", "settings", "advisor", "investor", "sales", "payments", "insurance", "treasury", "esg", "global", "marketplace", "network", "automation", "copilot", "security", "privacy", "banking", "predict", "voice", "field", "tokens", "frontier"],
-      visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights", "settings", "advisor", "investor", "sales", "payments", "insurance", "treasury", "esg", "global", "marketplace", "network", "automation", "copilot", "security", "privacy", "banking", "predict", "voice", "field", "tokens", "frontier"],
+      accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights", "settings", "investor", "sales", "payments", "insurance", "treasury", "esg", "global", "marketplace", "network", "automation", "copilot", "security", "privacy", "banking", "predict", "voice", "field", "tokens", "frontier"],
+      visibleTabs:    ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "term-sheet", "gst", "tax", "budgets", "credit", "capital", "lenders", "payroll", "vendors", "suppliers", "operations", "connectors", "compliance", "spend", "whatsapp", "scenarios", "collections", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights", "settings", "investor", "sales", "payments", "insurance", "treasury", "esg", "global", "marketplace", "network", "automation", "copilot", "security", "privacy", "banking", "predict", "voice", "field", "tokens", "frontier"],
       canExport: true,
       canAddNotes: true,
       namespaces: ["app", "forecast", "credit", "capital", "operations"],
@@ -45,8 +45,8 @@ export const defaultConfig: AppStore = {
     {
       id: "accountant",
       label: "Accountant / CA / CFO",
-      accessibleTabs: ["dashboard", "transactions", "forecast", "analytics", "health", "working-capital", "statements", "gst", "tax", "compliance", "operations", "documents", "data", "books", "crm", "erp", "hrms", "insights", "advisor"],
-      visibleTabs:    ["dashboard", "transactions", "forecast", "analytics", "health", "working-capital", "statements", "gst", "tax", "compliance", "operations", "documents", "data", "books", "crm", "erp", "hrms", "insights", "advisor"],
+      accessibleTabs: ["dashboard", "transactions", "forecast", "analytics", "health", "working-capital", "statements", "gst", "tax", "compliance", "operations", "documents", "data", "books", "crm", "insights", "advisor"],
+      visibleTabs:    ["dashboard", "transactions", "forecast", "analytics", "health", "working-capital", "statements", "gst", "tax", "compliance", "operations", "documents", "data", "books", "crm", "insights", "advisor"],
       canExport: true,
       canAddNotes: false,
       namespaces: ["app", "forecast", "operations"],
@@ -55,8 +55,8 @@ export const defaultConfig: AppStore = {
       // Customer-facing — invoices, receivables, collections. No costs/payroll/banking.
       id: "sales",
       label: "Sales / Collections",
-      accessibleTabs: ["dashboard", "invoices", "receivables", "collections", "alerts", "analytics", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights"],
-      visibleTabs:    ["dashboard", "invoices", "receivables", "collections", "alerts", "analytics", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights"],
+      accessibleTabs: ["dashboard", "invoices", "receivables", "collections", "alerts", "analytics", "benchmarks", "documents", "data", "books", "crm", "insights"],
+      visibleTabs:    ["dashboard", "invoices", "receivables", "collections", "alerts", "analytics", "benchmarks", "documents", "data", "books", "crm", "insights"],
       canExport: true,
       canAddNotes: false,
       namespaces: ["app"],
