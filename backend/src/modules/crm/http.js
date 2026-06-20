@@ -65,4 +65,7 @@ router.get("/activities", async (req, res) => { try { res.json(await crm.listAct
 router.post("/activities", canWrite, async (req, res) => { try { res.status(201).json(await crm.logActivity(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/activities/:id/done", canWrite, async (req, res) => { try { res.json(await crm.completeActivity(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 
+// ── Demo seed (investor-demo sales pipeline) ─────────────────────────────────────────
+router.post("/demo-seed", canWrite, async (req, res) => { try { res.status(201).json(await crm.seedDemo(tenantOf(req), req.user.id)); } catch (e) { fail(res, e); } });
+
 module.exports = router;

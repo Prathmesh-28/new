@@ -22,6 +22,7 @@ const payterms = require("./payterms");
 const subs = require("./subscriptions");
 const importers = require("./importers");
 const usage = require("./usage");
+const demoseed = require("./demoseed");
 const validators = require("../../lib/validators");
 // Reject a malformed GSTIN/PAN (checksum-verified) before it hits the ledger.
 const badId = (b) => {
@@ -689,6 +690,8 @@ router.get("/subscriptions", async (req, res) => { try { res.json(await subs.lis
 router.post("/subscriptions/:id/change-plan", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await subs.changePlan(tenantOf(req), { subscriptionId: req.params.id, newPlanId: b.newPlanId, prorate: b.prorate !== false })); } catch (e) { fail(res, e); } });
 router.post("/subscriptions/:id/cancel", canPost, async (req, res) => { try { res.json(await subs.cancelSubscription(tenantOf(req), req.params.id, (req.body || {}).atPeriodEnd !== false)); } catch (e) { fail(res, e); } });
 router.post("/subscriptions/run", canPost, async (req, res) => { try { res.status(201).json(await subs.generateDueInvoices(tenantOf(req), (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
+// Investor-demo seeder: populate the books module (GL, invoices, GST, inventory, subscriptions, usage) for this tenant.
+router.post("/demo-seed", canPost, async (req, res) => { try { res.status(201).json(await demoseed.seedDemo(tenantOf(req), req.user.id)); } catch (e) { fail(res, e); } });
 // Usage / metered billing.
 router.post("/usage/ingest", canPost, async (req, res) => { try { res.status(201).json(await usage.ingestUsage(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/usage/aggregate", async (req, res) => { try { const q = req.query; res.json(await usage.aggregateUsage(tenantOf(req), { subscriptionId: q.subscriptionId, metric: q.metric, from: q.from, to: q.to, aggregation: q.aggregation })); } catch (e) { fail(res, e); } });

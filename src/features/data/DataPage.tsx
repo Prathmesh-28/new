@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { generateDemoData } from "@/lib/demoData";
+import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, ArrowLeftRight, Columns3, Building2, ShieldCheck, Plus, Clock, CheckCircle2, Copy, Replace, Bookmark, FileDown, Archive, Search, BarChart3, Braces, Coins, BadgeCheck, Table2, ReceiptText, CalendarRange, ScanSearch, FileJson } from "lucide-react";
 import { toast } from "sonner";
@@ -40,25 +41,36 @@ export default function DataPage() {
     });
   };
 
-  const loadDemo = () => {
-    if (!window.confirm("Load the FY23–FY28 demo dataset? This replaces your current transactions, invoices, accounts, loans and obligations with realistic sample data.")) return;
+  const loadDemo = async () => {
+    if (!window.confirm("Load the full demo dataset? This fills EVERY module — transactions, invoices, accounts, loans, GST, payroll, inventory, sales pipeline, treasury, compliance and more — with realistic sample data so you can walk through the whole platform.")) return;
     const demo = generateDemoData();
-    setStore(s => ({
-      ...s,
-      firm: { ...s.firm, ...demo.firm },
-      bankAccounts: demo.bankAccounts ?? s.bankAccounts,
-      transactions: demo.transactions ?? s.transactions,
-      invoices: demo.invoices ?? s.invoices,
-      activeLoans: demo.activeLoans ?? s.activeLoans,
-      obligations: demo.obligations ?? s.obligations,
-    }));
-    toast.success(`Loaded ${demo.transactions?.length ?? 0} transactions across FY23–FY28`);
+    // Spread the entire generated store: every top-level array (orders, inventory,
+    // credit, capital, connectors, budgets, alerts…) plus the full featureData bag
+    // that lights up all ~600 feature-page tools at once. firm is merged, not replaced.
+    setStore(s => ({ ...s, ...demo, firm: { ...s.firm, ...demo.firm } }));
+    toast.success(`Loaded ${demo.transactions?.length ?? 0} transactions + data across every module`);
+    // Also seed the backend modules so the accounting books (GL/GST/inventory/
+    // subscriptions) and the CRM sales pipeline show data too. Best-effort.
+    toast.loading("Seeding backend accounting & CRM…", { id: "demo-backend" });
+    const [books, crm] = await Promise.allSettled([
+      api.post("/api/books/demo-seed", {}),
+      api.post("/api/crm/demo-seed", {}),
+    ]);
+    const ok = [books, crm].filter(r => r.status === "fulfilled").length;
+    if (ok > 0) toast.success(`Seeded ${ok === 2 ? "accounting books + CRM pipeline" : "backend module"}`, { id: "demo-backend" });
+    else toast.error("Frontend demo loaded; backend seed unavailable (sign in to a workspace to seed books/CRM).", { id: "demo-backend" });
   };
 
   const clearAll = () => {
-    if (!window.confirm("Clear ALL financial data (transactions, invoices, accounts, loans)? This cannot be undone.")) return;
-    setStore(s => ({ ...s, transactions: [], invoices: [], bankAccounts: [], activeLoans: [], obligations: [] }));
-    toast.success("All financial data cleared");
+    if (!window.confirm("Clear ALL demo/financial data across every module (transactions, invoices, accounts, loans, and all feature tools)? This cannot be undone.")) return;
+    setStore(s => ({
+      ...s,
+      transactions: [], invoices: [], bankAccounts: [], activeLoans: [], obligations: [],
+      fixedAssets: [], orders: [], inventory: [], procurement: [], budgets: [],
+      scenarios: [], alerts: [], creditApplications: [], creditOffers: [],
+      capitalRaises: [], capitalInvestments: [], connectors: [], featureData: {},
+    }));
+    toast.success("All data cleared across every module");
   };
 
   const txnTemplate = "date,amount,description,counterparty\n01/06/2026,250000,Client payment,Mehta Corp\n03/06/2026,-120000,Office rent,Landlord\n05/06/2026,-410000,Monthly payroll,Team\n";

@@ -29,6 +29,7 @@ const payterms = require("./payterms");
 const subscriptions = require("./subscriptions");
 const importers = require("./importers");
 const usage = require("./usage");
+const demoseed = require("./demoseed");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -73,6 +74,7 @@ module.exports = {
   signPortalToken: portal.signToken,
   verifyPortalToken: portal.verifyToken,
   seedBooks,
+  seedDemo: demoseed.seedDemo,
   ledgerIdByName,
   router: require("./http"),
 };

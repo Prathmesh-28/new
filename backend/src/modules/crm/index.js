@@ -729,6 +729,121 @@ async function timeline(tenantId, refType, refId) {
   return events;
 }
 
+// ── Demo seed (investor-demo sales pipeline) ─────────────────────────────────────────
+// Populates a realistic Indian-SMB sales pipeline: accounts, contacts, leads across
+// stages, deals spread over QUALIFICATION→…→WON/LOST with ₹ values + 2026 close dates,
+// plus a few tasks and notes. Reuses the existing create* fns; each call is wrapped in
+// try/catch so a single failure never aborts the seed. Returns { created, errors }.
+async function seedDemo(tenantId, actorId) {
+  const created = { accounts: 0, contacts: 0, leads: 0, deals: 0, tasks: 0, notes: 0 };
+  const errors = [];
+  const run = async (label, fn) => {
+    try { const r = await fn(); return r; }
+    catch (e) { errors.push(`${label}: ${e.message}`); return null; }
+  };
+
+  // ── Accounts (~5 Indian companies) ──
+  const accountDefs = [
+    { name: "Tata Digital Pvt Ltd", industry: "Technology", website: "https://tatadigital.com", phone: "+91 22 6661 8282", gstin: "27AABCT1234A1Z5", annualRevenue: 250000000, territory: "West" },
+    { name: "Zomato Ltd", industry: "Food Delivery", website: "https://zomato.com", phone: "+91 124 451 4444", gstin: "06AAACZ1234B1Z9", annualRevenue: 120000000, territory: "North" },
+    { name: "Nykaa E-Retail", industry: "Retail / E-commerce", website: "https://nykaa.com", phone: "+91 22 6614 0000", gstin: "27AAFCN5678C1Z3", annualRevenue: 90000000, territory: "West" },
+    { name: "Freshworks India", industry: "SaaS", website: "https://freshworks.com", phone: "+91 44 6667 8888", gstin: "33AABCF9012D1Z7", annualRevenue: 180000000, territory: "South" },
+    { name: "Polycab Industries", industry: "Manufacturing", website: "https://polycab.com", phone: "+91 22 2483 7000", gstin: "27AAACP3456E1Z1", annualRevenue: 320000000, territory: "West" },
+  ];
+  const accounts = [];
+  for (const a of accountDefs) {
+    const row = await run(`account "${a.name}"`, () => createAccount(tenantId, actorId, a));
+    if (row) { accounts.push(row); created.accounts++; }
+  }
+  const acct = (i) => (accounts[i] ? accounts[i].id : null);
+
+  // ── Contacts (~6) ──
+  const contactDefs = [
+    { accountId: acct(0), name: "Rohan Mehta", email: "rohan.mehta@tatadigital.com", phone: "+91 98200 11223", designation: "VP Finance", salutation: "Mr" },
+    { accountId: acct(1), name: "Priya Sharma", email: "priya.sharma@zomato.com", phone: "+91 99100 44556", designation: "Head of Procurement", salutation: "Ms" },
+    { accountId: acct(2), name: "Aditya Nair", email: "aditya.nair@nykaa.com", phone: "+91 90040 77889", designation: "CFO", salutation: "Mr" },
+    { accountId: acct(3), name: "Kavya Reddy", email: "kavya.reddy@freshworks.com", phone: "+91 90030 22110", designation: "Finance Controller", salutation: "Ms" },
+    { accountId: acct(4), name: "Sandeep Joshi", email: "sandeep.joshi@polycab.com", phone: "+91 98700 33445", designation: "GM Operations", salutation: "Mr" },
+    { accountId: acct(0), name: "Neha Gupta", email: "neha.gupta@tatadigital.com", phone: "+91 98201 55667", designation: "Accounts Manager", salutation: "Ms" },
+  ];
+  const contacts = [];
+  for (const c of contactDefs) {
+    const row = await run(`contact "${c.name}"`, () => createContact(tenantId, c));
+    if (row) { contacts.push(row); created.contacts++; }
+  }
+  const cont = (i) => (contacts[i] ? contacts[i].id : null);
+
+  // ── Leads (~8 across stages) ──
+  const leadDefs = [
+    { name: "Vikram Iyer", company: "Infosys BPM", email: "vikram.iyer@infosysbpm.com", phone: "+91 80400 11111", jobTitle: "Director", industry: "IT Services", source: "Website", annualRevenue: 50000000, status: "NEW", priority: "MEDIUM", territory: "South" },
+    { name: "Anjali Desai", company: "Mahindra Logistics", email: "anjali.desai@mahindralogistics.com", phone: "+91 22 5566 7788", jobTitle: "Procurement Lead", industry: "Logistics", source: "Referral", annualRevenue: 75000000, status: "CONTACTED", priority: "HIGH", territory: "West" },
+    { name: "Rahul Verma", company: "Paytm Services", email: "rahul.verma@paytm.com", phone: "+91 120 477 0770", jobTitle: "Finance Manager", industry: "Fintech", source: "Cold Call", annualRevenue: 110000000, status: "NURTURE", priority: "MEDIUM", territory: "North" },
+    { name: "Sneha Kulkarni", company: "Bajaj Finserv", email: "sneha.kulkarni@bajajfinserv.in", phone: "+91 20 3040 5060", jobTitle: "AVP", industry: "Financial Services", source: "Event", annualRevenue: 200000000, status: "QUALIFIED", priority: "HIGH", territory: "West" },
+    { name: "Arjun Pillai", company: "Flipkart Internet", email: "arjun.pillai@flipkart.com", phone: "+91 80 4900 1100", jobTitle: "Senior Manager", industry: "E-commerce", source: "Website", annualRevenue: 150000000, status: "CONTACTED", priority: "HIGH", territory: "South" },
+    { name: "Meera Krishnan", company: "Wipro Enterprises", email: "meera.krishnan@wipro.com", phone: "+91 80 2844 0011", jobTitle: "Finance Head", industry: "Manufacturing", source: "Referral", annualRevenue: 90000000, status: "NURTURE", priority: "LOW", territory: "South" },
+    { name: "Karan Malhotra", company: "OYO Rooms", email: "karan.malhotra@oyorooms.com", phone: "+91 124 619 7000", jobTitle: "Controller", industry: "Hospitality", source: "Cold Call", annualRevenue: 60000000, status: "NEW", priority: "LOW", territory: "North" },
+    { name: "Divya Menon", company: "Swiggy", email: "divya.menon@swiggy.in", phone: "+91 80 6191 5000", jobTitle: "VP Operations", industry: "Food Delivery", source: "Event", annualRevenue: 130000000, status: "QUALIFIED", priority: "HIGH", territory: "South" },
+  ];
+  const leads = [];
+  for (const l of leadDefs) {
+    const row = await run(`lead "${l.name}"`, () => createLead(tenantId, actorId, l));
+    if (row) { leads.push(row); created.leads++; }
+  }
+
+  // ── Deals (~8 spread over the pipeline) ──
+  const dealDefs = [
+    { title: "Tata Digital — Annual Accounting Suite", accountId: acct(0), contactId: cont(0), value: 1850000, stage: "QUALIFICATION", source: "Website", priority: "HIGH", expectedClose: "2026-09-30" },
+    { title: "Zomato — Vendor Reconciliation Platform", accountId: acct(1), contactId: cont(1), value: 980000, stage: "DEMO", source: "Referral", priority: "MEDIUM", expectedClose: "2026-08-15" },
+    { title: "Nykaa — GST Filing Automation", accountId: acct(2), contactId: cont(2), value: 1250000, stage: "PROPOSAL", source: "Event", priority: "HIGH", expectedClose: "2026-07-31" },
+    { title: "Freshworks — Multi-entity Ledger Rollout", accountId: acct(3), contactId: cont(3), value: 2400000, stage: "NEGOTIATION", source: "Referral", priority: "HIGH", expectedClose: "2026-07-15" },
+    { title: "Polycab — Inventory + Books Integration", accountId: acct(4), contactId: cont(4), value: 3100000, stage: "NEGOTIATION", source: "Cold Call", priority: "MEDIUM", expectedClose: "2026-10-31" },
+    { title: "Tata Digital — Pilot Expansion", accountId: acct(0), contactId: cont(5), value: 750000, stage: "DEMO", source: "Website", priority: "MEDIUM", expectedClose: "2026-09-15" },
+    { title: "Zomato — Payroll Module (Closed)", accountId: acct(1), contactId: cont(1), value: 1450000, stage: "WON", source: "Referral", priority: "HIGH", expectedClose: "2026-05-30" },
+    { title: "Nykaa — Custom Reporting (Lost)", accountId: acct(2), contactId: cont(2), value: 620000, stage: "LOST", source: "Cold Call", priority: "LOW", expectedClose: "2026-06-10", lostReason: "Budget cut for FY26" },
+  ];
+  const deals = [];
+  for (const d of dealDefs) {
+    const { lostReason, ...payload } = d;
+    const row = await run(`deal "${d.title}"`, async () => {
+      // create as an open deal first, then move to the terminal stage so moveStage
+      // applies probability/closed_at + lost-reason validation faithfully.
+      const openStage = d.stage === "WON" || d.stage === "LOST" ? "QUALIFICATION" : d.stage;
+      const deal = await createDeal(tenantId, actorId, { ...payload, stage: openStage });
+      if (d.stage === "WON") return await moveStage(tenantId, actorId, deal.id, "WON");
+      if (d.stage === "LOST") return await moveStage(tenantId, actorId, deal.id, "LOST", { lostReason });
+      return deal;
+    });
+    if (row) { deals.push(row); created.deals++; }
+  }
+  const dealId = (i) => (deals[i] ? deals[i].id : null);
+
+  // ── Tasks (a few, attached to deals/leads) ──
+  const taskDefs = [
+    { title: "Send pricing proposal to Tata Digital", referenceType: "DEAL", referenceId: dealId(0), priority: "HIGH", status: "TODO", dueDate: "2026-07-05", assignedTo: actorId },
+    { title: "Schedule product demo for Zomato", referenceType: "DEAL", referenceId: dealId(1), priority: "MEDIUM", status: "IN_PROGRESS", dueDate: "2026-07-02", assignedTo: actorId },
+    { title: "Follow up on Freshworks contract terms", referenceType: "DEAL", referenceId: dealId(3), priority: "HIGH", status: "TODO", dueDate: "2026-07-08", assignedTo: actorId },
+    { title: "Qualify Bajaj Finserv lead", referenceType: "LEAD", referenceId: leads[3] ? leads[3].id : null, priority: "HIGH", status: "DONE", dueDate: "2026-06-15", assignedTo: actorId },
+  ];
+  for (const t of taskDefs) {
+    const row = await run(`task "${t.title}"`, () => createTask(tenantId, actorId, t));
+    if (row) created.tasks++;
+  }
+
+  // ── Notes ──
+  const noteDefs = [
+    { title: "Discovery call", content: "Tata Digital wants a consolidated ledger across 3 subsidiaries. Decision by end Q3 2026.", referenceType: "DEAL", referenceId: dealId(0) },
+    { title: "Demo feedback", content: "Zomato liked the auto-reconciliation; needs SAP export. Champion: Priya Sharma.", referenceType: "DEAL", referenceId: dealId(1) },
+    { title: "Win summary", content: "Zomato payroll module closed at ₹14.5L. Upsell GST automation next quarter.", referenceType: "DEAL", referenceId: dealId(6) },
+    { title: "Lead context", content: "Bajaj Finserv evaluating 2 vendors; price-sensitive but high volume.", referenceType: "LEAD", referenceId: leads[3] ? leads[3].id : null },
+  ];
+  for (const n of noteDefs) {
+    const row = await run(`note "${n.title}"`, () => createNote(tenantId, actorId, n));
+    if (row) created.notes++;
+  }
+
+  return { created, errors };
+}
+
 module.exports = {
   // constants + pure helpers (unit-testable)
   STAGES, OPEN_STAGES, LEAD_STATUSES, DEAL_STATUSES, TASK_STATUSES, TASK_PRIORITIES,
@@ -747,4 +862,6 @@ module.exports = {
   createTask, listTasks, setTaskStatus, completeTask, createNote, listNotes,
   // activities / status / timeline
   logActivity, listActivities, completeActivity, logStatusChange, timeline,
+  // demo seed
+  seedDemo,
 };
