@@ -1,0 +1,175 @@
+// §7 (M2) — Document pipelines. Estimate/SO/Challan and PO/GRN are NON-POSTING
+// documents; only converting to an Invoice (SALES) or Bill (PURCHASE) hits the
+// ledger via the posting engine. Plus advances/credit allocation, Undeposited
+// Funds deposits, and recurring templates.
+const { pool } = require("../../db");
+const { money, toDb } = require("./money");
+const { financialYearFor } = require("./fy");
+const { postVoucher, PostError } = require("./posting-engine");
+const { buildSalesVoucher, buildPurchaseVoucher } = require("./mappers");
+const { ledgerIdByName } = require("./seed");
+
+// Allowed conversions. "INVOICE"/"BILL" are terminal (they post a voucher).
+const NEXT = {
+  ESTIMATE: ["SALES_ORDER", "DELIVERY_CHALLAN", "INVOICE"],
+  SALES_ORDER: ["DELIVERY_CHALLAN", "INVOICE"],
+  DELIVERY_CHALLAN: ["INVOICE"],
+  PURCHASE_ORDER: ["GRN", "BILL"],
+  GRN: ["BILL"],
+};
+
+async function nextDocNumber(client, tenantId, kind, fy) {
+  const { rows } = await client.query(
+    `INSERT INTO book_voucher_counters(tenant_id,voucher_type,financial_year,next_number) VALUES($1,$2,$3,2)
+       ON CONFLICT(tenant_id,voucher_type,financial_year) DO UPDATE SET next_number = book_voucher_counters.next_number + 1
+     RETURNING next_number - 1 AS number`,
+    [tenantId, `DOC_${kind}`, fy]
+  );
+  return Number(rows[0].number);
+}
+
+async function createDocument(tenantId, actorId, d) {
+  if (!d.docKind || !d.docDate) throw new PostError("BAD_INPUT", "docKind and docDate required", 400);
+  const fy = financialYearFor(d.docDate);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const num = await nextDocNumber(client, tenantId, d.docKind, fy);
+    const { rows } = await client.query(
+      `INSERT INTO book_documents(tenant_id,doc_kind,doc_number,doc_date,financial_year,party_ledger_id,status,parent_document_id,subtotal,gst_rate,inter_state,hsn_sac,lines,narration,reference,created_by)
+       VALUES($1,$2,$3,$4,$5,$6,'OPEN',$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [tenantId, d.docKind, num, d.docDate, fy, d.partyLedgerId || null, d.parentDocumentId || null,
+       toDb(d.subtotal || 0), toDb(d.gstRate || 0), !!d.interState, d.hsn || null,
+       d.lines ? JSON.stringify(d.lines) : null, d.narration || null, d.reference || null, actorId || null]
+    );
+    await client.query("COMMIT");
+    return rows[0];
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+async function salesCtx(tenantId, customerLedgerId) {
+  const ctx = {
+    customerLedgerId,
+    salesLedgerId: await ledgerIdByName(tenantId, "Sales"),
+    cgstLedgerId: await ledgerIdByName(tenantId, "CGST Output"),
+    sgstLedgerId: await ledgerIdByName(tenantId, "SGST Output"),
+    igstLedgerId: await ledgerIdByName(tenantId, "IGST Output"),
+  };
+  if (!ctx.salesLedgerId || !ctx.cgstLedgerId || !ctx.sgstLedgerId || !ctx.igstLedgerId) throw new PostError("NOT_SEEDED", "Sales/tax ledgers missing — seed first", 422);
+  return ctx;
+}
+async function purchaseCtx(tenantId, vendorLedgerId) {
+  const ctx = {
+    vendorLedgerId,
+    purchaseLedgerId: await ledgerIdByName(tenantId, "Purchases"),
+    cgstInputLedgerId: await ledgerIdByName(tenantId, "CGST Input"),
+    sgstInputLedgerId: await ledgerIdByName(tenantId, "SGST Input"),
+    igstInputLedgerId: await ledgerIdByName(tenantId, "IGST Input"),
+  };
+  if (!ctx.purchaseLedgerId || !ctx.cgstInputLedgerId || !ctx.sgstInputLedgerId || !ctx.igstInputLedgerId) throw new PostError("NOT_SEEDED", "Purchase/tax ledgers missing — seed first", 422);
+  return ctx;
+}
+
+async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
+  const { rows: dr } = await pool.query("SELECT * FROM book_documents WHERE tenant_id=$1 AND id=$2", [tenantId, docId]);
+  const doc = dr[0];
+  if (!doc) throw new PostError("NOT_FOUND", "Document not found", 404);
+  if (doc.status === "CONVERTED" || doc.status === "CANCELLED") throw new PostError("BAD_STATE", `Document is ${doc.status}`, 409);
+  if (!(NEXT[doc.doc_kind] || []).includes(toKind)) throw new PostError("BAD_TRANSITION", `Cannot convert ${doc.doc_kind} → ${toKind}`, 422);
+
+  if (toKind === "INVOICE" || toKind === "BILL") {
+    const input = { lineTotal: doc.subtotal, gstRate: doc.gst_rate, interState: doc.inter_state, hsn: doc.hsn_sac, date: opts.date || doc.doc_date, reference: doc.reference || `${doc.doc_kind} #${doc.doc_number}` };
+    let m;
+    if (toKind === "INVOICE") m = buildSalesVoucher(input, await salesCtx(tenantId, doc.party_ledger_id));
+    else m = buildPurchaseVoucher(input, await purchaseCtx(tenantId, doc.party_ledger_id));
+    const r = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+    await pool.query("UPDATE book_documents SET status='CONVERTED', converted_voucher_id=$2 WHERE id=$1", [docId, r.voucherId]);
+    return { document: docId, voucher: r };
+  }
+
+  // Non-posting → next non-posting document, linked; mark source converted.
+  const child = await createDocument(tenantId, actorId, {
+    docKind: toKind, docDate: opts.date || doc.doc_date, partyLedgerId: doc.party_ledger_id, parentDocumentId: docId,
+    subtotal: doc.subtotal, gstRate: doc.gst_rate, interState: doc.inter_state, hsn: doc.hsn_sac, lines: doc.lines, narration: doc.narration, reference: doc.reference,
+  });
+  await pool.query("UPDATE book_documents SET status='CONVERTED' WHERE id=$1", [docId]);
+  return { document: docId, child };
+}
+
+async function cancelDocument(tenantId, docId) {
+  const { rows } = await pool.query("UPDATE book_documents SET status='CANCELLED' WHERE tenant_id=$1 AND id=$2 AND status<>'CONVERTED' RETURNING id", [tenantId, docId]);
+  if (!rows[0]) throw new PostError("BAD_STATE", "Document not found or already converted", 409);
+  return { ok: true };
+}
+
+async function listDocuments(tenantId, filter = {}) {
+  const params = [tenantId]; const where = ["tenant_id=$1"];
+  if (filter.kind) { params.push(filter.kind); where.push(`doc_kind=$${params.length}`); }
+  if (filter.status) { params.push(filter.status); where.push(`status=$${params.length}`); }
+  if (filter.party) { params.push(filter.party); where.push(`party_ledger_id=$${params.length}`); }
+  const { rows } = await pool.query(`SELECT * FROM book_documents WHERE ${where.join(" AND ")} ORDER BY doc_date DESC, created_at DESC LIMIT 500`, params);
+  return rows;
+}
+
+// Advance / credit application — a reporting link (ledger movement already posted).
+async function allocate(tenantId, actorId, sourceVoucherId, targetVoucherId, amount) {
+  if (!sourceVoucherId || !targetVoucherId || amount == null) throw new PostError("BAD_INPUT", "sourceVoucherId, targetVoucherId, amount required", 400);
+  const { rows } = await pool.query(
+    "INSERT INTO book_allocations(tenant_id,source_voucher_id,target_voucher_id,amount,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *",
+    [tenantId, sourceVoucherId, targetVoucherId, toDb(amount), actorId || null]
+  );
+  return rows[0];
+}
+
+// Undeposited Funds → Bank: a CONTRA (Dr Bank / Cr Undeposited Funds).
+async function recordDeposit(tenantId, actorId, bankLedgerId, amount, date) {
+  const undep = await ledgerIdByName(tenantId, "Undeposited Funds");
+  if (!undep) throw new PostError("NOT_SEEDED", "Undeposited Funds ledger missing — seed first", 422);
+  if (!bankLedgerId || amount == null || !date) throw new PostError("BAD_INPUT", "bankLedgerId, amount, date required", 400);
+  return postVoucher(tenantId, actorId, { voucherType: "CONTRA", voucherDate: date, narration: "Deposit of undeposited funds", source: "manual" },
+    [{ ledgerId: bankLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: undep, debit: "0", credit: toDb(amount) }]);
+}
+
+// Recurring templates.
+function advanceDate(dateStr, freq) {
+  const d = new Date(dateStr);
+  ({ WEEKLY: () => d.setUTCDate(d.getUTCDate() + 7), MONTHLY: () => d.setUTCMonth(d.getUTCMonth() + 1), QUARTERLY: () => d.setUTCMonth(d.getUTCMonth() + 3), YEARLY: () => d.setUTCFullYear(d.getUTCFullYear() + 1) }[freq] || (() => d.setUTCMonth(d.getUTCMonth() + 1)))();
+  return d.toISOString().slice(0, 10);
+}
+async function createRecurring(tenantId, actorId, r) {
+  if (!r.name || !r.templateKind || !r.frequency || !r.nextRun) throw new PostError("BAD_INPUT", "name, templateKind, frequency, nextRun required", 400);
+  const { rows } = await pool.query(
+    "INSERT INTO book_recurring(tenant_id,name,template_kind,template,frequency,next_run,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+    [tenantId, r.name, r.templateKind, JSON.stringify(r.template || {}), r.frequency, r.nextRun, actorId || null]
+  );
+  return rows[0];
+}
+// Generate all due recurring docs as of a date. (A scheduler/worker would call
+// this daily; for now it's an explicit endpoint — no queue infra yet.)
+async function runRecurringDue(tenantId, actorId, asOf) {
+  const today = asOf || new Date().toISOString().slice(0, 10);
+  const { rows } = await pool.query("SELECT * FROM book_recurring WHERE tenant_id=$1 AND active=true AND next_run<=$2", [tenantId, today]);
+  const generated = [];
+  for (const r of rows) {
+    const tmpl = r.template || {};
+    try {
+      let res = null;
+      if (r.template_kind === "SALES_INVOICE") {
+        const m = buildSalesVoucher({ ...tmpl, date: today }, await salesCtx(tenantId, tmpl.customerLedgerId));
+        res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+      } else if (r.template_kind === "BILL") {
+        const m = buildPurchaseVoucher({ ...tmpl, date: today }, await purchaseCtx(tenantId, tmpl.vendorLedgerId));
+        res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+      } else if (r.template_kind === "JOURNAL") {
+        res = await postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: today, narration: tmpl.narration || r.name, source: "api" }, tmpl.entries || []);
+      }
+      await pool.query("UPDATE book_recurring SET last_run=$2, next_run=$3 WHERE id=$1", [r.id, today, advanceDate(today, r.frequency)]);
+      generated.push({ recurring: r.id, name: r.name, voucher: res });
+    } catch (e) {
+      generated.push({ recurring: r.id, name: r.name, error: e.message });
+    }
+  }
+  return { asOf: today, generated };
+}
+
+module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, salesCtx, purchaseCtx, NEXT };

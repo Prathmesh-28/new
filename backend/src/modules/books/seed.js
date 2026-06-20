@@ -29,6 +29,8 @@ const DEFAULT_LEDGERS = [
   ["CGST Output", "Duties & Taxes"], ["SGST Output", "Duties & Taxes"], ["IGST Output", "Duties & Taxes"],
   ["CGST Input", "Duties & Taxes"], ["SGST Input", "Duties & Taxes"], ["IGST Input", "Duties & Taxes"],
   ["TDS Payable", "Duties & Taxes"], ["Round Off", "Indirect Expenses"],
+  // M2: holding + returns ledgers
+  ["Undeposited Funds", "Current Assets"], ["Sales Returns", "Sales Accounts"], ["Purchase Returns", "Purchase Accounts"],
 ];
 
 async function seedBooks(tenantId) {

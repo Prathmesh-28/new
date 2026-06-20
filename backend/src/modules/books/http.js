@@ -6,8 +6,9 @@ const { pool } = require("../../db");
 const { postVoucher, reverseVoucher, PostError } = require("./posting-engine");
 const reports = require("./reports");
 const { seedBooks, ledgerIdByName } = require("./seed");
-const { buildSalesVoucher, buildReceiptVoucher } = require("./mappers");
+const { buildSalesVoucher, buildReceiptVoucher, buildPurchaseVoucher, buildCreditNote, buildPaymentVoucher } = require("./mappers");
 const { financialYearFor } = require("./fy");
+const docs = require("./documents");
 
 router.use(authenticate);
 
@@ -150,6 +151,81 @@ router.get("/reports/balance-sheet", async (req, res) => { try { res.json(await 
 router.get("/reports/day-book", async (req, res) => { try { res.json(await reports.dayBook(tenantOf(req), req.query.from || "1900-01-01", req.query.to || "2999-12-31")); } catch (e) { fail(res, e); } });
 router.get("/ledgers/:id/statement", async (req, res) => {
   try { const r = await reports.ledgerStatement(tenantOf(req), req.params.id, fyOf(req)); if (!r) return res.status(404).json({ error: "Ledger not found" }); res.json(r); } catch (e) { fail(res, e); }
+});
+
+// ── M2: Purchase (bill), credit note, payment documents ──────────────────────
+router.post("/documents/purchase", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.vendorLedgerId || b.lineTotal == null || b.gstRate == null || !b.date) return res.status(400).json({ error: "vendorLedgerId, lineTotal, gstRate, date required" });
+    const ctx = await docs.purchaseCtx(t, b.vendorLedgerId);
+    const m = buildPurchaseVoucher(b, ctx);
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+router.post("/documents/credit-note", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req); const b = req.body || {};
+    if (!b.customerLedgerId || b.lineTotal == null || b.gstRate == null || !b.date) return res.status(400).json({ error: "customerLedgerId, lineTotal, gstRate, date required" });
+    const ctx = {
+      customerLedgerId: b.customerLedgerId, salesReturnsLedgerId: await ledgerIdByName(t, "Sales Returns"),
+      cgstLedgerId: await ledgerIdByName(t, "CGST Output"), sgstLedgerId: await ledgerIdByName(t, "SGST Output"), igstLedgerId: await ledgerIdByName(t, "IGST Output"),
+    };
+    if (!ctx.salesReturnsLedgerId) return res.status(422).json({ error: "Sales Returns ledger missing — seed first", code: "NOT_SEEDED" });
+    const m = buildCreditNote(b, ctx);
+    const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+router.post("/documents/payment", canPost, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.bankLedgerId || !b.partyLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "bankLedgerId, partyLedgerId, amount, date required" });
+    const m = buildPaymentVoucher(b, { bankLedgerId: b.bankLedgerId, partyLedgerId: b.partyLedgerId });
+    const r = await postVoucher(tenantOf(req), req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
+    res.status(r.replayed ? 200 : 201).json(r);
+  } catch (e) { fail(res, e); }
+});
+
+// ── M2: non-posting document pipelines ───────────────────────────────────────
+router.post("/documents", canPost, async (req, res) => {
+  try { res.status(201).json(await docs.createDocument(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); }
+});
+router.get("/documents", async (req, res) => {
+  try { res.json(await docs.listDocuments(tenantOf(req), { kind: req.query.kind, status: req.query.status, party: req.query.party })); } catch (e) { fail(res, e); }
+});
+router.post("/documents/:id/convert", canPost, async (req, res) => {
+  try { res.json(await docs.convertDocument(tenantOf(req), req.user.id, req.params.id, (req.body || {}).toKind, { date: (req.body || {}).date })); } catch (e) { fail(res, e); }
+});
+router.post("/documents/:id/cancel", canPost, async (req, res) => {
+  try { res.json(await docs.cancelDocument(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+
+// ── M2: allocations, deposits, recurring ─────────────────────────────────────
+router.post("/allocations", canPost, async (req, res) => {
+  try { const b = req.body || {}; res.status(201).json(await docs.allocate(tenantOf(req), req.user.id, b.sourceVoucherId, b.targetVoucherId, b.amount)); } catch (e) { fail(res, e); }
+});
+router.get("/allocations", async (req, res) => {
+  try {
+    const t = tenantOf(req); const v = req.query.voucher;
+    const { rows } = v
+      ? await pool.query("SELECT * FROM book_allocations WHERE tenant_id=$1 AND (source_voucher_id=$2 OR target_voucher_id=$2) ORDER BY created_at DESC", [t, v])
+      : await pool.query("SELECT * FROM book_allocations WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [t]);
+    res.json(rows);
+  } catch (e) { fail(res, e); }
+});
+router.post("/deposit", canPost, async (req, res) => {
+  try { const b = req.body || {}; res.status(201).json(await docs.recordDeposit(tenantOf(req), req.user.id, b.bankLedgerId, b.amount, b.date)); } catch (e) { fail(res, e); }
+});
+router.post("/recurring", canPost, async (req, res) => {
+  try { res.status(201).json(await docs.createRecurring(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); }
+});
+router.get("/recurring", async (req, res) => {
+  try { const { rows } = await pool.query("SELECT * FROM book_recurring WHERE tenant_id=$1 ORDER BY next_run", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); }
+});
+router.post("/recurring/run", canPost, async (req, res) => {
+  try { res.json(await docs.runRecurringDue(tenantOf(req), req.user.id, (req.body || {}).asOf)); } catch (e) { fail(res, e); }
 });
 
 module.exports = router;

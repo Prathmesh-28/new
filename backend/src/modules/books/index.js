@@ -3,6 +3,7 @@
 const engine = require("./posting-engine");
 const reports = require("./reports");
 const mappers = require("./mappers");
+const documents = require("./documents");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -11,6 +12,7 @@ module.exports = {
   PostError: engine.PostError,
   ...reports,
   ...mappers,
+  ...documents,
   seedBooks,
   ledgerIdByName,
   router: require("./http"),

@@ -4,7 +4,8 @@ const assert = require("assert");
 const { money, sum, eq, toDb } = require("./money");
 const { financialYearFor, periodMonthFor } = require("./fy");
 const { validateEntries, PostError } = require("./posting-engine");
-const { splitGst, buildSalesVoucher } = require("./mappers");
+const { splitGst, buildSalesVoucher, buildPurchaseVoucher, buildCreditNote } = require("./mappers");
+const { NEXT } = require("./documents");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -44,5 +45,21 @@ validateEntries(sale.entries); ok("sales mapper voucher passes engine validation
 const mirror = sale.entries.map((e) => ({ debit: e.credit, credit: e.debit }));
 const combined = [...sale.entries, ...mirror];
 assert.ok(eq(sum(combined.map((e) => e.debit)), sum(combined.map((e) => e.credit)))); ok("original + reversal nets to zero");
+
+// 7. M2 — purchase (bill) mapper balances.
+const pctx = { vendorLedgerId: "v", purchaseLedgerId: "p", cgstInputLedgerId: "ci", sgstInputLedgerId: "si", igstInputLedgerId: "ii" };
+const bill = buildPurchaseVoucher({ lineTotal: "10000", gstRate: "18", interState: false, date: "2026-06-15" }, pctx);
+assert.ok(eq(sum(bill.entries.map((e) => e.debit)), sum(bill.entries.map((e) => e.credit))) && eq(sum(bill.entries.map((e) => e.debit)), "11800")); ok("purchase/bill mapper balances (Σ = 11800)");
+validateEntries(bill.entries); ok("purchase voucher passes engine validation");
+
+// 8. M2 — credit note (sales return) mapper balances.
+const cnctx = { customerLedgerId: "c", salesReturnsLedgerId: "sr", cgstLedgerId: "cg", sgstLedgerId: "sg", igstLedgerId: "ig" };
+const cn = buildCreditNote({ lineTotal: "10000", gstRate: "18", interState: true, date: "2026-06-15" }, cnctx);
+assert.ok(eq(sum(cn.entries.map((e) => e.debit)), sum(cn.entries.map((e) => e.credit)))); ok("credit-note mapper balances");
+
+// 9. M2 — document transitions.
+assert.ok(NEXT.ESTIMATE.includes("SALES_ORDER") && NEXT.ESTIMATE.includes("INVOICE")); ok("estimate → sales-order/invoice allowed");
+assert.ok(!(NEXT.ESTIMATE || []).includes("GRN")); ok("estimate → GRN rejected (wrong pipeline)");
+assert.ok(NEXT.PURCHASE_ORDER.includes("BILL") && NEXT.GRN.includes("BILL")); ok("PO/GRN → bill allowed");
 
 console.log(`\n${n} checks passed.`);

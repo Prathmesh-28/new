@@ -189,6 +189,65 @@ const BOOKS_SCHEMA = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_audit_tenant ON book_audit_log(tenant_id, created_at DESC);
+
+  -- ── M2: non-posting documents (sales & purchase pipelines) ────────────────
+  -- Estimate → Sales Order → Delivery Challan → (Invoice = posts a SALES voucher)
+  -- Purchase Order → GRN → (Bill = posts a PURCHASE voucher)
+  CREATE TABLE IF NOT EXISTS book_documents (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           TEXT NOT NULL,
+    doc_kind            TEXT NOT NULL CHECK (doc_kind IN
+                          ('ESTIMATE','SALES_ORDER','DELIVERY_CHALLAN','PURCHASE_ORDER','GRN')),
+    doc_number          BIGINT NOT NULL,
+    doc_date            DATE NOT NULL,
+    financial_year      TEXT NOT NULL,
+    party_ledger_id     UUID REFERENCES book_ledgers(id),
+    status              TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('DRAFT','OPEN','CONVERTED','CANCELLED')),
+    parent_document_id  UUID REFERENCES book_documents(id),
+    converted_voucher_id UUID REFERENCES book_vouchers(id),
+    subtotal            NUMERIC(19,4) NOT NULL DEFAULT 0,
+    gst_rate            NUMERIC(9,4) NOT NULL DEFAULT 0,
+    inter_state         BOOLEAN NOT NULL DEFAULT false,
+    hsn_sac             TEXT,
+    lines               JSONB,
+    narration           TEXT,
+    reference           TEXT,
+    created_by          UUID,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, doc_kind, doc_number, financial_year)
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_docs_kind  ON book_documents(tenant_id, doc_kind, status);
+  CREATE INDEX IF NOT EXISTS idx_book_docs_party ON book_documents(tenant_id, party_ledger_id);
+
+  -- M2: recurring templates (auto-generate invoices/bills/journals on a schedule)
+  CREATE TABLE IF NOT EXISTS book_recurring (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    template_kind TEXT NOT NULL CHECK (template_kind IN ('SALES_INVOICE','BILL','JOURNAL','RECEIPT')),
+    template      JSONB NOT NULL,
+    frequency     TEXT NOT NULL CHECK (frequency IN ('WEEKLY','MONTHLY','QUARTERLY','YEARLY')),
+    next_run      DATE NOT NULL,
+    last_run      DATE,
+    active        BOOLEAN NOT NULL DEFAULT true,
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_recurring_due ON book_recurring(tenant_id, active, next_run);
+
+  -- M2: allocations — how an advance/credit voucher is applied across invoices/bills
+  -- (a reporting/aging link; the ledger movement itself is already posted).
+  CREATE TABLE IF NOT EXISTS book_allocations (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         TEXT NOT NULL,
+    source_voucher_id UUID NOT NULL REFERENCES book_vouchers(id),  -- advance RECEIPT/PAYMENT or CREDIT/DEBIT_NOTE
+    target_voucher_id UUID NOT NULL REFERENCES book_vouchers(id),  -- the SALES/PURCHASE it offsets
+    amount            NUMERIC(19,4) NOT NULL,
+    created_by        UUID,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_alloc_src ON book_allocations(tenant_id, source_voucher_id);
+  CREATE INDEX IF NOT EXISTS idx_book_alloc_tgt ON book_allocations(tenant_id, target_voucher_id);
 `;
 
 module.exports = { BOOKS_SCHEMA };
