@@ -7,7 +7,7 @@ import {
   BookOpen, LayoutGrid, ListTree, FilePlus2, BarChart3, Repeat,
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
   FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
-  Landmark, Tag, CalendarClock,
+  Landmark, Tag, CalendarClock, Layers,
 } from "lucide-react";
 import BooksReceivablesTab from "./BooksReceivablesTab";
 import BooksGstTab from "./BooksGstTab";
@@ -16,6 +16,7 @@ import BooksInventoryTab from "./BooksInventoryTab";
 import BooksTaxFilingTab from "./BooksTaxFilingTab";
 import BooksPricingTab from "./BooksPricingTab";
 import BooksPaymentTermsTab from "./BooksPaymentTermsTab";
+import BooksSubscriptionsTab from "./BooksSubscriptionsTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -115,7 +116,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,6 +343,7 @@ export default function BooksPage() {
     { id: "taxfiling", label: "Tax Filing",        icon: <Landmark size={14} /> },
     { id: "pricing",   label: "Pricing",           icon: <Tag size={14} /> },
     { id: "payterms",  label: "Payment Terms",     icon: <CalendarClock size={14} /> },
+    { id: "subscriptions", label: "Subscriptions", icon: <Layers size={14} /> },
   ];
 
   return (
@@ -413,6 +415,7 @@ export default function BooksPage() {
             {tab === "taxfiling" && <BooksTaxFilingTab />}
             {tab === "pricing" && <BooksPricingTab />}
             {tab === "payterms" && <BooksPaymentTermsTab />}
+            {tab === "subscriptions" && <BooksSubscriptionsTab />}
           </>
         )}
       </div>

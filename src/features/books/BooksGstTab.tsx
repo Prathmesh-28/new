@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
   Landmark, Download, RefreshCw, Calculator, FileJson, Receipt, Plus,
-  Percent, Banknote, ShieldAlert, Ban,
+  Percent, Banknote, ShieldAlert, Ban, GitCompareArrows,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,6 +119,25 @@ interface BlockedItc {
   basis: string;
   byHead: HeadMap;
   totalBlocked: string;
+}
+
+// ── New: GSTR-2B ITC match (invoice-level) ──
+interface Gstr2bMatchRow {
+  gstin?: string | null;
+  invoiceNo?: string | null;
+  invoiceDate?: string | null;
+  taxable?: string | number | null;
+  tax?: string | number | null;
+  diff?: string | number | null;
+  reason?: string | null;
+}
+interface Gstr2bMatchResult {
+  period?: string;
+  matched?: Gstr2bMatchRow[];
+  probable?: Gstr2bMatchRow[];
+  missingInBooks?: Gstr2bMatchRow[];
+  missingInPortal?: Gstr2bMatchRow[];
+  summary?: { itcAtRisk?: string | number };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -448,6 +467,9 @@ export default function BooksGstTab() {
         <LiabilityVsPaidCard period={period} />
         <BlockedItcCard period={period} />
       </div>
+
+      {/* GSTR-2B ITC MATCH (invoice-level) */}
+      <Gstr2bMatchCard period={period} />
 
       {/* GST CHALLAN (PMT-06) REGISTER */}
       <GstChallanCard period={period} />
@@ -1029,6 +1051,151 @@ function GstRateMaster() {
             )}
           </tbody>
         </table>
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GSTR-2B ITC MATCH (invoice-level) — paste portal 2B CSV, reconcile vs books
+// ─────────────────────────────────────────────────────────────────────────────
+const GSTR2B_PLACEHOLDER =
+  "gstin,invoiceNo,invoiceDate,taxable,tax\n29AABCT1234A1Z5,INV-001,2026-05-03,10000,1800\n27AAACX5678B1Z2,INV-014,2026-05-11,5000,900";
+
+function parseGstr2bCsv(text: string): Gstr2bMatchRow[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+  // detect + skip a header row if it names known columns
+  const first = lines[0].toLowerCase();
+  const hasHeader = /gstin|invoice|taxable|tax/.test(first);
+  const body = hasHeader ? lines.slice(1) : lines;
+  const rows: Gstr2bMatchRow[] = [];
+  for (const line of body) {
+    const c = line.split(",").map((x) => x.trim());
+    if (c.every((x) => !x)) continue;
+    rows.push({
+      gstin: c[0] || null,
+      invoiceNo: c[1] || null,
+      invoiceDate: c[2] || null,
+      taxable: c[3] ?? null,
+      tax: c[4] ?? null,
+    });
+  }
+  return rows;
+}
+
+function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bMatchRow[]; tint?: "green" | "red" | "amber" }) {
+  const dot =
+    tint === "green" ? "bg-green-400" : tint === "red" ? "bg-red-400" : tint === "amber" ? "bg-amber-400" : "bg-[var(--color-primary)]";
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`w-2 h-2 rounded-full ${dot}`} />
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] tabular-nums">
+          {rows.length}
+        </span>
+      </div>
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              <th className={thCls}>GSTIN</th>
+              <th className={thCls}>Invoice</th>
+              <th className={thCls}>Date</th>
+              <th className={thR}>Taxable</th>
+              <th className={thR}>Tax</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={5} className="px-3 py-5 text-center text-[var(--color-muted)]">None.</td></tr>
+            ) : (
+              rows.map((r, i) => (
+                <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
+                  <td className="px-3 py-2.5 font-mono text-xs">{r.gstin || "—"}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="font-mono text-xs">{r.invoiceNo || "—"}</span>
+                    {r.reason && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{r.reason}</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.invoiceDate || "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.taxable as string)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.tax as string)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Gstr2bMatchCard({ period }: { period: string }) {
+  const [csv, setCsv] = useState("");
+  const [result, setResult] = useState<Gstr2bMatchResult | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const parsed = useMemo(() => parseGstr2bCsv(csv), [csv]);
+
+  const run = async () => {
+    if (parsed.length === 0) {
+      toast.error("Paste at least one 2B invoice row");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api.post<Gstr2bMatchResult>("/api/books/gst/gstr2b/match", {
+        period,
+        portalInvoices: parsed,
+      });
+      setResult(res);
+      toast.success(`Matched ${res?.matched?.length ?? 0} · ${parsed.length} portal invoices`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="GSTR-2B ITC match (invoice-level)" icon={<GitCompareArrows size={15} />}>
+      <div className="space-y-3">
+        <div>
+          <label className={labelCls}>Paste portal 2B invoices (CSV: gstin, invoiceNo, invoiceDate, taxable, tax)</label>
+          <textarea
+            value={csv}
+            onChange={(e) => setCsv(e.target.value)}
+            rows={6}
+            placeholder={GSTR2B_PLACEHOLDER}
+            className={`${inputCls} font-mono text-xs resize-y`}
+          />
+          <p className="text-[11px] text-[var(--color-muted)] mt-1">
+            {parsed.length} invoice{parsed.length === 1 ? "" : "s"} parsed · a header row is auto-detected and skipped.
+          </p>
+        </div>
+        <button type="button" onClick={run} disabled={busy} className={btnPrimary}>
+          {busy ? <RefreshCw size={14} className="animate-spin" /> : <GitCompareArrows size={14} />} Match against books
+        </button>
+
+        {result && (
+          <div className="space-y-4 pt-1">
+            <div className="flex flex-wrap gap-3">
+              <StatCard label="Matched" value={String(result.matched?.length ?? 0)} tint="green" />
+              <StatCard label="Probable" value={String(result.probable?.length ?? 0)} />
+              <StatCard label="Missing in books" value={String(result.missingInBooks?.length ?? 0)} tint="red" />
+              <StatCard label="Missing in portal" value={String(result.missingInPortal?.length ?? 0)} tint="red" />
+            </div>
+            <div className="bg-[var(--color-bg)] border border-red-700/40 rounded-lg p-4 flex items-center justify-between">
+              <span className="text-sm font-semibold text-red-300">ITC at risk</span>
+              <span className="text-xl font-bold tabular-nums text-red-400">{rupee(result.summary?.itcAtRisk)}</span>
+            </div>
+            <Gstr2bBucketTable title="Matched" rows={result.matched ?? []} tint="green" />
+            <Gstr2bBucketTable title="Probable (fuzzy / amount mismatch)" rows={result.probable ?? []} tint="amber" />
+            <Gstr2bBucketTable title="Missing in books (in 2B, not booked)" rows={result.missingInBooks ?? []} tint="red" />
+            <Gstr2bBucketTable title="Missing in portal (booked, not in 2B)" rows={result.missingInPortal ?? []} tint="red" />
+          </div>
+        )}
       </div>
     </Card>
   );
