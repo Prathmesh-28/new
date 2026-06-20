@@ -19,6 +19,7 @@ const ewaybill = require("./ewaybill");
 const importer = require("./importer");
 const closing = require("./closing");
 const ledgersadmin = require("./ledgersadmin");
+const items = require("./items");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -44,6 +45,7 @@ module.exports = {
   ...importer,
   ...closing,
   ...ledgersadmin,
+  ...items,
   ewaybill,
   payments,
   fx,

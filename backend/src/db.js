@@ -641,6 +641,33 @@ async function initDb() {
     ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS disposal_value NUMERIC(19,4);
     ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS asset_group    TEXT;
 
+    -- Books should-haves (inventory depth): barcode, variant attributes, kits, serials.
+    ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS barcode    TEXT;
+    ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS attributes JSONB;
+    ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS is_kit     BOOLEAN NOT NULL DEFAULT false;
+    CREATE TABLE IF NOT EXISTS book_serials (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      item_id       UUID NOT NULL,
+      serial_no     TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'IN_STOCK',
+      warehouse_id  UUID,
+      batch_no      TEXT,
+      in_voucher_id UUID,
+      out_voucher_id UUID,
+      received_on   DATE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, item_id, serial_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_serials ON book_serials(tenant_id, item_id, status);
+    CREATE TABLE IF NOT EXISTS book_item_components (
+      tenant_id         TEXT NOT NULL,
+      parent_item_id    UUID NOT NULL,
+      component_item_id UUID NOT NULL,
+      qty               NUMERIC(19,4) NOT NULL DEFAULT 1,
+      PRIMARY KEY (tenant_id, parent_item_id, component_item_id)
+    );
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

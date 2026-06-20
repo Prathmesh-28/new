@@ -294,9 +294,96 @@ async function physicalAdjust(tenantId, actorId, { itemId, countedQty, warehouse
   return { before: toDb(before), counted: toDb(counted), variance: toDb(variance), adjusted };
 }
 
+// ── Serialised stock ───────────────────────────────────────────────────────────
+// Each unit is individually tracked in book_serials. receiveSerials posts ONE
+// receive() for the whole batch (qty = serials.length) and inserts a row per
+// serial; issueSerials validates each serial is IN_STOCK for this item, posts a
+// single issue() for the qty, and flips those serials to ISSUED. All-or-nothing.
+async function receiveSerials(tenantId, { itemId, serials = [], rate, date, voucherId = null } = {}) {
+  if (!itemId) throw new PostError("BAD_INPUT", "itemId required", 400);
+  if (!Array.isArray(serials) || serials.length === 0) throw new PostError("BAD_INPUT", "serials must be a non-empty array", 400);
+  const nos = serials.map((s) => String(s && s.serialNo != null ? s.serialNo : "").trim());
+  if (nos.some((n) => !n)) throw new PostError("BAD_INPUT", "each serial needs a serialNo", 400);
+  const dup = nos.find((n, i) => nos.indexOf(n) !== i);
+  if (dup) throw new PostError("DUPLICATE_SERIAL", `Duplicate serial in request: ${dup}`, 409);
+
+  const qty = serials.length;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Pre-flight: no serial already exists for this item.
+    const { rows: ex } = await client.query("SELECT serial_no FROM book_serials WHERE tenant_id=$1 AND item_id=$2 AND serial_no = ANY($3)", [tenantId, itemId, nos]);
+    if (ex[0]) throw new PostError("DUPLICATE_SERIAL", `Serial already exists: ${ex[0].serial_no}`, 409);
+
+    const recv = await receive(tenantId, itemId, qty, rate, { date, voucherId });
+
+    const recOn = date || new Date().toISOString().slice(0, 10);
+    for (const s of serials) {
+      await client.query(
+        "INSERT INTO book_serials(tenant_id,item_id,serial_no,status,warehouse_id,batch_no,in_voucher_id,received_on) VALUES($1,$2,$3,'IN_STOCK',$4,$5,$6,$7)",
+        [tenantId, itemId, String(s.serialNo).trim(), s.warehouseId || null, s.batchNo || null, voucherId, recOn]
+      );
+    }
+    await client.query("COMMIT");
+    return { ...recv, serials: nos, count: qty };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+async function issueSerials(tenantId, { itemId, serials = [], voucherId = null } = {}) {
+  if (!itemId) throw new PostError("BAD_INPUT", "itemId required", 400);
+  if (!Array.isArray(serials) || serials.length === 0) throw new PostError("BAD_INPUT", "serials must be a non-empty array", 400);
+  const nos = serials.map((s) => String(s == null ? "" : s).trim());
+  if (nos.some((n) => !n)) throw new PostError("BAD_INPUT", "each serial must be a non-empty serialNo", 400);
+  const dup = nos.find((n, i) => nos.indexOf(n) !== i);
+  if (dup) throw new PostError("DUPLICATE_SERIAL", `Duplicate serial in request: ${dup}`, 409);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: found } = await client.query("SELECT serial_no, status FROM book_serials WHERE tenant_id=$1 AND item_id=$2 AND serial_no = ANY($3) FOR UPDATE", [tenantId, itemId, nos]);
+    const byNo = new Map(found.map((r) => [r.serial_no, r]));
+    for (const n of nos) {
+      const r = byNo.get(n);
+      if (!r) throw new PostError("SERIAL_NOT_FOUND", `Serial not in stock for this item: ${n}`, 404);
+      if (r.status !== "IN_STOCK") throw new PostError("SERIAL_NOT_AVAILABLE", `Serial ${n} is ${r.status}`, 409);
+    }
+    const issued = await issue(tenantId, itemId, nos.length, { voucherId });
+    await client.query("UPDATE book_serials SET status='ISSUED', out_voucher_id=$4 WHERE tenant_id=$1 AND item_id=$2 AND serial_no = ANY($3)", [tenantId, itemId, nos, voucherId]);
+    await client.query("COMMIT");
+    return { ...issued, serials: nos, count: nos.length };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+async function listSerials(tenantId, itemId, status) {
+  const params = [tenantId, itemId];
+  let sql = "SELECT id, serial_no, status, warehouse_id, batch_no, in_voucher_id, out_voucher_id, received_on, created_at FROM book_serials WHERE tenant_id=$1 AND item_id=$2";
+  if (status) { params.push(status); sql += ` AND status=$${params.length}`; }
+  sql += " ORDER BY serial_no";
+  const { rows } = await pool.query(sql, params);
+  return rows;
+}
+
+// ── Kits / bundles (BOM assembly) ───────────────────────────────────────────────
+// Read book_item_components for the kit item, then run a stockEntry that CONSUMES
+// each component (component.qty * qty) and PRODUCES qty of the kit item with the
+// cost rolled up from the consumed components. sellKit reuses issue() of the kit.
+async function buildKit(tenantId, actorId, { kitItemId, qty, date } = {}) {
+  if (!kitItemId) throw new PostError("BAD_INPUT", "kitItemId required", 400);
+  if (!gt(qty, 0)) throw new PostError("BAD_INPUT", "qty must be > 0", 400);
+  const { rows: comps } = await pool.query(
+    "SELECT component_item_id, qty FROM book_item_components WHERE tenant_id=$1 AND parent_item_id=$2",
+    [tenantId, kitItemId]
+  );
+  if (comps.length === 0) throw new PostError("NO_COMPONENTS", "Kit has no components — define book_item_components first", 422);
+  const consumes = comps.map((c) => ({ itemId: c.component_item_id, qty: toDb(money(c.qty).mul(qty)) }));
+  const produces = [{ itemId: kitItemId, qty: toDb(qty) }];
+  return stockEntry(tenantId, actorId, { consumes, produces, date });
+}
+
 module.exports = {
   applyInwardWAvg, applyOutwardWAvg, consumeFifo,
   createItem, createWarehouse, createPriceList, setPrice, priceFor,
   receive, issue, transfer, postStockValueJournal, lowStock, itemLedger,
   nearExpiry, setUomConversions, convertQty, stockEntry, physicalAdjust,
+  receiveSerials, issueSerials, listSerials, buildKit,
 };

@@ -13,6 +13,7 @@ const ewb = require("./ewaybill");
 const importer = require("./importer");
 const closing = require("./closing");
 const ledgersadmin = require("./ledgersadmin");
+const items = require("./items");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -624,6 +625,17 @@ router.post("/inventory/stock-entry", canPost, async (req, res) => { try { res.s
 router.post("/inventory/physical-adjust", canPost, async (req, res) => { try { res.status(201).json(await inv.physicalAdjust(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/inventory/items/:id/uom", canPost, async (req, res) => { try { res.json(await inv.setUomConversions(tenantOf(req), req.params.id, (req.body || {}).conversions || [])); } catch (e) { fail(res, e); } });
 router.get("/reports/stock-summary", async (req, res) => { try { res.json(await reports.stockSummary(tenantOf(req), req.query.from || "1900-01-01", req.query.to || "2999-12-31")); } catch (e) { fail(res, e); } });
+// Serial numbers, kits, variants, barcode.
+router.post("/inventory/receive-serials", canPost, async (req, res) => { try { res.status(201).json(await inv.receiveSerials(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/inventory/issue-serials", canPost, async (req, res) => { try { res.status(201).json(await inv.issueSerials(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/inventory/items/:id/serials", async (req, res) => { try { res.json(await inv.listSerials(tenantOf(req), req.params.id, req.query.status)); } catch (e) { fail(res, e); } });
+router.post("/inventory/build-kit", canPost, async (req, res) => { try { res.status(201).json(await inv.buildKit(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/inventory/items/:id/variants", canPost, async (req, res) => { try { res.status(201).json(await items.createVariant(tenantOf(req), { ...req.body, parentItemId: req.params.id })); } catch (e) { fail(res, e); } });
+router.get("/inventory/items/:id/variants", async (req, res) => { try { res.json(await items.listVariants(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/inventory/items/:id/kit", canPost, async (req, res) => { try { res.json(await items.setKitComponents(tenantOf(req), req.params.id, (req.body || {}).components || [])); } catch (e) { fail(res, e); } });
+router.get("/inventory/items/:id/kit", async (req, res) => { try { res.json(await items.getKitComponents(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/inventory/items/:id/barcode", canPost, async (req, res) => { try { res.json(await items.setBarcode(tenantOf(req), req.params.id, (req.body || {}).barcode)); } catch (e) { fail(res, e); } });
+router.get("/inventory/barcode/:code", async (req, res) => { try { res.json(await items.findByBarcode(tenantOf(req), req.params.code)); } catch (e) { fail(res, e); } });
 
 // ── M4: GST returns ──────────────────────────────────────────────────────────
 const reqPeriod = (req, res) => { const p = req.query.period; if (!p || !/^\d{4}-\d{2}$/.test(p)) { res.status(400).json({ error: "period=YYYY-MM required" }); return null; } return p; };
