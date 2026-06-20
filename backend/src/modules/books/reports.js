@@ -332,4 +332,100 @@ async function partyStatement(tenantId, ledgerId, from, to) {
   return { ledger: { id: lg[0].id, name: lg[0].name }, from, to, opening: toRupees(opening), lines, closing: toRupees(running) };
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement };
+// §10 (M3) — Stock Summary: item-wise stock movement & valuation over [from,to].
+// Ported from ERPNext's Stock Balance report logic: per item we compute opening
+// (item master opening_qty/value + all movements strictly before `from`), inward /
+// outward within the window, and closing = opening + inward − outward. Effective
+// movement date is the linked voucher's voucher_date, falling back to the movement's
+// own created_at::date for manual (voucher-less) receive/issue. Value follows the same
+// signed flow as the running valuation (inward adds value, outward removes it), so
+// closingValue reconciles to the item's tracked valuation. A per-warehouse qty sub-list
+// is attached from the book_stock_balances snapshot when warehouses are in use.
+async function stockSummary(tenantId, fromDate, toDate) {
+  // Effective date of each movement: prefer the voucher date, else the movement's own date.
+  const effDate = "COALESCE(v.voucher_date, m.created_at::date)";
+  const { rows: items } = await pool.query(
+    `SELECT i.id, i.name, i.unit, i.opening_qty, i.opening_value,
+            i.current_qty, i.current_value, i.valuation_method,
+            COALESCE(SUM(CASE WHEN ${effDate} <  $2 THEN m.qty_in  ELSE 0 END),0) AS pre_in_qty,
+            COALESCE(SUM(CASE WHEN ${effDate} <  $2 THEN m.qty_out ELSE 0 END),0) AS pre_out_qty,
+            COALESCE(SUM(CASE WHEN ${effDate} <  $2 THEN (m.qty_in*m.rate) ELSE 0 END),0) AS pre_in_val,
+            COALESCE(SUM(CASE WHEN ${effDate} <  $2 THEN (m.qty_out*m.rate) ELSE 0 END),0) AS pre_out_val,
+            COALESCE(SUM(CASE WHEN ${effDate} BETWEEN $2 AND $3 THEN m.qty_in  ELSE 0 END),0) AS in_qty,
+            COALESCE(SUM(CASE WHEN ${effDate} BETWEEN $2 AND $3 THEN m.qty_out ELSE 0 END),0) AS out_qty,
+            COALESCE(SUM(CASE WHEN ${effDate} BETWEEN $2 AND $3 THEN (m.qty_in*m.rate)  ELSE 0 END),0) AS in_val,
+            COALESCE(SUM(CASE WHEN ${effDate} BETWEEN $2 AND $3 THEN (m.qty_out*m.rate) ELSE 0 END),0) AS out_val
+       FROM book_stock_items i
+       LEFT JOIN book_stock_movements m ON m.item_id=i.id AND m.tenant_id=i.tenant_id
+       LEFT JOIN book_vouchers v ON v.id=m.voucher_id AND v.is_cancelled=false
+      WHERE i.tenant_id=$1 AND i.is_active=true
+      GROUP BY i.id, i.name, i.unit, i.opening_qty, i.opening_value, i.current_qty, i.current_value, i.valuation_method
+      ORDER BY i.name`,
+    [tenantId, fromDate, toDate]
+  );
+
+  // Per-warehouse qty snapshot (current balances; value tracked at item level).
+  const { rows: balRows } = await pool.query(
+    `SELECT b.item_id, b.warehouse_id, w.name AS warehouse_name, b.qty
+       FROM book_stock_balances b
+       LEFT JOIN book_warehouses w ON w.id=b.warehouse_id AND w.tenant_id=b.tenant_id
+      WHERE b.tenant_id=$1
+      ORDER BY w.name`,
+    [tenantId]
+  );
+  const balByItem = new Map();
+  for (const b of balRows) {
+    const a = balByItem.get(b.item_id) || [];
+    a.push({ warehouseId: b.warehouse_id, name: b.warehouse_name || null, qty: toRupees(money(b.qty)) });
+    balByItem.set(b.item_id, a);
+  }
+
+  const totals = {
+    openingQty: money(0), openingValue: money(0),
+    inwardQty: money(0), inwardValue: money(0),
+    outwardQty: money(0), outwardValue: money(0),
+    closingQty: money(0), closingValue: money(0),
+    currentValue: money(0),
+  };
+  const out = items.map((r) => {
+    const openingQty = money(r.opening_qty).plus(money(r.pre_in_qty)).minus(money(r.pre_out_qty));
+    const openingValue = money(r.opening_value).plus(money(r.pre_in_val)).minus(money(r.pre_out_val));
+    const inwardQty = money(r.in_qty), inwardValue = money(r.in_val);
+    const outwardQty = money(r.out_qty), outwardValue = money(r.out_val);
+    const closingQty = openingQty.plus(inwardQty).minus(outwardQty);
+    const closingValue = openingValue.plus(inwardValue).minus(outwardValue);
+    totals.openingQty = totals.openingQty.plus(openingQty);
+    totals.openingValue = totals.openingValue.plus(openingValue);
+    totals.inwardQty = totals.inwardQty.plus(inwardQty);
+    totals.inwardValue = totals.inwardValue.plus(inwardValue);
+    totals.outwardQty = totals.outwardQty.plus(outwardQty);
+    totals.outwardValue = totals.outwardValue.plus(outwardValue);
+    totals.closingQty = totals.closingQty.plus(closingQty);
+    totals.closingValue = totals.closingValue.plus(closingValue);
+    totals.currentValue = totals.currentValue.plus(money(r.current_value));
+    return {
+      itemId: r.id, name: r.name, unit: r.unit,
+      valuationMethod: r.valuation_method,
+      openingQty: toRupees(openingQty), openingValue: toRupees(openingValue),
+      inwardQty: toRupees(inwardQty), inwardValue: toRupees(inwardValue),
+      outwardQty: toRupees(outwardQty), outwardValue: toRupees(outwardValue),
+      closingQty: toRupees(closingQty), closingValue: toRupees(closingValue),
+      currentValue: toRupees(money(r.current_value)),
+      warehouses: balByItem.get(r.id) || [],
+    };
+  });
+
+  return {
+    from: fromDate, to: toDate,
+    items: out,
+    totals: {
+      openingQty: toRupees(totals.openingQty), openingValue: toRupees(totals.openingValue),
+      inwardQty: toRupees(totals.inwardQty), inwardValue: toRupees(totals.inwardValue),
+      outwardQty: toRupees(totals.outwardQty), outwardValue: toRupees(totals.outwardValue),
+      closingQty: toRupees(totals.closingQty), closingValue: toRupees(totals.closingValue),
+      currentValue: toRupees(totals.currentValue),
+    },
+  };
+}
+
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary };

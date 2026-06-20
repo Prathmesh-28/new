@@ -619,6 +619,13 @@ async function initDb() {
     -- survives reload instead of being recomputed/lost.
     ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS breakdown JSONB;
 
+    -- Books Wave-5 inventory depth: batch identity + mfg/expiry on FIFO lots (FEFO),
+    -- and alternate-unit conversion factors on items.
+    ALTER TABLE book_stock_lots  ADD COLUMN IF NOT EXISTS batch_no    TEXT;
+    ALTER TABLE book_stock_lots  ADD COLUMN IF NOT EXISTS mfg_date    DATE;
+    ALTER TABLE book_stock_lots  ADD COLUMN IF NOT EXISTS expiry_date DATE;
+    ALTER TABLE book_stock_items ADD COLUMN IF NOT EXISTS uom_conversions JSONB;
+
     -- Vendor master (vendors page): a real profile per vendor, not just a txn string.
     CREATE TABLE IF NOT EXISTS vendor_master (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

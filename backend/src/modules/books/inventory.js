@@ -88,7 +88,7 @@ async function receive(tenantId, itemId, qty, rate, opts = {}) {
     const next = applyInwardWAvg({ qty: item.current_qty, value: item.current_value }, qty, rate);
     await client.query("UPDATE book_stock_items SET current_qty=$2, current_value=$3 WHERE id=$1", [itemId, toDb(next.qty), toDb(next.value)]);
     if (item.valuation_method === "FIFO") {
-      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,warehouse_id,in_movement_id,qty_remaining,rate,received_on) VALUES($1,$2,$3,gen_random_uuid(),$4,$5,$6)", [tenantId, itemId, opts.warehouseId || null, toDb(qty), toDb(rate), opts.date || new Date().toISOString().slice(0, 10)]);
+      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,warehouse_id,in_movement_id,qty_remaining,rate,received_on,batch_no,mfg_date,expiry_date) VALUES($1,$2,$3,gen_random_uuid(),$4,$5,$6,$7,$8,$9)", [tenantId, itemId, opts.warehouseId || null, toDb(qty), toDb(rate), opts.date || new Date().toISOString().slice(0, 10), opts.batchNo || null, opts.mfgDate || null, opts.expiryDate || null]);
     }
     await _movement(client, tenantId, itemId, { qtyIn: qty, rate, value: money(qty).mul(rate), voucherId: opts.voucherId, warehouseId: opts.warehouseId });
     await client.query("COMMIT");
@@ -114,7 +114,10 @@ async function issue(tenantId, itemId, qty, opts = {}) {
 
     let cogs;
     if (item.valuation_method === "FIFO") {
-      const { rows: lots } = await client.query("SELECT id, qty_remaining AS \"qtyRemaining\", rate FROM book_stock_lots WHERE tenant_id=$1 AND item_id=$2 AND qty_remaining>0 ORDER BY received_on, id", [tenantId, itemId]);
+      // FEFO (first-expiry-first-out) when opts.fefo: expiring lots leave first;
+      // lots with no expiry sort last. Otherwise plain FIFO by received_on.
+      const orderBy = opts.fefo ? "expiry_date NULLS LAST, received_on, id" : "received_on, id";
+      const { rows: lots } = await client.query(`SELECT id, qty_remaining AS "qtyRemaining", rate FROM book_stock_lots WHERE tenant_id=$1 AND item_id=$2 AND qty_remaining>0 ORDER BY ${orderBy}`, [tenantId, itemId]);
       const r = consumeFifo(lots, qty);
       if (gt(r.remaining, 0) && !item.allow_negative) throw new PostError("NEGATIVE_STOCK", "Insufficient FIFO lots", 409);
       cogs = r.cogs;
@@ -170,8 +173,130 @@ async function itemLedger(tenantId, itemId) {
   return rows;
 }
 
+// ── Batch / expiry ───────────────────────────────────────────────────────────
+// Lots (FIFO items) whose expiry_date falls within `days` from today and still
+// have stock — the "use these now or write them off" list.
+async function nearExpiry(tenantId, days = 90) {
+  const { rows } = await pool.query(
+    `SELECT i.name AS item_name, l.item_id, l.batch_no, l.expiry_date, l.qty_remaining AS qty
+       FROM book_stock_lots l
+       JOIN book_stock_items i ON i.id = l.item_id
+      WHERE l.tenant_id=$1 AND l.expiry_date IS NOT NULL
+        AND l.qty_remaining > 0
+        AND l.expiry_date <= (CURRENT_DATE + ($2 || ' days')::interval)
+      ORDER BY l.expiry_date, i.name`,
+    [tenantId, String(days)]
+  );
+  return rows;
+}
+
+// ── UoM conversion ─────────────────────────────────────────────────────────────
+// conversions = [{ unit, factor }] where factor = base units per 1 of `unit`.
+// Stored on book_stock_items.uom_conversions (JSONB). receive/issue always work
+// in BASE units; convertQty is a helper callers use before posting.
+async function setUomConversions(tenantId, itemId, conversions) {
+  if (!Array.isArray(conversions)) throw new PostError("BAD_INPUT", "conversions must be an array", 400);
+  const clean = conversions.map((c) => {
+    if (!c || !c.unit || !gt(c.factor, 0)) throw new PostError("BAD_INPUT", "each conversion needs unit and factor>0", 400);
+    return { unit: String(c.unit), factor: toDb(c.factor) };
+  });
+  const { rows } = await pool.query(
+    "UPDATE book_stock_items SET uom_conversions=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *",
+    [tenantId, itemId, JSON.stringify(clean)]
+  );
+  if (!rows[0]) throw new PostError("NOT_FOUND", "Item not found", 404);
+  return rows[0];
+}
+
+// item = a book_stock_items row (uses item.unit as base + item.uom_conversions).
+// Returns a money() Decimal of qty expressed in base units.
+function convertQty(item, qty, fromUnit) {
+  if (!fromUnit || fromUnit === item.unit) return money(qty);
+  const list = Array.isArray(item.uom_conversions) ? item.uom_conversions
+    : (typeof item.uom_conversions === "string" && item.uom_conversions ? JSON.parse(item.uom_conversions) : []);
+  const conv = (list || []).find((c) => c.unit === fromUnit);
+  if (!conv) throw new PostError("BAD_INPUT", `No UoM conversion for ${fromUnit} on ${item.name}`, 400);
+  return money(qty).mul(conv.factor);
+}
+
+// ── Stock journal / manufacture ───────────────────────────────────────────────
+// Issue each consumed item (raw materials → COGS) and receive each produced item.
+// For manufacture the produced rate defaults to total consumed cost / produced qty
+// (cost roll-up). Quantities are in BASE units. No GL P&L beyond stock valuation.
+async function stockEntry(tenantId, actorId, { consumes = [], produces = [], date } = {}) {
+  const consumed = [], produced = [];
+  let totalCost = money(0);
+  for (const c of consumes) {
+    const r = await issue(tenantId, c.itemId, c.qty, { warehouseId: c.warehouseId || null, date });
+    totalCost = totalCost.plus(r.cogs);
+    consumed.push({ itemId: c.itemId, qty: toDb(c.qty), cogs: r.cogs });
+  }
+  const totalProducedQty = produces.reduce((a, p) => a.plus(p.qty), money(0));
+  for (const p of produces) {
+    // Default rate: roll consumed cost onto output proportionally by qty.
+    let rate = p.rate != null ? money(p.rate)
+      : (gt(totalProducedQty, 0) ? totalCost.div(totalProducedQty) : money(0));
+    const r = await receive(tenantId, p.itemId, p.qty, rate, { warehouseId: p.warehouseId || null, date });
+    produced.push({ itemId: p.itemId, qty: toDb(p.qty), rate: toDb(rate), value: r });
+  }
+  return { consumed, produced, totalCost: toDb(totalCost) };
+}
+
+// ── Physical adjustment (stock count) ─────────────────────────────────────────
+// Reconcile system qty to a physical count: surplus → receive, shortage → issue
+// the difference, and post the value delta to the 'Stock Adjustment' ledger so
+// the GL stays in step with the subsidiary. Returns the before/after picture.
+async function physicalAdjust(tenantId, actorId, { itemId, countedQty, warehouseId = null, date } = {}) {
+  const { rows: ir } = await pool.query("SELECT * FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
+  const item = ir[0];
+  if (!item) throw new PostError("NOT_FOUND", "Item not found", 404);
+
+  let before;
+  if (warehouseId) {
+    const { rows: wb } = await pool.query("SELECT qty FROM book_stock_balances WHERE tenant_id=$1 AND item_id=$2 AND warehouse_id=$3", [tenantId, itemId, warehouseId]);
+    before = money(wb[0] ? wb[0].qty : 0);
+  } else {
+    before = money(item.current_qty);
+  }
+  const counted = money(countedQty);
+  const variance = counted.minus(before); // + surplus, − shortage
+  if (variance.isZero()) return { before: toDb(before), counted: toDb(counted), variance: toDb(0), adjusted: null };
+
+  const avg = money(item.current_qty).greaterThan(0) ? money(item.current_value).div(item.current_qty) : money(0);
+  let valueDelta, adjusted;
+  if (gt(variance, 0)) {
+    // Surplus: receive the difference at current avg cost.
+    adjusted = await receive(tenantId, itemId, variance, avg, { warehouseId, date });
+    valueDelta = variance.mul(avg);
+  } else {
+    // Shortage: issue the absolute difference (allow_negative-aware via issue()).
+    const out = variance.abs();
+    const r = await issue(tenantId, itemId, out, { warehouseId, date });
+    adjusted = r;
+    valueDelta = money(r.cogs).neg();
+  }
+
+  // GL: keep Stock-in-hand in step with the subsidiary against Stock Adjustment.
+  if (!valueDelta.isZero()) {
+    const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
+    const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
+    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing — seed first", 422);
+    const amt = valueDelta.abs();
+    const surplus = gt(valueDelta, 0);
+    // Surplus → Dr Stock-in-hand / Cr Stock Adjustment; shortage → reverse.
+    await postVoucher(tenantId, actorId,
+      { voucherType: "JOURNAL", voucherDate: date || new Date().toISOString().slice(0, 10), narration: `Stock adjustment: ${item.name}`, source: "api" },
+      surplus
+        ? [{ ledgerId: stockLedger, debit: toDb(amt), credit: "0" }, { ledgerId: adjLedger, debit: "0", credit: toDb(amt) }]
+        : [{ ledgerId: adjLedger, debit: toDb(amt), credit: "0" }, { ledgerId: stockLedger, debit: "0", credit: toDb(amt) }]);
+  }
+
+  return { before: toDb(before), counted: toDb(counted), variance: toDb(variance), adjusted };
+}
+
 module.exports = {
   applyInwardWAvg, applyOutwardWAvg, consumeFifo,
   createItem, createWarehouse, createPriceList, setPrice, priceFor,
   receive, issue, transfer, postStockValueJournal, lowStock, itemLedger,
+  nearExpiry, setUomConversions, convertQty, stockEntry, physicalAdjust,
 };
