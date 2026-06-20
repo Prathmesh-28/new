@@ -68,6 +68,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/investor",     label: "Investors",    icon: Briefcase,       tab: "investor"     },
       { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
       { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
+      { to: "/admin/data",   label: "All Data",     icon: Database,        tab: "admin"        },
     ]},
     { label: "Growth & Treasury", items: [
       { to: "/sales",        label: "Sales & CRM",  icon: Handshake,       tab: "sales"        },
