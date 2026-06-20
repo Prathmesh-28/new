@@ -426,6 +426,12 @@ initDb()
     }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
-    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · e-invoice worker on");
+    // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) — raises in-app alerts.
+    cron.schedule("0 3 * * *", () => {
+      require("./lib/reminders").runOverdueReminders()
+        .then(n => { if (n) console.log(`[reminders] raised ${n} overdue-invoice alert(s)`); })
+        .catch(err => console.error("[reminders]", err.message));
+    }, { timezone: "UTC" });
+    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · e-invoice worker on");
   })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

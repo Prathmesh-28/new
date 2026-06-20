@@ -612,6 +612,9 @@ async function initDb() {
 
   // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──
   await pool.query(`
+    -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS upi_id TEXT;
+
     -- Vendor master (vendors page): a real profile per vendor, not just a txn string.
     CREATE TABLE IF NOT EXISTS vendor_master (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

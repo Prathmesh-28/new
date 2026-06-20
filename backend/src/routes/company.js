@@ -8,7 +8,7 @@ const { writeAudit } = require("../lib/audit");
 // tenant id: legal name, GSTIN, industry, address, etc. (gap B5).
 
 const FIELDS = ["company_name", "legal_name", "gstin", "pan", "industry", "company_size",
-  "address", "city", "state", "pincode", "phone", "website", "logo_url"];
+  "address", "city", "state", "pincode", "phone", "website", "logo_url", "upi_id"];
 
 function scopeTenant(req) {
   // super_admin may target any tenant via ?tenant_id / body.tenant_id; others are scoped.

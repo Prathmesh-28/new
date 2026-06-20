@@ -1654,6 +1654,7 @@ const COMPANY_FIELDS: [string, string, string][] = [
   ["city", "City", "Pune"],
   ["state", "State", "Maharashtra"],
   ["pincode", "PIN code", "411001"],
+  ["upi_id", "UPI / VPA (for payment links)", "acme@hdfcbank"],
 ];
 
 export function CompanyProfileCard() {
