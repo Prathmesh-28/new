@@ -15,6 +15,8 @@ const closing = require("./closing");
 const ledgersadmin = require("./ledgersadmin");
 const items = require("./items");
 const vt = require("./vouchertools");
+const taxfiling = require("./taxfiling");
+const incometax = require("./incometax");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -365,6 +367,21 @@ router.post("/documents/vendor-advance", canPost, async (req, res) => {
 // TCS (tax collected at source).
 router.get("/tcs/sections", async (_req, res) => { res.json(tds.TCS_SECTIONS); });
 router.post("/tcs/compute", async (req, res) => { try { res.json(tds.computeTcs(req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── Tax filing (TDS/TCS return file, Form 16A, lower-deduction certs, 26AS, ITR) ──
+router.post("/tax/tds-return", canPost, async (req, res) => { try { res.json(await taxfiling.tdsReturnFile(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/tax/form16a", async (req, res) => { try { const html = await taxfiling.form16A(tenantOf(req), { partyLedgerId: req.query.partyLedgerId, quarter: req.query.quarter, fy: fyOf(req) }); res.type("text/html").send(html); } catch (e) { fail(res, e); } });
+router.post("/tax/tds-certificates", canPost, async (req, res) => { try { res.status(201).json(await taxfiling.addTdsCertificate(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/tax/tds-certificates", async (req, res) => { try { res.json(await taxfiling.listTdsCertificates(tenantOf(req), req.query.partyLedgerId)); } catch (e) { fail(res, e); } });
+router.post("/tax/26as-reconcile", canPost, async (req, res) => { try { res.json(await taxfiling.reconcile26AS(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/tax/advance-tax", async (req, res) => { try { res.json(incometax.advanceTaxSchedule(req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/tax/income-tax", async (req, res) => { try { res.json(incometax.computeIncomeTax(req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/tax/itr-summary", async (req, res) => {
+  try {
+    const q = req.query;
+    res.json(await incometax.itrSummary(tenantOf(req), fyOf(req), { otherIncome: Number(q.otherIncome) || 0, capitalGains: Number(q.capitalGains) || 0, deductions: Number(q.deductions) || 0, regime: q.regime, entityType: q.entityType }));
+  } catch (e) { fail(res, e); }
+});
 
 // ── M2: non-posting document pipelines ───────────────────────────────────────
 router.post("/documents", canPost, async (req, res) => {

@@ -21,6 +21,8 @@ const closing = require("./closing");
 const ledgersadmin = require("./ledgersadmin");
 const items = require("./items");
 const vouchertools = require("./vouchertools");
+const taxfiling = require("./taxfiling");
+const incometax = require("./incometax");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -48,6 +50,8 @@ module.exports = {
   ...ledgersadmin,
   ...items,
   ...vouchertools,
+  ...taxfiling,
+  ...incometax,
   ewaybill,
   payments,
   fx,

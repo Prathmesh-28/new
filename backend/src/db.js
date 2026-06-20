@@ -614,6 +614,8 @@ async function initDb() {
   await pool.query(`
     -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.
     ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS upi_id TEXT;
+    -- Deductor TAN — used on TDS/TCS return files + Form 16A.
+    ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS tan TEXT;
 
     -- Per-employee payroll-run breakdown (PF/ESI/PT/TDS → net) persisted so it
     -- survives reload instead of being recomputed/lost.
@@ -718,6 +720,36 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_book_gst_challans ON book_gst_challans(tenant_id, period);
+
+    -- Tax filing: s.197 lower-deduction certificates + ingested 26AS/AIS rows.
+    CREATE TABLE IF NOT EXISTS book_tds_certificates (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      party_ledger_id UUID,
+      pan             TEXT,
+      section         TEXT NOT NULL,
+      certificate_no  TEXT,
+      rate            NUMERIC(9,4) NOT NULL DEFAULT 0,
+      threshold_limit NUMERIC(19,4),
+      valid_from      DATE,
+      valid_to        DATE,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_tds_certs ON book_tds_certificates(tenant_id, party_ledger_id, section);
+    CREATE TABLE IF NOT EXISTS book_26as_entries (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      kind          TEXT NOT NULL DEFAULT 'TDS',
+      deductor_tan  TEXT,
+      deductor_name TEXT,
+      section       TEXT,
+      period        TEXT,
+      amount        NUMERIC(19,4) NOT NULL DEFAULT 0,
+      tax           NUMERIC(19,4) NOT NULL DEFAULT 0,
+      matched_voucher_id UUID,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_26as ON book_26as_entries(tenant_id, period);
 
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
