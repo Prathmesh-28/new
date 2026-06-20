@@ -387,6 +387,97 @@ const BOOKS_SCHEMA = `
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_assets ON book_fixed_assets(tenant_id, is_active);
+
+  -- ── M8: automation (approvals, numbering, late fees, expenses, projects) ──
+  CREATE TABLE IF NOT EXISTS book_approval_rules (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    entity_type   TEXT NOT NULL,             -- voucher type or document kind
+    min_amount    NUMERIC(19,4) NOT NULL DEFAULT 0,
+    approver_role TEXT NOT NULL DEFAULT 'owner',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS book_approvals (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id    TEXT NOT NULL,
+    entity_type  TEXT NOT NULL,
+    entity_id    UUID,
+    amount       NUMERIC(19,4) NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+    requested_by UUID,
+    decided_by   UUID,
+    note         TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    decided_at   TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_approvals ON book_approvals(tenant_id, status);
+
+  CREATE TABLE IF NOT EXISTS book_number_formats (
+    tenant_id TEXT NOT NULL,
+    doc_type  TEXT NOT NULL,
+    prefix    TEXT NOT NULL DEFAULT '',
+    pad       INT  NOT NULL DEFAULT 4,
+    suffix    TEXT NOT NULL DEFAULT '',
+    include_fy BOOLEAN NOT NULL DEFAULT true,
+    PRIMARY KEY (tenant_id, doc_type)
+  );
+  CREATE TABLE IF NOT EXISTS book_reminders (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      TEXT NOT NULL,
+    name           TEXT NOT NULL,
+    days_after_due INT NOT NULL DEFAULT 7,
+    fee_percent_pa NUMERIC(9,4) NOT NULL DEFAULT 0,
+    active         BOOLEAN NOT NULL DEFAULT true
+  );
+  CREATE TABLE IF NOT EXISTS book_attachments (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id   UUID NOT NULL,
+    filename    TEXT NOT NULL,
+    url         TEXT,
+    uploaded_by UUID,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_attach ON book_attachments(tenant_id, entity_type, entity_id);
+
+  CREATE TABLE IF NOT EXISTS book_projects (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id          TEXT NOT NULL,
+    name               TEXT NOT NULL,
+    customer_ledger_id UUID REFERENCES book_ledgers(id),
+    status             TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS book_timesheets (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   TEXT NOT NULL,
+    project_id  UUID NOT NULL REFERENCES book_projects(id),
+    work_date   DATE NOT NULL,
+    hours       NUMERIC(9,2) NOT NULL,
+    rate        NUMERIC(19,4) NOT NULL DEFAULT 0,
+    billable    BOOLEAN NOT NULL DEFAULT true,
+    invoiced_voucher_id UUID REFERENCES book_vouchers(id),
+    note        TEXT,
+    created_by  UUID,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_ts ON book_timesheets(tenant_id, project_id);
+
+  CREATE TABLE IF NOT EXISTS book_expenses (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    exp_date        DATE NOT NULL,
+    category_ledger_id UUID NOT NULL REFERENCES book_ledgers(id),
+    amount          NUMERIC(19,4) NOT NULL,
+    paid_from_ledger_id UUID REFERENCES book_ledgers(id),
+    billable        BOOLEAN NOT NULL DEFAULT false,
+    customer_ledger_id  UUID REFERENCES book_ledgers(id),
+    voucher_id      UUID REFERENCES book_vouchers(id),
+    note            TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
 `;
 
 module.exports = { BOOKS_SCHEMA };

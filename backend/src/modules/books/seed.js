@@ -35,6 +35,8 @@ const DEFAULT_LEDGERS = [
   ["Stock-in-hand", "Stock-in-hand"], ["Cost of Goods Sold", "Direct Expenses"], ["Stock Adjustment", "Direct Expenses"],
   // M7: forex + depreciation ledgers
   ["Forex Gain/Loss", "Indirect Expenses"], ["Depreciation", "Indirect Expenses"], ["Accumulated Depreciation", "Fixed Assets"],
+  // M8: late fee income
+  ["Late Fee Income", "Indirect Incomes"],
 ];
 
 async function seedBooks(tenantId) {

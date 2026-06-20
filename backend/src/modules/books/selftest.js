@@ -1,7 +1,7 @@
 // Pure-logic correctness checks for the books engine — no DB needed.
 // Run: `node src/modules/books/selftest.js` from backend/. Exits non-zero on failure.
 const assert = require("assert");
-const { money, sum, eq, toDb } = require("./money");
+const { money, sum, eq, toDb, toRupees } = require("./money");
 const { financialYearFor, periodMonthFor } = require("./fy");
 const { validateEntries, PostError } = require("./posting-engine");
 const { splitGst, buildSalesVoucher, buildPurchaseVoucher, buildCreditNote } = require("./mappers");
@@ -12,6 +12,7 @@ const { classifyLine, daysBetween, lineMatches } = require("./recon");
 const { cashFlowActivity } = require("./reports");
 const { fxConvert, realizedFx } = require("./fx");
 const { depreciationMonthly } = require("./assets");
+const { formatDocNumber, computeLateFee, ruleRequiresApproval } = require("./automation");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -104,5 +105,13 @@ assert.ok(eq(fxConvert("100", "83"), "8300")); ok("fxConvert 100 USD @83 → ₹
 assert.ok(eq(realizedFx("100", "80", "83"), "300")); ok("realised FX 100 @80→83 → ₹300 gain");
 assert.ok(eq(depreciationMonthly("SLM", "120000", "0", "10"), "1000")); ok("SLM 10% on 120000 → 1000/month");
 assert.ok(eq(depreciationMonthly("WDV", "120000", "12000", "10"), "900")); ok("WDV 10% on 108000 WDV → 900/month");
+
+// 16. M8 — automation pure helpers.
+assert.strictEqual(formatDocNumber({ prefix: "INV-", pad: 4, suffix: "", include_fy: true }, 7, "2026-27"), "INV-2026-27-0007"); ok("number format → INV-2026-27-0007");
+assert.strictEqual(formatDocNumber({ prefix: "BILL/", pad: 5, suffix: "/A", include_fy: false }, 42, "2026-27"), "BILL/00042/A"); ok("number format (no FY) → BILL/00042/A");
+assert.strictEqual(toRupees(computeLateFee("10000", 30, "18")), "147.95"); ok("late fee 18%pa on 10000 for 30d → ₹147.95");
+assert.strictEqual(toRupees(computeLateFee("10000", 0, "18")), "0.00"); ok("late fee 0 days → 0");
+assert.ok(ruleRequiresApproval([{ entity_type: "PAYMENT", min_amount: "100000" }], "PAYMENT", "150000")); ok("payment ≥ ₹1L needs approval");
+assert.ok(!ruleRequiresApproval([{ entity_type: "PAYMENT", min_amount: "100000" }], "PAYMENT", "50000")); ok("payment < ₹1L auto-ok");
 
 console.log(`\n${n} checks passed.`);

@@ -15,6 +15,8 @@ const recon = require("./recon");
 const payments = require("./payments");
 const fx = require("./fx");
 const assets = require("./assets");
+const auto = require("./automation");
+const ops = require("./ops");
 
 router.use(authenticate);
 
@@ -288,5 +290,21 @@ router.post("/fx/settlement", canPost, async (req, res) => { try { const b = req
 router.post("/assets", canPost, async (req, res) => { try { res.status(201).json(await assets.createAsset(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/assets", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res.json(await assets.runDepreciation(tenantOf(req), req.user.id, (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
+
+// ── M8: automation + ops ─────────────────────────────────────────────────────
+router.post("/approval-rules", canPost, async (req, res) => { try { res.status(201).json(await auto.createRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/approvals", async (req, res) => { try { res.json(await auto.listApprovals(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+router.post("/approvals", canPost, async (req, res) => { try { res.status(201).json(await auto.requestApproval(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/approvals/:id/decide", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await auto.decideApproval(tenantOf(req), req.user.id, req.params.id, !!b.approve, b.note)); } catch (e) { fail(res, e); } });
+router.post("/number-formats", canPost, async (req, res) => { try { res.status(201).json(await auto.setNumberFormat(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/overdue", async (req, res) => { try { res.json(await auto.overdue(tenantOf(req), req.query.asOf, Number(req.query.ratePerAnnum) || 0)); } catch (e) { fail(res, e); } });
+router.post("/late-fee", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await auto.postLateFee(tenantOf(req), req.user.id, b)); } catch (e) { fail(res, e); } });
+router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/projects", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_projects WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
+router.post("/timesheets", canPost, async (req, res) => { try { res.status(201).json(await ops.logTime(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/projects/:id/billable", async (req, res) => { try { res.json(await ops.billableSummary(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/attachments", canPost, async (req, res) => { try { res.status(201).json(await ops.addAttachment(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/attachments", async (req, res) => { try { res.json(await ops.listAttachments(tenantOf(req), req.query.entityType, req.query.entityId)); } catch (e) { fail(res, e); } });
 
 module.exports = router;

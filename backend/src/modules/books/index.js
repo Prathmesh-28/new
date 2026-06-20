@@ -10,6 +10,8 @@ const recon = require("./recon");
 const payments = require("./payments");
 const fx = require("./fx");
 const assets = require("./assets");
+const automation = require("./automation");
+const ops = require("./ops");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -23,6 +25,8 @@ module.exports = {
   ...gst,
   ...recon,
   ...assets,
+  ...automation,
+  ...ops,
   payments,
   fx,
   seedBooks,

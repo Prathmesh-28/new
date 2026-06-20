@@ -1,0 +1,86 @@
+// §M8 — automation: approval rules + queue, configurable document numbering,
+// late-fee / overdue reminders. Pure helpers are exported for testing.
+const { pool } = require("../../db");
+const { money, toDb, toRupees, gt } = require("./money");
+const { PostError, postVoucher } = require("./posting-engine");
+const { ledgerIdByName } = require("./seed");
+
+// ── Pure ─────────────────────────────────────────────────────────────────────
+function formatDocNumber(fmt, number, fy) {
+  const pad = String(number).padStart(fmt.pad || 0, "0");
+  const mid = fmt.include_fy && fy ? `${fy}-${pad}` : pad;
+  return `${fmt.prefix || ""}${mid}${fmt.suffix || ""}`;
+}
+function computeLateFee(amount, daysOverdue, ratePerAnnum) {
+  if (daysOverdue <= 0) return money(0);
+  return money(amount).mul(ratePerAnnum).div(100).mul(daysOverdue).div(365);
+}
+function ruleRequiresApproval(rules, entityType, amount) {
+  return rules.some((r) => r.entity_type === entityType && money(amount).greaterThanOrEqualTo(r.min_amount));
+}
+
+// ── Approvals ────────────────────────────────────────────────────────────────
+async function createRule(tenantId, r) {
+  const { rows } = await pool.query("INSERT INTO book_approval_rules(tenant_id,entity_type,min_amount,approver_role) VALUES($1,$2,$3,$4) RETURNING *", [tenantId, r.entityType, toDb(r.minAmount || 0), r.approverRole || "owner"]);
+  return rows[0];
+}
+async function requiresApproval(tenantId, entityType, amount) {
+  const { rows } = await pool.query("SELECT * FROM book_approval_rules WHERE tenant_id=$1 AND entity_type=$2", [tenantId, entityType]);
+  return ruleRequiresApproval(rows, entityType, amount);
+}
+async function requestApproval(tenantId, actorId, a) {
+  const { rows } = await pool.query("INSERT INTO book_approvals(tenant_id,entity_type,entity_id,amount,requested_by,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING *", [tenantId, a.entityType, a.entityId || null, toDb(a.amount || 0), actorId || null, a.note || null]);
+  return rows[0];
+}
+async function decideApproval(tenantId, actorId, id, approve, note) {
+  const { rows } = await pool.query("UPDATE book_approvals SET status=$3, decided_by=$4, note=COALESCE($5,note), decided_at=now() WHERE tenant_id=$1 AND id=$2 AND status='PENDING' RETURNING *", [tenantId, id, approve ? "APPROVED" : "REJECTED", actorId || null, note || null]);
+  if (!rows[0]) throw new PostError("BAD_STATE", "Approval not found or already decided", 409);
+  return rows[0];
+}
+async function listApprovals(tenantId, status) {
+  const { rows } = status
+    ? await pool.query("SELECT * FROM book_approvals WHERE tenant_id=$1 AND status=$2 ORDER BY created_at DESC", [tenantId, status])
+    : await pool.query("SELECT * FROM book_approvals WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [tenantId]);
+  return rows;
+}
+
+// ── Configurable numbering ───────────────────────────────────────────────────
+async function setNumberFormat(tenantId, f) {
+  const { rows } = await pool.query("INSERT INTO book_number_formats(tenant_id,doc_type,prefix,pad,suffix,include_fy) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,doc_type) DO UPDATE SET prefix=EXCLUDED.prefix,pad=EXCLUDED.pad,suffix=EXCLUDED.suffix,include_fy=EXCLUDED.include_fy RETURNING *", [tenantId, f.docType, f.prefix || "", f.pad || 4, f.suffix || "", f.includeFy !== false]);
+  return rows[0];
+}
+async function formattedNumber(tenantId, docType, number, fy) {
+  const { rows } = await pool.query("SELECT * FROM book_number_formats WHERE tenant_id=$1 AND doc_type=$2", [tenantId, docType]);
+  const fmt = rows[0] || { prefix: `${docType.slice(0, 3).toUpperCase()}-`, pad: 4, suffix: "", include_fy: true };
+  return formatDocNumber(fmt, number, fy);
+}
+
+// ── Overdue + late fees (reads outstanding SALES from the ledger) ────────────
+async function overdue(tenantId, asOf, ratePerAnnum) {
+  const today = asOf || new Date().toISOString().slice(0, 10);
+  const { rows } = await pool.query(
+    `SELECT v.id, v.voucher_number, v.voucher_date, v.reference, v.party_ledger_id,
+            COALESCE((SELECT SUM(e.debit) FROM book_voucher_entries e WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS gross,
+            COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.target_voucher_id=v.id),0) AS allocated
+       FROM book_vouchers v
+      WHERE v.tenant_id=$1 AND v.voucher_type='SALES' AND v.is_cancelled=false`,
+    [tenantId]
+  );
+  const invoices = [];
+  for (const r of rows) {
+    const outstanding = money(r.gross).minus(r.allocated);
+    if (!gt(outstanding, 0)) continue;
+    const days = Math.max(0, Math.round((new Date(today).getTime() - new Date(r.voucher_date).getTime()) / 86400000));
+    invoices.push({ voucherId: r.id, number: r.voucher_number, reference: r.reference, partyLedgerId: r.party_ledger_id, outstanding: toRupees(outstanding), daysOverdue: days, suggestedLateFee: toRupees(computeLateFee(outstanding, days, ratePerAnnum || 0)) });
+  }
+  return { asOf: today, ratePerAnnum: ratePerAnnum || 0, invoices };
+}
+async function postLateFee(tenantId, actorId, { partyLedgerId, amount, date }) {
+  const lf = await ledgerIdByName(tenantId, "Late Fee Income");
+  if (!lf) throw new PostError("NOT_SEEDED", "Late Fee Income ledger missing — seed first", 422);
+  if (!partyLedgerId || amount == null) throw new PostError("BAD_INPUT", "partyLedgerId and amount required", 400);
+  return postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: date || new Date().toISOString().slice(0, 10), narration: "Late fee", source: "api", partyLedgerId },
+    [{ ledgerId: partyLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: lf, debit: "0", credit: toDb(amount) }]);
+}
+
+module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee };
