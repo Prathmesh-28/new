@@ -31,6 +31,7 @@ const { financialYearFor } = require("./fy");
 const { postVoucher, PostError } = require("./posting-engine");
 const { buildSalesVoucher } = require("./mappers");
 const { salesCtx } = require("./documents");
+const usage = require("./usage");
 
 // ── pure date helpers (UTC, 'YYYY-MM-DD') ────────────────────────────────────
 // All subscription dates are date-only; we parse/format in UTC so a date never
@@ -335,7 +336,8 @@ async function generateDueInvoices(tenantId, asOf) {
   // ended and the first real invoice should fire (flipping it to active).
   const { rows: subs } = await pool.query(
     `SELECT s.*, p.price AS plan_price, p.gst_rate AS plan_gst_rate, p.hsn_sac AS plan_hsn,
-            p.interval AS plan_interval, p.interval_count AS plan_interval_count, p.name AS plan_name
+            p.interval AS plan_interval, p.interval_count AS plan_interval_count, p.name AS plan_name,
+            p.metric AS plan_metric, p.unit_price AS plan_unit_price
        FROM book_subscriptions s
        JOIN book_subscription_plans p ON p.id = s.plan_id AND p.tenant_id = s.tenant_id
       WHERE s.tenant_id=$1
@@ -362,18 +364,32 @@ async function generateDueInvoices(tenantId, asOf) {
     let iterations = 0;
     let activated = s.status === "trial"; // first billing flips trial → active
 
+    const metered = s.plan_metric && String(s.plan_metric).trim() && s.plan_unit_price != null;
+
     while (runDate <= cutoffStr && iterations < MAX_CATCHUP) {
       iterations++;
       const periodEnd = advancePeriod(runDate, plan);
       try {
+        // Metered plans (OpenMeter/Lago): on top of the recurring base fee, add a
+        // usage charge for the period that just closed — [runDate, periodEnd) — by
+        // aggregating this subscription's events and pricing them via usage.js. The
+        // non-metered path is unchanged: usageCharge stays null and periodTotal == base.
+        let usageCharge = null;
+        if (metered) {
+          usageCharge = await usage.usageChargeForPeriod(tenantId, s.id, runDate, periodEnd);
+        }
+        const periodTotal = usageCharge ? lineTotal.plus(money(usageCharge.amount)) : lineTotal;
+
         let inv = null;
-        // A zero-priced plan posts no voucher (nothing to invoice) but still advances.
-        if (lineTotal.greaterThan(0)) {
+        // A zero-total period posts no voucher (nothing to invoice) but still advances.
+        if (periodTotal.greaterThan(0)) {
           inv = await postPlanInvoice(pool, tenantId, s.party_ledger_id, plan, {
-            amount: lineTotal,
+            amount: periodTotal,
             date: runDate,
             reference: `Subscription: ${plan.name}`,
-            narration: `Subscription ${plan.name} ${runDate} → ${periodEnd}`,
+            narration: usageCharge
+              ? `Subscription ${plan.name} ${runDate} → ${periodEnd} (base ${toRupees(lineTotal)} + usage ${usageCharge.units} ${usageCharge.metric} @ ${usageCharge.unitPrice} = ${usageCharge.amount})`
+              : `Subscription ${plan.name} ${runDate} → ${periodEnd}`,
           });
         }
         // Advance the clock for THIS subscription: this period is billed, the next
@@ -390,7 +406,9 @@ async function generateDueInvoices(tenantId, asOf) {
           planName: plan.name,
           period: runDate,
           periodEnd,
-          amount: toRupees(lineTotal),
+          amount: toRupees(periodTotal),
+          baseAmount: toRupees(lineTotal),
+          usage: usageCharge,
           fy: financialYearFor(runDate),
           activatedFromTrial: activated,
           voucher: inv,

@@ -20,6 +20,8 @@ const incometax = require("./incometax");
 const pricing = require("./pricing");
 const payterms = require("./payterms");
 const subs = require("./subscriptions");
+const importers = require("./importers");
+const usage = require("./usage");
 const validators = require("../../lib/validators");
 // Reject a malformed GSTIN/PAN (checksum-verified) before it hits the ledger.
 const badId = (b) => {
@@ -685,6 +687,10 @@ router.get("/subscriptions", async (req, res) => { try { res.json(await subs.lis
 router.post("/subscriptions/:id/change-plan", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await subs.changePlan(tenantOf(req), { subscriptionId: req.params.id, newPlanId: b.newPlanId, prorate: b.prorate !== false })); } catch (e) { fail(res, e); } });
 router.post("/subscriptions/:id/cancel", canPost, async (req, res) => { try { res.json(await subs.cancelSubscription(tenantOf(req), req.params.id, (req.body || {}).atPeriodEnd !== false)); } catch (e) { fail(res, e); } });
 router.post("/subscriptions/run", canPost, async (req, res) => { try { res.status(201).json(await subs.generateDueInvoices(tenantOf(req), (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
+// Usage / metered billing.
+router.post("/usage/ingest", canPost, async (req, res) => { try { res.status(201).json(await usage.ingestUsage(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/usage/aggregate", async (req, res) => { try { const q = req.query; res.json(await usage.aggregateUsage(tenantOf(req), { subscriptionId: q.subscriptionId, metric: q.metric, from: q.from, to: q.to, aggregation: q.aggregation })); } catch (e) { fail(res, e); } });
+router.get("/subscriptions/:id/usage-charge", async (req, res) => { try { res.json(await usage.usageChargeForPeriod(tenantOf(req), req.params.id, req.query.from, req.query.to)); } catch (e) { fail(res, e); } });
 router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
 router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });
@@ -711,6 +717,8 @@ router.get("/documents/:id/eway/status", async (req, res) => { try { res.json(aw
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });
+// Import a real bank-statement FILE (OFX/QFX/QIF/CAMT.053/MT940/CSV) → parsed lines.
+router.post("/recon/import-file", canPost, async (req, res) => { try { const b = req.body || {}; const lines = importers.parseStatement(b.format, b.content); res.status(201).json({ parsed: lines.length, ...(await recon.importLines(tenantOf(req), b.bankLedgerId, lines)) }); } catch (e) { fail(res, e); } });
 router.post("/recon/auto-match", canPost, async (req, res) => { try { res.json(await recon.autoMatch(tenantOf(req), (req.body || {}).toleranceDays || 3)); } catch (e) { fail(res, e); } });
 router.get("/recon/inbox", async (req, res) => { try { res.json(await recon.inbox(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/recon/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.confirmLine(tenantOf(req), req.user.id, b.lineId, b.counterLedgerId)); } catch (e) { fail(res, e); } });

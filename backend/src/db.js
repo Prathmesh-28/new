@@ -851,6 +851,22 @@ async function initDb() {
       created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_book_subs ON book_subscriptions(tenant_id, status, next_invoice_date);
+    -- Usage / metered billing (ported from OpenMeter/Lago).
+    ALTER TABLE book_subscription_plans ADD COLUMN IF NOT EXISTS metric      TEXT;
+    ALTER TABLE book_subscription_plans ADD COLUMN IF NOT EXISTS unit_price  NUMERIC(19,4);
+    ALTER TABLE book_subscription_plans ADD COLUMN IF NOT EXISTS aggregation TEXT DEFAULT 'sum';
+    CREATE TABLE IF NOT EXISTS book_usage_events (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      subscription_id UUID,
+      metric          TEXT NOT NULL,
+      value           NUMERIC(19,4) NOT NULL DEFAULT 0,
+      event_time      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      dedup_key       TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_book_usage_dedup ON book_usage_events(tenant_id, dedup_key) WHERE dedup_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_book_usage ON book_usage_events(tenant_id, subscription_id, metric, event_time);
 
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
