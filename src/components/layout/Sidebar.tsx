@@ -13,7 +13,7 @@ import {
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
-  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart,
+  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -22,264 +22,112 @@ import { getFrequentPages } from "@/components/CommandPalette";
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
 interface NavGroup { label: string; items: NavItem[] }
 
-const NAV_GROUPS: Record<string, NavGroup[]> = {
-  super_admin: [
-    { label: "Core", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
-      { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
-      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
-      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-    ]},
-    { label: "Finance", items: [
-      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
-      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
-      { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
-      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
-      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
-      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
-      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
-      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
-      { to: "/crm",          label: "CRM",          icon: Handshake,       tab: "crm"          },
-      { to: "/erp",          label: "ERP",          icon: Factory,         tab: "erp"          },
-      { to: "/hrms",         label: "HRMS",         icon: Users,           tab: "hrms"         },
-      { to: "/insights",     label: "Insights",     icon: LineChart,       tab: "insights"     },
-      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
-      { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
-      { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
-      { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
-      { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
-      { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
-    ]},
-    { label: "Operations", items: [
-      { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
-      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
-      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
-      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
-      { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
-      { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
-    ]},
-    { label: "Tools", items: [
-      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
-      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
-      { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
-      { to: "/whatsapp",     label: "WhatsApp",     icon: MessageCircle,   tab: "whatsapp"     },
-      { to: "/scenarios",    label: "Scenarios",    icon: Sliders,         tab: "scenarios"    },
-      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
-      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
-      { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
-      { to: "/advisor",      label: "Advisor / CA", icon: Users,           tab: "advisor"      },
-      { to: "/investor",     label: "Investors",    icon: Briefcase,       tab: "investor"     },
-      { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
-      { to: "/admin",        label: "Admin",        icon: ShieldCheck,     tab: "admin"        },
-      { to: "/admin/data",   label: "All Data",     icon: Database,        tab: "admin"        },
-    ]},
-    { label: "Growth & Treasury", items: [
-      { to: "/sales",        label: "Sales & CRM",  icon: Handshake,       tab: "sales"        },
-      { to: "/payments",     label: "Payments",     icon: IndianRupee,     tab: "payments"     },
-      { to: "/treasury",     label: "Treasury",     icon: Coins,           tab: "treasury"     },
-      { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
-      { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
-      { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
-      { to: "/marketplace",  label: "Marketplace",  icon: ShoppingCart,    tab: "marketplace"  },
-      { to: "/network",      label: "B2B Network",  icon: Network,         tab: "network"      },
-      { to: "/automation",   label: "Automation",   icon: Workflow,        tab: "automation"   },
-      { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
-      { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
-      { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
-      { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
-      { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
-      { to: "/voice",        label: "Voice",        icon: Mic,             tab: "voice"        },
-      { to: "/field",        label: "Field/Offline",icon: Smartphone,      tab: "field"        },
-      { to: "/tokens",       label: "Tokens",       icon: Blocks,          tab: "tokens"       },
-      { to: "/frontier",     label: "Frontier Lab", icon: FlaskConical,    tab: "frontier"     },
-    ]},
-  ],
-  owner: [
-    { label: "Core", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
-      { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
-      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
-      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-    ]},
-    { label: "Finance", items: [
-      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
-      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
-      { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
-      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
-      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
-      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
-      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
-      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
-      { to: "/crm",          label: "CRM",          icon: Handshake,       tab: "crm"          },
-      { to: "/erp",          label: "ERP",          icon: Factory,         tab: "erp"          },
-      { to: "/hrms",         label: "HRMS",         icon: Users,           tab: "hrms"         },
-      { to: "/insights",     label: "Insights",     icon: LineChart,       tab: "insights"     },
-      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
-      { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
-      { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
-      { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
-      { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
-    ]},
-    { label: "Operations", items: [
-      { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
-      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
-      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
-      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
-      { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
-      { to: "/connectors",   label: "Connectors",   icon: PlugZap,         tab: "connectors"   },
-    ]},
-    { label: "Tools", items: [
-      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
-      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
-      { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
-      { to: "/whatsapp",     label: "WhatsApp",     icon: MessageCircle,   tab: "whatsapp"     },
-      { to: "/scenarios",    label: "Scenarios",    icon: Sliders,         tab: "scenarios"    },
-      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
-      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
-      { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
-      { to: "/advisor",      label: "Advisor / CA", icon: Users,           tab: "advisor"      },
-      { to: "/investor",     label: "Investors",    icon: Briefcase,       tab: "investor"     },
-      { to: "/settings",     label: "Settings",     icon: Settings2,       tab: "settings"     },
-    ]},
-    { label: "Growth & Treasury", items: [
-      { to: "/sales",        label: "Sales & CRM",  icon: Handshake,       tab: "sales"        },
-      { to: "/payments",     label: "Payments",     icon: IndianRupee,     tab: "payments"     },
-      { to: "/treasury",     label: "Treasury",     icon: Coins,           tab: "treasury"     },
-      { to: "/insurance",    label: "Insurance",    icon: Umbrella,        tab: "insurance"    },
-      { to: "/esg",          label: "ESG",          icon: Leaf,            tab: "esg"          },
-      { to: "/global",       label: "Global",       icon: Globe,           tab: "global"       },
-      { to: "/marketplace",  label: "Marketplace",  icon: ShoppingCart,    tab: "marketplace"  },
-      { to: "/network",      label: "B2B Network",  icon: Network,         tab: "network"      },
-      { to: "/automation",   label: "Automation",   icon: Workflow,        tab: "automation"   },
-      { to: "/copilot",      label: "AI CFO",       icon: Bot,             tab: "copilot"      },
-      { to: "/security",     label: "Security",     icon: ShieldAlert,     tab: "security"     },
-      { to: "/privacy",      label: "Privacy",      icon: KeyRound,        tab: "privacy"      },
-      { to: "/banking",      label: "Banking",      icon: Banknote,        tab: "banking"      },
-      { to: "/predict",      label: "Predict",      icon: Radar,           tab: "predict"      },
-      { to: "/voice",        label: "Voice",        icon: Mic,             tab: "voice"        },
-      { to: "/field",        label: "Field/Offline",icon: Smartphone,      tab: "field"        },
-      { to: "/tokens",       label: "Tokens",       icon: Blocks,          tab: "tokens"       },
-      { to: "/frontier",     label: "Frontier Lab", icon: FlaskConical,    tab: "frontier"     },
-    ]},
-  ],
-  finance_manager: [
-    { label: "Core", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
-      { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
-      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
-      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-    ]},
-    { label: "Finance", items: [
-      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
-      { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
-      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
-      { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
-      { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
-      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
-      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
-      { to: "/crm",          label: "CRM",          icon: Handshake,       tab: "crm"          },
-      { to: "/erp",          label: "ERP",          icon: Factory,         tab: "erp"          },
-      { to: "/hrms",         label: "HRMS",         icon: Users,           tab: "hrms"         },
-      { to: "/insights",     label: "Insights",     icon: LineChart,       tab: "insights"     },
-      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
-      { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
-      { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
-    ]},
-    { label: "Operations", items: [
-      { to: "/payroll",      label: "Payroll",      icon: Wallet,          tab: "payroll"      },
-      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
-      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
-      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
-    ]},
-    { label: "Tools", items: [
-      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
-      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
-      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
-      { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
-    ]},
-  ],
-  accountant: [
-    { label: "", items: [
-      { to: "/advisor",      label: "My Clients",   icon: Users,           tab: "advisor"      },
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/transactions", label: "Transactions", icon: FileText,        tab: "transactions" },
-      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
-      { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
-      { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
-      { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
-      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
-      { to: "/crm",          label: "CRM",          icon: Handshake,       tab: "crm"          },
-      { to: "/erp",          label: "ERP",          icon: Factory,         tab: "erp"          },
-      { to: "/hrms",         label: "HRMS",         icon: Users,           tab: "hrms"         },
-      { to: "/insights",     label: "Insights",     icon: LineChart,       tab: "insights"     },
-      { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
-      { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
-      { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-    ]},
-  ],
-  sales: [
-    { label: "", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/invoices",     label: "Invoices",     icon: FilePlus,        tab: "invoices"     },
-      { to: "/receivables",  label: "Receivables",  icon: Receipt,         tab: "receivables"  },
-      { to: "/collections",  label: "Collections",  icon: PhoneCall,       tab: "collections"  },
-      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
-      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-      { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
-    ]},
-  ],
-  operations_manager: [
-    { label: "", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
-      { to: "/suppliers",    label: "Suppliers",    icon: Store,           tab: "suppliers"    },
-      { to: "/vendors",      label: "Vendors",      icon: Building2,       tab: "vendors"      },
-      { to: "/spend",        label: "Spend Intel",  icon: ScanSearch,      tab: "spend"        },
-      { to: "/documents",    label: "Documents",    icon: FolderOpen,      tab: "documents"    },
-      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
-      { to: "/data",         label: "Data & Import",icon: Database,        tab: "data"         },
-      { to: "/alerts",       label: "Alerts",       icon: Bell,            tab: "alerts"       },
-    ]},
-  ],
-  viewer: [
-    { label: "", items: [
-      { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard, tab: "dashboard"    },
-      { to: "/analytics",    label: "Analytics",    icon: BarChart3,       tab: "analytics"    },
-      { to: "/health",       label: "Fin Health",   icon: HeartPulse,      tab: "health"       },
-      { to: "/cfo-brief",    label: "CFO Brief",    icon: Sparkles,        tab: "cfo-brief"    },
-      { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
-      { to: "/benchmarks",   label: "Benchmarks",   icon: Award,           tab: "benchmarks"   },
-    ]},
-  ],
-  investor: [
-    { label: "", items: [
-      { to: "/investor",     label: "Portfolio",    icon: Briefcase,       tab: "investor"     },
-      { to: "/capital",      label: "Capital",      icon: Rocket,          tab: "capital"      },
-      { to: "/valuation",    label: "Valuation",    icon: Gem,             tab: "valuation"    },
-      { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
-      { to: "/lenders",      label: "Lenders",      icon: Landmark,        tab: "lenders"      },
-    ]},
-  ],
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Single master navigation catalogue — every page in the app, organised by the
+// JOB the user is doing (user-flow categories), not by which team built it.
+// Each role's sidebar is derived from this ONE list, filtered by canAccess() —
+// so categorisation stays identical for everyone and we never duplicate it per
+// role. Order of groups = the natural daily flow: understand → sell → record →
+// run → people → plan → fund → automate → extend → administer.
+// ─────────────────────────────────────────────────────────────────────────────
+const NAV_CATALOG: NavGroup[] = [
+  { label: "Overview", items: [
+    { to: "/dashboard",       label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"  },
+    { to: "/analytics",       label: "Analytics",     icon: BarChart3,       tab: "analytics"  },
+    { to: "/insights",        label: "Insights",      icon: LineChart,       tab: "insights"   },
+    { to: "/health",          label: "Fin Health",    icon: HeartPulse,      tab: "health"     },
+    { to: "/cfo-brief",       label: "CFO Brief",     icon: Sparkles,        tab: "cfo-brief"  },
+    { to: "/benchmarks",      label: "Benchmarks",    icon: Award,           tab: "benchmarks" },
+  ]},
+  { label: "Sales & CRM", items: [
+    { to: "/crm",             label: "CRM",           icon: Handshake,       tab: "crm"         },
+    { to: "/sales",           label: "Sales Pipeline",icon: TrendingUp,      tab: "sales"       },
+    { to: "/invoices",        label: "Invoices",      icon: FilePlus,        tab: "invoices"    },
+    { to: "/receivables",     label: "Receivables",   icon: Receipt,         tab: "receivables" },
+    { to: "/collections",     label: "Collections",   icon: PhoneCall,       tab: "collections" },
+  ]},
+  { label: "Accounting & Tax", items: [
+    { to: "/transactions",    label: "Transactions",  icon: FileText,        tab: "transactions" },
+    { to: "/books",           label: "Books (GL)",    icon: BookOpen,        tab: "books"        },
+    { to: "/gst",             label: "GST",           icon: Calculator,      tab: "gst"          },
+    { to: "/tax",             label: "Tax Autopilot", icon: ShieldCheck,     tab: "tax"          },
+    { to: "/statements",      label: "Statements",    icon: FileSpreadsheet, tab: "statements"   },
+    { to: "/payments",        label: "Payments",      icon: IndianRupee,     tab: "payments"     },
+    { to: "/banking",         label: "Banking",       icon: Banknote,        tab: "banking"      },
+  ]},
+  { label: "Operations", items: [
+    { to: "/erp",             label: "ERP / Mfg",     icon: Factory,         tab: "erp"         },
+    { to: "/operations",      label: "Operations",    icon: Package,         tab: "operations"  },
+    { to: "/vendors",         label: "Vendors",       icon: Building2,       tab: "vendors"     },
+    { to: "/suppliers",       label: "Suppliers",     icon: Store,           tab: "suppliers"   },
+    { to: "/spend",           label: "Spend Intel",   icon: ScanSearch,      tab: "spend"       },
+    { to: "/connectors",      label: "Connectors",    icon: PlugZap,         tab: "connectors"  },
+  ]},
+  { label: "People", items: [
+    { to: "/hrms",            label: "HRMS",          icon: Users,           tab: "hrms"    },
+    { to: "/payroll",         label: "Payroll",       icon: Wallet,          tab: "payroll" },
+  ]},
+  { label: "Planning", items: [
+    { to: "/forecast",        label: "Forecast",      icon: TrendingUp,      tab: "forecast"        },
+    { to: "/budgets",         label: "Budgets",       icon: PiggyBank,       tab: "budgets"         },
+    { to: "/working-capital", label: "Working Capital",icon: RefreshCcw,     tab: "working-capital" },
+    { to: "/scenarios",       label: "Scenarios",     icon: Sliders,         tab: "scenarios"       },
+    { to: "/predict",         label: "Predict",       icon: Radar,           tab: "predict"         },
+    { to: "/compliance",      label: "Compliance",    icon: CalendarCheck,   tab: "compliance"      },
+  ]},
+  { label: "Capital & Treasury", items: [
+    { to: "/capital",         label: "Capital",       icon: Rocket,          tab: "capital"    },
+    { to: "/credit",          label: "Credit",        icon: CreditCard,      tab: "credit"     },
+    { to: "/debt",            label: "Debt",          icon: Scale,           tab: "debt"       },
+    { to: "/valuation",       label: "Valuation",     icon: Gem,             tab: "valuation"  },
+    { to: "/term-sheet",      label: "Term Sheet",    icon: ScrollText,      tab: "term-sheet" },
+    { to: "/lenders",         label: "Lenders",       icon: Landmark,        tab: "lenders"    },
+    { to: "/investor",        label: "Investors",     icon: Briefcase,       tab: "investor"   },
+    { to: "/treasury",        label: "Treasury",      icon: Coins,           tab: "treasury"   },
+    { to: "/insurance",       label: "Insurance",     icon: Umbrella,        tab: "insurance"  },
+  ]},
+  { label: "AI & Automation", items: [
+    { to: "/copilot",         label: "AI CFO",        icon: Bot,             tab: "copilot"    },
+    { to: "/automation",      label: "Automation",    icon: Workflow,        tab: "automation" },
+    { to: "/whatsapp",        label: "WhatsApp",      icon: MessageCircle,   tab: "whatsapp"   },
+    { to: "/voice",           label: "Voice",         icon: Mic,             tab: "voice"      },
+    { to: "/documents",       label: "Documents",     icon: FolderOpen,      tab: "documents"  },
+    { to: "/advisor",         label: "Advisor / CA",  icon: Users,           tab: "advisor"    },
+    { to: "/alerts",          label: "Alerts",        icon: Bell,            tab: "alerts"     },
+    { to: "/field",           label: "Field/Offline", icon: Smartphone,      tab: "field"      },
+  ]},
+  { label: "Markets & Labs", items: [
+    { to: "/marketplace",     label: "Marketplace",   icon: ShoppingCart,    tab: "marketplace" },
+    { to: "/network",         label: "B2B Network",   icon: Network,         tab: "network"     },
+    { to: "/global",          label: "Global",        icon: Globe,           tab: "global"      },
+    { to: "/esg",             label: "ESG",           icon: Leaf,            tab: "esg"         },
+    { to: "/tokens",          label: "Tokens",        icon: Blocks,          tab: "tokens"      },
+    { to: "/frontier",        label: "Frontier Lab",  icon: FlaskConical,    tab: "frontier"    },
+  ]},
+  { label: "Organization", items: [
+    // "Team & Access" deep-links into the Settings team section — where an owner
+    // manages company users (invite, roles, remove, permissions). Gated on the
+    // "settings" tab, so only owner + super_admin see it.
+    { to: "/settings#team",   label: "Team & Access", icon: UsersRound,      tab: "settings"   },
+    { to: "/settings",        label: "Settings",      icon: Settings2,       tab: "settings"   },
+    { to: "/data",            label: "Data & Import", icon: Database,        tab: "data"        },
+    { to: "/security",        label: "Security",      icon: ShieldAlert,     tab: "security"    },
+    { to: "/privacy",         label: "Privacy",       icon: KeyRound,        tab: "privacy"     },
+    { to: "/admin",           label: "Admin Console", icon: ShieldCheck,     tab: "admin"       },
+    { to: "/admin/data",      label: "All Data",      icon: Database,        tab: "admin"       },
+  ]},
+];
 
 // Audit #1 — the 6-8 daily-driver pages per role shown up top as "Main"; the rest
-// stay collapsed. The 20% of features used 80% of the time.
+// stay collapsed under their user-flow group. The 20% of features used 80% of the time.
 const PRIMARY_NAV: Record<string, string[]> = {
   super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "admin", "settings"],
   owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "settings"],
   finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "forecast", "health"],
   accountant:         ["dashboard", "transactions", "gst", "tax", "compliance", "statements"],
-  sales:              ["dashboard", "invoices", "receivables", "collections", "analytics"],
-  operations_manager: ["dashboard", "operations", "vendors", "suppliers", "documents"],
-  viewer:             ["dashboard", "analytics", "health", "documents"],
+  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "analytics"],
+  operations_manager: ["dashboard", "operations", "vendors", "suppliers", "spend", "documents"],
+  viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "benchmarks"],
   investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
 };
 
@@ -386,7 +234,8 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   // When previewing "as" another role, render that role's navigation.
   const role   = previewRole ?? user?.role ?? "owner";
   const location = useLocation();
-  const groupsRaw = (NAV_GROUPS[role] ?? NAV_GROUPS.owner)
+  // One catalogue, filtered to what this role can actually reach. Empty groups drop out.
+  const groupsRaw = NAV_CATALOG
     .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
     .filter(g => g.items.length > 0);
 
@@ -401,15 +250,17 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
   // ── IA (audit #1): a short role-based "Main" + a personalised "Frequent" group,
   // with the long tail collapsed. Turns a ~60-item wall into ~8 visible by default.
+  // Dedup is by PATH (not tab) so items that intentionally share a tab — e.g.
+  // /admin + /admin/data, or /settings + /settings#team — don't collide.
   const byTab: Record<string, NavItem> = {};
   const byPath: Record<string, NavItem> = {};
-  groupsRaw.forEach(g => g.items.forEach(it => { byTab[it.tab] = it; byPath[it.to] = it; }));
+  groupsRaw.forEach(g => g.items.forEach(it => { if (!byTab[it.tab]) byTab[it.tab] = it; byPath[it.to] = it; }));
   const primaryTabs = (PRIMARY_NAV[role] ?? []).filter(t => byTab[t]);
-  const primarySet = new Set(primaryTabs);
   const primaryItems = primaryTabs.map(t => byTab[t]);
-  const freqItems = getFrequentPages(8).map(p => byPath[p]).filter(Boolean).filter(it => !primarySet.has(it.tab)).slice(0, 4);
+  const primaryPaths = new Set(primaryItems.map(it => it.to));
+  const freqItems = getFrequentPages(8).map(p => byPath[p]).filter(Boolean).filter(it => !primaryPaths.has(it.to)).slice(0, 4);
   const restGroups = groupsRaw
-    .map(g => ({ ...g, items: g.items.filter(it => !primarySet.has(it.tab)) }))
+    .map(g => ({ ...g, items: g.items.filter(it => !primaryPaths.has(it.to)) }))
     .filter(g => g.items.length > 0);
   const groups: NavGroup[] = [
     ...(freqItems.length ? [{ label: "Frequent", items: freqItems }] : []),

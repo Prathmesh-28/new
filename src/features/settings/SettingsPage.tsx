@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -1947,6 +1947,17 @@ export default function SettingsPage() {
 
   const isOwner = user?.role === "owner" || user?.role === "super_admin";
 
+  // Deep-link support — /settings#team (from the sidebar "Team & Access" link)
+  // scrolls straight to the team-management section. Re-runs whenever the hash
+  // changes, so it works even when already on the Settings page.
+  const location = useLocation();
+  useEffect(() => {
+    const id = location.hash.replace("#", "");
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el) { const t = setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 120); return () => clearTimeout(t); }
+  }, [location.hash, loading]);
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">Settings</h1>
@@ -2029,8 +2040,8 @@ export default function SettingsPage() {
       {/* #188 Customer-statement template */}
       <StatementTemplateCard />
 
-      {/* Team invites (owner-facing, in-platform) */}
-      <TeamInvitesCard />
+      {/* Team invites (owner-facing, in-platform) — #team deep-link target */}
+      <div id="team" className="scroll-mt-20"><TeamInvitesCard /></div>
 
       {/* Team Members */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
