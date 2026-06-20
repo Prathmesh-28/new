@@ -1,6 +1,9 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 
 // GET /api/gst/liability — compute current GSTR-3B fields from transactions
@@ -57,7 +60,7 @@ router.get("/returns", authenticate, async (req, res) => {
 });
 
 // POST /api/gst/returns — create/compute a GST return for a month
-router.post("/returns", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/returns", authenticate, canWrite, async (req, res) => {
   const { return_type = "GSTR-3B", period_month, period_year } = req.body;
   if (!period_month || !period_year) return res.status(400).json({ error: "period_month and period_year required" });
 
@@ -91,7 +94,7 @@ router.post("/returns", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // POST /api/gst/irn — generate IRN stub (delegates to Masters India GSP in production)
-router.post("/irn", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/irn", authenticate, canWrite, async (req, res) => {
   const { invoice_id } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
 

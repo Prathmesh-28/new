@@ -2,9 +2,12 @@ const router    = require("express").Router();
 const PDFDoc    = require("pdfkit");
 const QRCode    = require("qrcode");
 const { pool }  = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 const { sendMail } = require("../lib/email");
 const { sendWhatsApp } = require("../lib/whatsapp");
+
+const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 function nextInvoiceNumber(existing) {
   const year = new Date().getFullYear();
@@ -41,7 +44,7 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 // POST /api/invoices
-router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/", authenticate, canWrite, async (req, res) => {
   const { customer_name, customer_gstin, customer_email, gst_rate = 18, due_date, items = [] } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
 
@@ -76,7 +79,7 @@ router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/invoices/:id — update status
-router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { status } = req.body;
   const valid = ["draft", "sent", "paid", "cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: `status must be one of: ${valid.join(", ")}` });
@@ -178,7 +181,7 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
 });
 
 // POST /:id/remind - Send WhatsApp reminder with UPI link
-router.post("/:id/remind", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
   const { id } = req.params;
   const tenantId = req.user.tenant_id;
   try {
@@ -253,7 +256,7 @@ router.get("/:id/reminders", authenticate, async (req, res) => {
 });
 
 // POST /api/invoices/:id/send — email invoice
-router.post("/:id/send", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await pool.query(
     "SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]
@@ -273,7 +276,7 @@ router.post("/:id/send", authenticate, requireOwnerOrAdmin, async (req, res) => 
 });
 
 // POST /api/invoices/:id/upi-link — generate UPI QR (Razorpay optional, fallback to static UPI)
-router.post("/:id/upi-link", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await pool.query(
     "SELECT i.*, kv.value AS kv FROM invoices i LEFT JOIN kv_store kv ON kv.tenant_id=i.tenant_id AND kv.namespace='app' AND kv.key='store' WHERE i.id=$1 AND i.tenant_id=$2",
     [req.params.id, req.user.tenant_id]

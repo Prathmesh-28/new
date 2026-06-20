@@ -72,6 +72,12 @@ const equityPctOf = (amount: number, preMoney: number): number =>
   preMoney + amount > 0 ? (amount / (preMoney + amount)) * 100 : 0;
 
 export default function CapitalPage() {
+  // Raise-management writes (create / publish / add-investor) POST/PATCH to
+  // owner/super_admin-only endpoints — an `investor` role 403s. Gate the write
+  // controls on the effective role; everyone keeps the read-only raises view.
+  const { effectiveRole } = useApp();
+  const canManageRaises = effectiveRole === "owner" || effectiveRole === "super_admin";
+
   const [capTab, setCapTab] = useState<"raises" | "runway" | "safe" | "grants" | "use-of-funds">("raises");
   const [showRaiseForm,   setShowRaiseForm]   = useState(false);
   const [showInvestForm,  setShowInvestForm]  = useState<string | null>(null);
@@ -174,7 +180,7 @@ export default function CapitalPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">Capital</h1>
-        {capTab === "raises" && (
+        {capTab === "raises" && canManageRaises && (
           <button onClick={() => setShowRaiseForm(v => !v)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
             <Plus size={12} /> New Raise
@@ -204,12 +210,16 @@ export default function CapitalPage() {
           <Rocket size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
           <h2 className="text-base font-semibold mb-1">No capital raises yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
-            Pick an instrument — Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing — set a target in ₹, and start tracking investor commitments.
+            {canManageRaises
+              ? "Pick an instrument — Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing — set a target in ₹, and start tracking investor commitments."
+              : "No capital raises have been set up yet. They'll appear here once the owner creates one."}
           </p>
-          <button onClick={() => setShowRaiseForm(true)}
-            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
-            Start a Capital Raise
-          </button>
+          {canManageRaises && (
+            <button onClick={() => setShowRaiseForm(true)}
+              className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
+              Start a Capital Raise
+            </button>
+          )}
         </div>
       )}
 
@@ -230,7 +240,7 @@ export default function CapitalPage() {
       )}
 
       {/* New raise form */}
-      {showRaiseForm && (
+      {showRaiseForm && canManageRaises && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
           <h2 className="text-sm font-semibold">New Capital Raise</h2>
           <input placeholder="Raise name (e.g. Seed 2026)" value={raiseName} onChange={e => setRaiseName(e.target.value)}
@@ -279,14 +289,16 @@ export default function CapitalPage() {
                   <span className="text-sm font-medium">{decodeName(r.name)}</span>
                   <span className="text-xs text-[var(--color-muted)] ml-2">{raiseTypeLabel(r.raise_type)}</span>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  {r.status === "draft" && (
-                    <button onClick={() => handlePublish(r)} className="text-xs bg-green-900/40 text-green-400 border border-green-800/40 px-2 py-1 rounded hover:bg-green-900/60">Publish</button>
-                  )}
-                  {r.status === "active" && (
-                    <button onClick={() => { const next = showInvestForm === r.id ? null : r.id; setShowInvestForm(next); if (next) loadInvestors(r.id); }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">+ Investor</button>
-                  )}
-                </div>
+                {canManageRaises && (
+                  <div className="flex gap-2 shrink-0">
+                    {r.status === "draft" && (
+                      <button onClick={() => handlePublish(r)} className="text-xs bg-green-900/40 text-green-400 border border-green-800/40 px-2 py-1 rounded hover:bg-green-900/60">Publish</button>
+                    )}
+                    {r.status === "active" && (
+                      <button onClick={() => { const next = showInvestForm === r.id ? null : r.id; setShowInvestForm(next); if (next) loadInvestors(r.id); }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">+ Investor</button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="font-bold text-[var(--color-primary)]">{formatCurrency(raisedAmount)}</span>
@@ -300,7 +312,7 @@ export default function CapitalPage() {
                 {isPriced && pm > 0 && <> · pre-money {formatCurrency(pm)} · {equityPctOf(targetAmount, pm).toFixed(2)}% equity at target</>}
               </p>
 
-              {showInvestForm === r.id && (
+              {showInvestForm === r.id && canManageRaises && (
                 <div className="mt-3 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
                   <input placeholder="Investor name" value={investorName} onChange={e => setInvestorName(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />
                   <input placeholder="Investor email (optional)" type="email" value={investorEmail} onChange={e => setInvestorEmail(e.target.value)} className="w-full bg-transparent border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none" />

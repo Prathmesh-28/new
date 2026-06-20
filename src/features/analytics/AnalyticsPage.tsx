@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export default function AnalyticsPage() {
-  const { store } = useApp();
+  const { store, canExport } = useApp();
   const { transactions, firm } = store;
   const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags" | "margin-trends" | "expense-ratios" | "ar-ageing" | "break-even" | "working-capital" | "seasonality" | "refund-impact" | "per-employee" | "yoy-growth" | "new-vs-repeat" | "weekday-pattern" | "aov-trend" | "channel-split">("overview");
   const [range, setRange] = useState<"3" | "6" | "12">("6");
@@ -240,16 +240,18 @@ export default function AnalyticsPage() {
           <h1 className="text-xl font-bold">Analytics</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{firm.name} · Last {rangeN} months · {transactions.length} transactions analysed</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => exportAnalytics("pdf")}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <FileDown size={13} /> PDF
-          </button>
-          <button onClick={() => exportAnalytics("excel")}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <SheetIcon size={13} /> Excel
-          </button>
-        </div>
+        {canExport() && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => exportAnalytics("pdf")}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <FileDown size={13} /> PDF
+            </button>
+            <button onClick={() => exportAnalytics("excel")}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <SheetIcon size={13} /> Excel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI Strip */}
@@ -857,12 +859,14 @@ export default function AnalyticsPage() {
                   <p className="text-sm font-semibold">Monthly Net Cash Flow · 12 Months</p>
                   <p className="text-xs text-[var(--color-muted)] mt-0.5">Green = net positive month · Red = net negative · Line = cumulative cash position</p>
                 </div>
-                <button
-                  onClick={exportCfCsv}
-                  className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors"
-                >
-                  <FileDown size={13} /> Export CSV
-                </button>
+                {canExport() && (
+                  <button
+                    onClick={exportCfCsv}
+                    className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors"
+                  >
+                    <FileDown size={13} /> Export CSV
+                  </button>
+                )}
               </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={cfMonths} barCategoryGap="28%" margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -1654,7 +1658,7 @@ function RatiosTab() {
 
 // ── TRIAL BALANCE ──────────────────────────────────────────────────────────────
 function TrialBalanceTab() {
-  const { store } = useApp();
+  const { store, canExport } = useApp();
   const { transactions, firm } = store;
 
   type Line = { account: string; debit: number; credit: number };
@@ -1736,10 +1740,12 @@ function TrialBalanceTab() {
             <BookOpen size={14} className="text-[var(--color-primary)]" />
             <p className="text-sm font-semibold">Trial Balance · Cash Basis</p>
           </div>
-          <button onClick={exportTbCsv}
-            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <FileDown size={13} /> Export CSV
-          </button>
+          {canExport() && (
+            <button onClick={exportTbCsv}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              <FileDown size={13} /> Export CSV
+            </button>
+          )}
         </div>
         {lines.length === 0 ? (
           <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transactions to aggregate. Add or import transactions to build the trial balance.</p>

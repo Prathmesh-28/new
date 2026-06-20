@@ -322,7 +322,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // False when viewing a client's data (advisor) or when the (effective) role is read-only.
-  const canEdit = () => !isReadOnly && !isReadOnlyRole(effectiveRole);
+  // Exception: a real super_admin edits inside a client/tenant view too — the banner
+  // promises "changes save to this company" and setStore already persists for super_admin,
+  // so the edit UI must not be hidden. (Previewing another role drops this exemption.)
+  const canEdit = () => effectiveRole === "super_admin" || (!isReadOnly && !isReadOnlyRole(effectiveRole));
 
   // The accessible-tab set shown in the role editor (effective config).
   const roleTabs = (roleId: UserRole): string[] => getRoleConfig(roleId)?.accessibleTabs ?? [];

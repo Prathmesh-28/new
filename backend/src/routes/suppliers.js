@@ -1,6 +1,9 @@
 const router = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "operations_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 // Resolve the tenant to operate on: super_admin may target any tenant via ?tenant_id,
 // everyone else is locked to their own tenant.
@@ -12,7 +15,7 @@ function scopeTenant(req) {
 // GET /marketplace - REAL early-pay candidates computed from the tenant's own spend.
 // Top expense counterparties (outflows) over the last 180d, joined to vendor_master
 // for negotiated terms; an early-pay discount yields a concrete saving per supplier.
-router.get("/marketplace", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.get("/marketplace", authenticate, async (req, res) => {
   try {
     const tenantId = scopeTenant(req);
     const { rows } = await pool.query(
@@ -75,7 +78,7 @@ router.get("/marketplace", authenticate, requireOwnerOrAdmin, async (req, res) =
 
 // POST /pay-early - record a REAL early payment as an expense transaction.
 // Body: { offer_id, supplier_name, amount, discount?, saving? }
-router.post("/pay-early", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/pay-early", authenticate, canWrite, async (req, res) => {
   try {
     const tenantId = scopeTenant(req);
     const { offer_id, supplier_name, amount, discount, saving } = req.body || {};

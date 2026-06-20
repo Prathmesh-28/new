@@ -3,6 +3,9 @@ const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { score: underwrite } = require("../lib/underwriting");
 
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
+
 const LENDER_OFFERS = [
   { lender_partner: "Headroom Capital",    product_type: "revenue_advance",  factor_rate: 1.12, apr_equivalent: 0.28, repayment_pct: 0.08, term_months: 6,  min_score: 45 },
   { lender_partner: "InvoiceFirst",        product_type: "invoice_finance",  factor_rate: 1.08, apr_equivalent: 0.20, repayment_pct: 0.15, term_months: 4,  min_score: 55 },
@@ -36,7 +39,7 @@ router.get("/applications/:id", authenticate, async (req, res) => {
 });
 
 // POST /api/credit/apply — create application + run underwriting
-router.post("/apply", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/apply", authenticate, canWrite, async (req, res) => {
   const { requested_amount } = req.body;
 
   // Check no active pending application
@@ -97,7 +100,7 @@ router.post("/apply", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // POST /api/credit/accept/:offerId
-router.post("/accept/:offerId", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/accept/:offerId", authenticate, canWrite, async (req, res) => {
   const { rows: offerRows } = await pool.query(
     "SELECT co.*, ca.tenant_id AS app_tenant FROM credit_offers co JOIN credit_applications ca ON ca.id=co.application_id WHERE co.id=$1",
     [req.params.offerId]
@@ -133,7 +136,7 @@ router.get("/loans", authenticate, async (req, res) => {
 });
 
 // POST /api/credit/loans/:id/payment — record a repayment
-router.post("/loans/:id/payment", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/loans/:id/payment", authenticate, canWrite, async (req, res) => {
   const { amount } = req.body;
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Positive amount required" });
 

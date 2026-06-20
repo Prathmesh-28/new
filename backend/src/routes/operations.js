@@ -1,8 +1,11 @@
 const router   = require("express").Router();
 const crypto   = require("crypto");
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 const { normalise } = require("../lib/normalise");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "operations_manager", "accountant"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 const { validateSignature } = require("../lib/whatsapp");
 
 // ── ORDERS ─────────────────────────────────────────────────────────────────────
@@ -19,7 +22,7 @@ router.get("/orders", authenticate, async (req, res) => {
 });
 
 // POST /api/operations/orders
-router.post("/orders", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/orders", authenticate, canWrite, async (req, res) => {
   const { buyer_name, buyer_phone, buyer_email, source = "manual", notes, items = [] } = req.body;
   if (!buyer_name) return res.status(400).json({ error: "buyer_name required" });
 
@@ -43,7 +46,7 @@ router.post("/orders", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/operations/orders/:id/status
-router.patch("/orders/:id/status", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/orders/:id/status", authenticate, canWrite, async (req, res) => {
   const { status } = req.body;
   const valid = ["pending","confirmed","processing","dispatched","delivered","cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: "Invalid status" });
@@ -67,7 +70,7 @@ router.patch("/orders/:id/status", authenticate, requireOwnerOrAdmin, async (req
 });
 
 // DELETE /api/operations/orders/:id
-router.delete("/orders/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.delete("/orders/:id", authenticate, canWrite, async (req, res) => {
   await pool.query("DELETE FROM orders WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
   res.json({ ok: true });
 });
@@ -84,7 +87,7 @@ router.get("/inventory", authenticate, async (req, res) => {
 });
 
 // POST /api/operations/inventory
-router.post("/inventory", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/inventory", authenticate, canWrite, async (req, res) => {
   const { product_name, sku, category = "general", quantity = 0, unit = "units", unit_cost = 0, reorder_level = 10 } = req.body;
   if (!product_name) return res.status(400).json({ error: "product_name required" });
 
@@ -100,7 +103,7 @@ router.post("/inventory", authenticate, requireOwnerOrAdmin, async (req, res) =>
 });
 
 // PATCH /api/operations/inventory/:id
-router.patch("/inventory/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/inventory/:id", authenticate, canWrite, async (req, res) => {
   const { quantity, unit_cost, reorder_level } = req.body;
   const updates = []; const vals = []; let i = 1;
   if (quantity      !== undefined) { updates.push(`quantity=$${i++}`);      vals.push(quantity); }
@@ -117,7 +120,7 @@ router.patch("/inventory/:id", authenticate, requireOwnerOrAdmin, async (req, re
 });
 
 // DELETE /api/operations/inventory/:id
-router.delete("/inventory/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.delete("/inventory/:id", authenticate, canWrite, async (req, res) => {
   await pool.query("DELETE FROM inventory WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
   res.json({ ok: true });
 });
@@ -143,7 +146,7 @@ router.get("/procurement", authenticate, async (req, res) => {
 });
 
 // POST /api/operations/procurement
-router.post("/procurement", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/procurement", authenticate, canWrite, async (req, res) => {
   const { supplier_name, expected_date, items = [] } = req.body;
   if (!supplier_name) return res.status(400).json({ error: "supplier_name required" });
 
@@ -165,7 +168,7 @@ router.post("/procurement", authenticate, requireOwnerOrAdmin, async (req, res) 
 });
 
 // PATCH /api/operations/procurement/:id/status
-router.patch("/procurement/:id/status", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/procurement/:id/status", authenticate, canWrite, async (req, res) => {
   const { status } = req.body;
   const valid = ["draft","approved","ordered","received","cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: "Invalid status" });

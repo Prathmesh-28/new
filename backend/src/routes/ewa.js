@@ -1,9 +1,12 @@
 const router = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 // GET / - EWA status for all employees this month
-router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.get("/", authenticate, canWrite, async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const { rows: employees } = await pool.query(
@@ -32,7 +35,7 @@ router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // POST /request - Request an EWA advance
-router.post("/request", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/request", authenticate, canWrite, async (req, res) => {
   const { employee_id, amount } = req.body;
   if (!employee_id || !amount) return res.status(400).json({ error: "employee_id and amount required" });
   // In a real system, this would create a disbursement and register a payroll deduction

@@ -1,11 +1,14 @@
 const router   = require("express").Router();
 const QRCode   = require("qrcode");
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 const crypto   = require("crypto");
 
+const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
+
 // POST /api/collections/upi-link
-router.post("/upi-link", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   const { invoice_id, amount } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
 

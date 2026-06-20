@@ -1,6 +1,9 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 function computeTds(grossAnnual) {
   // Simplified new tax regime slab (FY 2024-25)
@@ -15,7 +18,7 @@ function computeTds(grossAnnual) {
 // GET /api/payroll/employees — salary + PAN is sensitive; restrict reads to
 // owner/admin (matches the create/update/run guards below) so a sales/ops
 // teammate can't read the whole payroll.
-router.get("/employees", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.get("/employees", authenticate, canWrite, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM employees WHERE tenant_id=$1 AND status='active' ORDER BY name",
     [req.user.tenant_id]
@@ -24,7 +27,7 @@ router.get("/employees", authenticate, requireOwnerOrAdmin, async (req, res) => 
 });
 
 // POST /api/payroll/employees
-router.post("/employees", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/employees", authenticate, canWrite, async (req, res) => {
   const { name, email, pan, bank_account, bank_ifsc, gross_salary, joining_date } = req.body;
   if (!name || !gross_salary) return res.status(400).json({ error: "name and gross_salary required" });
 
@@ -42,7 +45,7 @@ router.post("/employees", authenticate, requireOwnerOrAdmin, async (req, res) =>
 });
 
 // PATCH /api/payroll/employees/:id
-router.patch("/employees/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
   const { name, email, gross_salary, bank_account, bank_ifsc, pan, status } = req.body;
   const { rows: [existing] } = await pool.query(
     "SELECT * FROM employees WHERE id=$1 AND tenant_id=$2",
@@ -67,7 +70,7 @@ router.patch("/employees/:id", authenticate, requireOwnerOrAdmin, async (req, re
 });
 
 // GET /api/payroll/runs — payroll totals expose pay data; owner/admin only.
-router.get("/runs", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.get("/runs", authenticate, canWrite, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM payroll_runs WHERE tenant_id=$1 ORDER BY run_year DESC, run_month DESC",
     [req.user.tenant_id]
@@ -76,7 +79,7 @@ router.get("/runs", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // POST /api/payroll/run — execute payroll for a month
-router.post("/run", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/run", authenticate, canWrite, async (req, res) => {
   const { run_month, run_year } = req.body;
   const m = run_month ?? new Date().getMonth() + 1;
   const y = run_year  ?? new Date().getFullYear();
@@ -115,7 +118,7 @@ router.post("/run", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // POST /api/payroll/runs/:id/disburse — mark as disbursed (production: trigger Setu bulk payout)
-router.post("/runs/:id/disburse", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/runs/:id/disburse", authenticate, canWrite, async (req, res) => {
   const { rows: [run] } = await pool.query(
     "UPDATE payroll_runs SET status='disbursed', disbursed_at=now() WHERE id=$1 AND tenant_id=$2 RETURNING *",
     [req.params.id, req.user.tenant_id]

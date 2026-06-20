@@ -1,6 +1,9 @@
 const router = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 const CATEGORIES = ["revenue","payroll","rent","software","inventory","utilities","marketing","tax","loan_repayment","transfer","uncategorized"];
 
@@ -56,7 +59,7 @@ router.get("/summary", authenticate, async (req, res) => {
 });
 
 // POST /api/transactions — manual entry or bulk import
-router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/", authenticate, canWrite, async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body];
   const inserted = [];
 
@@ -76,7 +79,7 @@ router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/transactions/:id — update category, merchant etc.
-router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { category, merchant_name, is_recurring, recurrence_cadence } = req.body;
 
   const { rows: existing } = await pool.query(
@@ -104,7 +107,7 @@ router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // DELETE /api/transactions/:id
-router.delete("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.delete("/:id", authenticate, canWrite, async (req, res) => {
   const { rowCount } = await pool.query(
     "DELETE FROM transactions WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]

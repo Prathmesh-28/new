@@ -21,6 +21,10 @@ function canAccess(role, ns) {
   return (ROLE_NAMESPACES[role] || []).includes(ns);
 }
 
+// Roles that may read their namespaces but must never write/delete, enforced
+// server-side so a viewer can't mutate data by hitting the API directly.
+const READONLY_ROLES = ["viewer"];
+
 // Writes: a user writes their own tenant; only a super_admin may target another
 // tenant (advisors stay read-only on client data).
 async function resolveWriteTenantId(req) {
@@ -119,6 +123,7 @@ router.get("/:ns/:key", authenticate, async (req, res) => {
 // PUT /api/kv/:ns/:key
 router.put("/:ns/:key", authenticate, async (req, res) => {
   const { ns, key } = req.params;
+  if (READONLY_ROLES.includes(req.user.role)) return res.status(403).json({ error: "Read-only role" });
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
   const tenantId = await resolveWriteTenantId(req);
@@ -138,6 +143,7 @@ router.put("/:ns/:key", authenticate, async (req, res) => {
 // DELETE /api/kv/:ns/:key
 router.delete("/:ns/:key", authenticate, async (req, res) => {
   const { ns, key } = req.params;
+  if (READONLY_ROLES.includes(req.user.role)) return res.status(403).json({ error: "Read-only role" });
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });
 
   const tenantId = await resolveWriteTenantId(req);

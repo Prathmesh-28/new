@@ -1,7 +1,10 @@
 const router    = require("express").Router();
 const { pool }  = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 const { normaliseMany } = require("../lib/normalise");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 // GET /api/connectors
 router.get("/", authenticate, async (req, res) => {
@@ -13,7 +16,7 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 // POST /api/connectors
-router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/", authenticate, canWrite, async (req, res) => {
   const { provider, account_name = "", consent_id, access_token, consent_expiry } = req.body;
   if (!provider) return res.status(400).json({ error: "provider required" });
 
@@ -33,7 +36,7 @@ router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/connectors/:id
-router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { status, account_count } = req.body;
   const updates = []; const vals = []; let i = 1;
   if (status        !== undefined) { updates.push(`status=$${i++}`);        vals.push(status); }
@@ -49,13 +52,13 @@ router.patch("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // DELETE /api/connectors/:id
-router.delete("/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.delete("/:id", authenticate, canWrite, async (req, res) => {
   await pool.query("DELETE FROM connector_consents WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
   res.json({ ok: true });
 });
 
 // POST /api/connectors/:id/sync — trigger provider sync
-router.post("/:id/sync", authenticate, requireOwnerOrAdmin, async (req, res) => {
+router.post("/:id/sync", authenticate, canWrite, async (req, res) => {
   const { rows: c } = await pool.query(
     "SELECT * FROM connector_consents WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]

@@ -96,7 +96,7 @@ export default function CfoBriefPage() {
 }
 
 function AiBriefView() {
-  const { store } = useApp();
+  const { store, canExport } = useApp();
   const { transactions, bankAccounts, firm, alerts, activeLoans } = store;
 
   const [brief,     setBrief]     = useState<BriefSection[] | null>(null);
@@ -236,7 +236,7 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {brief && (
+          {brief && canExport() && (
             <button onClick={downloadTxt} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
               <Download size={12} /> Export
             </button>
@@ -461,7 +461,7 @@ function capitalise(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); 
 interface DeckSlide { id: string; title: string; bullets: string[] }
 
 function BoardDeckGenerator() {
-  const { store } = useApp();
+  const { store, canExport } = useApp();
   const { transactions, bankAccounts, firm, activeLoans, alerts } = store;
 
   // Which slides to include — durable so the owner's deck template persists.
@@ -548,9 +548,11 @@ function BoardDeckGenerator() {
           <button onClick={copyDeck} disabled={!activeSlides.length} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg disabled:opacity-40">
             <Copy size={12} /> Copy
           </button>
-          <button onClick={exportDeck} disabled={!activeSlides.length} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
-            <Download size={13} /> Export Deck
-          </button>
+          {canExport() && (
+            <button onClick={exportDeck} disabled={!activeSlides.length} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+              <Download size={13} /> Export Deck
+            </button>
+          )}
         </div>
       </div>
 
@@ -1131,7 +1133,7 @@ function TopActionsThisWeek() {
 // A single printable/exportable page distilling the whole financial position into
 // four blocks: position, performance, obligations, and headline takeaway.
 function OnePageSummary() {
-  const { store } = useApp();
+  const { store, canExport } = useApp();
   const { transactions, bankAccounts, activeLoans, invoices, firm, alerts } = store;
 
   const s = useMemo(() => {
@@ -1204,9 +1206,11 @@ TAKEAWAY
           <h1 className="text-xl font-bold flex items-center gap-2"><FileText size={18} className="text-[var(--color-primary)]" /> One-Page Financial Summary</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">The whole picture on one page for {s.cur.label} — position, performance, obligations and the takeaway</p>
         </div>
-        <button onClick={exportTxt} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
-          <Download size={13} /> Export
-        </button>
+        {canExport() && (
+          <button onClick={exportTxt} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+            <Download size={13} /> Export
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

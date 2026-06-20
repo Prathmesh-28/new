@@ -3,7 +3,10 @@
 // the record instead of being re-typed across the vendors tabs. Tenant-scoped.
 const router = require("express").Router();
 const { pool } = require("../db");
-const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
+
+const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "operations_manager"];
+const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 router.use(authenticate);
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
@@ -24,7 +27,7 @@ router.get("/", async (req, res) => {
 });
 
 // Create a vendor (owner/admin).
-router.post("/", requireOwnerOrAdmin, async (req, res) => {
+router.post("/", canWrite, async (req, res) => {
   try {
     const v = pick(req.body || {});
     if (!v.name) return res.status(400).json({ error: "Vendor name is required" });
@@ -41,7 +44,7 @@ router.post("/", requireOwnerOrAdmin, async (req, res) => {
 });
 
 // Update a vendor (owner/admin).
-router.patch("/:id", requireOwnerOrAdmin, async (req, res) => {
+router.patch("/:id", canWrite, async (req, res) => {
   try {
     const v = pick(req.body || {});
     const cols = Object.keys(v);
@@ -57,7 +60,7 @@ router.patch("/:id", requireOwnerOrAdmin, async (req, res) => {
 });
 
 // Delete a vendor (owner/admin).
-router.delete("/:id", requireOwnerOrAdmin, async (req, res) => {
+router.delete("/:id", canWrite, async (req, res) => {
   try {
     await pool.query("DELETE FROM vendor_master WHERE id=$1 AND tenant_id=$2", [req.params.id, tenantOf(req)]);
     res.json({ ok: true });
