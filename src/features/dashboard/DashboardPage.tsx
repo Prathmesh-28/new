@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
 import PreviewBadge from "@/components/PreviewBadge";
 import { api } from "@/lib/api";
+import type { BankAccount } from "@/data/types";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "text-red-400 border-red-700/60 bg-red-900/40",
@@ -374,35 +375,168 @@ function HealthScoreWidget() {
   );
 }
 
-function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: { name: string; balance: number; provider: string }) => void }) {
-  const [name, setName]         = useState("");
-  const [balance, setBalance]   = useState("");
-  const [provider, setProvider] = useState("Manual");
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const ACCOUNT_TYPES: { id: NonNullable<BankAccount["accountType"]>; label: string }[] = [
+  { id: "current", label: "Current" },
+  { id: "savings", label: "Savings" },
+  { id: "cc",      label: "Cash Credit (CC)" },
+  { id: "od",      label: "Overdraft (OD)" },
+  { id: "wallet",  label: "Wallet / Payment gateway" },
+];
+
+type AddAccountPayload = {
+  name: string; balance: number; provider: string;
+  ifsc?: string; bankName?: string; branch?: string; city?: string;
+  accountLast4?: string; accountType: NonNullable<BankAccount["accountType"]>; asOf: string;
+};
+
+function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: AddAccountPayload) => void }) {
+  const [name, setName]               = useState("");
+  const [ifsc, setIfsc]               = useState("");
+  const [resolved, setResolved]       = useState<{ bank: string; branch: string; city: string } | null>(null);
+  const [fetching, setFetching]       = useState(false);
+  const [fetchErr, setFetchErr]       = useState("");
+  const [manual, setManual]           = useState(false);
+  const [manualBank, setManualBank]   = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountType, setAccountType] = useState<NonNullable<BankAccount["accountType"]>>("current");
+  const [balance, setBalance]         = useState("");
+  const [asOf, setAsOf]               = useState(new Date().toISOString().split("T")[0]);
+
+  // Auto-resolve bank + branch from the IFSC (Razorpay's free public IFSC API).
+  // Falls back to manual entry if offline or the code isn't found.
+  useEffect(() => {
+    const code = ifsc.trim().toUpperCase();
+    if (!IFSC_RE.test(code)) { setResolved(null); setFetchErr(""); return; }
+    let cancelled = false;
+    setFetching(true); setFetchErr("");
+    fetch(`https://ifsc.razorpay.com/${code}`)
+      .then(r => { if (!r.ok) throw new Error("not found"); return r.json(); })
+      .then((d: { BANK?: string; BRANCH?: string; CITY?: string; CENTRE?: string }) => {
+        if (cancelled) return;
+        setResolved({ bank: d.BANK ?? "", branch: d.BRANCH ?? "", city: d.CITY || d.CENTRE || "" });
+        setManual(false);
+        if (!name.trim() && d.BANK) setName(`${d.BANK.split(" ")[0]} ${ACCOUNT_TYPES.find(t => t.id === accountType)?.label ?? ""}`.trim());
+      })
+      .catch(() => { if (!cancelled) { setResolved(null); setFetchErr("Couldn't auto-fetch — check the IFSC, or enter your bank manually."); setManual(true); } })
+      .finally(() => { if (!cancelled) setFetching(false); });
+    return () => { cancelled = true; };
+  }, [ifsc]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const code = ifsc.trim().toUpperCase();
+  const validIfsc = IFSC_RE.test(code);
+  const bank = resolved?.bank || (manual ? manualBank.trim() : "");
+  const digits = accountNumber.replace(/\D/g, "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !balance) return;
+    if (!bank) { toast.error("Enter your IFSC to auto-fetch the bank, or type the bank name"); return; }
     const bal = parseFloat(balance);
-    if (isNaN(bal)) { toast.error("Enter a valid balance"); return; }
-    onAdd({ name, balance: bal, provider });
+    if (isNaN(bal) || bal < 0) { toast.error("Enter a valid current balance"); return; }
+    if (accountNumber && (digits.length < 9 || digits.length > 18)) { toast.error("Account number looks off — it should be 9–18 digits"); return; }
+    onAdd({
+      name: name.trim() || `${bank} ${ACCOUNT_TYPES.find(t => t.id === accountType)?.label ?? ""}`.trim(),
+      balance: bal,
+      provider: bank,
+      ifsc: validIfsc ? code : undefined,
+      bankName: bank,
+      branch: resolved?.branch,
+      city: resolved?.city,
+      accountLast4: digits ? digits.slice(-4) : undefined,
+      accountType,
+      asOf,
+    });
+    toast.success(`${bank} account added`);
     onClose();
   };
 
+  const field = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]";
+  const lbl = "text-xs font-medium text-[var(--color-muted)] block mb-1";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm">
-        <h2 className="text-base font-bold mb-4">Add Bank Account</h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input required value={name} onChange={e => setName(e.target.value)} placeholder="Account name (e.g. HDFC Current)"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
-          <input required type="number" min="0" value={balance} onChange={e => setBalance(e.target.value)} placeholder="Current balance (₹)"
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]" />
-          <select value={provider} onChange={e => setProvider(e.target.value)}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm outline-none">
-            {["Manual", "HDFC", "ICICI", "SBI", "Axis", "Kotak", "Yes Bank", "Razorpay", "Stripe"].map(p => <option key={p}>{p}</option>)}
-          </select>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold">Add a bank account</h2>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Enter your IFSC and we'll pull the bank &amp; branch for you — no hand-typing.</p>
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* IFSC + auto-resolve */}
+          <div>
+            <label className={lbl}>IFSC code</label>
+            <div className="relative">
+              <input
+                value={ifsc}
+                onChange={e => setIfsc(e.target.value.toUpperCase())}
+                placeholder="e.g. HDFC0000123"
+                maxLength={11}
+                autoCapitalize="characters"
+                className={`${field} font-mono tracking-wider pr-24`}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px]">
+                {fetching ? <span className="flex items-center gap-1 text-[var(--color-muted)]"><span className="w-3 h-3 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /> looking up…</span>
+                  : resolved ? <span className="flex items-center gap-1 text-green-500"><CheckCircle2 size={12} /> found</span>
+                  : ifsc && !validIfsc ? <span className="text-[var(--color-muted)]">{ifsc.length}/11</span>
+                  : null}
+              </span>
+            </div>
+            {/* Resolved bank confirmation (review-before-add) */}
+            {resolved && (
+              <div className="mt-2 flex items-start gap-2 p-3 bg-green-950/20 border border-green-800/30 rounded-lg">
+                <Landmark size={15} className="text-green-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 text-xs">
+                  <p className="font-semibold text-green-300">{resolved.bank}</p>
+                  <p className="text-[var(--color-muted)] mt-0.5">{resolved.branch}{resolved.city ? ` · ${resolved.city}` : ""}</p>
+                </div>
+              </div>
+            )}
+            {fetchErr && <p className="mt-1.5 text-[11px] text-amber-400 flex items-center gap-1"><AlertTriangle size={11} /> {fetchErr}</p>}
+          </div>
+
+          {/* Manual bank fallback */}
+          {(manual || (!resolved && !fetching && ifsc.length === 0)) && (
+            <div>
+              <label className={lbl}>Bank name {resolved ? "" : "(if you don't have the IFSC handy)"}</label>
+              <input value={manualBank} onChange={e => { setManualBank(e.target.value); setManual(true); }} placeholder="e.g. HDFC Bank"
+                className={field} />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Account number</label>
+              <input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="optional" inputMode="numeric"
+                className={`${field} font-mono`} />
+              {digits.length >= 4 && <p className="text-[10px] text-[var(--color-muted)] mt-1">Stored as ••••{digits.slice(-4)}</p>}
+            </div>
+            <div>
+              <label className={lbl}>Account type</label>
+              <select value={accountType} onChange={e => setAccountType(e.target.value as NonNullable<BankAccount["accountType"]>)} className={field}>
+                {ACCOUNT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Current balance (₹)</label>
+              <input required type="number" min="0" step="0.01" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0.00"
+                className={field} />
+            </div>
+            <div>
+              <label className={lbl}>Balance as of</label>
+              <input type="date" value={asOf} max={new Date().toISOString().split("T")[0]} onChange={e => setAsOf(e.target.value)} className={field} />
+            </div>
+          </div>
+
+          <div>
+            <label className={lbl}>Nickname (shown across Headroom)</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. HDFC Current — main" className={field} />
+          </div>
+
           <div className="flex gap-2 pt-1">
-            <button type="submit" className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">Add Account</button>
+            <button type="submit" disabled={fetching} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">Add account</button>
             <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
           </div>
         </form>
@@ -2253,11 +2387,17 @@ export default function DashboardPage() {
                   return (
                     <div key={a.id} className="py-2.5 border-b border-[var(--color-border)] last:border-0">
                       <div className="flex items-center justify-between mb-1.5">
-                        <div>
-                          <p className="text-sm font-medium">{a.name}</p>
-                          <p className="text-xs text-[var(--color-muted)]">{a.provider}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{a.name}</p>
+                          <p className="text-xs text-[var(--color-muted)] truncate">
+                            {[
+                              a.branch || a.provider,
+                              a.accountType ? (ACCOUNT_TYPES.find(t => t.id === a.accountType)?.label ?? a.accountType) : null,
+                              a.accountLast4 ? `••${a.accountLast4}` : null,
+                            ].filter(Boolean).join(" · ")}
+                          </p>
                         </div>
-                        <span className="text-sm font-semibold tabular-nums text-[var(--color-text)]">{formatCurrency(a.balance)}</span>
+                        <span className="text-sm font-semibold tabular-nums text-[var(--color-text)] shrink-0 ml-2">{formatCurrency(a.balance)}</span>
                       </div>
                       <div className="h-1 bg-[var(--color-bg)] rounded-full overflow-hidden">
                         <div className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
@@ -2301,9 +2441,13 @@ export default function DashboardPage() {
       {showAddAccount && (
         <AddAccountModal
           onClose={() => setShowAddAccount(false)}
-          onAdd={({ name, balance, provider }) => {
-            addBankAccount({ id: generateId(), name, provider, balance, lastSync: new Date().toISOString(), status: "connected" });
-            toast.success("Account added");
+          onAdd={(a) => {
+            addBankAccount({
+              id: generateId(), name: a.name, provider: a.provider, balance: a.balance,
+              lastSync: new Date().toISOString(), status: "connected",
+              ifsc: a.ifsc, bankName: a.bankName, branch: a.branch, city: a.city,
+              accountLast4: a.accountLast4, accountType: a.accountType, asOf: a.asOf,
+            });
           }}
         />
       )}

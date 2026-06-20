@@ -140,6 +140,15 @@ export interface BankAccount {
   balance: number;
   lastSync: string;
   status: "connected" | "pending" | "error";
+  // Real-account details (optional → older saved accounts stay valid). The add
+  // flow resolves bank + branch from the IFSC so the owner doesn't hand-type them.
+  ifsc?: string;            // e.g. HDFC0000123
+  bankName?: string;        // resolved from IFSC (BANK)
+  branch?: string;          // resolved from IFSC (BRANCH)
+  city?: string;            // resolved from IFSC (CITY)
+  accountLast4?: string;    // last 4 of the account number (we never store the full number)
+  accountType?: "savings" | "current" | "cc" | "od" | "wallet";
+  asOf?: string;            // ISO date the opening balance was taken as-of
 }
 
 export interface Transaction {
