@@ -45,6 +45,8 @@ const NAV_ITEMS: { label: string; path: string; icon: LucideIcon; desc?: string 
   { label: "Advisor",      path: "/advisor",      icon: Users,           desc: "CA/CFO client portal" },
   { label: "Settings",     path: "/settings",     icon: Settings,        desc: "Account preferences" },
   { label: "Profile",      path: "/profile",      icon: Settings,        desc: "Your profile" },
+  { label: "Admin Console",path: "/admin",        icon: ShieldCheck,     desc: "Super admin: users, companies, plans, audit" },
+  { label: "All Data",     path: "/admin/data",   icon: Database,        desc: "Super admin master data explorer" },
 ];
 
 // Complete page index: the curated NAV_ITEMS (rich icons/descriptions) plus every

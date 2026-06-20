@@ -533,6 +533,23 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               <p className="text-[10px] text-[var(--color-muted)] capitalize mt-px">{role.replace("_", " ")}</p>
             </div>
           )}
+          {/* Always-visible Admin Console for the platform super_admin (never hidden by nav grouping/scroll) */}
+          {user?.role === "super_admin" && (
+            <NavLink
+              to="/admin"
+              title="Admin Console"
+              className={({ isActive }) => cn(
+                "flex items-center gap-2 text-xs font-semibold transition-colors rounded-md px-2 py-1.5 w-full mb-0.5",
+                collapsed && "justify-center",
+                isActive
+                  ? "text-purple-300 bg-purple-900/30"
+                  : "text-purple-300 hover:bg-purple-900/20"
+              )}
+            >
+              <ShieldCheck size={13} />
+              {!collapsed && <span>Admin Console</span>}
+            </NavLink>
+          )}
           <NavLink
             to="/profile"
             title="Profile"
