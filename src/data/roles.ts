@@ -107,6 +107,7 @@ export const TAB_CATALOG: TabDef[] = [
   { tab: "statements",      label: "Statements",       group: "Finance" },
   { tab: "term-sheet",      label: "Term Sheet",       group: "Finance" },
   { tab: "gst",             label: "GST",              group: "Finance" },
+  { tab: "books",           label: "Books (GL)",       group: "Finance" },
   { tab: "tax",             label: "Tax Autopilot",    group: "Finance" },
   { tab: "budgets",         label: "Budgets",          group: "Finance" },
   { tab: "credit",          label: "Credit",           group: "Finance" },

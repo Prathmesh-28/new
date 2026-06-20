@@ -13,7 +13,7 @@ import {
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
-  Mic, Smartphone, Blocks, FlaskConical,
+  Mic, Smartphone, Blocks, FlaskConical, BookOpen,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -40,6 +40,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
       { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
@@ -108,6 +109,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
       { to: "/term-sheet",   label: "Term Sheet",   icon: ScrollText,      tab: "term-sheet"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
@@ -172,6 +174,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/debt",         label: "Debt",         icon: Scale,           tab: "debt"         },
       { to: "/statements",   label: "Statements",   icon: FileSpreadsheet, tab: "statements"   },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/budgets",      label: "Budgets",      icon: PiggyBank,       tab: "budgets"      },
       { to: "/credit",       label: "Credit",       icon: CreditCard,      tab: "credit"       },
@@ -198,6 +201,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       { to: "/forecast",     label: "Forecast",     icon: TrendingUp,      tab: "forecast"     },
       { to: "/working-capital", label: "Working Capital", icon: RefreshCcw, tab: "working-capital" },
       { to: "/gst",          label: "GST",          icon: Calculator,      tab: "gst"          },
+      { to: "/books",        label: "Books (GL)",   icon: BookOpen,        tab: "books"        },
       { to: "/tax",          label: "Tax Autopilot",icon: ShieldCheck,     tab: "tax"          },
       { to: "/compliance",   label: "Compliance",   icon: CalendarCheck,   tab: "compliance"   },
       { to: "/operations",   label: "Operations",   icon: Package,         tab: "operations"   },
