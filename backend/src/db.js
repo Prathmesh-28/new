@@ -604,6 +604,11 @@ async function initDb() {
   `);
   // books module (double-entry GL) — §5 data model
   await pool.query(require("./modules/books/schema").BOOKS_SCHEMA);
+  // business modules layered on books + Headroom tenancy
+  await pool.query(require("./modules/crm/schema").CRM_SCHEMA);
+  await pool.query(require("./modules/erp/schema").ERP_SCHEMA);
+  await pool.query(require("./modules/hrms/schema").HRMS_SCHEMA);
+  await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
 }
 
 module.exports = { pool, initDb };

@@ -107,6 +107,10 @@ app.use("/api/company",            require("./routes/company"));    // tenant/co
 app.use("/api/org",                require("./routes/org"));        // owner-scoped org views (own tenant)
 app.use("/api/books",              require("./modules/books/http")); // double-entry GL engine (§books)
 app.use("/api/portal",             require("./modules/books/portal").router); // PUBLIC customer/vendor portals + gateway webhook
+app.use("/api/crm",                require("./modules/crm/http"));   // CRM: leads, deals (pipeline), accounts
+app.use("/api/erp",                require("./modules/erp/http"));   // ERP: BOMs + work orders (manufacturing)
+app.use("/api/hrms",               require("./modules/hrms/http"));  // HRMS: employees, attendance, leave, payroll
+app.use("/api/insights",           require("./modules/insights/http")); // Insights: cross-module KPIs + dashboards
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));

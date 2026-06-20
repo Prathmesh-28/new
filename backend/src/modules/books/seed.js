@@ -37,6 +37,8 @@ const DEFAULT_LEDGERS = [
   ["Forex Gain/Loss", "Indirect Expenses"], ["Depreciation", "Indirect Expenses"], ["Accumulated Depreciation", "Fixed Assets"],
   // M8: late fee income
   ["Late Fee Income", "Indirect Incomes"],
+  // HRMS payroll GL ledgers
+  ["Salaries", "Indirect Expenses"], ["Salaries Payable", "Provisions"], ["PF Payable", "Duties & Taxes"], ["Staff Deductions", "Provisions"],
 ];
 
 async function seedBooks(tenantId) {
