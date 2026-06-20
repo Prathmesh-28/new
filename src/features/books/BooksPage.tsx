@@ -1785,6 +1785,12 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
   const [raw, setRaw] = useState("");
   const [importing, setImporting] = useState(false);
   const [matching, setMatching] = useState(false);
+  // --- Import bank statement file ---
+  const [fileFormat, setFileFormat] = useState("OFX");
+  const [fileBankLedgerId, setFileBankLedgerId] = useState("");
+  const [fileContent, setFileContent] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [fileImporting, setFileImporting] = useState(false);
   const [inboxBusy, setInboxBusy] = useState(false);
   const [inbox, setInbox] = useState<ReconLine[]>([]);
   const [counters, setCounters] = useState<Record<string, string>>({});
@@ -1829,6 +1835,50 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
       toast.error(errMsg(e));
     } finally {
       setImporting(false);
+    }
+  };
+
+  const onFilePick = (e: { target: HTMLInputElement }) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFileName(f.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        setFileContent(typeof reader.result === "string" ? reader.result : "");
+      } catch (err) {
+        toast.error(errMsg(err));
+      }
+    };
+    reader.onerror = () => toast.error("Could not read file");
+    reader.readAsText(f);
+  };
+
+  const doImportFile = async () => {
+    if (!fileBankLedgerId) {
+      toast.error("Pick a bank ledger first");
+      return;
+    }
+    if (!fileContent.trim()) {
+      toast.error("Choose a file or paste statement contents");
+      return;
+    }
+    setFileImporting(true);
+    try {
+      const res = await api.post<{ parsed?: number; imported?: number; inserted?: number }>(
+        "/api/books/recon/import-file",
+        { format: fileFormat, content: fileContent, bankLedgerId: fileBankLedgerId },
+      );
+      const imported = res?.imported ?? res?.inserted ?? 0;
+      const parsedCount = res?.parsed ?? imported;
+      toast.success(`Parsed ${parsedCount} · imported ${imported} line(s)`);
+      setFileContent("");
+      setFileName("");
+      await loadInbox();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setFileImporting(false);
     }
   };
 
@@ -1912,6 +1962,61 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
           >
             {matching ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
             Auto-match
+          </button>
+        </div>
+      </div>
+
+      {/* IMPORT STATEMENT FILE */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-4 inline-flex items-center gap-1.5">
+          <FileText size={14} className="text-[var(--color-primary)]" /> Import bank statement file
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-1">
+            <label className={labelCls}>Format</label>
+            <select value={fileFormat} onChange={(e) => setFileFormat(e.target.value)} className={inputCls}>
+              <option value="OFX">OFX / QFX</option>
+              <option value="QIF">QIF</option>
+              <option value="CAMT.053">CAMT.053 (ISO 20022)</option>
+              <option value="MT940">MT940 (SWIFT)</option>
+              <option value="CSV">CSV</option>
+            </select>
+          </div>
+          <div className="md:col-span-1">
+            <label className={labelCls}>Bank ledger</label>
+            <select value={fileBankLedgerId} onChange={(e) => setFileBankLedgerId(e.target.value)} className={inputCls}>
+              <option value="">Select account…</option>
+              {bankOptions.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-1">
+            <label className={labelCls}>Statement file</label>
+            <input
+              type="file"
+              accept=".ofx,.qfx,.qif,.xml,.sta,.txt,.csv,text/*"
+              onChange={onFilePick}
+              className="block w-full text-xs text-[var(--color-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[var(--color-border)] file:bg-[var(--color-bg)] file:text-[var(--color-text)] file:text-xs file:font-semibold hover:file:border-[var(--color-primary)] file:cursor-pointer"
+            />
+            {fileName && <p className="text-[11px] text-[var(--color-muted)] mt-1 truncate">Loaded: {fileName}</p>}
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className={labelCls}>…or paste file contents</label>
+          <textarea
+            value={fileContent}
+            onChange={(e) => { setFileContent(e.target.value); if (fileName) setFileName(""); }}
+            rows={5}
+            placeholder="Paste raw OFX / QIF / CAMT.053 / MT940 / CSV here, or pick a file above"
+            className={`${inputCls} font-mono resize-y`}
+          />
+          <p className="text-[11px] text-[var(--color-muted)] mt-1 tabular-nums">{fileContent.length} char(s)</p>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button type="button" onClick={doImportFile} disabled={fileImporting} className={btnPrimary}>
+            {fileImporting ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
+            Import file
           </button>
         </div>
       </div>

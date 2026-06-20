@@ -23,6 +23,7 @@ const items = require("./items");
 const vouchertools = require("./vouchertools");
 const taxfiling = require("./taxfiling");
 const incometax = require("./incometax");
+const taxrules = require("./taxrules");
 const pricing = require("./pricing");
 const payterms = require("./payterms");
 const subscriptions = require("./subscriptions");
@@ -57,6 +58,7 @@ module.exports = {
   ...vouchertools,
   ...taxfiling,
   ...incometax,
+  taxrules,
   ...pricing,
   ...payterms,
   ...subscriptions,

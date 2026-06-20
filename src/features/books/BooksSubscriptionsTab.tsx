@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
   Layers, Repeat, RefreshCw, Plus, Zap, PlayCircle, Pause, XCircle, ArrowLeftRight,
+  Gauge, Send, BarChart3, Receipt,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,7 +151,14 @@ function Th({ children, right = false }: { children: React.ReactNode; right?: bo
   );
 }
 
-type Section = "plans" | "subscriptions";
+type Section = "plans" | "subscriptions" | "usage";
+
+const AGGREGATION_OPTIONS: { id: string; label: string }[] = [
+  { id: "SUM", label: "Sum" },
+  { id: "COUNT", label: "Count" },
+  { id: "MAX", label: "Max" },
+  { id: "UNIQUE_COUNT", label: "Unique" },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN
@@ -161,6 +169,7 @@ export default function BooksSubscriptionsTab() {
   const sections: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: "plans", label: "Plans", icon: <Layers size={14} /> },
     { id: "subscriptions", label: "Subscriptions", icon: <Repeat size={14} /> },
+    { id: "usage", label: "Usage", icon: <Gauge size={14} /> },
   ];
 
   return (
@@ -189,6 +198,7 @@ export default function BooksSubscriptionsTab() {
 
       {section === "plans" && <PlansSection />}
       {section === "subscriptions" && <SubscriptionsSection />}
+      {section === "usage" && <UsageSection />}
     </div>
   );
 }
@@ -659,6 +669,304 @@ function SubscriptionsSection() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USAGE / METERED BILLING
+// ─────────────────────────────────────────────────────────────────────────────
+interface AggregateResponse {
+  metric?: string;
+  aggregation?: string;
+  units?: string | number;
+}
+interface UsageChargeResponse {
+  metric?: string;
+  units?: string | number;
+  unitPrice?: string | number;
+  amount?: string | number;
+}
+
+function subLabel(s: Subscription): string {
+  return `${partyOf(s)} — ${planOf(s)}`;
+}
+
+function UsageSection() {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [busy, setBusy] = useState(true);
+
+  // ingest form
+  const [iSub, setISub] = useState("");
+  const [iMetric, setIMetric] = useState("");
+  const [iValue, setIValue] = useState("1");
+  const [iDedup, setIDedup] = useState("");
+  const [ingesting, setIngesting] = useState(false);
+
+  // aggregate viewer
+  const [aSub, setASub] = useState("");
+  const [aMetric, setAMetric] = useState("");
+  const [aFrom, setAFrom] = useState("");
+  const [aTo, setATo] = useState("");
+  const [aAgg, setAAgg] = useState("SUM");
+  const [aLoading, setALoading] = useState(false);
+  const [aResult, setAResult] = useState<AggregateResponse | null>(null);
+
+  // usage charge lookup
+  const [cSub, setCSub] = useState("");
+  const [cFrom, setCFrom] = useState("");
+  const [cTo, setCTo] = useState("");
+  const [cLoading, setCLoading] = useState(false);
+  const [cResult, setCResult] = useState<UsageChargeResponse | null>(null);
+  const [cNotMetered, setCNotMetered] = useState(false);
+
+  const loadSubs = useCallback(async () => {
+    setBusy(true);
+    try {
+      const rows = await api.get<Subscription[]>("/api/books/subscriptions");
+      setSubs(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+      setSubs([]);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadSubs(); }, [loadSubs]);
+
+  const ingest = async () => {
+    if (!iSub) { toast.error("Pick a subscription"); return; }
+    if (!iMetric.trim()) { toast.error("Enter a metric"); return; }
+    if (num(iValue) < 0) { toast.error("Value cannot be negative"); return; }
+    setIngesting(true);
+    try {
+      const res = await api.post<{ deduplicated?: boolean }>("/api/books/usage/ingest", {
+        subscriptionId: iSub,
+        metric: iMetric.trim(),
+        value: num(iValue),
+        ...(iDedup.trim() ? { dedupKey: iDedup.trim() } : {}),
+      });
+      toast.success(res?.deduplicated ? "Duplicate event ignored (dedup)" : "Usage event recorded");
+      setIValue("1"); setIDedup("");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  const runAggregate = async () => {
+    if (!aSub) { toast.error("Pick a subscription"); return; }
+    if (!aMetric.trim()) { toast.error("Enter a metric"); return; }
+    setALoading(true);
+    setAResult(null);
+    try {
+      const qs = new URLSearchParams({
+        subscriptionId: aSub,
+        metric: aMetric.trim(),
+        aggregation: aAgg,
+      });
+      if (aFrom) qs.set("from", aFrom);
+      if (aTo) qs.set("to", aTo);
+      const res = await api.get<AggregateResponse>(`/api/books/usage/aggregate?${qs.toString()}`);
+      setAResult(res ?? null);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setALoading(false);
+    }
+  };
+
+  const runCharge = async () => {
+    if (!cSub) { toast.error("Pick a subscription"); return; }
+    setCLoading(true);
+    setCResult(null);
+    setCNotMetered(false);
+    try {
+      const qs = new URLSearchParams();
+      if (cFrom) qs.set("from", cFrom);
+      if (cTo) qs.set("to", cTo);
+      const q = qs.toString();
+      const res = await api.get<UsageChargeResponse | null>(
+        `/api/books/subscriptions/${cSub}/usage-charge${q ? `?${q}` : ""}`,
+      );
+      if (res == null) { setCNotMetered(true); }
+      else { setCResult(res); }
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setCLoading(false);
+    }
+  };
+
+  const subSelect = (value: string, onChange: (v: string) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+      <option value="">Select a subscription…</option>
+      {subs.map((s) => (
+        <option key={s.id} value={s.id}>{subLabel(s)}</option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* INGEST */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Send size={15} className="text-[var(--color-primary)]" /> Record usage event
+          </h3>
+          <button type="button" onClick={() => void loadSubs()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh subscriptions">
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <label className={labelCls}>Subscription</label>
+            {subSelect(iSub, setISub)}
+          </div>
+          <div>
+            <label className={labelCls}>Metric</label>
+            <input
+              value={iMetric}
+              onChange={(e) => setIMetric(e.target.value)}
+              placeholder="e.g. api_calls"
+              className={`${inputCls} font-mono`}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Value</label>
+            <input
+              value={iValue}
+              onChange={(e) => setIValue(e.target.value)}
+              inputMode="decimal"
+              placeholder="1"
+              className={`${inputCls} font-mono tabular-nums`}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <label className={labelCls}>Dedup key (optional)</label>
+            <input
+              value={iDedup}
+              onChange={(e) => setIDedup(e.target.value)}
+              placeholder="Idempotency key — a repeat is ignored"
+              className={`${inputCls} font-mono`}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end mt-4">
+          <button type="button" onClick={ingest} disabled={ingesting} className={btnPrimary}>
+            {ingesting ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+            Record event
+          </button>
+        </div>
+      </div>
+
+      {/* AGGREGATE */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <BarChart3 size={15} className="text-[var(--color-primary)]" /> Aggregate usage
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <label className={labelCls}>Subscription</label>
+            {subSelect(aSub, setASub)}
+          </div>
+          <div>
+            <label className={labelCls}>Metric</label>
+            <input
+              value={aMetric}
+              onChange={(e) => setAMetric(e.target.value)}
+              placeholder="e.g. api_calls"
+              className={`${inputCls} font-mono`}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Aggregation</label>
+            <select value={aAgg} onChange={(e) => setAAgg(e.target.value)} className={inputCls}>
+              {AGGREGATION_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>From</label>
+            <input type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>To</label>
+            <input type="date" value={aTo} onChange={(e) => setATo(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 mt-4">
+          <div className="text-sm">
+            {aResult ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="text-[var(--color-muted)]">{aResult.metric} · {aResult.aggregation}</span>
+                <span className="font-mono tabular-nums font-semibold text-base">{num(aResult.units).toLocaleString("en-IN")}</span>
+                <span className="text-[var(--color-muted)]">units</span>
+              </span>
+            ) : (
+              <span className="text-[var(--color-muted)]">Run to see aggregated units for the window.</span>
+            )}
+          </div>
+          <button type="button" onClick={runAggregate} disabled={aLoading} className={btnPrimary}>
+            {aLoading ? <RefreshCw size={14} className="animate-spin" /> : <BarChart3 size={14} />}
+            Aggregate
+          </button>
+        </div>
+      </div>
+
+      {/* USAGE CHARGE FOR PERIOD */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <Receipt size={15} className="text-[var(--color-primary)]" /> Usage charge for period
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-3">
+            <label className={labelCls}>Subscription</label>
+            {subSelect(cSub, setCSub)}
+          </div>
+          <div>
+            <label className={labelCls}>From</label>
+            <input type="date" value={cFrom} onChange={(e) => setCFrom(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>To</label>
+            <input type="date" value={cTo} onChange={(e) => setCTo(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 mt-4">
+          <button type="button" onClick={runCharge} disabled={cLoading} className={btnPrimary}>
+            {cLoading ? <RefreshCw size={14} className="animate-spin" /> : <Receipt size={14} />}
+            Compute charge
+          </button>
+        </div>
+        {cNotMetered && (
+          <p className="text-sm text-[var(--color-muted)] mt-4">This subscription's plan is not metered — only the base fee applies.</p>
+        )}
+        {cResult && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Metric</div>
+              <div className="text-sm font-mono">{cResult.metric ?? "—"}</div>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Units</div>
+              <div className="text-sm font-mono tabular-nums">{num(cResult.units).toLocaleString("en-IN")}</div>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Unit price</div>
+              <div className="text-sm font-mono tabular-nums">{rupee(cResult.unitPrice)}</div>
+            </div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Amount</div>
+              <div className="text-sm font-mono tabular-nums font-semibold">{rupee(cResult.amount)}</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

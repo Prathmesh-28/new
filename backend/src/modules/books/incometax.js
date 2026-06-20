@@ -16,99 +16,64 @@
 const { money, ZERO, toRupees } = require("./money");
 const { PostError } = require("./posting-engine");
 const reports = require("./reports");
+const taxrules = require("./taxrules");
 
-// ── (A) Statutory rate tables, keyed by Assessment Year ──────────────────────
-// A "slab" is { upTo, rate } where upTo is the upper bound of taxable income for
-// that band (null = no ceiling) and rate is a percentage. computeSlab walks them.
-//
-// New regime = s.115BAC (default from AY 2024-25). Old regime = the pre-existing
-// slabs (with the basic exemption + Chapter VI-A deductions the caller supplies).
-const IT_RULES = {
-  "2024-25": {
-    new: {
-      slabs: [
-        { upTo: 300000, rate: 0 },
-        { upTo: 600000, rate: 5 },
-        { upTo: 900000, rate: 10 },
-        { upTo: 1200000, rate: 15 },
-        { upTo: 1500000, rate: 20 },
-        { upTo: null, rate: 30 },
-      ],
-      rebate87A: { incomeLimit: 700000, maxRebate: 25000 },
-      // Under the new regime the top surcharge slab (37%) was abolished: capped 25%.
-      surcharge: [
-        { over: 5000000, rate: 10 },
-        { over: 10000000, rate: 15 },
-        { over: 20000000, rate: 25 },
-      ],
-    },
-    old: {
-      slabs: [
-        { upTo: 250000, rate: 0 },
-        { upTo: 500000, rate: 5 },
-        { upTo: 1000000, rate: 20 },
-        { upTo: null, rate: 30 },
-      ],
-      rebate87A: { incomeLimit: 500000, maxRebate: 12500 },
-      surcharge: [
-        { over: 5000000, rate: 10 },
-        { over: 10000000, rate: 15 },
-        { over: 20000000, rate: 25 },
-        { over: 50000000, rate: 37 },
-      ],
-    },
-  },
-  "2025-26": {
-    // AY 2025-26 (FY 2024-25): new-regime slabs unchanged from AY 2024-25 for the
-    // individual base; rebate/surcharge identical. (The wider FY2025-26 rebate is a
-    // later AY and intentionally not asserted here.)
-    new: {
-      slabs: [
-        { upTo: 300000, rate: 0 },
-        { upTo: 700000, rate: 5 },
-        { upTo: 1000000, rate: 10 },
-        { upTo: 1200000, rate: 15 },
-        { upTo: 1500000, rate: 20 },
-        { upTo: null, rate: 30 },
-      ],
-      rebate87A: { incomeLimit: 700000, maxRebate: 25000 },
-      surcharge: [
-        { over: 5000000, rate: 10 },
-        { over: 10000000, rate: 15 },
-        { over: 20000000, rate: 25 },
-      ],
-    },
-    old: {
-      slabs: [
-        { upTo: 250000, rate: 0 },
-        { upTo: 500000, rate: 5 },
-        { upTo: 1000000, rate: 20 },
-        { upTo: null, rate: 30 },
-      ],
-      rebate87A: { incomeLimit: 500000, maxRebate: 12500 },
-      surcharge: [
-        { over: 5000000, rate: 10 },
-        { over: 10000000, rate: 15 },
-        { over: 20000000, rate: 25 },
-        { over: 50000000, rate: 37 },
-      ],
-    },
-  },
-};
+// ── (A) Statutory rate tables ─────────────────────────────────────────────────
+// The slab/surcharge/rebate/cess facts are no longer inline here — they live in
+// ./taxrules as DATED, VALIDATED parameters (rules-as-data, OpenFisca-style), keyed
+// by the Assessment Year. We resolve them by AY via taxrules.ayToDate + resolveParam
+// and run them through the pure helpers taxrules exports (slabTax / applyRebate87A /
+// surcharge / addCess). This keeps the legislation auditable in one inspectable file.
+const { ayToDate, resolveParam, slabTax, applyRebate87A, surcharge: surchargeOf, addCess } = taxrules;
 
-// Non-individual flat rates. company: caller passes a 25%/30% via entityType detail;
-// we accept "company" (default 30, or 25 if companyRate25 opt) and "firm"/"llp" (30).
-const FLAT_RATES = {
-  company: { rate: 30, rate25: 25, surcharge: [{ over: 10000000, rate: 7 }, { over: 100000000, rate: 12 }] },
-  firm: { rate: 30, surcharge: [{ over: 10000000, rate: 12 }] },
-};
+// The AYs whose INDIVIDUAL/HUF slab tables this engine is willing to compute. The
+// dated parameter store could resolve any date to its nearest-effective entry, but
+// historically this engine only configured these two AYs (the old IT_RULES had just
+// these keys) and threw UNSUPPORTED_AY for any other AY — we keep that contract exact
+// (a future/prior AY needs an explicit Finance-Act review, not silent slab reuse).
+// NOTE: only the individual path was AY-gated historically; company/firm used static
+// FLAT_RATES regardless of AY (see flatRulesFor), so that path is intentionally NOT
+// gated here.
+const SUPPORTED_AYS = new Set(["2024-25", "2025-26"]);
 
-const CESS_RATE = 4; // Health & Education Cess on (tax + surcharge).
-
+// Resolve the INDIVIDUAL slab/rebate/surcharge rule set for an AY from the dated
+// parameter store. Mirrors the old IT_RULES[ay] shape. Throws UNSUPPORTED_AY for an
+// AY that was never configured.
 function rulesFor(ay) {
-  const r = IT_RULES[ay];
-  if (!r) throw new PostError("UNSUPPORTED_AY", `Income-tax rules not configured for AY ${ay}`, 422);
-  return r;
+  if (!SUPPORTED_AYS.has(String(ay))) {
+    throw new PostError("UNSUPPORTED_AY", `Income-tax rules not configured for AY ${ay}`, 422);
+  }
+  const onDate = ayToDate(ay);
+  const r = (key) => resolveParam("incometax", key, onDate);
+  return {
+    new: {
+      slabs: r("slabsNew").brackets,
+      rebate87A: r("rebate87ANew"),
+      surcharge: r("surchargeIndividualNew").bands,
+    },
+    old: {
+      slabs: r("slabsOld").brackets,
+      rebate87A: r("rebate87AOld"),
+      surcharge: r("surchargeIndividualOld").bands,
+    },
+    cessRate: r("cessIndividual").rate,
+  };
+}
+
+// Resolve the NON-INDIVIDUAL flat-rate rule set (company/firm). These rates are not
+// AY-keyed in the legislation we encode (a single static entry), and historically the
+// company/firm path never consulted the AY — so we resolve "as of today" and do NOT
+// gate on SUPPORTED_AYS, preserving that any AY (even unconfigured) computes a flat
+// liability. Mirrors the old FLAT_RATES + CESS_RATE shape.
+const _FLAT_DATE = new Date().toISOString().slice(0, 10);
+function flatRulesFor(entity) {
+  const r = (key) => resolveParam("incometax", key, _FLAT_DATE);
+  if (entity === "company") {
+    const f = r("flatCompany");
+    return { rate: f.rate, rate25: f.rate25, surcharge: r("surchargeCompany").bands, cessRate: r("cessCompany").rate };
+  }
+  const f = r("flatFirm");
+  return { rate: f.rate, surcharge: r("surchargeFirm").bands, cessRate: r("cessFirm").rate };
 }
 
 function normEntity(entityType) {
@@ -119,28 +84,16 @@ function normEntity(entityType) {
   throw new PostError("BAD_ENTITY", `Unknown entityType '${entityType}'`, 422);
 }
 
-// Walk the slabs and tax each band's slice. Returns a Decimal.
+// Walk the slabs and tax each band's slice. Returns a Decimal. (Thin wrapper over
+// the rules-as-data helper taxrules.slabTax — kept so the engine reads clearly.)
 function computeSlab(taxableIncome, slabs) {
-  let tax = ZERO;
-  let lower = money(0);
-  const ti = money(taxableIncome);
-  for (const s of slabs) {
-    const ceil = s.upTo == null ? ti : money(s.upTo);
-    const top = ti.lessThan(ceil) ? ti : ceil;
-    const slice = top.minus(lower);
-    if (slice.greaterThan(0)) tax = tax.plus(slice.times(s.rate).div(100));
-    lower = ceil;
-    if (ti.lessThanOrEqualTo(ceil)) break;
-  }
-  return tax;
+  return slabTax(taxableIncome, slabs);
 }
 
-// Surcharge on tax-before-cess, by the highest band the income crosses. Returns Decimal.
+// Surcharge on tax-before-cess, by the highest band the income crosses. Returns
+// Decimal. (Delegates to taxrules.surcharge; note the (tax, income, bands) order.)
 function computeSurcharge(taxableIncome, baseTax, surchargeBands) {
-  const ti = money(taxableIncome);
-  let rate = 0;
-  for (const b of surchargeBands) if (ti.greaterThan(b.over)) rate = b.rate;
-  return rate === 0 ? ZERO : money(baseTax).times(rate).div(100);
+  return surchargeOf(baseTax, taxableIncome, surchargeBands);
 }
 
 // ── (1) Advance-tax schedule (s.211) ─────────────────────────────────────────
@@ -210,29 +163,30 @@ function computeIncomeTax({ taxableIncome, regime, entityType, ay, companyRate25
   let baseTax = ZERO;
   let rebate = ZERO;
   let surchargeBands = [];
+  let cessRate;
 
   if (entity === "individual") {
-    const r = rulesFor(ay);
+    const r = rulesFor(ay); // AY-keyed individual slabs/rebate/surcharge from ./taxrules
     const reg = regime === "old" ? "old" : "new"; // default new (115BAC)
     const cfg = r[reg];
     baseTax = computeSlab(ti, cfg.slabs);
     // 87A rebate: if total income ≤ limit, rebate the tax up to maxRebate.
-    if (ti.lessThanOrEqualTo(cfg.rebate87A.incomeLimit)) {
-      rebate = baseTax.lessThan(cfg.rebate87A.maxRebate) ? baseTax : money(cfg.rebate87A.maxRebate);
-    }
+    rebate = applyRebate87A(ti, baseTax, cfg.rebate87A);
     surchargeBands = cfg.surcharge;
+    cessRate = r.cessRate;
   } else {
-    // Company / firm: flat rate, no slabs, no 87A.
-    const flat = FLAT_RATES[entity];
+    // Company / firm: flat rate, no slabs, no 87A. AY-independent (as historically).
+    const flat = flatRulesFor(entity);
     const rate = entity === "company" && companyRate25 ? flat.rate25 : flat.rate;
     baseTax = ti.times(rate).div(100);
     surchargeBands = flat.surcharge;
+    cessRate = flat.cessRate;
   }
 
   const taxAfterRebate = baseTax.minus(rebate);
   const surcharge = computeSurcharge(ti, taxAfterRebate, surchargeBands);
   const taxPlusSurcharge = taxAfterRebate.plus(surcharge);
-  const cess = taxPlusSurcharge.times(CESS_RATE).div(100);
+  const cess = addCess(taxPlusSurcharge, cessRate);
   const total = taxPlusSurcharge.plus(cess);
   const effectiveRate = ti.greaterThan(0) ? total.div(ti).times(100) : ZERO;
 
@@ -302,4 +256,13 @@ async function itrSummary(tenantId, fy, opts = {}) {
   };
 }
 
-module.exports = { advanceTaxSchedule, computeIncomeTax, itrSummary };
+// Re-export the rules-as-data primitives so an inspector route can read the dated
+// parameter tables (and the validation) the income-tax numbers are sourced from.
+module.exports = {
+  advanceTaxSchedule,
+  computeIncomeTax,
+  itrSummary,
+  taxParams: taxrules.PARAMS,
+  resolveParam: taxrules.resolveParam,
+  validateParams: taxrules.validateParams,
+};

@@ -390,6 +390,8 @@ router.get("/tax/tds-certificates", async (req, res) => { try { res.json(await t
 router.post("/tax/26as-reconcile", canPost, async (req, res) => { try { res.json(await taxfiling.reconcile26AS(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/tax/advance-tax", async (req, res) => { try { res.json(incometax.advanceTaxSchedule(req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/tax/income-tax", async (req, res) => { try { res.json(incometax.computeIncomeTax(req.body || {})); } catch (e) { fail(res, e); } });
+// Rules-as-data inspector: the dated tax legislation (slabs/rebate/surcharge/cess, TDS/TCS rates) as inspectable parameters.
+router.get("/tax/params", async (req, res) => { try { res.json({ params: incometax.taxParams, validated: (incometax.validateParams(), true) }); } catch (e) { fail(res, e); } });
 router.get("/tax/itr-summary", async (req, res) => {
   try {
     const q = req.query;

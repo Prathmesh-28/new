@@ -10,6 +10,7 @@
 // reconciles exactly to the posting engine, never a JS float.
 const { money, toDb, toRupees } = require("./money");
 const { PostError } = require("./posting-engine");
+const taxrules = require("./taxrules");
 
 // (1) The common sections a small business actually hits. Rates are percentages.
 // `threshold` is the per-transaction (single) floor; `aggregateThreshold`, where
@@ -18,47 +19,32 @@ const { PostError } = require("./posting-engine");
 // deductee has no PAN — always 20% here. Thresholds are informational: the caller
 // decides whether the year-to-date crosses them; computeTds deducts on the amount
 // it is given (ERPNext applies the cumulative test upstream the same way).
-const NO_PAN_RATE = 20;
-const TDS_SECTIONS = {
-  "194C": {
-    section: "194C",
-    description: "Payments to contractors / sub-contractors",
-    rate: 1,                    // individual / HUF payee
-    rateOther: 2,               // any other payee (company, firm, etc.)
-    threshold: 30000,           // single contract
-    aggregateThreshold: 100000, // annual aggregate
-    noPan: NO_PAN_RATE,
-  },
-  "194J": {
-    section: "194J",
-    description: "Professional / technical fees, royalty",
-    rate: 10,
-    threshold: 30000,
-    noPan: NO_PAN_RATE,
-  },
-  "194H": {
-    section: "194H",
-    description: "Commission or brokerage",
-    rate: 5,
-    threshold: 15000,
-    noPan: NO_PAN_RATE,
-  },
-  "194I": {
-    section: "194I",
-    description: "Rent (plant/machinery 2%, land/building/furniture 10%)",
-    rate: 10,
-    threshold: 240000,
-    noPan: NO_PAN_RATE,
-  },
-  "194Q": {
-    section: "194Q",
-    description: "Purchase of goods above the aggregate turnover trigger",
-    rate: 0.1,
-    threshold: 5000000,            // deduct only on value above ₹50,00,000
-    aggregateThreshold: 5000000,
-    noPan: NO_PAN_RATE,
-  },
-};
+//
+// The numbers are no longer inline: they are sourced from ./taxrules as DATED,
+// VALIDATED parameters (rules-as-data). We materialise the currently-effective
+// entry for each section into the same shape the callers already consume — the
+// dated `from` key is stripped so TDS_SECTIONS/TCS_SECTIONS are byte-identical to
+// the legacy inline tables.
+const NO_PAN_RATE = taxrules.NO_PAN_RATE;
+
+// Strip the dated `from` field from a resolved parameter entry → the legacy shape.
+function _strip(entry) {
+  const { from, ...rest } = entry;
+  return rest;
+}
+
+// Materialise a { sectionKey: entry } table from a taxrules domain, resolved as of
+// `onDate` (defaults to today — the currently-effective rates).
+function _materialise(domain, onDate) {
+  const out = {};
+  for (const key of Object.keys(taxrules.PARAMS[domain])) {
+    out[key] = _strip(taxrules.resolveParam(domain, key, onDate));
+  }
+  return out;
+}
+
+const _TODAY = new Date().toISOString().slice(0, 10);
+const TDS_SECTIONS = _materialise("tds", _TODAY);
 
 function _section(section) {
   const s = TDS_SECTIONS[String(section || "").toUpperCase()];
@@ -165,37 +151,7 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
 // applies that aggregate test, same convention as 194Q above). `noPan` is the
 // §206CC penal rate: twice the normal rate, or 5%, whichever is HIGHER, applied
 // when the buyer has no PAN.
-const TCS_SECTIONS = {
-  "206C(1H)": {
-    section: "206C(1H)",
-    description: "Sale of goods to a buyer above the ₹50,00,000 aggregate",
-    rate: 0.1,
-    threshold: 5000000,            // collect only on value above ₹50,00,000
-    aggregateThreshold: 5000000,
-    label: "TCS on sale of goods",
-  },
-  "206C-SCRAP": {
-    section: "206C-SCRAP",
-    description: "Sale of scrap",
-    rate: 1,
-    threshold: 0,
-    label: "TCS on scrap",
-  },
-  "206C-TENDU": {
-    section: "206C-TENDU",
-    description: "Sale of tendu leaves",
-    rate: 5,
-    threshold: 0,
-    label: "TCS on tendu leaves",
-  },
-  "206C-TIMBER": {
-    section: "206C-TIMBER",
-    description: "Sale of timber / other forest produce (not tendu)",
-    rate: 2.5,
-    threshold: 0,
-    label: "TCS on timber / forest produce",
-  },
-};
+const TCS_SECTIONS = _materialise("tcs", _TODAY);
 
 function _tcsSection(section) {
   const s = TCS_SECTIONS[String(section || "").toUpperCase()];
@@ -275,4 +231,9 @@ function buildTcsCollection({ customerLedgerId, tcsPayableLedgerId, amount, sect
 module.exports = {
   TDS_SECTIONS, computeTds, buildTdsDeduction, NO_PAN_RATE,
   TCS_SECTIONS, computeTcs, buildTcsCollection,
+  // Rules-as-data primitives (for an inspector route): the dated parameter store,
+  // the dated resolver, and the load-time validation that guards the tables.
+  taxParams: taxrules.PARAMS,
+  resolveParam: taxrules.resolveParam,
+  validateParams: taxrules.validateParams,
 };
