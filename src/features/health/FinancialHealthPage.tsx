@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { computeFinancialSnapshot, type FinancialSnapshot } from "@/lib/finance";
+import { totalDepreciation } from "@/lib/depreciation";
 import { formatAmount } from "@/lib/utils";
 import {
   HeartPulse, ArrowRight, TrendingUp, TrendingDown, Minus, Droplets, Receipt, Scale,
@@ -14,7 +15,7 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { format } from "date-fns";
+import { format, addMonths } from "date-fns";
 
 const COMPONENT_ICON: Record<string, React.ElementType> = {
   liquidity: Droplets, profitability: PiggyBank, collections: Receipt,
@@ -57,9 +58,18 @@ export default function FinancialHealthPage() {
   const lenderReady = health.score >= 65 && (snap.dscr === null || snap.dscr >= 1.25);
 
   // ── EBITDA & Free Cash Flow ───────────────────────────────────────────────────
-  const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + snap.monthlyRevenue * 0.015;
+  // Real monthly depreciation from the fixed-asset register (trailing 1-month window)
+  // rather than a flat 1.5%-of-revenue proxy.
+  const monthlyDepreciation = useMemo(() => {
+    const now = new Date();
+    const d = totalDepreciation(store.fixedAssets ?? [], addMonths(now, -1).toISOString(), now.toISOString());
+    return Number.isFinite(d) && d > 0 ? d : 0;
+  }, [store.fixedAssets]);
+  const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + monthlyDepreciation;
   const ebitdaMgnPct  = snap.monthlyRevenue > 0 ? Math.round((monthlyEbitda / snap.monthlyRevenue) * 100) : null;
-  const opCashFlow    = snap.monthlyNet + snap.monthlyDebtService;
+  // Operating cash flow = net profit + interest add-back (principal repayment is a real
+  // cash outflow, so add back interest only — not full debt service).
+  const opCashFlow    = snap.monthlyNet + snap.monthlyInterest;
   const fcfRatioPct   = snap.monthlyRevenue > 0 ? Math.round((opCashFlow / snap.monthlyRevenue) * 100) : null;
 
   const ratios: { label: string; value: string; target: string; ok: boolean; path: string }[] = [

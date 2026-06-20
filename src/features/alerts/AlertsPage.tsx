@@ -4,6 +4,7 @@ import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers, BadgeCheck, HandCoins, Repeat, Landmark } from "lucide-react";
 import { toast } from "sonner";
+import { addMonths, addQuarters, addYears } from "date-fns";
 
 const INP = "w-full text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]";
 
@@ -405,11 +406,18 @@ function ComplianceDueDateAlerts() {
 
   // Roll a recurring item's due date forward to the next cycle after it lapses.
   const rollForward = (item: ComplianceItem) => {
-    const d = new Date(item.dueDate);
-    if (item.recurrence === "monthly") d.setMonth(d.getMonth() + 1);
-    else if (item.recurrence === "quarterly") d.setMonth(d.getMonth() + 3);
-    else if (item.recurrence === "annual") d.setFullYear(d.getFullYear() + 1);
-    else return;
+    let d = new Date(item.dueDate);
+    if (isNaN(d.getTime())) { toast.error("Invalid due date"); return; }
+    const step = (base: Date): Date =>
+      item.recurrence === "monthly" ? addMonths(base, 1)
+      : item.recurrence === "quarterly" ? addQuarters(base, 1)
+      : item.recurrence === "annual" ? addYears(base, 1)
+      : base;
+    if (item.recurrence !== "monthly" && item.recurrence !== "quarterly" && item.recurrence !== "annual") return;
+    // Roll forward (date-fns clamps to month-end, avoiding Jan31→Mar overflow)
+    // until the new due date is no longer in the past — covers multiple lapsed cycles.
+    const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0);
+    do { d = step(d); } while (d.getTime() < cutoff.getTime());
     setItems(prev => prev.map(x => x.id === item.id ? { ...x, dueDate: d.toISOString().split("T")[0] } : x));
     toast.success(`${item.name} rolled to next cycle`);
   };

@@ -83,6 +83,7 @@ export default function TaxPage() {
   const [cgBuy,        setCgBuy]        = useState("");
   const [cgSell,       setCgSell]       = useState("");
   const [cgHoldMonths, setCgHoldMonths] = useState("");
+  const [cgSlabRate,   setCgSlabRate]   = useState(30); // slab rate for debt gains (taxed at slab post-Apr 2023)
 
   const deadlines = useMemo(() => computeTaxCalendar(today), []);
 
@@ -174,6 +175,8 @@ export default function TaxPage() {
         let slabTax = 0;
         let rem = netTaxable;
         for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); slabTax += t * r; rem -= t; }
+        // Section 87A rebate (new regime): full rebate if taxable income ≤ ₹7L
+        if (netTaxable <= 700000) slabTax = 0;
         const cess = Math.round(slabTax * 0.04);
         const totalTax = Math.round(slabTax + cess);
         const limit44AD  = 30000000; // ₹3 crore (digital only above ₹2 crore)
@@ -287,7 +290,10 @@ export default function TaxPage() {
         const taxableGain = isLtcg && cgAsset === "equity"
           ? Math.max(0, gain - (rates.ltcgExempt ?? 0))
           : Math.max(0, gain);
-        const rate = isLtcg ? rates.ltcg : rates.stcg;
+        // Debt MF/bonds (post-Apr 2023) are taxed at the assessee's slab rate, not a fixed rate.
+        const rate = cgAsset === "debt"
+          ? (Number.isFinite(cgSlabRate) ? cgSlabRate : 30)
+          : (isLtcg ? rates.ltcg : rates.stcg);
         const tax  = gain > 0 ? Math.round(taxableGain * rate / 100) : 0;
         const cess = Math.round(tax * 0.04);
         const totalTax = tax + cess;
@@ -316,6 +322,17 @@ export default function TaxPage() {
                   ))}
                 </div>
                 <p className="text-[10px] text-[var(--color-muted)]">LTCG threshold: {ASSET_THRESHOLDS[cgAsset]}</p>
+                {cgAsset === "debt" && (
+                  <div>
+                    <label className="block text-xs text-[var(--color-muted)] mb-1">Your income-tax slab rate (debt gains taxed at slab)</label>
+                    <select value={cgSlabRate} onChange={e => setCgSlabRate(parseInt(e.target.value) || 0)}
+                      className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]">
+                      {[0, 5, 10, 15, 20, 30].map(r => (
+                        <option key={r} value={r}>{r}%</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-[var(--color-muted)] mb-1">Purchase price (₹)</label>

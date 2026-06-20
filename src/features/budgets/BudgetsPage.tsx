@@ -405,7 +405,9 @@ function ZeroBasedBudgetBuilder() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {lines.map(l => {
                 const catActual = actuals[l.category] ?? 0;
-                const v = l.justified - catActual;
+                const sumJustified = lines.reduce((s, x) => x.category === l.category ? s + (x.justified || 0) : s, 0);
+                const share = sumJustified > 0 ? (l.justified || 0) / sumJustified : 0;
+                const v = (l.justified || 0) - catActual * share;
                 return (
                   <tr key={l.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{l.label}</td>

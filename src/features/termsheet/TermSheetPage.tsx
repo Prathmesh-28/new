@@ -555,7 +555,7 @@ function EsopTopupImpact() {
   // Existing pool keeps its shares; founders + prior investors absorb the top-up dilution
   // so that founders + prior investors + currentPool + topUp = 100.
   const nonPoolBase = founderPct + investorPct;
-  const scaleNonPool = nonPoolBase > 0 ? Math.max(0, (100 - targetPoolPct - currentPoolPct) / nonPoolBase) : 1;
+  const scaleNonPool = nonPoolBase > 0 ? Math.max(0, (100 - targetPoolPct) / nonPoolBase) : 1;
 
   const after = {
     founder: Math.max(0, founderPct * scaleNonPool),

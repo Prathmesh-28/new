@@ -394,7 +394,7 @@ export function scenarioToDailyDelta(scenarios: Scenario[], horizon: number, tod
     if (!sc.active) continue;
     const p = sc.params || {};
     if (sc.type === "contract_won") { const i = startIdx(p, 10); if (i < horizon) delta[i] += num(p.amount); }
-    else if (sc.type === "new_hire") { const s = startIdx(p, 15); const perDay = num(p.salary) / 30; for (let t = s; t < horizon; t++) delta[t] -= perDay; }
+    else if (sc.type === "new_hire") { const s = startIdx(p, 15); const perDay = num(p.salary ?? p.amount) / 30; for (let t = s; t < horizon; t++) delta[t] -= perDay; }
     else if (sc.type === "loan_draw") {
       const s = startIdx(p, 0); const amt = num(p.amount); const months = num(p.termMonths, 12);
       const e = months > 0 ? (amt * (0.18 / 12)) / (1 - (1 + 0.18 / 12) ** -months) : 0;

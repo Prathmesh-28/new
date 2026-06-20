@@ -103,8 +103,8 @@ export default function BenchmarksPage() {
   const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
   const lastMDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
   const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
-  const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
+  const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
   const thisCost = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
   const payroll  = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.category === "payroll").reduce((s, t) => s + t.amount, 0));
 

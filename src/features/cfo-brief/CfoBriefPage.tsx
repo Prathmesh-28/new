@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, monthlyBurn, runwayDays } from "@/lib/utils";
+import { computeFinancialSnapshot } from "@/lib/finance";
 import { Sparkles, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, CheckCircle2, Clock, ChevronRight, Download, FileText, Presentation, ShieldAlert, Copy, Gauge, Wallet, Percent, CalendarClock, ListChecks, Scale, LineChart, Receipt, Banknote, GitCompareArrows, Droplets, Rocket, Users, Coins } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -112,7 +113,8 @@ function AiBriefView() {
 
   const burn    = monthlyBurn(transactions);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
-  const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);
+  // Net-burn runway (nets revenue against expenses) — not gross-expense burn.
+  const runway  = computeFinancialSnapshot(store).runwayDays;
 
   const now  = new Date();
   const m1s  = startOfMonth(now).toISOString().split("T")[0];
@@ -123,9 +125,9 @@ function AiBriefView() {
   const thisMonthTxns = transactions.filter(t => t.date >= m1s && t.date <= m1e);
   const lastMonthTxns = transactions.filter(t => t.date >= m2s && t.date <= m2e);
 
-  const thisMRev = thisMonthTxns.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const thisMRev = thisMonthTxns.filter(t=>t.amount>0&&t.category==="revenue").reduce((s,t)=>s+t.amount,0);
   const thisMExp = Math.abs(thisMonthTxns.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0));
-  const lastMRev = lastMonthTxns.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const lastMRev = lastMonthTxns.filter(t=>t.amount>0&&t.category==="revenue").reduce((s,t)=>s+t.amount,0);
   const lastMExp = Math.abs(lastMonthTxns.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0));
 
   const topVendors = Object.entries(

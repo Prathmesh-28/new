@@ -216,32 +216,48 @@ export default function WorkingCapitalPage() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <p className="text-sm font-semibold mb-1">Cash Release Simulator</p>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          How much cash you unlock by improving each cycle leg. Based on your {formatAmount(snap.monthlyExpense)}/month run rate.
+          How much cash you unlock by improving each cycle leg. DSO is valued on revenue, DIO & DPO on cost of goods; each reduction is capped by your current cycle.
         </p>
+        {(() => {
+          // DSO frees cash off daily REVENUE; DIO/DPO off daily COGS (fall back to opex run-rate).
+          const monthlyRevenue = Number.isFinite(snap.monthlyRevenue) ? snap.monthlyRevenue : 0;
+          const monthlyCogs = snap.grossMarginPct != null && Number.isFinite(snap.grossMarginPct)
+            ? monthlyRevenue * (1 - snap.grossMarginPct / 100)
+            : (Number.isFinite(snap.monthlyExpense) ? snap.monthlyExpense : 0);
+          const dsoCut = Math.max(0, Math.min(15, snap.dsoDays || 0));
+          const dioCut = Math.max(0, Math.min(10, snap.dioDays || 0));
+          // DPO is an extension — bounded by a sensible 10-day target, valued on COGS outflow.
+          const dpoExt = 10;
+          const dsoRelease = Math.round((dsoCut / 30) * monthlyRevenue);
+          const dioRelease = Math.round((dioCut / 30) * monthlyCogs);
+          const dpoRelease = Math.round((dpoExt / 30) * monthlyCogs);
+          const totalRelease = dsoRelease + dioRelease + dpoRelease;
+          return (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             {
-              label: "Reduce DSO by 15 days",
+              label: `Reduce DSO by ${dsoCut} days`,
               current: `${snap.dsoDays} days`,
-              release: Math.round((15 / 30) * snap.monthlyExpense),
+              release: dsoRelease,
               how: "Send reminders at day 7, 14, 21 from invoice date. Offer 2% early-pay discount.",
               color: "text-yellow-400",
               barColor: "bg-yellow-500",
               pct: Math.min(100, (snap.dsoDays / 90) * 100),
             },
             {
-              label: "Reduce DIO by 10 days",
+              label: `Reduce DIO by ${dioCut} days`,
               current: `${snap.dioDays} days`,
-              release: Math.round((10 / 30) * snap.monthlyExpense),
+              release: dioRelease,
               how: "Reduce reorder quantities, switch slow SKUs to just-in-time procurement.",
               color: "text-orange-400",
               barColor: "bg-orange-500",
               pct: Math.min(100, (snap.dioDays / 90) * 100),
             },
             {
-              label: "Extend DPO by 10 days",
+              label: `Extend DPO by ${dpoExt} days`,
               current: `${snap.dpoDays} days`,
-              release: Math.round((10 / 30) * snap.monthlyExpense),
+              release: dpoRelease,
               how: "Negotiate 45-day terms with top 3 suppliers (offer volume commitment).",
               color: "text-green-400",
               barColor: "bg-green-500",
@@ -262,9 +278,12 @@ export default function WorkingCapitalPage() {
         <div className="mt-4 pt-3 border-t border-[var(--color-border)] flex items-center justify-between">
           <p className="text-xs text-[var(--color-muted)]">Combined impact of all three improvements</p>
           <p className="text-sm font-bold text-green-400">
-            {formatAmount(Math.round(((15 + 10 + 10) / 30) * snap.monthlyExpense))} unlocked
+            {formatAmount(totalRelease)} unlocked
           </p>
         </div>
+        </>
+          );
+        })()}
       </div>
 
       {/* Payment-terms negotiator */}

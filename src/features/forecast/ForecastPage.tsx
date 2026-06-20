@@ -4,7 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { runForecast, generateForecast } from "@/lib/forecastEngine";
-import { monthlyAggregates, cmgr, monthlyCashFlow, dso, dio, dpo, advanceTaxSchedule } from "@/lib/finance";
+import { monthlyAggregates, cmgr, monthlyCashFlow, dso, dio, dpo, advanceTaxSchedule, gstSummary } from "@/lib/finance";
 import { scheduleReminders, cancelReminders } from "@/lib/nativeFeatures";
 import { isNative } from "@/lib/mobile";
 import {
@@ -87,9 +87,8 @@ export default function ForecastPage() {
     const now       = new Date();
     const lastM     = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMStr  = `${lastM.getFullYear()}-${String(lastM.getMonth() + 1).padStart(2, "0")}`;
-    const revenue   = transactions.filter(t => t.amount > 0 && t.date.startsWith(lastMStr)).reduce((s, t) => s + t.amount, 0);
-    if (revenue <= 0) return;
-    const liability = Math.round(revenue * (firm.gstRate / 100));
+    const liability = gstSummary(transactions, firm.gstRate, lastMStr).netPayable;
+    if (liability <= 0) return;
     // GSTR-3B is due on the 20th of the current month for last month's returns
     const due = new Date(now.getFullYear(), now.getMonth(), 20);
     if (due < now) { due.setMonth(due.getMonth() + 1); } // already passed → next month

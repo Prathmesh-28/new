@@ -902,7 +902,13 @@ function ExpiryRenewalVault() {
 }
 
 // ── #160 Bank Statement Parser (text → txns) ─────────────────────────────────────
-type ParsedRow = { id: string; date: string; description: string; debit: number; credit: number };
+// `needsReview` = direction (Dr/Cr) could not be inferred with confidence and the
+// user must confirm it before import, rather than silently defaulting to credit.
+type ParsedRow = { id: string; date: string; description: string; debit: number; credit: number; needsReview: boolean };
+
+// Narration keywords that strongly imply money leaving (debit) or arriving (credit).
+const DEBIT_KEYWORDS = /\b(withdraw\w*|debit\w*|paid|payment|purchase|atm|emi|chq|cheque|outward|charge\w*|fee|spent|dr)\b/i;
+const CREDIT_KEYWORDS = /\b(deposit\w*|credit\w*|received|recd|inward|refund|interest|salary|neft\s*in|imps\s*in|cr)\b/i;
 
 // Parse pasted statement text line-by-line. Each line is expected to carry a
 // date, a narration, and one or two trailing amounts (debit/credit or amount + balance).
@@ -914,7 +920,12 @@ function parseStatement(text: string): ParsedRow[] {
     const dateM = line.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4}-\d{2}-\d{2})/);
     if (!dateM) continue;
     const amounts = [...line.matchAll(/(-?(?:₹|rs\.?)?\s*[0-9][0-9,]*\.[0-9]{2})(\s*(?:cr|dr))?/gi)]
-      .map(m => ({ value: parseFloat(m[1].replace(/[₹,\s]|rs\.?/gi, "")), tag: (m[2] || "").trim().toLowerCase() }));
+      .map(m => ({
+        value: parseFloat(m[1].replace(/[₹,\s]|rs\.?/gi, "")),
+        tag: (m[2] || "").trim().toLowerCase(),
+        index: m.index ?? -1,
+      }))
+      .filter(a => Number.isFinite(a.value));
     if (!amounts.length) continue;
     const date = dateM[0];
     let description = line;
@@ -923,14 +934,40 @@ function parseStatement(text: string): ParsedRow[] {
     if (firstAmtM && firstAmtM.index !== undefined) description = description.slice(0, description.indexOf(firstAmtM[0])) || description;
     description = description.replace(/\s+/g, " ").replace(/(cr|dr)\b/gi, "").trim() || "—";
 
-    // The first amount is the transaction; sign / Cr/Dr tag decides direction.
+    // The first amount is the transaction value; everything below decides direction.
     const first = amounts[0];
+    const value = Math.abs(first.value);
     let debit = 0, credit = 0;
-    if (first.tag === "cr") credit = Math.abs(first.value);
-    else if (first.tag === "dr") debit = Math.abs(first.value);
-    else if (first.value < 0) debit = Math.abs(first.value);
-    else credit = first.value;
-    out.push({ id: crypto.randomUUID(), date, description: description.slice(0, 80), debit, credit });
+    let needsReview = false;
+
+    if (first.tag === "cr") {
+      credit = value;                                   // explicit Cr tag
+    } else if (first.tag === "dr") {
+      debit = value;                                    // explicit Dr tag
+    } else if (first.value < 0) {
+      debit = value;                                    // signed negative → outflow
+    } else if (amounts.length >= 2) {
+      // Two-column layout (debit col | credit col, often + a balance). The populated
+      // column's horizontal position tells us the direction. The transaction amount
+      // and balance are usually the two largest fields; use the line midpoint of the
+      // two leading amounts to decide which side the first amount sits on.
+      const second = amounts[1];
+      const mid = (first.index + second.index) / 2;
+      if (first.index < mid) debit = value; else credit = value;
+      // Column inference is heuristic — flag for confirmation unless narration agrees.
+      const dk = DEBIT_KEYWORDS.test(description), ck = CREDIT_KEYWORDS.test(description);
+      if (dk && !ck) { debit = value; credit = 0; }
+      else if (ck && !dk) { credit = value; debit = 0; }
+      else needsReview = true;
+    } else {
+      // Single untagged amount, no sign: infer from narration keywords only.
+      const dk = DEBIT_KEYWORDS.test(description), ck = CREDIT_KEYWORDS.test(description);
+      if (dk && !ck) debit = value;
+      else if (ck && !dk) credit = value;
+      else { credit = value; needsReview = true; }      // ambiguous → confirm, don't trust default
+    }
+
+    out.push({ id: crypto.randomUUID(), date, description: description.slice(0, 80), debit, credit, needsReview });
   }
   return out;
 }
@@ -944,11 +981,24 @@ function BankStatementParser() {
     const parsed = parseStatement(text);
     if (!parsed.length) { toast.error("No transaction rows found — paste lines with a date and an amount"); return; }
     setRows(parsed);
-    toast.success(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""}`);
+    const review = parsed.filter(r => r.needsReview).length;
+    if (review > 0) toast.warning(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""} — ${review} need${review === 1 ? "s" : ""} Dr/Cr confirmation`);
+    else toast.success(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""}`);
   };
 
   const totalDr = rows.reduce((s, r) => s + r.debit, 0);
   const totalCr = rows.reduce((s, r) => s + r.credit, 0);
+  const reviewCount = rows.filter(r => r.needsReview).length;
+
+  // User confirms an ambiguous row's direction: move its amount to the chosen
+  // column and clear the review flag. Amount is taken from whichever side is set.
+  const setDirection = (id: string, dir: "debit" | "credit") => {
+    setRows(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const amt = Math.abs(r.debit || r.credit || 0);
+      return { ...r, debit: dir === "debit" ? amt : 0, credit: dir === "credit" ? amt : 0, needsReview: false };
+    }));
+  };
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -981,23 +1031,43 @@ function BankStatementParser() {
             </div>
           ))}
         </div>
+        {reviewCount > 0 && (
+          <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-4 py-3 flex items-center gap-3">
+            <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+            <p className="text-sm">
+              <span className="font-semibold text-yellow-300">{reviewCount} row{reviewCount > 1 ? "s" : ""} need{reviewCount === 1 ? "s" : ""} confirmation</span>
+              <span className="text-[var(--color-muted)]"> — we couldn't tell debit from credit. Tap Dr or Cr on each flagged row before importing.</span>
+            </p>
+          </div>
+        )}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Description", "Debit", "Credit"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+          <table className="w-full text-sm min-w-[620px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Description", "Debit", "Credit", "Status"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
-                <tr key={r.id} className="hover:bg-white/2">
+                <tr key={r.id} className={`hover:bg-white/2 ${r.needsReview ? "bg-yellow-950/10" : ""}`}>
                   <td className="px-3 py-2.5 text-xs whitespace-nowrap">{r.date}</td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.description}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "—"}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {r.needsReview ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Confirm</span>
+                        <button onClick={() => setDirection(r.id, "debit")} className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-red-400 hover:bg-red-900/20">Dr</button>
+                        <button onClick={() => setDirection(r.id, "credit")} className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-green-400 hover:bg-green-900/20">Cr</button>
+                      </span>
+                    ) : (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">OK</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Parsing is a preview only — formats vary by bank, so verify a sample of rows before importing into your ledger. Amounts must include decimals (e.g. 1,250.00) and a Cr/Dr tag or sign for reliable direction detection.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Parsing is a preview only — formats vary by bank, so verify a sample of rows before importing into your ledger. Where the debit/credit direction is unclear we flag the row for your confirmation instead of guessing. Amounts must include decimals (e.g. 1,250.00); a Cr/Dr tag, sign, or withdrawal/deposit keyword improves direction detection.</p>
     </div>
   );
 }

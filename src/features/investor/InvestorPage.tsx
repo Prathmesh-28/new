@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Briefcase, TrendingUp, Rocket, X, ShieldCheck, AlertTriangle, Bell, Search, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight, ChevronRight, Mail, FolderLock, FileText, Layers, Copy, Trash2, Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { computeFinancialSnapshot } from "@/lib/finance";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -702,11 +703,13 @@ function InvestorUpdateComposer({ user }: { user: { email: string } }) {
     const monthTxns = txns.filter(t => t.date.startsWith(m));
     const mrr = monthTxns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
     const burn = monthTxns.filter(t => t.category === "expense" || t.category === "payroll").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const cash = txns.reduce((s, t) => s + t.amount, 0);
+    const cash = (store.bankAccounts ?? []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
     const netBurn = Math.max(0, burn - mrr);
-    const runwayMonths = netBurn > 0 ? Math.floor(cash / netBurn) : Infinity;
+    const snap = computeFinancialSnapshot(store);
+    const runwayDays = Number.isFinite(snap.runwayDays) ? snap.runwayDays : 999;
+    const runwayMonths = runwayDays >= 999 ? Infinity : Math.floor(runwayDays / 30);
     return { mrr, burn, cash, netBurn, runwayMonths };
-  }, [txns]);
+  }, [txns, store]);
 
   const [highlights, setHighlights] = useState("");
   const [asks, setAsks] = useState("");

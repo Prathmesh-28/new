@@ -534,15 +534,25 @@ export default function OperationsPage() {
       {tab === "inventory" && inventory.length > 0 && (() => {
         // Compute avg monthly units sold per product from confirmed/delivered orders
         const salesByProduct: Record<string, number> = {};
+        let earliestOrderTs = Infinity;
+        let latestOrderTs = -Infinity;
         orders.filter(o => ["confirmed", "dispatched", "delivered"].includes(o.status)).forEach(o => {
+          const ts = new Date(o.createdAt).getTime();
+          if (Number.isFinite(ts)) {
+            if (ts < earliestOrderTs) earliestOrderTs = ts;
+            if (ts > latestOrderTs) latestOrderTs = ts;
+          }
           o.items.forEach(item => {
             salesByProduct[item.productName] = (salesByProduct[item.productName] ?? 0) + item.quantity;
           });
         });
-        const monthsOfData = Math.max(1, Object.keys(salesByProduct).length > 0 ? 3 : 1);
+        // Derive the demand window from actual order dates rather than a fixed 90-day assumption.
+        const windowDays = (Number.isFinite(earliestOrderTs) && Number.isFinite(latestOrderTs))
+          ? Math.max(1, Math.round((latestOrderTs - earliestOrderTs) / 86400000))
+          : 1;
         const reorderItems = inventory.map(item => {
           const totalSold   = salesByProduct[item.productName] ?? 0;
-          const dailyDemand = totalSold / (monthsOfData * 30);
+          const dailyDemand = totalSold / windowDays;
           const leadTimeDays = 7; // default 7-day supplier lead time
           const safetyStock  = Math.ceil(dailyDemand * leadTimeDays);
           const reorderPoint = Math.ceil(dailyDemand * leadTimeDays + safetyStock);

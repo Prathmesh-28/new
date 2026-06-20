@@ -305,26 +305,32 @@ function OfflineQueue({ online }: { online: boolean }) {
   // the cash book; a collection additionally settles the customer's oldest open
   // invoice so their outstanding balance actually drops. Throws on failure so the
   // caller can keep the item pending + retryable.
-  const flushOne = (q: QueueItem): { ledgerRef: string } => {
+  const flushOne = (q: QueueItem, settledIds?: Set<string>): { ledgerRef: string } => {
     const when = (q.at || new Date().toISOString()).slice(0, 10);
 
     if (q.kind === "collection") {
       const customer = resolveCustomer(q.customer) ?? "Field collection";
       if (q.amount <= 0) throw new Error("collection has no amount");
-      // 1) Cash book: money in is positive revenue.
+      // 1) Cash book: a collection settles an existing receivable, so it is NOT new
+      //    revenue — booking it as revenue would double-count the original sale.
+      //    Post it as a transfer (cash movement) instead.
       addTransaction({
         id: generateId(), date: when, amount: Math.abs(q.amount),
         description: `Field collection${q.mode ? ` (${q.mode.toUpperCase()})` : ""} — ${customer}`,
-        category: "revenue", counterparty: customer, isRecurring: false,
+        category: "transfer", counterparty: customer, isRecurring: false,
         bankAccountId, notes: q.meta,
       });
       // 2) Outstanding: apply against the customer's oldest unpaid invoice.
+      //    Skip any invoice already settled earlier in this same sync run — the store
+      //    snapshot doesn't update mid-loop, so without this the same invoice could
+      //    be settled by two collections.
       const open = store.invoices
-        .filter(i => i.customer.trim().toLowerCase() === customer.trim().toLowerCase() && i.status !== "paid")
+        .filter(i => i.customer.trim().toLowerCase() === customer.trim().toLowerCase() && i.status !== "paid" && !settledIds?.has(i.id))
         .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
       const target = open[0];
       if (target && q.amount >= target.amount) {
         updateInvoice({ ...target, status: "paid" });
+        settledIds?.add(target.id);
         return { ledgerRef: `Cash book + ${target.invoiceNumber ?? "invoice"} settled` };
       }
       if (target) {
@@ -354,9 +360,12 @@ function OfflineQueue({ online }: { online: boolean }) {
     setSyncing(true);
     let ok = 0, failed = 0;
     const results: Record<string, Partial<QueueItem>> = {};
+    // Invoice IDs already settled in THIS run — the store snapshot is fixed for the
+    // whole loop, so this prevents two collections settling the same invoice.
+    const settledIds = new Set<string>();
     for (const q of pending) {
       try {
-        const { ledgerRef } = flushOne(q);
+        const { ledgerRef } = flushOne(q, settledIds);
         results[q.id] = { synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined };
         ok++;
       } catch (e) {

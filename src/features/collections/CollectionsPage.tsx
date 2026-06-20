@@ -134,7 +134,8 @@ export default function CollectionsPage() {
   const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep" | "partpay" | "unapplied" | "creditlimit" | "goal" | "recoveryroi">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
-  const [contacted, setContacted] = useState<Set<string>>(new Set());
+  // Persisted per-invoice "contacted / reminder-sent" flags (survives reload + syncs across devices).
+  const [contacted, setContacted] = useFeatureState<Record<string, boolean>>("collections-contacted", {});
 
   const receivables = useMemo(() => {
     return store.invoices
@@ -217,8 +218,13 @@ export default function CollectionsPage() {
   }, [store.invoices]);
 
   const markContacted = (id: string) => {
-    setContacted(s => new Set([...s, id]));
-    toast.success("Marked as contacted");
+    if (!id) return;
+    try {
+      setContacted(s => ({ ...(s ?? {}), [id]: true }));
+      toast.success("Marked as contacted");
+    } catch {
+      toast.error("Could not save contacted status");
+    }
   };
 
   return (
@@ -442,7 +448,7 @@ export default function CollectionsPage() {
           )}
           {sorted.map(row => {
             const style  = AGING_STYLE[row.aging];
-            const isContacted = contacted.has(row.id);
+            const isContacted = !!contacted?.[row.id];
             return (
               <div key={row.id} className={`px-4 py-3 hover:bg-white/2 transition-colors ${style.row}`}>
                 <div className="flex items-center gap-4">

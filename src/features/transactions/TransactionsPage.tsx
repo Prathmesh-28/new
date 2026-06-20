@@ -202,12 +202,22 @@ export default function TransactionsPage() {
     const lastKey  = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
     const biggestExpense = transactions.filter(t => t.amount < 0 && t.date.startsWith(thisKey)).sort((a, b) => a.amount - b.amount)[0] ?? null;
     const dupIds = new Set<string>();
-    for (let i = 0; i < transactions.length; i++) {
-      for (let j = i + 1; j < transactions.length; j++) {
-        const a = transactions[i], b = transactions[j];
-        const daysDiff = Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) / 86400000;
-        if (daysDiff <= 3 && a.amount === b.amount && a.counterparty && a.counterparty === b.counterparty) {
-          dupIds.add(a.id); dupIds.add(b.id);
+    // Bucket by amount + counterparty in one O(n) pass, then only compare dates within each bucket.
+    const dupBuckets: Record<string, Transaction[]> = {};
+    for (const t of transactions) {
+      if (!t.counterparty) continue;
+      const key = `${t.amount}|${t.counterparty.toLowerCase()}`;
+      (dupBuckets[key] ??= []).push(t);
+    }
+    for (const bucket of Object.values(dupBuckets)) {
+      if (bucket.length < 2) continue;
+      for (let i = 0; i < bucket.length; i++) {
+        for (let j = i + 1; j < bucket.length; j++) {
+          const a = bucket[i], b = bucket[j];
+          const daysDiff = Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) / 86400000;
+          if (daysDiff <= 3) {
+            dupIds.add(a.id); dupIds.add(b.id);
+          }
         }
       }
     }

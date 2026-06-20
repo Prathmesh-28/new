@@ -65,6 +65,18 @@ export default function OrganizationPage() {
   const [gstRate, setGstRate] = useState(store.firm.gstRate ?? 18);
   const [gstSaving, setGstSaving] = useState(false);
 
+  // Re-sync form fields when store.firm loads/changes (AppContext merges the KV
+  // firm record post-mount; without this the initial-mount values are stale and
+  // would overwrite the real firm on Save).
+  useEffect(() => {
+    setFirmName(store.firm.name ?? "");
+    setFirmIndustry(store.firm.industry ?? "");
+    setSafetyDays(store.firm.safetyThresholdDays ?? 14);
+    setGstRegistered(store.firm.gstRegistered ?? false);
+    setGstNumber(store.firm.gstNumber ?? "");
+    setGstRate(store.firm.gstRate ?? 18);
+  }, [store.firm]);
+
   const token = () => localStorage.getItem("hr_access") ?? "";
   const loadUsers = useCallback(async () => {
     try {

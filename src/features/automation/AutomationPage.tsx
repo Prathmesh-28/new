@@ -15,7 +15,7 @@ import {
   PackageSearch, ShieldCheck, Fingerprint, ArrowLeftRight, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, addDays, differenceInCalendarDays, parseISO } from "date-fns";
+import { format, addDays, addMonths, addQuarters, differenceInCalendarDays, parseISO } from "date-fns";
 
 // ── shared styles (mirrors TaxPage input + DebtPage card) ──────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -983,10 +983,16 @@ function RecurringTasks() {
   // Compute the next occurrence on or after today from the anchor + cadence.
   const nextRun = (t: RecurringTask): Date => {
     const base = parseISO(t.anchorDate);
-    const stepDays = t.cadence === "daily" ? 1 : t.cadence === "weekly" ? 7 : t.cadence === "monthly" ? 30 : 91;
+    if (isNaN(base.getTime())) return today;
+    // Step the anchor by true calendar units so month/quarter dates don't drift.
+    const step = (d: Date): Date =>
+      t.cadence === "daily" ? addDays(d, 1)
+      : t.cadence === "weekly" ? addDays(d, 7)
+      : t.cadence === "monthly" ? addMonths(d, 1)
+      : addQuarters(d, 1);
     let d = base;
     let guard = 0;
-    while (differenceInCalendarDays(d, today) < 0 && guard < 5000) { d = addDays(d, stepDays); guard++; }
+    while (differenceInCalendarDays(d, today) < 0 && guard < 5000) { d = step(d); guard++; }
     return d;
   };
 

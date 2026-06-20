@@ -559,6 +559,7 @@ function MultiEntityConsolidation() {
   const [exp, setExp] = useState("");
   const [cash, setCash] = useState("");
   const [intercoElim, setIntercoElim] = useState("");
+  const [unrealisedProfit, setUnrealisedProfit] = useState("");
 
   const addCurrentFirm = () => {
     const txns = store.transactions ?? [];
@@ -580,11 +581,18 @@ function MultiEntityConsolidation() {
   };
   const remove = (id: string) => setEntities(prev => prev.filter(e => e.id !== id));
 
-  const elim = parseFloat(intercoElim) || 0;
+  // Intra-group turnover: one entity's sale is another's purchase at the SAME value,
+  // so eliminating it from both turnover (revenue) and cost (expense) is PBT-neutral by
+  // design — this only removes double-counting from the topline, never from profit.
+  const elim = Math.max(0, parseFloat(intercoElim) || 0);
+  // Unrealised profit on intra-group stock: margin on goods sold within the group that
+  // remain unsold in closing inventory. This is the genuine PBT-reducing elimination —
+  // we remove it from revenue (and NOT from expense) so group PBT actually falls.
+  const urp = Math.max(0, parseFloat(unrealisedProfit) || 0);
   const gross = entities.reduce((a, e) => ({ revenue: a.revenue + e.revenue, expense: a.expense + e.expense, cash: a.cash + e.cash }), { revenue: 0, expense: 0, cash: 0 });
-  const consRevenue = gross.revenue - elim;
+  const consRevenue = gross.revenue - elim - urp;
   const consExpense = gross.expense - elim;
-  const consPbt = consRevenue - consExpense;
+  const consPbt = consRevenue - consExpense; // = gross PBT - urp (intra-group turnover cancels)
   // Minority interest on profit: sum each entity's PBT × (1 - ownership%).
   const minorityInterest = Math.round(entities.reduce((a, e) => a + (e.revenue - e.expense) * (1 - e.ownership / 100), 0));
   const ownersProfit = consPbt - minorityInterest;
@@ -597,7 +605,7 @@ function MultiEntityConsolidation() {
           <Building2 size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Multi-Entity Consolidation</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Roll up subsidiaries and group companies into one consolidated P&amp;L. Enter each entity's FY figures and ownership %; we eliminate inter-company turnover and split out minority interest.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Roll up subsidiaries and group companies into one consolidated P&amp;L. Enter each entity's FY figures and ownership %; we eliminate intra-group turnover, strip unrealised profit on intra-group stock, and split out minority interest.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
           <div className="md:col-span-2"><label className="text-xs text-[var(--color-muted)] block mb-1">Entity name</label><input value={name} onChange={e => setName(e.target.value)} className={inpCls} placeholder="Subsidiary Pvt Ltd" /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Owned %</label><input type="number" value={own} onChange={e => setOwn(e.target.value)} className={inpCls} /></div>
@@ -639,9 +647,17 @@ function MultiEntityConsolidation() {
           </div>
 
           <div className={cardCls}>
-            <div className="max-w-xs mb-4">
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Inter-company eliminations ₹ (sales between group entities)</label>
-              <input type="number" value={intercoElim} onChange={e => setIntercoElim(e.target.value)} className={inpCls} placeholder="0" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl mb-4">
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Intra-group turnover ₹ (sales between group entities)</label>
+                <input type="number" value={intercoElim} onChange={e => setIntercoElim(e.target.value)} className={inpCls} placeholder="0" />
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">Removed from both revenue &amp; cost — PBT-neutral (no double-counting).</p>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--color-muted)] block mb-1">Unrealised profit on intra-group stock ₹</label>
+                <input type="number" value={unrealisedProfit} onChange={e => setUnrealisedProfit(e.target.value)} className={inpCls} placeholder="0" />
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">Margin on intra-group goods still in closing inventory — reduces Group PBT.</p>
+              </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
@@ -659,7 +675,7 @@ function MultiEntityConsolidation() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative consolidation (AS-21 style). Eliminations are applied to both revenue and expense equally; intra-group balances and unrealised profit on stock are not auto-detected. Verify with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative consolidation (AS-21 style). Intra-group turnover nets off revenue &amp; cost equally (PBT-neutral, by design); only unrealised profit on intra-group stock reduces Group PBT. Intra-group balances are not auto-detected. Verify with your CA.</p>
     </div>
   );
 }

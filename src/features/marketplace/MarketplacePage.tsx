@@ -825,9 +825,13 @@ function SalesConsolidator() {
     const importedChannels = new Set<string>();
     const out: ConsolidatedRow[] = roll.byChannel.map(c => {
       importedChannels.add(c.channel);
+      // Carry the parsed imported net through so this view agrees with the
+      // Payout Calendar (which uses c.net). net(r) = gross - fees - returns,
+      // so make returns the balancing residual: gross - fees - net.
+      const cNet = Number.isFinite(c.net) ? c.net : c.gross - c.fees;
       return {
         id: `imp-${c.channel}`, channel: c.channel, orders: c.orders,
-        grossSales: c.gross, fees: c.fees, returns: 0, source: "imported",
+        grossSales: c.gross, fees: c.fees, returns: c.gross - c.fees - cNet, source: "imported",
       };
     });
     for (const r of rows) {

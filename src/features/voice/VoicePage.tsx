@@ -274,6 +274,8 @@ function VoiceCapture() {
   const draft = useMemo(() => parseEntry(text), [text]);
 
   // Editable confirm fields, seeded from the parse and resettable when the draft changes.
+  const [direction, setDirection] = useState<"in" | "out">("out");
+  const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<LedgerCategory>("expense");
   const [party, setParty] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -283,11 +285,19 @@ function VoiceCapture() {
   useEffect(() => {
     if (draft && seedKey !== lastSeed.current) {
       lastSeed.current = seedKey;
+      setDirection(draft.direction);
+      setAmount(String(Math.abs(draft.amount)));
       setCategory(suggestLedgerCategory(draft.direction, draft.raw));
       setParty(draft.party === "Unknown party" ? "" : draft.party);
       setDate(new Date().toISOString().split("T")[0]);
     }
   }, [draft, seedKey]);
+
+  // Parsed magnitude of the editable amount field; NaN/negative collapse to 0 so we never post junk.
+  const amountValue = useMemo(() => {
+    const n = Math.abs(Number(amount));
+    return Number.isFinite(n) ? n : 0;
+  }, [amount]);
 
   // Known parties already in the store (transactions + invoices + orders) for matching.
   const knownParties = useMemo(() => {
@@ -332,6 +342,7 @@ function VoiceCapture() {
   const post = () => {
     if (!draft) return;
     if (isReadOnly) { toast.error("Read-only view — switch to your own books to post entries"); return; }
+    if (amountValue <= 0) { toast.error("Enter an amount greater than zero before posting"); return; }
     setPosting(true);
     try {
       // Prefer an existing known party (so the new entry reconciles against the
@@ -342,14 +353,14 @@ function VoiceCapture() {
       addTransaction({
         id: generateId(),
         date,
-        amount: draft.direction === "in" ? Math.abs(draft.amount) : -Math.abs(draft.amount),
+        amount: direction === "in" ? amountValue : -amountValue,
         description: draft.raw,
         category,
         counterparty,
         isRecurring: false,
         bankAccountId: defaultAccount,
       });
-      toast.success(`Posted ${formatCurrency(draft.amount)} ${draft.direction === "in" ? "in" : "out"}${counterparty ? ` · ${counterparty}` : ""} to the ledger`);
+      toast.success(`Posted ${formatCurrency(amountValue)} ${direction === "in" ? "in" : "out"}${counterparty ? ` · ${counterparty}` : ""} to the ledger`);
       setText("");
       lastSeed.current = "";
     } catch (err) {
@@ -385,11 +396,17 @@ function VoiceCapture() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                   <p className="text-[10px] text-[var(--color-muted)] mb-1">Direction</p>
-                  <p className={`text-base font-bold tabular-nums ${draft.direction === "in" ? "text-green-400" : "text-red-400"}`}>{draft.direction === "in" ? "Money in" : "Money out"}</p>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setDirection("in")}
+                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "in" ? "bg-green-500/20 text-green-400 border border-green-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>Money in</button>
+                    <button type="button" onClick={() => setDirection("out")}
+                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "out" ? "bg-red-500/20 text-red-400 border border-red-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>Money out</button>
+                  </div>
                 </div>
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                   <p className="text-[10px] text-[var(--color-muted)] mb-1">Amount</p>
-                  <p className="text-base font-bold tabular-nums text-[var(--color-text)]">{formatCurrency(draft.amount)}</p>
+                  <input type="number" inputMode="decimal" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0"
+                    className="w-full bg-transparent text-base font-bold tabular-nums text-[var(--color-text)] outline-none placeholder:text-[var(--color-muted)]" />
                 </div>
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                   <p className="text-[10px] text-[var(--color-muted)] mb-1">Date</p>

@@ -195,8 +195,8 @@ function SmartActionsPanel() {
   if (unread.length > 0) {
     actions.push({ urgency: 7, label: `${unread.length} unread alert${unread.length > 1 ? "s" : ""}`, detail: unread[0]?.message ?? "Review your alerts.", path: "/alerts", color: "text-yellow-400" });
   }
-  if (burn > balance * 0.3 && runway < 90) {
-    actions.push({ urgency: 6, label: "High burn relative to balance", detail: `Monthly burn ₹${Math.round(burn / 1000)}K is ${Math.round((burn / balance) * 100)}% of balance. Review spend.`, path: "/spend", color: "text-orange-400" });
+  if (balance > 0 && burn > balance * 0.3 && runway < 90) {
+    actions.push({ urgency: 6, label: "High burn relative to balance", detail: `Monthly burn ₹${Math.round(burn / 1000)}K is ${balance > 0 ? Math.round((burn / balance) * 100) + "%" : "—"} of balance. Review spend.`, path: "/spend", color: "text-orange-400" });
   }
   actions.push({ urgency: 3, label: "Review sector benchmarks", detail: "See how your margins compare to industry peers.", path: "/benchmarks", color: "text-[var(--color-primary)]" });
 
