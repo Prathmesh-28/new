@@ -42,6 +42,10 @@ const ConnectorsPage     = lazy(() => import("@/features/connectors/ConnectorsPa
 const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
 const AllDataPage        = lazy(() => import("@/features/admin/AllDataPage"));
 const BooksPage          = lazy(() => import("@/features/books/BooksPage"));
+const CrmPage            = lazy(() => import("@/features/crm/CrmPage"));
+const ErpPage            = lazy(() => import("@/features/erp/ErpPage"));
+const HrmsPage           = lazy(() => import("@/features/hrms/HrmsPage"));
+const InsightsPage       = lazy(() => import("@/features/insights/InsightsPage"));
 const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage"));
 const TransactionsPage   = lazy(() => import("@/features/transactions/TransactionsPage"));
 const AlertsPage         = lazy(() => import("@/features/alerts/AlertsPage"));
@@ -231,6 +235,10 @@ function AppShell() {
                 <Route path="/admin"         element={<AdminPage />} />
                 <Route path="/admin/data"    element={<AllDataPage />} />
                 <Route path="/books"         element={<BooksPage />} />
+                <Route path="/crm"           element={<CrmPage />} />
+                <Route path="/erp"           element={<ErpPage />} />
+                <Route path="/hrms"          element={<HrmsPage />} />
+                <Route path="/insights"      element={<InsightsPage />} />
                 <Route path="/invoices"      element={<InvoicesPage />} />
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
