@@ -47,7 +47,11 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const updateItem = (i: number, key: string, val: string) => setItems(v => v.map((row, j) => j === i ? { ...row, [key]: val } : row));
 
   const subtotal = items.reduce((s, it) => s + (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0), 0);
-  const gst      = subtotal * (parseFloat(gstRate) / 100);
+  const gst      = items.reduce((s, it) => {
+    const lineAmt = (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
+    const lineRate = parseFloat(it.gst_rate) || parseFloat(gstRate) || 0;
+    return s + lineAmt * (lineRate / 100);
+  }, 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,8 +181,8 @@ function UpiQrModal({ invoice, onClose }: { invoice: Invoice; onClose: () => voi
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.post<{ url: string; qr: string }>(`/api/invoices/${invoice.id}/upi-link`, {})
-      .then(r => { setUrl(r.url); setQr(r.qr); })
+    api.post<{ upi_link: string; qr: string }>(`/api/invoices/${invoice.id}/upi-link`, {})
+      .then(r => { setUrl(r.upi_link); setQr(r.qr); })
       .catch(() => toast.error("Could not generate UPI link"))
       .finally(() => setLoading(false));
   }, [invoice.id]);
@@ -334,15 +338,23 @@ export default function InvoicesPage() {
   useEffect(() => { load(); }, [load]);
 
   const markStatus = async (id: string, status: string) => {
-    await api.patch(`/api/invoices/${id}`, { status }).catch(() => toast.error("Failed to update"));
-    toast.success(`Marked as ${status}`);
-    load();
+    try {
+      await api.patch(`/api/invoices/${id}`, { status });
+      toast.success(`Marked as ${status}`);
+      load();
+    } catch {
+      toast.error("Failed to update");
+    }
   };
 
   const sendInvoice = async (id: string) => {
-    await api.post(`/api/invoices/${id}/send`, {}).catch(() => toast.error("Failed to send"));
-    toast.success("Invoice emailed to customer");
-    load();
+    try {
+      await api.post(`/api/invoices/${id}/send`, {});
+      toast.success("Invoice emailed to customer");
+      load();
+    } catch {
+      toast.error("Failed to send");
+    }
   };
 
   const downloadPdf = (id: string, num: string) => {
@@ -2467,11 +2479,24 @@ function Gstr1Summary({ invoices }: { invoices: Invoice[] }) {
   // Rate-wise breakup for the GSTR-1 HSN/rate summary.
   const byRate = new Map<string, { taxable: number; tax: number }>();
   for (const i of elig) {
-    const r = String(i.gst_rate ?? 0);
-    const cur = byRate.get(r) ?? { taxable: 0, tax: 0 };
-    cur.taxable += parseFloat(String(i.subtotal)) || 0;
-    cur.tax += parseFloat(String(i.gst_amount)) || 0;
-    byRate.set(r, cur);
+    const lines = i.items?.length ? i.items : null;
+    if (lines) {
+      for (const it of lines) {
+        const lineAmt = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+        const lineRate = it.gst_rate ?? i.gst_rate ?? 0;
+        const r = String(lineRate);
+        const cur = byRate.get(r) ?? { taxable: 0, tax: 0 };
+        cur.taxable += lineAmt;
+        cur.tax += lineAmt * (Number(lineRate) / 100);
+        byRate.set(r, cur);
+      }
+    } else {
+      const r = String(i.gst_rate ?? 0);
+      const cur = byRate.get(r) ?? { taxable: 0, tax: 0 };
+      cur.taxable += parseFloat(String(i.subtotal)) || 0;
+      cur.tax += parseFloat(String(i.gst_amount)) || 0;
+      byRate.set(r, cur);
+    }
   }
   const rateRows = [...byRate.entries()].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
 

@@ -12,7 +12,9 @@ async function _ledgerClosings(tenantId, fy, asOf) {
   const { rows } = await pool.query(
     `SELECT l.id, l.name, l.opening_balance, l.opening_is_debit, g.nature, g.affects_pl,
             COALESCE(SUM(CASE WHEN v.financial_year=$2 AND v.is_cancelled=false${dateClause} THEN e.debit  ELSE 0 END),0) AS dr,
-            COALESCE(SUM(CASE WHEN v.financial_year=$2 AND v.is_cancelled=false${dateClause} THEN e.credit ELSE 0 END),0) AS cr
+            COALESCE(SUM(CASE WHEN v.financial_year=$2 AND v.is_cancelled=false${dateClause} THEN e.credit ELSE 0 END),0) AS cr,
+            COALESCE(SUM(CASE WHEN v.financial_year<$2 AND v.is_cancelled=false THEN e.debit  ELSE 0 END),0) AS prior_dr,
+            COALESCE(SUM(CASE WHEN v.financial_year<$2 AND v.is_cancelled=false THEN e.credit ELSE 0 END),0) AS prior_cr
        FROM book_ledgers l
        JOIN book_account_groups g ON g.id = l.group_id
        LEFT JOIN book_voucher_entries e ON e.ledger_id = l.id AND e.tenant_id = l.tenant_id
@@ -23,7 +25,13 @@ async function _ledgerClosings(tenantId, fy, asOf) {
     params
   );
   return rows.map((r) => {
-    const opening = r.opening_is_debit ? money(r.opening_balance) : money(r.opening_balance).neg();
+    const bookOpening = r.opening_is_debit ? money(r.opening_balance) : money(r.opening_balance).neg();
+    // Permanent (balance-sheet) ledgers carry their balance across FYs: the opening
+    // for the selected FY is the book opening plus the net movement of ALL prior FYs.
+    // P&L ledgers reset every FY, so they take the book opening only (no carry-forward).
+    const opening = r.affects_pl
+      ? bookOpening
+      : bookOpening.plus(money(r.prior_dr)).minus(money(r.prior_cr));
     const signed = opening.plus(money(r.dr)).minus(money(r.cr));
     return { ledgerId: r.id, name: r.name, nature: r.nature, affectsPl: r.affects_pl, dr: money(r.dr), cr: money(r.cr), signed };
   });

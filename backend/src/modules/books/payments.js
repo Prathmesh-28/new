@@ -36,15 +36,23 @@ async function createLink(tenantId, { invoiceVoucherId, partyLedgerId, amount, p
 // Webhook settlement: find the link by gateway ref and post the receipt into
 // Undeposited Funds (online collections sit there until batch-deposited to bank).
 async function markPaidByProviderRef(providerRef) {
+  // Read the link first (only to learn ledger/amount); the actual settlement is
+  // gated below by a conditional UPDATE so exactly one caller can post.
   const { rows } = await pool.query("SELECT * FROM book_payment_links WHERE provider_ref=$1 AND status<>'PAID'", [providerRef]);
   const link = rows[0];
   if (!link || !link.party_ledger_id) return null;
   const undep = await ledgerIdByName(link.tenant_id, "Undeposited Funds");
   if (!undep) return null;
+  // Claim the row: only the caller whose UPDATE flips status<>'PAID'→'PAID' wins.
+  // A concurrent double-click / duplicate webhook gets rowCount 0 and bails.
+  const claim = await pool.query("UPDATE book_payment_links SET status='PAID' WHERE id=$1 AND status<>'PAID'", [link.id]);
+  if (claim.rowCount !== 1) return null;
+  // postVoucher dedupes on idempotencyKey, so even an in-flight retry posts once.
   const r = await postVoucher(link.tenant_id, null,
     { voucherType: "RECEIPT", voucherDate: new Date().toISOString().slice(0, 10), narration: "Online payment (gateway)", source: "api", partyLedgerId: link.party_ledger_id },
-    [{ ledgerId: undep, debit: toDb(link.amount), credit: "0" }, { ledgerId: link.party_ledger_id, debit: "0", credit: toDb(link.amount) }]);
-  await pool.query("UPDATE book_payment_links SET status='PAID', receipt_voucher_id=$2 WHERE id=$1", [link.id, r.voucherId]);
+    [{ ledgerId: undep, debit: toDb(link.amount), credit: "0" }, { ledgerId: link.party_ledger_id, debit: "0", credit: toDb(link.amount) }],
+    { idempotencyKey: `recv:${link.id}` });
+  await pool.query("UPDATE book_payment_links SET receipt_voucher_id=$2 WHERE id=$1", [link.id, r.voucherId]);
   if (link.invoice_voucher_id) await pool.query("INSERT INTO book_allocations(tenant_id,source_voucher_id,target_voucher_id,amount) VALUES($1,$2,$3,$4)", [link.tenant_id, r.voucherId, link.invoice_voucher_id, toDb(link.amount)]);
   return { ok: true, voucherId: r.voucherId };
 }
@@ -55,10 +63,17 @@ async function markPaid(tenantId, actorId, linkId, bankLedgerId) {
   if (!link) throw new PostError("NOT_FOUND", "Link not found", 404);
   if (link.status === "PAID") throw new PostError("BAD_STATE", "Already paid", 409);
   if (!bankLedgerId || !link.party_ledger_id) throw new PostError("BAD_INPUT", "bankLedgerId and a party on the link are required", 400);
+  // Claim the row before posting: the conditional UPDATE is the real gate, so a
+  // TOCTOU race / double-click lets exactly one caller through (rowCount 1).
+  // The loser sees rowCount 0 and gets the same 409 as an already-paid link.
+  const claim = await pool.query("UPDATE book_payment_links SET status='PAID' WHERE tenant_id=$1 AND id=$2 AND status<>'PAID'", [tenantId, linkId]);
+  if (claim.rowCount !== 1) throw new PostError("BAD_STATE", "Already paid", 409);
+  // Deterministic key so an in-flight posting retry still posts the receipt once.
   const r = await postVoucher(tenantId, actorId,
     { voucherType: "RECEIPT", voucherDate: new Date().toISOString().slice(0, 10), narration: "Online payment received", source: "api", partyLedgerId: link.party_ledger_id },
-    [{ ledgerId: bankLedgerId, debit: toDb(link.amount), credit: "0" }, { ledgerId: link.party_ledger_id, debit: "0", credit: toDb(link.amount) }]);
-  await pool.query("UPDATE book_payment_links SET status='PAID', receipt_voucher_id=$2 WHERE id=$1", [linkId, r.voucherId]);
+    [{ ledgerId: bankLedgerId, debit: toDb(link.amount), credit: "0" }, { ledgerId: link.party_ledger_id, debit: "0", credit: toDb(link.amount) }],
+    { idempotencyKey: `recv:${link.id}` });
+  await pool.query("UPDATE book_payment_links SET receipt_voucher_id=$2 WHERE id=$1", [linkId, r.voucherId]);
   if (link.invoice_voucher_id) {
     await pool.query("INSERT INTO book_allocations(tenant_id,source_voucher_id,target_voucher_id,amount) VALUES($1,$2,$3,$4)", [tenantId, r.voucherId, link.invoice_voucher_id, toDb(link.amount)]);
   }

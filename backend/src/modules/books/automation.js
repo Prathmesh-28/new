@@ -60,17 +60,24 @@ async function overdue(tenantId, asOf, ratePerAnnum) {
   const today = asOf || new Date().toISOString().slice(0, 10);
   const { rows } = await pool.query(
     `SELECT v.id, v.voucher_number, v.voucher_date, v.reference, v.party_ledger_id,
+            COALESCE(pl.credit_period_days, 0) AS credit_period_days,
             COALESCE((SELECT SUM(e.debit) FROM book_voucher_entries e WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS gross,
             COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.target_voucher_id=v.id),0) AS allocated
        FROM book_vouchers v
+       LEFT JOIN book_ledgers pl ON pl.id=v.party_ledger_id AND pl.tenant_id=v.tenant_id
       WHERE v.tenant_id=$1 AND v.voucher_type='SALES' AND v.is_cancelled=false`,
     [tenantId]
   );
   const invoices = [];
+  const todayMs = new Date(today).getTime();
   for (const r of rows) {
     const outstanding = money(r.gross).minus(r.allocated);
     if (!gt(outstanding, 0)) continue;
-    const days = Math.max(0, Math.round((new Date(today).getTime() - new Date(r.voucher_date).getTime()) / 86400000));
+    // Due date = voucher_date + credit_period_days; only count days past the due date.
+    const creditDays = Number(r.credit_period_days) || 0;
+    const dueMs = new Date(r.voucher_date).getTime() + creditDays * 86400000;
+    const days = Math.max(0, Math.round((todayMs - dueMs) / 86400000));
+    if (days <= 0) continue; // not yet due / due today — exclude from overdue list
     invoices.push({ voucherId: r.id, number: r.voucher_number, reference: r.reference, partyLedgerId: r.party_ledger_id, outstanding: toRupees(outstanding), daysOverdue: days, suggestedLateFee: toRupees(computeLateFee(outstanding, days, ratePerAnnum || 0)) });
   }
   return { asOf: today, ratePerAnnum: ratePerAnnum || 0, invoices };

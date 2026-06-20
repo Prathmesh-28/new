@@ -55,7 +55,12 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   const invoice_number = nextInvoiceNumber(existing.map(r => r.invoice_number));
 
   const subtotal   = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
-  const gst_amount = parseFloat((subtotal * gst_rate / 100).toFixed(2));
+  const gstSum     = items.reduce((s, i) => {
+    const lineAmt = parseFloat(i.quantity) * parseFloat(i.unit_price);
+    const lineRate = (i.gst_rate ?? gst_rate);
+    return s + (lineAmt * lineRate / 100);
+  }, 0);
+  const gst_amount = parseFloat(gstSum.toFixed(2));
   const total      = parseFloat((subtotal + gst_amount).toFixed(2));
 
   const { rows: [inv] } = await pool.query(

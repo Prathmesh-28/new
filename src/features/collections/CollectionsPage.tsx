@@ -19,7 +19,9 @@ import { toast } from "sonner";
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
 function getAging(dueDateStr: string): Aging {
+  if (!dueDateStr) return "current";
   const days = differenceInDays(new Date(), parseISO(dueDateStr));
+  if (Number.isNaN(days)) return "current";
   if (days < 0)  return "current";
   if (days <= 30) return "1-30";
   if (days <= 60) return "31-60";
@@ -144,7 +146,11 @@ export default function CollectionsPage() {
         dueDate: inv.dueDate,
         status: inv.status,
         aging: getAging(inv.dueDate),
-        daysOverdue: Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate))),
+        daysOverdue: (() => {
+          if (!inv.dueDate) return 0;
+          const d = differenceInDays(new Date(), parseISO(inv.dueDate));
+          return Number.isNaN(d) ? 0 : Math.max(0, d);
+        })(),
       }));
   }, [store]);
 
@@ -183,9 +189,14 @@ export default function CollectionsPage() {
       if (inv.status === "paid") {
         c.totalPaid += inv.amount;
         c.paidCount++;
-        const dueDate = parseISO(inv.dueDate);
-        const daysTaken = differenceInDays(new Date(), dueDate);
-        c.totalDaysToCollect += Math.max(0, daysTaken);
+        // No payment date exists on the store Invoice, so a metric anchored to
+        // new Date() would drift upward forever. Use the fixed terms-based span
+        // (due date − invoice date) instead, which is stable once the invoice
+        // is created. Guard against missing/invalid dates.
+        const daysTaken = (inv.dueDate && inv.invoiceDate)
+          ? differenceInDays(parseISO(inv.dueDate), parseISO(inv.invoiceDate))
+          : 0;
+        c.totalDaysToCollect += Number.isNaN(daysTaken) ? 0 : Math.max(0, daysTaken);
       } else {
         const overdueDays = Math.max(0, differenceInDays(new Date(), parseISO(inv.dueDate)));
         if (overdueDays > 0) c.overdueAmount += inv.amount;
