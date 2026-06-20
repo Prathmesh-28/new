@@ -8,7 +8,12 @@ const { financialYearFor } = require("./fy");
 const { postVoucher, PostError } = require("./posting-engine");
 const { buildSalesVoucher, buildPurchaseVoucher, buildSalesVoucherLines, buildPurchaseVoucherLines } = require("./mappers");
 const { ledgerIdByName } = require("./seed");
+const inventory = require("./inventory");
 const auto = require("./automation");
+
+// Idempotency marker appended to a document's reference once its lines have been
+// moved through inventory, so postDocumentStock() is safe to call more than once.
+const STOCK_POSTED_MARK = "[STOCK_POSTED]";
 
 // Allowed conversions. "INVOICE"/"BILL" are terminal (they post a voucher).
 const NEXT = {
@@ -229,4 +234,44 @@ async function runAllRecurring(asOf) {
   return { tenants: rows.length, results: out };
 }
 
-module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, salesCtx, purchaseCtx, NEXT };
+// Move INVENTORY for a stock document. A DELIVERY_CHALLAN ships goods out, so each
+// line is issue()d (qty + warehouse from the line); a GRN takes goods in, so each
+// line is receive()d (qty + rate). Lines without an itemId (e.g. free-text/service
+// rows) are skipped. Idempotent: once moved, the document's reference carries a
+// STOCK_POSTED marker and a second call is a no-op (returns moved:[]). Only valid
+// for DELIVERY_CHALLAN / GRN — anything else raises a PostError.
+async function postDocumentStock(tenantId, actorId, docId) {
+  const { rows } = await pool.query("SELECT * FROM book_documents WHERE tenant_id=$1 AND id=$2", [tenantId, docId]);
+  const doc = rows[0];
+  if (!doc) throw new PostError("NOT_FOUND", "Document not found", 404);
+  const docKind = doc.doc_kind;
+  if (docKind !== "DELIVERY_CHALLAN" && docKind !== "GRN") {
+    throw new PostError("BAD_KIND", `Stock can only be moved for DELIVERY_CHALLAN or GRN, not ${docKind}`, 422);
+  }
+  if (doc.status === "CANCELLED") throw new PostError("BAD_STATE", "Document is CANCELLED", 409);
+
+  // Idempotency guard — never double-move the same document.
+  const ref = doc.reference || "";
+  if (ref.includes(STOCK_POSTED_MARK)) return { docKind, moved: [] };
+
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  const moved = [];
+  for (const line of lines) {
+    if (!line || !line.itemId) continue; // skip service / free-text rows
+    if (docKind === "DELIVERY_CHALLAN") {
+      const res = await inventory.issue(tenantId, line.itemId, line.qty, { warehouseId: line.warehouseId || null, voucherId: doc.converted_voucher_id || null });
+      moved.push({ itemId: line.itemId, qty: toDb(line.qty), warehouseId: line.warehouseId || null, cogs: res.cogs });
+    } else {
+      const res = await inventory.receive(tenantId, line.itemId, line.qty, line.rate || 0, { warehouseId: line.warehouseId || null, voucherId: doc.converted_voucher_id || null });
+      moved.push({ itemId: line.itemId, qty: toDb(line.qty), rate: toDb(line.rate || 0), warehouseId: line.warehouseId || null, value: res.value });
+    }
+  }
+
+  // Stamp the idempotency marker only after every line moved cleanly.
+  const newRef = ref ? `${ref} ${STOCK_POSTED_MARK}` : STOCK_POSTED_MARK;
+  await pool.query("UPDATE book_documents SET reference=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, docId, newRef]);
+
+  return { docKind, moved };
+}
+
+module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, postDocumentStock, salesCtx, purchaseCtx, NEXT };

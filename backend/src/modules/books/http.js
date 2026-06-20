@@ -14,6 +14,7 @@ const importer = require("./importer");
 const closing = require("./closing");
 const ledgersadmin = require("./ledgersadmin");
 const items = require("./items");
+const vt = require("./vouchertools");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -719,6 +720,16 @@ router.post("/number-formats", canPost, async (req, res) => { try { res.status(2
 router.get("/overdue", async (req, res) => { try { res.json(await auto.overdue(tenantOf(req), req.query.asOf, Number(req.query.ratePerAnnum) || 0)); } catch (e) { fail(res, e); } });
 router.post("/late-fee", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await auto.postLateFee(tenantOf(req), req.user.id, b)); } catch (e) { fail(res, e); } });
 router.get("/dunning/due", async (req, res) => { try { res.json(await auto.dunningDue(tenantOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+// Reversing journal + voucher templates + post-dated cheques + delivery/GRN stock.
+router.post("/journals/reversing", canPost, async (req, res) => { try { res.status(201).json(await vt.reversingJournal(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/voucher-templates", canPost, async (req, res) => { try { res.status(201).json(await vt.saveTemplate(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/voucher-templates", async (req, res) => { try { res.json(await vt.listTemplates(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.delete("/voucher-templates/:id", canPost, async (req, res) => { try { res.json(await vt.deleteTemplate(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/pdc", canPost, async (req, res) => { try { res.status(201).json(await vt.createPdc(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/pdc", async (req, res) => { try { res.json(await vt.listPdc(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+router.post("/pdc/:id/clear", canPost, async (req, res) => { try { res.json(await vt.clearPdc(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/pdc/:id/bounce", canPost, async (req, res) => { try { res.json(await vt.bouncePdc(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/post-stock", canPost, async (req, res) => { try { res.status(201).json(await docs.postDocumentStock(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/projects", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_projects WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });

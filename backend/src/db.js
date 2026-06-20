@@ -668,6 +668,32 @@ async function initDb() {
       PRIMARY KEY (tenant_id, parent_item_id, component_item_id)
     );
 
+    -- Books should-haves (vouchers): saved entry templates + post-dated cheque register.
+    CREATE TABLE IF NOT EXISTS book_voucher_templates (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      voucher_type TEXT NOT NULL,
+      template     JSONB NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS book_pdc (
+      id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id         TEXT NOT NULL,
+      kind              TEXT NOT NULL DEFAULT 'RECEIVABLE',
+      party_ledger_id   UUID,
+      bank_ledger_id    UUID,
+      amount            NUMERIC(19,4) NOT NULL DEFAULT 0,
+      cheque_no         TEXT,
+      cheque_date       DATE,
+      status            TEXT NOT NULL DEFAULT 'PENDING',
+      cleared_voucher_id UUID,
+      note              TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_pdc ON book_pdc(tenant_id, status, cheque_date);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
