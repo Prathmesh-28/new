@@ -6,8 +6,12 @@ import { API_BASE } from "@/lib/apiBase";
 import {
   BookOpen, LayoutGrid, ListTree, FilePlus2, BarChart3, Repeat,
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
-  FileText, Trash2, Printer, Send,
+  FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
 } from "lucide-react";
+import BooksReceivablesTab from "./BooksReceivablesTab";
+import BooksGstTab from "./BooksGstTab";
+import BooksAdminTab from "./BooksAdminTab";
+import BooksInventoryTab from "./BooksInventoryTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -107,7 +111,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,6 +331,10 @@ export default function BooksPage() {
     { id: "invoices",  label: "Invoices",          icon: <FileText size={14} /> },
     { id: "reports",   label: "Reports",           icon: <BarChart3 size={14} /> },
     { id: "reconcile", label: "Reconcile",         icon: <Repeat size={14} /> },
+    { id: "arap",      label: "Receivables/Payables", icon: <Receipt size={14} /> },
+    { id: "gst",       label: "GST & Tax",         icon: <Percent size={14} /> },
+    { id: "inventory", label: "Inventory",         icon: <Boxes size={14} /> },
+    { id: "controls",  label: "Controls",          icon: <SlidersHorizontal size={14} /> },
   ];
 
   return (
@@ -391,6 +399,10 @@ export default function BooksPage() {
             {tab === "reconcile" && (
               <ReconcileTab ledgers={ledgers} canWrite={canWrite} />
             )}
+            {tab === "arap" && <BooksReceivablesTab />}
+            {tab === "gst" && <BooksGstTab />}
+            {tab === "inventory" && <BooksInventoryTab canWrite={canWrite} />}
+            {tab === "controls" && <BooksAdminTab />}
           </>
         )}
       </div>
