@@ -8,7 +8,8 @@ import { TAB_CATALOG } from "@/data/roles";
 // list by recording each page you land on.
 const LABELS: Record<string, string> = {
   ...Object.fromEntries(TAB_CATALOG.map(t => [`/${t.tab}`, t.label])),
-  "/admin": "Super Admin", "/settings": "Settings", "/profile": "Profile",
+  "/admin": "Super Admin", "/admin/data": "All Data", "/settings": "Settings",
+  "/organization": "Organization", "/profile": "Profile",
   "/cfo-brief": "CFO Brief", "/term-sheet": "Term Sheet", "/working-capital": "Working Capital",
 };
 

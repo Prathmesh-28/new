@@ -105,10 +105,9 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/frontier",        label: "Frontier Lab",  icon: FlaskConical,    tab: "frontier"    },
   ]},
   { label: "Organization", items: [
-    // "Team & Access" deep-links into the Settings team section — where an owner
-    // manages company users (invite, roles, remove, permissions). Gated on the
-    // "settings" tab, so only owner + super_admin see it.
-    { to: "/settings#team",   label: "Team & Access", icon: UsersRound,      tab: "settings"   },
+    // The company-admin console (members, roles & access, billing, company,
+    // audit). Gated on the "settings" tab, so only owner + super_admin see it.
+    { to: "/organization",    label: "Organization",  icon: UsersRound,      tab: "settings"   },
     { to: "/settings",        label: "Settings",      icon: Settings2,       tab: "settings"   },
     { to: "/data",            label: "Data & Import", icon: Database,        tab: "data"        },
     { to: "/security",        label: "Security",      icon: ShieldAlert,     tab: "security"    },

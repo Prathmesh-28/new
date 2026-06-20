@@ -47,6 +47,7 @@ const ErpPage            = lazy(() => import("@/features/erp/ErpPage"));
 const HrmsPage           = lazy(() => import("@/features/hrms/HrmsPage"));
 const InsightsPage       = lazy(() => import("@/features/insights/InsightsPage"));
 const SettingsPage       = lazy(() => import("@/features/settings/SettingsPage"));
+const OrganizationPage   = lazy(() => import("@/features/settings/OrganizationPage"));
 const TransactionsPage   = lazy(() => import("@/features/transactions/TransactionsPage"));
 const AlertsPage         = lazy(() => import("@/features/alerts/AlertsPage"));
 const ReceivablesPage    = lazy(() => import("@/features/receivables/ReceivablesPage"));
@@ -232,6 +233,7 @@ function AppShell() {
                 <Route path="/investor"      element={<InvestorPage />} />
                 <Route path="/connectors"    element={<ConnectorsPage />} />
                 <Route path="/settings"      element={<SettingsPage />} />
+                <Route path="/organization"  element={<OrganizationPage />} />
                 <Route path="/admin"         element={<AdminPage />} />
                 <Route path="/admin/data"    element={<AllDataPage />} />
                 <Route path="/books"         element={<BooksPage />} />
