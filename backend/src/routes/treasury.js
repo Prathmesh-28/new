@@ -2,6 +2,79 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 
+// super_admin may target any tenant via ?tenant_id; everyone else is scoped to their own.
+const tenantOf = (req) =>
+  req.user.role === "super_admin" && req.query.tenant_id
+    ? String(req.query.tenant_id)
+    : req.user.tenant_id;
+
+// GET /holdings - tenant-scoped list of recorded positions, ordered by maturity
+router.get("/holdings", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { rows } = await pool.query(
+      `SELECT id, kind, label, bank, amount, rate, start_date, maturity_date, notes, created_at
+         FROM treasury_holdings
+        WHERE tenant_id=$1
+        ORDER BY maturity_date ASC NULLS LAST, created_at DESC`,
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load holdings" });
+  }
+});
+
+// POST /holdings - record an actual FD / liquid fund / T-bill position
+router.post("/holdings", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { kind, label, bank, amount, rate, start_date, maturity_date, notes } = req.body || {};
+    const amt = Number(amount);
+    if (!label || !String(label).trim() || !Number.isFinite(amt) || amt <= 0) {
+      return res.status(400).json({ error: "label and a positive amount are required" });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO treasury_holdings
+         (tenant_id, kind, label, bank, amount, rate, start_date, maturity_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id, kind, label, bank, amount, rate, start_date, maturity_date, notes, created_at`,
+      [
+        tenantId,
+        kind ? String(kind) : "FD",
+        String(label).trim(),
+        bank ? String(bank) : null,
+        amt,
+        rate !== undefined && rate !== null && rate !== "" ? Number(rate) : null,
+        start_date || null,
+        maturity_date || null,
+        notes ? String(notes) : null,
+      ]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create holding" });
+  }
+});
+
+// DELETE /holdings/:id - remove a tenant-scoped position
+router.delete("/holdings/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { rowCount } = await pool.query(
+      "DELETE FROM treasury_holdings WHERE id=$1 AND tenant_id=$2",
+      [req.params.id, tenantId]
+    );
+    if (!rowCount) return res.status(404).json({ error: "Holding not found" });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete holding" });
+  }
+});
+
 // GET /analysis - Idle cash analysis
 router.get("/analysis", authenticate, requireOwnerOrAdmin, async (req, res) => {
   try {

@@ -141,6 +141,7 @@ app.use("/api/treasury",           require("./routes/treasury"));
 app.use("/api/ewa",                require("./routes/ewa"));
 app.use("/api/suppliers",          require("./routes/suppliers"));
 app.use("/api/lenders",            require("./routes/lenders"));
+app.use("/api/vendors",            require("./routes/vendors"));   // vendor master (profiles)
 
 // ── Platform admin endpoints (super_admin only) ─────────────────────────────
 // These are the PLATFORM owner's god-view across every tenant/company — distinct

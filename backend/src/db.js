@@ -609,6 +609,87 @@ async function initDb() {
   await pool.query(require("./modules/erp/schema").ERP_SCHEMA);
   await pool.query(require("./modules/hrms/schema").HRMS_SCHEMA);
   await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
+
+  // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──
+  await pool.query(`
+    -- Vendor master (vendors page): a real profile per vendor, not just a txn string.
+    CREATE TABLE IF NOT EXISTS vendor_master (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id       TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      gstin           TEXT,
+      pan             TEXT,
+      contact_name    TEXT,
+      phone           TEXT,
+      email           TEXT,
+      upi             TEXT,
+      bank_account    TEXT,
+      bank_ifsc       TEXT,
+      payment_terms_days INT DEFAULT 30,
+      is_msme         BOOLEAN DEFAULT false,
+      udyam           TEXT,
+      category        TEXT,
+      notes           TEXT,
+      created_at      TIMESTAMPTZ DEFAULT now(),
+      updated_at      TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (tenant_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS vendor_master_tenant ON vendor_master(tenant_id);
+
+    -- Advisor workspace (CA practice-management trackers): server-side per-advisor KV
+    -- so the whole firm sees the same board, not one browser's localStorage.
+    CREATE TABLE IF NOT EXISTS advisor_workspace (
+      advisor_id  UUID NOT NULL,
+      key         TEXT NOT NULL,
+      value       JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at  TIMESTAMPTZ DEFAULT now(),
+      PRIMARY KEY (advisor_id, key)
+    );
+
+    -- Treasury portfolio: the owner records an actual FD/liquid-fund/T-bill once and
+    -- it becomes the source of truth for the overview + maturity reminders.
+    CREATE TABLE IF NOT EXISTS treasury_holdings (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      kind          TEXT NOT NULL DEFAULT 'fd',
+      label         TEXT,
+      bank          TEXT,
+      amount        NUMERIC(16,2) NOT NULL DEFAULT 0,
+      rate          NUMERIC(6,3),
+      start_date    DATE,
+      maturity_date DATE,
+      notes         TEXT,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS treasury_holdings_tenant ON treasury_holdings(tenant_id, maturity_date);
+
+    -- Lender co-lending auction: real borrower applications + persisted lender bids.
+    CREATE TABLE IF NOT EXISTS lender_applications (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      company_name  TEXT,
+      amount        NUMERIC(16,2) NOT NULL DEFAULT 0,
+      purpose       TEXT,
+      tenure_months INT DEFAULT 12,
+      status        TEXT NOT NULL DEFAULT 'open',
+      created_by    UUID,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS lender_applications_status ON lender_applications(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS lender_applications_tenant ON lender_applications(tenant_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS lender_bids (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      application_id UUID NOT NULL REFERENCES lender_applications(id) ON DELETE CASCADE,
+      lender_id      UUID,
+      lender_label   TEXT,
+      rate           NUMERIC(6,3),
+      amount         NUMERIC(16,2),
+      note           TEXT,
+      created_at     TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS lender_bids_app ON lender_bids(application_id, created_at DESC);
+  `);
 }
 
 module.exports = { pool, initDb };

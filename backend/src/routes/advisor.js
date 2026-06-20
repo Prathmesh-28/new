@@ -200,4 +200,34 @@ router.get("/clients/:tenantId/report-preview", authenticate, requireAdvisor, as
   }
 });
 
+// GET /api/advisor/workspace/:key — load a stored practice-management tracker
+router.get("/workspace/:key", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM advisor_workspace WHERE advisor_id=$1 AND key=$2",
+      [req.user.id, req.params.key]
+    );
+    res.json(rows[0]?.value ?? {});
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load workspace" });
+  }
+});
+
+// PUT /api/advisor/workspace/:key — upsert a practice-management tracker
+router.put("/workspace/:key", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const value = req.body ?? {};
+    const { rows } = await pool.query(
+      `INSERT INTO advisor_workspace(advisor_id, key, value)
+       VALUES($1,$2,$3)
+       ON CONFLICT(advisor_id, key) DO UPDATE SET value=$3
+       RETURNING value`,
+      [req.user.id, req.params.key, JSON.stringify(value)]
+    );
+    res.json(rows[0].value);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save workspace" });
+  }
+});
+
 module.exports = router;

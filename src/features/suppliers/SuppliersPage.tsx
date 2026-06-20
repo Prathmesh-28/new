@@ -16,6 +16,18 @@ interface SupplierOffer {
   days_early: number;
   saving: number;
   due_date: string;
+  is_msme?: boolean;
+  bill_count?: number;
+  total_spend?: number;
+}
+
+interface PayEarlyResult {
+  success: boolean;
+  transaction_id: string;
+  amount_paid: number;
+  saving: number;
+  supplier_name: string;
+  message: string;
 }
 
 type SupTab = "early-pay" | "scorecard" | "reorder" | "rate-contract" | "msme-verify"
@@ -98,21 +110,32 @@ function EarlyPaySection() {
   const [offers, setOffers]   = useState<SupplierOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying]   = useState<Record<string, boolean>>({});
-  const [paid, setPaid]       = useState<Set<string>>(new Set());
+  const [paid, setPaid]       = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     api.get<SupplierOffer[]>("/api/suppliers/marketplace")
-      .then(setOffers)
-      .catch(() => {})
+      .then(data => setOffers(Array.isArray(data) ? data : []))
+      .catch(() => { setOffers([]); toast.error("Couldn't load early-pay candidates"); })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(load, []);
 
   const payEarly = async (offer: SupplierOffer) => {
     setPaying(p => ({ ...p, [offer.id]: true }));
     try {
-      await api.post("/api/suppliers/pay-early", { offer_id: offer.id });
-      setPaid(s => new Set([...s, offer.id]));
-      toast.success(`Early payment initiated to ${offer.supplier_name}. You saved ${formatCurrency(offer.saving)}.`);
+      const res = await api.post<PayEarlyResult>("/api/suppliers/pay-early", {
+        offer_id: offer.id,
+        supplier_name: offer.supplier_name,
+        amount: offer.invoice_amount,
+        discount: offer.early_pay_discount,
+        saving: offer.saving,
+      });
+      setPaid(s => ({ ...s, [offer.id]: true }));
+      toast.success(res?.message || `Early payment to ${offer.supplier_name} recorded. You saved ${formatCurrency(offer.saving)}.`);
+      // Refresh candidates so the recorded expense is reflected in the tenant's data.
+      load();
     } catch {
       toast.error("Payment failed");
     } finally {
@@ -120,7 +143,7 @@ function EarlyPaySection() {
     }
   };
 
-  const totalSavings = offers.filter(o => !paid.has(o.id)).reduce((s, o) => s + o.saving, 0);
+  const totalSavings = offers.filter(o => !paid[o.id]).reduce((s, o) => s + o.saving, 0);
 
   return (
     <div className="space-y-4">
@@ -131,7 +154,7 @@ function EarlyPaySection() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Open Offers",       value: offers.filter(o => !paid.has(o.id)).length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Open Offers",       value: offers.filter(o => !paid[o.id]).length.toString(), color: "text-[var(--color-primary)]" },
           { label: "Total Payable",     value: formatCurrency(offers.reduce((s,o)=>s+o.invoice_amount,0)), color: "text-[var(--color-muted)]" },
           { label: "Savings Available", value: formatCurrency(totalSavings), color: "text-green-400" },
         ].map(({ label, value, color }) => (
@@ -152,7 +175,7 @@ function EarlyPaySection() {
       ) : (
         <div className="space-y-3">
           {offers.map(offer => (
-            <div key={offer.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 transition-all ${paid.has(offer.id) ? "border-green-700/40 opacity-60" : "border-[var(--color-border)]"}`}>
+            <div key={offer.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 transition-all ${paid[offer.id] ? "border-green-700/40 opacity-60" : "border-[var(--color-border)]"}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -160,6 +183,9 @@ function EarlyPaySection() {
                     <span className="text-[10px] font-semibold bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded-full">
                       {offer.early_pay_discount}% discount
                     </span>
+                    {offer.is_msme && (
+                      <span className="text-[10px] font-semibold bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-0.5 rounded-full">MSME</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-xs text-[var(--color-muted)]">
                     <span>Invoice: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(offer.invoice_amount)}</span></span>
@@ -173,7 +199,7 @@ function EarlyPaySection() {
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold tabular-nums">{formatCurrency(offer.invoice_amount - offer.saving)}</p>
                   <p className="text-[10px] text-[var(--color-muted)]">Pay today</p>
-                  {paid.has(offer.id) ? (
+                  {paid[offer.id] ? (
                     <span className="flex items-center gap-1 text-xs text-green-400 mt-1"><Check size={11} /> Paid</span>
                   ) : (
                     <button onClick={() => payEarly(offer)} disabled={paying[offer.id]}

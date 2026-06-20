@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import {
   Wallet, Layers, GitCompareArrows, PieChart, Calculator, Landmark,
@@ -17,6 +18,83 @@ import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
+
+// ── Real persisted positions (backend: treasury_holdings) ──────────────────────
+export type TreasuryHolding = {
+  id: string;
+  kind: string;
+  label: string;
+  bank: string | null;
+  amount: number | string;
+  rate: number | string | null;
+  start_date: string | null;
+  maturity_date: string | null;
+  notes: string | null;
+  created_at?: string;
+};
+
+type NewHolding = {
+  kind: string;
+  label: string;
+  bank?: string;
+  amount: number;
+  rate?: number | null;
+  start_date?: string | null;
+  maturity_date?: string | null;
+  notes?: string | null;
+};
+
+const numOf = (v: number | string | null | undefined) => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Shared hook: fetches the tenant's recorded FD / liquid-fund / T-bill positions
+// from the backend and exposes create/delete. Used by Overview + Maturity Calendar
+// so both read the SAME real data instead of a local stub.
+function useHoldings() {
+  const [holdings, setHoldings] = useState<TreasuryHolding[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const rows = await api.get<TreasuryHolding[]>("/api/treasury/holdings");
+      setHoldings(Array.isArray(rows) ? rows : []);
+    } catch {
+      toast.error("Couldn't load your treasury positions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const add = useCallback(async (h: NewHolding) => {
+    try {
+      const created = await api.post<TreasuryHolding>("/api/treasury/holdings", h);
+      setHoldings(prev => [...prev, created]);
+      toast.success("Position recorded");
+      return true;
+    } catch {
+      toast.error("Couldn't save the position");
+      return false;
+    }
+  }, []);
+
+  const remove = useCallback(async (id: string) => {
+    const prev = holdings;
+    setHoldings(prev.filter(x => x.id !== id)); // optimistic
+    try {
+      await api.delete(`/api/treasury/holdings/${id}`);
+      toast.success("Position removed");
+    } catch {
+      setHoldings(prev);
+      toast.error("Couldn't remove the position");
+    }
+  }, [holdings]);
+
+  return { holdings, loading, add, remove, reload: load };
+}
 
 type Tab =
   | "overview" | "sweep" | "ladder" | "compare" | "allocate" | "yield"
@@ -142,19 +220,47 @@ export default function TreasuryPage() {
 // ── Overview ─────────────────────────────────────────────────────────────────
 function Overview({ totalBalance }: { totalBalance: number }) {
   const { store } = useApp();
-  // Treat a configurable buffer as 8 weeks of payroll/opex proxy; default ₹5L floor.
-  const buffer = Math.max(500000, Math.round(totalBalance * 0.35));
-  const investable = Math.max(0, totalBalance - buffer);
-  // Yield forgone: idle cash at ~3% savings vs ~7% liquid fund on the investable slice.
-  const annualForgone = Math.round(investable * (0.07 - 0.03));
+  const { holdings } = useHoldings();
+  const today = new Date();
+
+  // Real position: how much is already deployed into recorded instruments.
+  const invested = useMemo(() => holdings.reduce((s, h) => s + numOf(h.amount), 0), [holdings]);
+  // Idle = cash sitting in current/savings accounts (not yet deployed). Never below 0.
+  const idle = Math.max(0, totalBalance - invested);
+  // Yield forgone on the idle slice: ~3% savings vs ~7% liquid fund.
+  const annualForgone = Math.round(idle * (0.07 - 0.03));
+  const investedPct = totalBalance > 0 ? Math.min(100, Math.round((invested / totalBalance) * 100)) : 0;
+
+  // Holdings maturing within ~30 days — surface as a reminder so cash gets redeployed.
+  const maturingSoon = useMemo(() =>
+    holdings
+      .filter(h => {
+        if (!h.maturity_date) return false;
+        const d = differenceInCalendarDays(new Date(h.maturity_date), today);
+        return d >= 0 && d <= 30;
+      })
+      .sort((a, b) => String(a.maturity_date).localeCompare(String(b.maturity_date))),
+  [holdings]); // eslint-disable-line react-hooks/exhaustive-deps
+  const maturingSoonAmt = maturingSoon.reduce((s, h) => s + numOf(h.amount), 0);
 
   return (
     <div className="space-y-4">
+      {maturingSoon.length > 0 && (
+        <div className="rounded-lg p-4 border border-yellow-800/50 bg-yellow-950/20">
+          <p className="text-sm font-bold text-yellow-400 flex items-center gap-2">
+            <AlertTriangle size={14} /> {maturingSoon.length} holding{maturingSoon.length > 1 ? "s" : ""} maturing within 30 days — {formatCurrency(Math.round(maturingSoonAmt))} freeing up
+          </p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">
+            {maturingSoon.map(h => `${h.label} (${format(new Date(h.maturity_date as string), "d MMM")})`).join(" · ")}. Decide now whether to renew, ladder, or sweep — don't let it auto-renew at a poor rate.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total Cash (all banks)", value: formatCurrency(totalBalance), color: "text-[var(--color-text)]", sub: `${store.bankAccounts.length} account(s)` },
-          { label: "Operating Buffer (est.)", value: formatCurrency(buffer), color: "text-yellow-400", sub: "Keep liquid for opex / payroll" },
-          { label: "Investable Surplus", value: formatCurrency(investable), color: "text-green-400", sub: "Above buffer — can earn yield" },
+          { label: "Invested", value: formatCurrency(Math.round(invested)), color: "text-blue-400", sub: `${holdings.length} position(s) · ${investedPct}% of cash` },
+          { label: "Idle Cash", value: formatCurrency(Math.round(idle)), color: "text-yellow-400", sub: "Not yet earning yield" },
           { label: "Yield Forgone / yr", value: formatCurrency(annualForgone), color: "text-red-400", sub: "Idle @ 3% vs liquid @ 7%" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
@@ -163,6 +269,23 @@ function Overview({ totalBalance }: { totalBalance: number }) {
             <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>
           </div>
         ))}
+      </div>
+
+      <div className={`${CARD} p-5`}>
+        <p className="text-sm font-semibold mb-3 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Invested vs idle</p>
+        <div className="h-3 bg-[var(--color-bg)] rounded-full overflow-hidden flex">
+          <div className="h-full bg-blue-500" style={{ width: `${investedPct}%` }} title="Invested" />
+          <div className="h-full bg-yellow-500/70" style={{ width: `${100 - investedPct}%` }} title="Idle" />
+        </div>
+        <div className="flex justify-between text-[11px] text-[var(--color-muted)] mt-2">
+          <span><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1 align-middle" />Invested {formatCurrency(Math.round(invested))} ({investedPct}%)</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500/70 mr-1 align-middle" />Idle {formatCurrency(Math.round(idle))} ({100 - investedPct}%)</span>
+        </div>
+        {holdings.length === 0 && (
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">
+            No positions recorded yet. Use the <strong className="text-[var(--color-text)]">Maturity Calendar</strong> tab to record your first FD, liquid fund or T-bill — the split and maturity reminders read straight from it.
+          </p>
+        )}
       </div>
 
       <div className={`${CARD} p-5`}>
@@ -934,69 +1057,101 @@ function PostTaxCalculator() {
   );
 }
 
-// ── #10 Maturity Calendar ──────────────────────────────────────────────────────
-type Holding = { id: string; name: string; instrument: string; amount: number; maturity: number; date: string };
+// ── #10 Maturity Calendar (real persisted positions) ───────────────────────────
 function MaturityCalendar() {
-  const [holdings, setHoldings] = useFeatureState<Holding[]>("trez-holdings", []);
-  const [name, setName] = useState("");
-  const [instrument, setInstrument] = useState("FD");
+  const { holdings, loading, add, remove } = useHoldings();
+  const [label, setLabel] = useState("");
+  const [kind, setKind] = useState("FD");
+  const [bank, setBank] = useState("");
   const [amount, setAmount] = useState("");
-  const [maturity, setMaturity] = useState("");
-  const [date, setDate] = useState(() => format(addDays(new Date(), 90), "yyyy-MM-dd"));
+  const [rate, setRate] = useState("");
+  const [startDate, setStartDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [maturityDate, setMaturityDate] = useState(() => format(addDays(new Date(), 90), "yyyy-MM-dd"));
+  const [saving, setSaving] = useState(false);
   const today = new Date();
 
-  const add = () => {
-    const amt = parseFloat(amount), mat = parseFloat(maturity);
-    if (!name.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter a label and invested amount"); return; }
-    setHoldings([...holdings, { id: crypto.randomUUID(), name: name.trim(), instrument, amount: amt, maturity: isNaN(mat) ? amt : mat, date }]);
-    setName(""); setAmount(""); setMaturity("");
-    toast.success("Holding added");
+  const submit = async () => {
+    const amt = parseFloat(amount);
+    if (!label.trim() || isNaN(amt) || amt <= 0) { toast.error("Enter a label and invested amount"); return; }
+    setSaving(true);
+    const ok = await add({
+      kind,
+      label: label.trim(),
+      bank: bank.trim() || undefined,
+      amount: amt,
+      rate: rate.trim() ? parseFloat(rate) : null,
+      start_date: startDate || null,
+      maturity_date: maturityDate || null,
+    });
+    setSaving(false);
+    if (ok) { setLabel(""); setBank(""); setAmount(""); setRate(""); }
   };
 
-  const sorted = [...holdings].sort((a, b) => a.date.localeCompare(b.date));
-  const totalInvested = holdings.reduce((s, h) => s + h.amount, 0);
-  const totalMaturity = holdings.reduce((s, h) => s + h.maturity, 0);
-  const next90 = holdings.filter(h => { const d = differenceInCalendarDays(new Date(h.date), today); return d >= 0 && d <= 90; }).reduce((s, h) => s + h.maturity, 0);
+  const sorted = [...holdings].sort((a, b) =>
+    String(a.maturity_date ?? "").localeCompare(String(b.maturity_date ?? "")));
+  const totalInvested = holdings.reduce((s, h) => s + numOf(h.amount), 0);
+  const next90 = holdings
+    .filter(h => { if (!h.maturity_date) return false; const d = differenceInCalendarDays(new Date(h.maturity_date), today); return d >= 0 && d <= 90; })
+    .reduce((s, h) => s + numOf(h.amount), 0);
+  const maturing30 = holdings
+    .filter(h => { if (!h.maturity_date) return false; const d = differenceInCalendarDays(new Date(h.maturity_date), today); return d >= 0 && d <= 30; })
+    .reduce((s, h) => s + numOf(h.amount), 0);
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Maturity Calendar</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track every FD, RD, T-bill and fund lock-in in one place so cash availability is never a surprise — and you don't auto-renew at a poor rate.</p>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+        <p className="text-xs text-[var(--color-muted)]">Record every real FD, T-bill and fund position once. It's saved to your account and powers the Overview invested-vs-idle split and the 30-day maturity reminder — so cash availability is never a surprise.</p>
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Label</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="HDFC FD" className={INP} />
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="HDFC FD" className={INP} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
-            <select value={instrument} onChange={e => setInstrument(e.target.value)} className={INP}>
+            <select value={kind} onChange={e => setKind(e.target.value)} className={INP}>
               {["FD", "RD", "T-Bill", "G-Sec", "Liquid fund", "Debt fund", "Corporate FD"].map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Invested (₹)</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Bank / issuer</label>
+            <input value={bank} onChange={e => setBank(e.target.value)} placeholder="HDFC" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="500000" className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Maturity value (₹)</label>
-            <input type="number" value={maturity} onChange={e => setMaturity(e.target.value)} placeholder="535000" className={INP} />
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Rate (% p.a.)</label>
+            <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="7.25" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Start date</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Matures on</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <input type="date" value={maturityDate} onChange={e => setMaturityDate(e.target.value)} className={INP} />
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
-            <Plus size={13} /> Add
-          </button>
         </div>
+        <button onClick={submit} disabled={saving} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
+          <Plus size={13} /> {saving ? "Saving…" : "Record position"}
+        </button>
       </div>
+
+      {maturing30 > 0 && (
+        <div className="rounded-lg p-3 border border-yellow-800/50 bg-yellow-950/20">
+          <p className="text-sm font-semibold text-yellow-400 flex items-center gap-2">
+            <AlertTriangle size={13} /> {formatCurrency(Math.round(maturing30))} matures within 30 days — plan its redeployment now.
+          </p>
+        </div>
+      )}
 
       {holdings.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Total invested", value: formatCurrency(Math.round(totalInvested)), color: "text-[var(--color-text)]" },
-            { label: "Total at maturity", value: formatCurrency(Math.round(totalMaturity)), color: "text-green-400" },
+            { label: "Positions", value: String(holdings.length), color: "text-blue-400" },
             { label: "Maturing in 90 days", value: formatCurrency(Math.round(next90)), color: "text-yellow-400" },
           ].map(k => (
             <div key={k.label} className={`${CARD} p-4`}>
@@ -1007,34 +1162,40 @@ function MaturityCalendar() {
         </div>
       )}
 
-      {sorted.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No holdings tracked. Add your deposits and funds to see the maturity timeline.</p>
+      {loading ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">Loading your positions…</p>
+      ) : sorted.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No positions recorded. Add your deposits and funds to see the maturity timeline.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-[var(--color-border)]">
-                <tr>{["Label", "Type", "Invested", "Maturity", "Date", "In", ""].map(h =>
+                <tr>{["Label", "Type", "Bank", "Amount", "Rate", "Matures", "In", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {sorted.map(h => {
-                  const days = differenceInCalendarDays(new Date(h.date), today);
-                  const past = days < 0;
+                  const days = h.maturity_date ? differenceInCalendarDays(new Date(h.maturity_date), today) : null;
+                  const past = days !== null && days < 0;
+                  const r = numOf(h.rate);
                   return (
                     <tr key={h.id} className={`hover:bg-white/2 ${past ? "opacity-50" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium">{h.name}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.instrument}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(h.amount))}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(h.maturity))}</td>
-                      <td className="px-4 py-2.5">{format(new Date(h.date), "d MMM yyyy")}</td>
+                      <td className="px-4 py-2.5 font-medium">{h.label}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.kind}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.bank || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(numOf(h.amount)))}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs">{r > 0 ? `${r}%` : "—"}</td>
+                      <td className="px-4 py-2.5">{h.maturity_date ? format(new Date(h.maturity_date), "d MMM yyyy") : "—"}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${past ? "bg-[var(--color-accent)] text-[var(--color-muted)]" : days <= 30 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
-                          {past ? "Matured" : days === 0 ? "Today" : `${days}d`}
-                        </span>
+                        {days === null ? <span className="text-[10px] text-[var(--color-muted)]">—</span> : (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${past ? "bg-[var(--color-accent)] text-[var(--color-muted)]" : days <= 30 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
+                            {past ? "Matured" : days === 0 ? "Today" : `${days}d`}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setHoldings(holdings.filter(x => x.id !== h.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(h.id)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   );
                 })}

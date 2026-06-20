@@ -1,10 +1,273 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale } from "lucide-react";
+import { api } from "@/lib/api";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Vendor master record — REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
+   This is the single source of truth for a vendor's profile (GSTIN, PAN, bank/UPI,
+   payment terms, MSME/Udyam, category). The MSME/TDS/KYC/terms tabs read this saved
+   profile instead of re-typing. Spend analytics stay derived from transactions and
+   are merged onto the master by name.
+   ───────────────────────────────────────────────────────────────────────── */
+export interface VendorMaster {
+  id: string;
+  name: string;
+  gstin: string | null;
+  pan: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  upi: string | null;
+  bank_account: string | null;
+  bank_ifsc: string | null;
+  payment_terms_days: number | null;
+  is_msme: boolean | null;
+  udyam: string | null;
+  category: string | null;
+  notes: string | null;
+}
+
+type VendorDraft = Partial<Omit<VendorMaster, "id">> & { name: string };
+
+// Shared loader for the vendor master. Each consumer keeps its own copy in state,
+// but they all hit the same persisted backend so edits in the Directory show up in
+// the KYC/TDS tabs after a save+refetch. Wrapped so it never throws into render.
+function useVendorMaster() {
+  const [vendors, setVendors] = useState<VendorMaster[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await api.get<VendorMaster[]>("/vendors");
+      setVendors(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      // Offline / not-yet-seeded: keep whatever we had, surface once.
+      console.warn("[vendors] load failed", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const upsert = useCallback(async (draft: VendorDraft, id?: string): Promise<VendorMaster | null> => {
+    try {
+      const saved = id
+        ? await api.patch<VendorMaster>(`/vendors/${id}`, draft)
+        : await api.post<VendorMaster>("/vendors", draft);
+      setVendors(prev => {
+        const without = prev.filter(v => v.id !== saved.id && v.name !== saved.name);
+        return [...without, saved].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      return saved;
+    } catch (e) {
+      toast.error(`Could not save vendor — ${(e as Error).message || "offline"}`);
+      return null;
+    }
+  }, []);
+
+  const remove = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      await api.delete(`/vendors/${id}`);
+      setVendors(prev => prev.filter(v => v.id !== id));
+      return true;
+    } catch (e) {
+      toast.error(`Could not delete vendor — ${(e as Error).message || "offline"}`);
+      return false;
+    }
+  }, []);
+
+  return { vendors, loading, refresh, upsert, remove };
+}
+
+// Lightweight format checks for the profile form (mirrors the KYC vault validators).
+const VM_PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const VM_GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
+const VM_IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+const PROFILE_CATEGORIES = ["expense", "payroll", "tax", "loan", "transfer", "raw-material", "services", "logistics", "utilities", "other"];
+
+function VendorProfileModal({
+  initial, presetName, onClose, onSave, onDelete,
+}: {
+  initial: VendorMaster | null;
+  presetName?: string;
+  onClose: () => void;
+  onSave: (draft: VendorDraft, id?: string) => Promise<VendorMaster | null>;
+  onDelete?: (id: string) => Promise<boolean>;
+}) {
+  const [form, setForm] = useState<VendorDraft>({
+    name: initial?.name ?? presetName ?? "",
+    gstin: initial?.gstin ?? "",
+    pan: initial?.pan ?? "",
+    contact_name: initial?.contact_name ?? "",
+    phone: initial?.phone ?? "",
+    email: initial?.email ?? "",
+    upi: initial?.upi ?? "",
+    bank_account: initial?.bank_account ?? "",
+    bank_ifsc: initial?.bank_ifsc ?? "",
+    payment_terms_days: initial?.payment_terms_days ?? null,
+    is_msme: initial?.is_msme ?? false,
+    udyam: initial?.udyam ?? "",
+    category: initial?.category ?? "expense",
+    notes: initial?.notes ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = <K extends keyof VendorDraft>(k: K, v: VendorDraft[K]) => setForm(f => ({ ...f, [k]: v }));
+
+  const pan = (form.pan ?? "").toUpperCase();
+  const gstin = (form.gstin ?? "").toUpperCase();
+  const ifsc = (form.bank_ifsc ?? "").toUpperCase();
+  const panOk = !pan || VM_PAN_RE.test(pan);
+  const gstinOk = !gstin || VM_GSTIN_RE.test(gstin);
+  const ifscOk = !ifsc || VM_IFSC_RE.test(ifsc);
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const errInp = (ok: boolean) => `${inp} ${ok ? "" : "border-red-800/50 focus:border-red-500"}`;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { toast.error("Vendor name is required"); return; }
+    if (!panOk) { toast.error("Invalid PAN format"); return; }
+    if (!gstinOk) { toast.error("Invalid GSTIN format"); return; }
+    if (!ifscOk) { toast.error("Invalid IFSC format"); return; }
+    const terms = form.payment_terms_days;
+    const draft: VendorDraft = {
+      name: form.name.trim(),
+      gstin: gstin || null,
+      pan: pan || null,
+      contact_name: (form.contact_name ?? "").trim() || null,
+      phone: (form.phone ?? "").trim() || null,
+      email: (form.email ?? "").trim() || null,
+      upi: (form.upi ?? "").trim() || null,
+      bank_account: (form.bank_account ?? "").trim() || null,
+      bank_ifsc: ifsc || null,
+      payment_terms_days: terms === null || terms === undefined || Number.isNaN(terms) ? null : Number(terms),
+      is_msme: !!form.is_msme,
+      udyam: (form.udyam ?? "").toUpperCase().trim() || null,
+      category: form.category || "expense",
+      notes: (form.notes ?? "").trim() || null,
+    };
+    setSaving(true);
+    const saved = await onSave(draft, initial?.id);
+    setSaving(false);
+    if (saved) {
+      toast.success(`${saved.name} profile saved`);
+      onClose();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!initial || !onDelete) return;
+    if (!window.confirm(`Delete vendor profile for ${initial.name}? Spend history from transactions is unaffected.`)) return;
+    setSaving(true);
+    const ok = await onDelete(initial.id);
+    setSaving(false);
+    if (ok) { toast.success(`${initial.name} profile deleted`); onClose(); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 overflow-y-auto">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-2xl space-y-4 my-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <Building2 size={16} className="text-[var(--color-primary)]" />
+            {initial ? "Edit Vendor Profile" : "New Vendor Profile"}
+          </h2>
+          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">Master record — saved to the server and shared across the MSME, TDS, terms and KYC tabs.</p>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor name *</label>
+              <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Legal / trade name" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
+              <select value={form.category ?? "expense"} onChange={e => set("category", e.target.value)} className={inp}>
+                {PROFILE_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? (c.charAt(0).toUpperCase() + c.slice(1).replace("-", " "))}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">GSTIN</label>
+              <input value={form.gstin ?? ""} onChange={e => set("gstin", e.target.value.toUpperCase())} maxLength={15} placeholder="22ABCDE1234F1Z5" className={errInp(gstinOk)} />
+              {!gstinOk && <p className="text-[10px] text-red-400 mt-0.5">15-char GSTIN format</p>}
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">PAN</label>
+              <input value={form.pan ?? ""} onChange={e => set("pan", e.target.value.toUpperCase())} maxLength={10} placeholder="ABCDE1234F" className={errInp(panOk)} />
+              {!panOk && <p className="text-[10px] text-red-400 mt-0.5">5 letters, 4 digits, 1 letter</p>}
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Contact name</label>
+              <input value={form.contact_name ?? ""} onChange={e => set("contact_name", e.target.value)} placeholder="Accounts contact" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Phone</label>
+              <input value={form.phone ?? ""} onChange={e => set("phone", e.target.value)} placeholder="+91…" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Email</label>
+              <input value={form.email ?? ""} onChange={e => set("email", e.target.value)} placeholder="accounts@vendor.com" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Payment terms (days)</label>
+              <input type="number" min="0" value={form.payment_terms_days ?? ""} onChange={e => set("payment_terms_days", e.target.value === "" ? null : parseInt(e.target.value, 10))} placeholder="e.g. 30" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Bank account no.</label>
+              <input value={form.bank_account ?? ""} onChange={e => set("bank_account", e.target.value)} placeholder="Account number" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
+              <input value={form.bank_ifsc ?? ""} onChange={e => set("bank_ifsc", e.target.value.toUpperCase())} maxLength={11} placeholder="HDFC0001234" className={errInp(ifscOk)} />
+              {!ifscOk && <p className="text-[10px] text-red-400 mt-0.5">4 letters, 0, 6 chars</p>}
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">UPI ID</label>
+              <input value={form.upi ?? ""} onChange={e => set("upi", e.target.value)} placeholder="vendor@upi" className={inp} />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Udyam (MSME) reg. no.</label>
+              <input value={form.udyam ?? ""} onChange={e => set("udyam", e.target.value.toUpperCase())} placeholder="UDYAM-XX-00-0000000" className={inp} />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={!!form.is_msme} onChange={e => set("is_msme", e.target.checked)} className="accent-[var(--color-primary)]" />
+            Registered MSME vendor (subject to 45-day payment rule / 43B(h))
+          </label>
+
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Notes</label>
+            <textarea value={form.notes ?? ""} onChange={e => set("notes", e.target.value)} rows={2} placeholder="Any internal notes" className={inp} />
+          </div>
+
+          <div className="flex gap-2 pt-1 items-center">
+            <button type="submit" disabled={saving} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 px-5 rounded-lg text-sm hover:opacity-90 disabled:opacity-60">
+              {saving && <Loader2 size={14} className="animate-spin" />}{initial ? "Save Changes" : "Create Vendor"}
+            </button>
+            <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+            {initial && onDelete && (
+              <button type="button" onClick={handleDelete} disabled={saving} className="ml-auto flex items-center gap-1.5 text-xs text-red-400 hover:bg-red-950/30 px-3 py-2 rounded-lg disabled:opacity-60">
+                <Trash2 size={13} /> Delete profile
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 interface Vendor {
   name: string;
@@ -124,6 +387,16 @@ export default function VendorsPage() {
   const [sortAsc,  setSortAsc]  = useState(false);
   const [schedVendor, setSchedVendor] = useState<Vendor | null>(null);
 
+  // Real persisted vendor master (GSTIN/PAN/bank/terms/MSME) backing the directory.
+  const { vendors: master, loading: masterLoading, upsert, remove } = useVendorMaster();
+  // Profile editor: null = closed; { name, record } = open (record null for create).
+  const [profileEdit, setProfileEdit] = useState<{ record: VendorMaster | null; presetName?: string } | null>(null);
+  const masterByName = useMemo(() => {
+    const idx: Record<string, VendorMaster> = {};
+    for (const v of master) idx[v.name.toLowerCase()] = v;
+    return idx;
+  }, [master]);
+
   const now  = new Date();
   const m1s  = startOfMonth(now).toISOString().split("T")[0];
   const m1e  = endOfMonth(now).toISOString().split("T")[0];
@@ -137,7 +410,7 @@ export default function VendorsPage() {
       map[t.counterparty].txns.push(t);
     });
 
-    return Object.entries(map).map(([name, { txns }]) => {
+    const derived = Object.entries(map).map(([name, { txns }]) => {
       const totalSpend  = txns.reduce((s, t) => s + Math.abs(t.amount), 0);
       const sorted      = [...txns].sort((a, b) => b.date.localeCompare(a.date));
       const lastPayment = sorted[0]?.date ?? "";
@@ -149,7 +422,20 @@ export default function VendorsPage() {
       const trend: Vendor["trend"] = thisMonth > lastMonth * 1.05 ? "up" : thisMonth < lastMonth * 0.95 ? "down" : "flat";
       return { name, category, totalSpend, lastPayment, txnCount, avgPayment, thisMonth, lastMonth, trend };
     });
-  }, [transactions, m1s, m1e, m2s, m2e]);
+
+    // Surface saved master vendors that have no matching transactions yet so the
+    // directory shows the full vendor book, not just transaction counterparties.
+    const seen = new Set(derived.map(v => v.name.toLowerCase()));
+    const masterOnly: Vendor[] = master
+      .filter(v => !seen.has(v.name.toLowerCase()))
+      .map(v => ({
+        name: v.name,
+        category: v.category || "expense",
+        totalSpend: 0, lastPayment: "", txnCount: 0, avgPayment: 0,
+        thisMonth: 0, lastMonth: 0, trend: "flat" as const,
+      }));
+    return [...derived, ...masterOnly];
+  }, [transactions, m1s, m1e, m2s, m2e, master]);
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(vendors.map(v => v.category)))], [vendors]);
 
@@ -206,7 +492,7 @@ export default function VendorsPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">Vendors</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">All vendors derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{master.length} saved profile{master.length !== 1 ? "s" : ""} · spend derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
@@ -280,12 +566,21 @@ export default function VendorsPage() {
                 </button>
               ))}
             </div>
+            <button onClick={() => setProfileEdit({ record: null })}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 ml-auto shrink-0">
+              <Plus size={13} /> Add Vendor
+            </button>
           </div>
 
           {filtered.length === 0 ? (
             <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-              <p className="text-sm text-[var(--color-muted)]">No vendors found. Import transactions to populate the vendor directory.</p>
+              <p className="text-sm text-[var(--color-muted)] mb-3">{masterLoading ? "Loading vendor directory…" : "No vendors yet. Add a vendor profile or import transactions to populate the directory."}</p>
+              {!masterLoading && (
+                <button onClick={() => setProfileEdit({ record: null })} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 inline-flex items-center gap-1.5">
+                  <Plus size={13} /> Add your first vendor
+                </button>
+              )}
             </div>
           ) : (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
@@ -308,11 +603,21 @@ export default function VendorsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
-                  {filtered.map((v, i) => (
-                    <tr key={i} className="hover:bg-white/2 transition-colors">
+                  {filtered.map((v, i) => {
+                    const prof = masterByName[v.name.toLowerCase()];
+                    return (
+                    <tr key={i} className="hover:bg-white/2 transition-colors cursor-pointer" onClick={() => setProfileEdit({ record: prof ?? null, presetName: v.name })}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-sm">{v.name}</p>
-                        <p className="text-[10px] text-[var(--color-muted)]">{v.txnCount} transaction{v.txnCount !== 1 ? "s" : ""} · avg {formatAmount(v.avgPayment)}</p>
+                        <p className="font-medium text-sm flex items-center gap-1.5">
+                          {v.name}
+                          {prof && <span title="Has a saved profile" className="inline-flex"><BadgeCheck size={12} className="text-[var(--color-primary)]" /></span>}
+                          {prof?.is_msme && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-blue-900/30 text-blue-400 border-blue-800/40">MSME</span>}
+                        </p>
+                        <p className="text-[10px] text-[var(--color-muted)]">
+                          {v.txnCount > 0 ? `${v.txnCount} transaction${v.txnCount !== 1 ? "s" : ""} · avg ${formatAmount(v.avgPayment)}` : "No transactions yet"}
+                          {prof?.payment_terms_days != null && ` · net ${prof.payment_terms_days}d`}
+                          {prof?.gstin && ` · ${prof.gstin}`}
+                        </p>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category]}`}>
@@ -332,13 +637,19 @@ export default function VendorsPage() {
                         {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => setSchedVendor(v)}
-                          className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg ml-auto transition-colors">
-                          <Calendar size={11} /> Schedule
-                        </button>
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <button onClick={(e) => { e.stopPropagation(); setProfileEdit({ record: prof ?? null, presetName: v.name }); }}
+                            className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg transition-colors">
+                            {prof ? <><Pencil size={11} /> Edit</> : <><Plus size={11} /> Profile</>}
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); setSchedVendor(v); }}
+                            className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg transition-colors">
+                            <Calendar size={11} /> Schedule
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  ); })}
                 </tbody>
               </table>
               <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)] flex items-center justify-between">
@@ -558,6 +869,15 @@ export default function VendorsPage() {
       {view === "wc-simulator"  && <WorkingCapitalSimulator />}
 
       {schedVendor && <ScheduleModal vendor={schedVendor} onClose={() => setSchedVendor(null)} />}
+      {profileEdit && (
+        <VendorProfileModal
+          initial={profileEdit.record}
+          presetName={profileEdit.presetName}
+          onClose={() => setProfileEdit(null)}
+          onSave={upsert}
+          onDelete={remove}
+        />
+      )}
     </div>
   );
 }
@@ -893,6 +1213,13 @@ interface TdsEntry {
 
 function VendorTdsLedger() {
   const [entries, setEntries] = useFeatureState<TdsEntry[]>("vendor-tds-ledger", []);
+  // Pull saved vendor master so TDS entries reference real profiles, not free text.
+  const { vendors: master } = useVendorMaster();
+  const masterByName = useMemo(() => {
+    const idx: Record<string, VendorMaster> = {};
+    for (const v of master) idx[v.name.toLowerCase()] = v;
+    return idx;
+  }, [master]);
   const [vendor, setVendor] = useState("");
   const [section, setSection] = useState<string>(TDS_SECTIONS[0].code);
   const [gross, setGross] = useState("");
@@ -941,13 +1268,23 @@ function VendorTdsLedger() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h3 className="text-sm font-semibold">Record TDS Deduction</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+          <div>
+            <input list="tds-master-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
+            <datalist id="tds-master-vendors">{master.map(v => <option key={v.id} value={v.name} />)}</datalist>
+          </div>
           <select value={section} onChange={e => setSection(e.target.value)} className={inpCls}>
             {TDS_SECTIONS.map(s => <option key={s.code} value={s.code}>{s.label} ({s.rate}%)</option>)}
           </select>
           <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="Gross amount (₹) *" className={inpCls} />
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
         </div>
+        {(() => {
+          const prof = masterByName[vendor.trim().toLowerCase()];
+          if (!vendor.trim()) return null;
+          return prof
+            ? <p className="text-xs text-[var(--color-muted)]">From master: PAN <span className="font-mono">{prof.pan || "— (no PAN, 20% rate applies)"}</span>{prof.gstin ? ` · GSTIN ${prof.gstin}` : ""}</p>
+            : <p className="text-[11px] text-orange-400">No saved profile for "{vendor.trim()}" — add one in the Directory to capture PAN for 26Q.</p>;
+        })()}
         {gross && <p className="text-xs text-[var(--color-muted)]">TDS @ {curRate}% = <span className="font-semibold text-[var(--color-primary)]">{formatCurrency(previewTds)}</span> · Net payable: {formatCurrency((parseFloat(gross) || 0) - previewTds)}</p>}
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record</button>
       </div>
@@ -1014,8 +1351,24 @@ function kycComplete(v: VendorKyc): boolean {
   return PAN_RE.test(v.pan.toUpperCase()) && GSTIN_RE.test(v.gstin.toUpperCase()) && IFSC_RE.test(v.ifsc.toUpperCase()) && v.bankAcc.trim().length >= 6;
 }
 
+// Map a persisted master record into the KYC card shape this tab renders.
+function masterToKyc(v: VendorMaster): VendorKyc {
+  return {
+    id: v.id,
+    name: v.name,
+    pan: (v.pan ?? "").toUpperCase(),
+    gstin: (v.gstin ?? "").toUpperCase(),
+    msmeUdyam: (v.udyam ?? "").toUpperCase(),
+    bankAcc: v.bank_account ?? "",
+    ifsc: (v.bank_ifsc ?? "").toUpperCase(),
+    email: v.email ?? "",
+  };
+}
+
 function VendorKycVault() {
-  const [vault, setVault] = useFeatureState<VendorKyc[]>("vendor-kyc-vault", []);
+  // Now backed by the persisted vendor master — the same records the Directory edits.
+  const { vendors: master, upsert, remove: removeMaster } = useVendorMaster();
+  const vault = useMemo(() => master.map(masterToKyc), [master]);
   const blank: Omit<VendorKyc, "id"> = { name: "", pan: "", gstin: "", msmeUdyam: "", bankAcc: "", ifsc: "", email: "" };
   const [form, setForm] = useState(blank);
 
@@ -1025,26 +1378,28 @@ function VendorKycVault() {
   const gstinOk = !form.gstin || GSTIN_RE.test(form.gstin.toUpperCase());
   const ifscOk = !form.ifsc || IFSC_RE.test(form.ifsc.toUpperCase());
 
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim()) { toast.error("Vendor name required"); return; }
     if (form.pan && !PAN_RE.test(form.pan.toUpperCase())) { toast.error("Invalid PAN format"); return; }
     if (form.gstin && !GSTIN_RE.test(form.gstin.toUpperCase())) { toast.error("Invalid GSTIN format"); return; }
     if (form.ifsc && !IFSC_RE.test(form.ifsc.toUpperCase())) { toast.error("Invalid IFSC format"); return; }
-    const rec: VendorKyc = {
-      id: crypto.randomUUID(),
+    // Upsert to the master (POST upserts by name) so onboarding persists server-side.
+    const saved = await upsert({
       name: form.name.trim(),
-      pan: form.pan.toUpperCase().trim(),
-      gstin: form.gstin.toUpperCase().trim(),
-      msmeUdyam: form.msmeUdyam.toUpperCase().trim(),
-      bankAcc: form.bankAcc.trim(),
-      ifsc: form.ifsc.toUpperCase().trim(),
-      email: form.email.trim(),
-    };
-    setVault(prev => [rec, ...prev]);
-    setForm(blank);
-    toast.success(`${rec.name} onboarded${kycComplete(rec) ? " — KYC complete" : " — KYC incomplete"}`);
+      pan: form.pan.toUpperCase().trim() || null,
+      gstin: form.gstin.toUpperCase().trim() || null,
+      udyam: form.msmeUdyam.toUpperCase().trim() || null,
+      is_msme: form.msmeUdyam.trim().length > 0,
+      bank_account: form.bankAcc.trim() || null,
+      bank_ifsc: form.ifsc.toUpperCase().trim() || null,
+      email: form.email.trim() || null,
+    });
+    if (saved) {
+      setForm(blank);
+      toast.success(`${saved.name} onboarded${kycComplete(masterToKyc(saved)) ? " — KYC complete" : " — KYC incomplete"}`);
+    }
   };
-  const remove = (id: string) => setVault(prev => prev.filter(v => v.id !== id));
+  const remove = (id: string) => { void removeMaster(id); };
 
   const completeN = vault.filter(kycComplete).length;
   const msmeN = vault.filter(v => v.msmeUdyam.trim().length > 0).length;
@@ -1053,7 +1408,7 @@ function VendorKycVault() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Onboard vendors with validated PAN, GSTIN, MSME (Udyam) and bank details — your single source of truth before raising the first PO or payment. Format-validated on save.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Onboard vendors with validated PAN, GSTIN, MSME (Udyam) and bank details — saved as the persisted vendor master and shared with the Directory, MSME and TDS tabs. Format-validated on save.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[

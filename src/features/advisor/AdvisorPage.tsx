@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -9,7 +9,6 @@ import {
   ReceiptText,
   ShieldCheck, Inbox, MessageSquare, FileSignature, Reply, Copy,
 } from "lucide-react";
-import { useFeatureState } from "@/hooks/useFeatureState";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -101,6 +100,57 @@ function loadFirmProfile(): CaFirmProfile {
   try { return JSON.parse(localStorage.getItem("hr_ca_firm") ?? "{}"); } catch { return { name: "", tagline: "", gstin: "" }; }
 }
 function saveFirmProfile(p: CaFirmProfile) { localStorage.setItem("hr_ca_firm", JSON.stringify(p)); }
+
+// ── Server-backed practice workspace ──────────────────────────────────────────
+// Drop-in useState-style hook that persists a tracker to the advisor's own
+// server-side workspace (GET on mount, debounced PUT on change) via
+// /api/advisor/workspace/<key>. Survives a device change. The setter accepts a
+// value or a functional updater, exactly like useState.
+type WsUpdater<T> = T | ((prev: T) => T);
+function useAdvisorWorkspace<T>(key: string, initial: T): [T, (updater: WsUpdater<T>) => void, boolean] {
+  const [value, setValue] = useState<T>(initial);
+  const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load once on mount.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const stored = await api.get<T>(`/api/advisor/workspace/${key}`);
+        if (!alive) return;
+        // Backend returns {} when nothing is stored yet → fall back to initial.
+        const isEmptyObj = stored && typeof stored === "object" && !Array.isArray(stored) && Object.keys(stored as object).length === 0;
+        if (stored !== undefined && stored !== null && !isEmptyObj) setValue(stored);
+      } catch {
+        toast.error("Couldn't load saved data — working offline");
+      } finally {
+        if (alive) { loadedRef.current = true; setLoaded(true); }
+      }
+    })();
+    return () => { alive = false; if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [key]);
+
+  const set = useCallback((updater: WsUpdater<T>) => {
+    setValue(prev => {
+      const next = typeof updater === "function" ? (updater as (p: T) => T)(prev) : updater;
+      // Only persist after the initial load has resolved, so we never clobber
+      // the server copy with the empty `initial` before it arrives.
+      if (loadedRef.current) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+          api.put(`/api/advisor/workspace/${key}`, next).catch(() => {
+            toast.error("Couldn't save — changes kept locally only");
+          });
+        }, 600);
+      }
+      return next;
+    });
+  }, [key]);
+
+  return [value, set, loaded];
+}
 
 // ── Compliance calendar helpers ───────────────────────────────────────────────
 
@@ -428,17 +478,12 @@ function BulkGstTab() {
 
 function PracticeTab({ clients }: { clients: ClientSummary[] }) {
   const today = new Date();
-  const [tasks, setTasks] = useState<CaTask[]>(() => {
-    try { return JSON.parse(localStorage.getItem("hr_ca_tasks") ?? "[]"); } catch { return []; }
-  });
+  const [tasks, setTasks] = useAdvisorWorkspace<CaTask[]>("adv-tasks", []);
   const [showAddTask,  setShowAddTask]  = useState(false);
   const [newTask, setNewTask] = useState({ clientLabel: "", title: "", deadline: "", type: "gst" as CaTask["type"] });
   const [activeView, setActiveView] = useState<"calendar" | "tasks">("calendar");
 
-  const saveTasks = (t: CaTask[]) => {
-    setTasks(t);
-    localStorage.setItem("hr_ca_tasks", JSON.stringify(t));
-  };
+  const saveTasks = (t: CaTask[]) => setTasks(t);
 
   const addTask = () => {
     if (!newTask.title || !newTask.clientLabel) { toast.error("Fill title and client"); return; }
@@ -775,13 +820,11 @@ function MarketplaceTab() {
 // ── CA Billing Tab ────────────────────────────────────────────────────────────
 
 function BillingTab({ clients }: { clients: ClientSummary[] }) {
-  const [bills, setBills] = useState<CaBill[]>(() => {
-    try { return JSON.parse(localStorage.getItem("hr_ca_bills") ?? "[]"); } catch { return []; }
-  });
+  const [bills, setBills] = useAdvisorWorkspace<CaBill[]>("adv-bills", []);
   const [showNew, setShowNew] = useState(false);
   const [newBill, setNewBill] = useState({ clientLabel: "", description: "", amount: "", dueDate: "" });
 
-  const saveBills = (b: CaBill[]) => { setBills(b); localStorage.setItem("hr_ca_bills", JSON.stringify(b)); };
+  const saveBills = (b: CaBill[]) => setBills(b);
 
   const createBill = () => {
     const amt = parseFloat(newBill.amount);
@@ -1285,7 +1328,7 @@ const CSTATE_STYLE: Record<ComplianceState, { cls: string; next: ComplianceState
 
 function ComplianceBoardTab({ clients }: { clients: ClientSummary[] }) {
   const periodKey = `${MONTH_NAMES[new Date().getMonth()]}-${new Date().getFullYear()}`;
-  const [grid, setGrid] = useFeatureState<Record<string, Record<string, ComplianceState>>>("adv-compliance-board", {});
+  const [grid, setGrid] = useAdvisorWorkspace<Record<string, Record<string, ComplianceState>>>("adv-compliance-board", {});
 
   const stateFor = (tid: string, ob: ComplianceObligation): ComplianceState =>
     grid[periodKey]?.[`${tid}:${ob}`] ?? "pending";
@@ -1391,7 +1434,7 @@ type DocRequest = {
 };
 
 function DocTrackerTab({ clients }: { clients: ClientSummary[] }) {
-  const [reqs, setReqs] = useFeatureState<DocRequest[]>("adv-doc-requests", []);
+  const [reqs, setReqs] = useAdvisorWorkspace<DocRequest[]>("adv-doc-requests", []);
   const [showNew, setShowNew] = useState(false);
   const [draft, setDraft] = useState({ clientLabel: "", document: "" });
 
@@ -1517,7 +1560,7 @@ type CaQuery = {
 };
 
 function QueryLogTab({ clients }: { clients: ClientSummary[] }) {
-  const [queries, setQueries] = useFeatureState<CaQuery[]>("adv-query-log", []);
+  const [queries, setQueries] = useAdvisorWorkspace<CaQuery[]>("adv-query-log", []);
   const [showNew, setShowNew] = useState(false);
   const [draft, setDraft] = useState({ clientLabel: "", subject: "", priority: "normal" as CaQuery["priority"] });
   const [replyFor, setReplyFor] = useState<string | null>(null);

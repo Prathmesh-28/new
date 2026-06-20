@@ -6,7 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { Navigate } from "react-router-dom";
 import {
-  ShieldCheck, TrendingUp, Landmark, CheckCircle2, X,
+  TrendingUp, Landmark, CheckCircle2, X,
   Gauge, FileSpreadsheet, ClipboardList, AlertTriangle, Plus, Trash2,
   Users, Scale, ListChecks, CalendarClock, Handshake, History, Star,
   Layers, Lock, Repeat, Phone, Activity, PieChart, Percent, ArrowLeftRight,
@@ -15,29 +15,52 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import PreviewBadge from "@/components/PreviewBadge";
 
-interface Application {
+interface Bid {
   id: string;
-  business_name: string;
-  city: string;
-  industry: string;
-  loan_amount: number;
-  revenue_monthly: number;
-  credit_score: number;
-  aa_verified: boolean;
-  requested_at: string;
+  application_id: string;
+  lender_id: string | null;
+  lender_label: string | null;
+  rate: number | string | null;
+  amount: number | string | null;
+  note: string | null;
+  created_at: string;
 }
 
+interface Application {
+  id: string;
+  tenant_id: string;
+  company_name: string | null;
+  amount: number | string;
+  purpose: string | null;
+  tenure_months: number | null;
+  status: string;
+  created_at: string;
+  bid_count?: number;
+  bids?: Bid[];
+}
+
+const toNum = (v: number | string | null | undefined): number => {
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return Number.isFinite(n as number) ? (n as number) : 0;
+};
+
 function BidModal({ app, onClose, onBid }: { app: Application; onClose: () => void; onBid: () => void }) {
-  const [rate, setRate]   = useState("");
-  const [fee, setFee]     = useState("");
+  const loanAmount = toNum(app.amount);
+  const [rate, setRate]     = useState("");
+  const [amount, setAmount] = useState(loanAmount ? String(loanAmount) : "");
+  const [note, setNote]     = useState("");
   const [bidding, setBidding] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBidding(true);
     try {
-      await api.post("/api/lenders/bid", { application_id: app.id, interest_rate: parseFloat(rate), processing_fee: parseFloat(fee || "0") });
-      toast.success(`Bid placed at ${rate}% p.a. You'll be notified of the borrower's decision within 48 hours.`);
+      await api.post(`/api/lenders/applications/${app.id}/bid`, {
+        rate: parseFloat(rate),
+        amount: parseFloat(amount || "0") || undefined,
+        note: note.trim() || undefined,
+      });
+      toast.success(`Bid placed at ${rate}% p.a. The borrower will see it on their application.`);
       onBid();
       onClose();
     } catch {
@@ -55,27 +78,31 @@ function BidModal({ app, onClose, onBid }: { app: Application; onClose: () => vo
           <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
         <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
-          <p className="text-sm font-semibold">{app.business_name}</p>
-          <div className="flex gap-3 mt-1 text-xs text-[var(--color-muted)]">
-            <span>{app.city} · {app.industry}</span>
-            <span>Loan: <span className="text-[var(--color-text)] font-semibold">{formatCurrency(app.loan_amount)}</span></span>
-            {app.aa_verified && <span className="text-green-400 flex items-center gap-0.5"><ShieldCheck size={10} /> AA Verified</span>}
+          <p className="text-sm font-semibold">{app.company_name || "Business"}</p>
+          <div className="flex flex-wrap gap-3 mt-1 text-xs text-[var(--color-muted)]">
+            <span>Loan: <span className="text-[var(--color-text)] font-semibold">{formatCurrency(loanAmount)}</span></span>
+            {app.tenure_months ? <span>Tenure: {app.tenure_months}m</span> : null}
+            {app.purpose ? <span>Purpose: <span className="text-[var(--color-text)]">{app.purpose}</span></span> : null}
           </div>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Interest rate (% p.a.) *</label>
-            <input type="number" min="8" max="36" step="0.25" value={rate} onChange={e => setRate(e.target.value)} required className={inp} placeholder="e.g. 14.5" />
+            <input type="number" min="1" max="48" step="0.25" value={rate} onChange={e => setRate(e.target.value)} required className={inp} placeholder="e.g. 14.5" />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Processing fee (%)</label>
-            <input type="number" min="0" max="5" step="0.1" value={fee} onChange={e => setFee(e.target.value)} className={inp} placeholder="e.g. 1.5" />
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount you'll fund (₹)</label>
+            <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} className={inp} placeholder={loanAmount ? String(loanAmount) : "Loan amount"} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Note (optional)</label>
+            <input value={note} onChange={e => setNote(e.target.value)} className={inp} placeholder="e.g. Subject to AA data verification" />
           </div>
           {rate && (
             <div className="bg-[var(--color-accent)] rounded-lg p-3 text-xs">
               <p className="text-[var(--color-muted)] mb-1">Monthly interest income (estimated)</p>
               <p className="text-xl font-bold text-[var(--color-primary)]">
-                {formatCurrency(app.loan_amount * (parseFloat(rate)/100) / 12)}
+                {formatCurrency((toNum(amount) || loanAmount) * (parseFloat(rate)/100) / 12)}
               </p>
             </div>
           )}
@@ -144,29 +171,97 @@ export default function LendersPage() {
 
 function Marketplace() {
   const [apps, setApps]       = useState<Application[]>([]);
+  const [mine, setMine]       = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [bidApp, setBidApp]   = useState<Application | null>(null);
-  const [bids, setBids]       = useState<Set<string>>(new Set());
+  const [bids, setBids]       = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    api.get<Application[]>("/api/lenders/queue")
-      .then(setApps)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  // Borrower application form
+  const [showForm, setShowForm] = useState(false);
+  const [company, setCompany]   = useState("");
+  const [amount, setAmount]     = useState("");
+  const [purpose, setPurpose]   = useState("");
+  const [tenure, setTenure]     = useState("12");
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([
+      api.get<Application[]>("/api/lenders/queue").then(setApps).catch(() => {}),
+      api.get<Application[]>("/api/lenders/applications/mine").then(setMine).catch(() => {}),
+    ]).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const submitApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { toast.error("Enter a positive loan amount"); return; }
+    setSubmitting(true);
+    try {
+      await api.post("/api/lenders/applications", {
+        company_name: company.trim() || undefined,
+        amount: amt,
+        purpose: purpose.trim() || undefined,
+        tenure_months: parseInt(tenure || "12", 10) || 12,
+      });
+      toast.success("Loan application submitted — lenders can now bid.");
+      setCompany(""); setAmount(""); setPurpose(""); setTenure("12"); setShowForm(false);
+      load();
+    } catch {
+      toast.error("Could not submit application");
+    } finally { setSubmitting(false); }
+  };
+
+  const fInp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-3">
-        <p className="text-sm font-semibold text-blue-300 mb-1">Co-lending Auction</p>
-        <p className="text-xs text-[var(--color-muted)]">Every application goes to 3–5 lenders simultaneously. The business picks the lowest rate. You only pay acquisition cost when you win — no cold-calling, no relationship-building from scratch. All financials are AA-verified, not founder-reported.</p>
+      <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-semibold text-blue-300 mb-1">Co-lending Auction</p>
+          <p className="text-xs text-[var(--color-muted)]">Every application goes to multiple lenders simultaneously. The business picks the lowest rate. Lenders bid on real, persisted applications and the borrower sees every bid on their request.</p>
+        </div>
+        <button onClick={() => setShowForm(s => !s)}
+          className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 shrink-0">
+          <Plus size={12} /> {showForm ? "Close" : "Submit loan application"}
+        </button>
       </div>
+
+      {showForm && (
+        <form onSubmit={submitApp} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold">New loan application</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Company name</label>
+              <input value={company} onChange={e => setCompany(e.target.value)} className={fInp} placeholder="e.g. Raj Traders Pvt Ltd" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Loan amount (₹) *</label>
+              <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} required className={fInp} placeholder="e.g. 2500000" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label>
+              <input value={purpose} onChange={e => setPurpose(e.target.value)} className={fInp} placeholder="e.g. Working capital / inventory" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Tenure (months)</label>
+              <input type="number" min="1" max="120" value={tenure} onChange={e => setTenure(e.target.value)} className={fInp} placeholder="12" />
+            </div>
+          </div>
+          <button type="submit" disabled={submitting || !amount}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
+            {submitting ? "Submitting…" : "Submit application"}
+          </button>
+        </form>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "In Queue",      value: apps.length.toString(),                                   color: "text-[var(--color-primary)]" },
-          { label: "AA-Verified",   value: apps.filter(a=>a.aa_verified).length.toString(),          color: "text-green-400" },
-          { label: "Total Volume",  value: formatCurrency(apps.reduce((s,a)=>s+a.loan_amount,0)),    color: "text-[var(--color-muted)]" },
+          { label: "Open in Queue", value: apps.length.toString(),                                          color: "text-[var(--color-primary)]" },
+          { label: "My Applications", value: mine.length.toString(),                                        color: "text-green-400" },
+          { label: "Total Volume",  value: formatCurrency(apps.reduce((s,a)=>s+toNum(a.amount),0)),         color: "text-[var(--color-muted)]" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -175,6 +270,54 @@ function Marketplace() {
         ))}
       </div>
 
+      {/* Borrower view: my applications with persisted bids */}
+      {mine.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> My applications &amp; bids received</h3>
+          {mine.map(app => {
+            const appBids = (app.bids || []).slice().sort((a, b) => toNum(a.rate) - toNum(b.rate));
+            const best = appBids.length ? appBids[0] : null;
+            return (
+              <div key={app.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <div>
+                    <p className="text-sm font-semibold">{app.company_name || "My application"}</p>
+                    <div className="flex flex-wrap gap-3 text-xs text-[var(--color-muted)] mt-0.5">
+                      <span>Loan: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(toNum(app.amount))}</span></span>
+                      {app.tenure_months ? <span>Tenure: {app.tenure_months}m</span> : null}
+                      {app.purpose ? <span>{app.purpose}</span> : null}
+                      <span>Applied {new Date(app.created_at).toLocaleDateString("en-IN")}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] shrink-0">{app.status}</span>
+                </div>
+                {appBids.length === 0 ? (
+                  <p className="text-xs text-[var(--color-muted)]">No bids yet — lenders are reviewing.</p>
+                ) : (
+                  <div className="border-t border-[var(--color-border)] pt-2 space-y-1.5">
+                    {appBids.map(b => (
+                      <div key={b.id} className={`flex items-center justify-between text-xs rounded-lg px-3 py-2 ${best && best.id === b.id ? "bg-green-950/20 border border-green-800/40" : "bg-[var(--color-bg)]"}`}>
+                        <div className="flex items-center gap-2">
+                          {best && best.id === b.id && <Star size={11} className="text-green-400" />}
+                          <span className="font-medium">{b.lender_label || "Lender"}</span>
+                          {b.note ? <span className="text-[var(--color-muted)]">· {b.note}</span> : null}
+                        </div>
+                        <div className="flex items-center gap-3 tabular-nums">
+                          {b.amount ? <span className="text-[var(--color-muted)]">{formatCurrency(toNum(b.amount))}</span> : null}
+                          <span className={`font-bold ${best && best.id === b.id ? "text-green-400" : "text-[var(--color-primary)]"}`}>{toNum(b.rate).toFixed(2)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Lender view: open queue across tenants */}
+      <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Open applications to bid on</h3>
       {loading ? (
         <div className="py-10 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>
       ) : apps.length === 0 ? (
@@ -185,28 +328,25 @@ function Marketplace() {
       ) : (
         <div className="space-y-3">
           {apps.map(app => (
-            <div key={app.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${bids.has(app.id) ? "border-green-700/40" : "border-[var(--color-border)]"}`}>
+            <div key={app.id} className={`bg-[var(--color-surface)] border rounded-lg p-4 ${bids[app.id] ? "border-green-700/40" : "border-[var(--color-border)]"}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <p className="text-sm font-semibold">{app.business_name}</p>
-                    {app.aa_verified && (
-                      <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
-                        <ShieldCheck size={9} /> AA Verified
-                      </span>
-                    )}
+                    <p className="text-sm font-semibold">{app.company_name || "Business"}</p>
+                    {app.bid_count ? (
+                      <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{app.bid_count} bid{app.bid_count === 1 ? "" : "s"}</span>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-[var(--color-muted)]">
-                    <span>{app.city} · {app.industry}</span>
-                    <span>Revenue: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(app.revenue_monthly)}/mo</span></span>
-                    <span>Score: <span className={`font-bold ${app.credit_score >= 70 ? "text-green-400" : app.credit_score >= 55 ? "text-yellow-400" : "text-red-400"}`}>{app.credit_score}/100</span></span>
-                    <span>Asked: {new Date(app.requested_at).toLocaleDateString("en-IN")}</span>
+                    {app.purpose ? <span>Purpose: <span className="text-[var(--color-text)]">{app.purpose}</span></span> : null}
+                    {app.tenure_months ? <span>Tenure: <span className="font-semibold text-[var(--color-text)]">{app.tenure_months}m</span></span> : null}
+                    <span>Asked: {new Date(app.created_at).toLocaleDateString("en-IN")}</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(app.loan_amount)}</p>
+                  <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(toNum(app.amount))}</p>
                   <p className="text-[10px] text-[var(--color-muted)] mb-2">loan requested</p>
-                  {bids.has(app.id) ? (
+                  {bids[app.id] ? (
                     <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={11} /> Bid placed</span>
                   ) : (
                     <button onClick={() => setBidApp(app)}
@@ -221,7 +361,7 @@ function Marketplace() {
         </div>
       )}
 
-      {bidApp && <BidModal app={bidApp} onClose={() => setBidApp(null)} onBid={() => setBids(s => new Set([...s, bidApp!.id]))} />}
+      {bidApp && <BidModal app={bidApp} onClose={() => setBidApp(null)} onBid={() => { setBids(s => ({ ...s, [bidApp.id]: true })); load(); }} />}
     </div>
   );
 }
