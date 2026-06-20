@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -10,6 +10,7 @@ import {
   Trophy, Lock, ShieldAlert, Package, Scale, PartyPopper, Hourglass,
   Ticket, MousePointerClick, PackageX, ScrollText,
   MapPin, Banknote, CreditCard, MinusCircle, Rocket,
+  Upload, Database, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +29,256 @@ type MktTab =
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
+
+// ── SHARED imported-settlement bucket ──────────────────────────────────────────
+// One source of truth for settlement-report rows that the Consolidator, Payout
+// Calendar and Cash-Cycle tabs all read from — so the same channel totals are
+// never re-keyed across three tabs. Manual entry remains a fallback everywhere.
+type ImportedSettlement = {
+  id: string;
+  channel: Channel;
+  settlementId: string;
+  gross: number;
+  fees: number;
+  net: number;
+  date: string; // YYYY-MM-DD (best-effort), or "" if unparseable
+};
+
+const IMPORTED_KEY = "mkt-imported-settlements";
+
+// Quote-aware CSV row splitter (mirrors TransactionImportModal's parseCSV).
+function splitCsvRows(text: string): string[][] {
+  return text.trim().split(/\r?\n/).map(line => {
+    const cols: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (c === "," && !inQuotes) { cols.push(cur.trim()); cur = ""; continue; }
+      cur += c;
+    }
+    cols.push(cur.trim());
+    return cols;
+  });
+}
+
+function normNum(v: string | undefined): number {
+  const n = Number((v ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Best-effort date normaliser → YYYY-MM-DD (handles DD/MM/YYYY, DD-MM-YY, ISO).
+function normDate(raw: string | undefined): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(s)) {
+    const [d, m, y] = s.slice(0, 10).split(/[-/]/);
+    return `${y}-${m}-${d}`;
+  }
+  if (/^\d{2}[-/]\d{2}[-/]\d{2}$/.test(s)) {
+    const [d, m, y] = s.split(/[-/]/);
+    return `20${y}-${m}-${d}`;
+  }
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? "" : new Date(t).toISOString().slice(0, 10);
+}
+
+// Auto-map marketplace settlement-export columns by fuzzy header match.
+// Amazon/Flipkart/Meesho all differ; we match on keywords, not fixed positions.
+function parseImportedSettlementCsv(text: string, fallbackChannel: Channel): { rows: ImportedSettlement[]; skipped: number; mapped: Record<string, number> } {
+  const all = splitCsvRows(text).filter(r => r.some(c => c.length > 0));
+  if (all.length < 2) return { rows: [], skipped: 0, mapped: {} };
+  const header = all[0].map(h => h.toLowerCase().replace(/\s+/g, "_"));
+  const find = (re: RegExp) => header.findIndex(h => re.test(h));
+
+  const idIdx = find(/settlement|transaction|order[-_]?id|order_item|sub_?order|orderid|invoice/);
+  const grossIdx = find(/gross|order[-_]?value|invoice[-_]?amount|item[-_]?total|product[-_]?amount|total[-_]?sale|principal|mrp/);
+  const feeIdx = find(/fee|commission|charge|deduction|tcs|tds|expense/);
+  const netIdx = find(/net|settle?ment[-_]?value|payout|amount[-_]?paid|final[-_]?settlement|order[-_]?settlement|disbursal/);
+  const chIdx = find(/channel|marketplace|platform|source/);
+  const dateIdx = find(/date|settled_on|settlement_date|payment_date|order_date/);
+
+  // Need at least one money column we can anchor on.
+  if (grossIdx === -1 && netIdx === -1) {
+    return { rows: [], skipped: all.length - 1, mapped: {} };
+  }
+
+  const rows: ImportedSettlement[] = [];
+  let skipped = 0;
+  all.slice(1).forEach((cols, i) => {
+    const gross = grossIdx >= 0 ? normNum(cols[grossIdx]) : 0;
+    const fees = feeIdx >= 0 ? Math.abs(normNum(cols[feeIdx])) : 0;
+    let net = netIdx >= 0 ? normNum(cols[netIdx]) : 0;
+    if (netIdx === -1) net = gross - fees;          // derive net if not exported
+    const grossResolved = grossIdx === -1 ? net + fees : gross; // derive gross if not exported
+    if (grossResolved === 0 && net === 0) { skipped++; return; }
+
+    let channel = fallbackChannel;
+    if (chIdx >= 0) {
+      const raw = (cols[chIdx] || "").toLowerCase();
+      const match = CHANNELS.find(c => raw.includes(c.toLowerCase().split(" ")[0]));
+      if (match) channel = match;
+    }
+
+    rows.push({
+      id: crypto.randomUUID(),
+      channel,
+      settlementId: (idIdx >= 0 ? cols[idIdx] : "") || `row-${i + 2}`,
+      gross: grossResolved,
+      fees,
+      net,
+      date: dateIdx >= 0 ? normDate(cols[dateIdx]) : "",
+    });
+  });
+
+  return {
+    rows,
+    skipped,
+    mapped: {
+      settlementId: idIdx, gross: grossIdx, fees: feeIdx, net: netIdx, channel: chIdx, date: dateIdx,
+    },
+  };
+}
+
+// Per-channel rollup derived from the shared imported rows.
+type ImportedChannelTotal = { channel: Channel; orders: number; gross: number; fees: number; net: number; firstDate: string; lastDate: string };
+
+function rollupImported(rows: ImportedSettlement[]): { byChannel: ImportedChannelTotal[]; gross: number; fees: number; net: number } {
+  const acc: Record<string, ImportedChannelTotal> = {};
+  for (const r of rows) {
+    const k = r.channel;
+    if (!acc[k]) acc[k] = { channel: r.channel, orders: 0, gross: 0, fees: 0, net: 0, firstDate: r.date, lastDate: r.date };
+    const a = acc[k];
+    a.orders += 1;
+    a.gross += r.gross;
+    a.fees += r.fees;
+    a.net += r.net;
+    if (r.date) {
+      if (!a.firstDate || r.date < a.firstDate) a.firstDate = r.date;
+      if (!a.lastDate || r.date > a.lastDate) a.lastDate = r.date;
+    }
+  }
+  const byChannel = CHANNELS.map(c => acc[c]).filter(Boolean) as ImportedChannelTotal[];
+  return {
+    byChannel,
+    gross: byChannel.reduce((s, r) => s + r.gross, 0),
+    fees: byChannel.reduce((s, r) => s + r.fees, 0),
+    net: byChannel.reduce((s, r) => s + r.net, 0),
+  };
+}
+
+// Reusable uploader card. Lives in the Consolidator but its parsed rows feed all
+// three tabs via the shared IMPORTED_KEY bucket. Wrapped in try/catch + toast.
+function SettlementImportCard({ compact }: { compact?: boolean }) {
+  const [rows, setRows] = useFeatureState<ImportedSettlement[]>(IMPORTED_KEY, []);
+  const [defaultChannel, setDefaultChannel] = useState<Channel>("Amazon");
+  const [lastMap, setLastMap] = useState<Record<string, number> | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const ingest = (text: string) => {
+    try {
+      const { rows: parsed, skipped, mapped } = parseImportedSettlementCsv(text, defaultChannel);
+      if (parsed.length === 0) {
+        toast.error("No rows mapped. Need at least a gross/order-value or a net/settlement column.");
+        return;
+      }
+      setRows(prev => [...prev, ...parsed]);
+      setLastMap(mapped);
+      toast.success(`Imported ${parsed.length} settlement row(s)${skipped ? `, skipped ${skipped}` : ""} — shared across Consolidator, Payout & Cash-Cycle`);
+    } catch (err) {
+      toast.error("Could not parse that CSV. Check it is a settlement export.");
+    }
+  };
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) { toast.error("Upload a .csv file"); return; }
+    const reader = new FileReader();
+    reader.onload = ev => ingest((ev.target?.result as string) || "");
+    reader.onerror = () => toast.error("Could not read that file");
+    reader.readAsText(file);
+  };
+
+  const roll = useMemo(() => rollupImported(rows), [rows]);
+
+  return (
+    <div className={`${CARD} p-5 space-y-3 border-[var(--color-primary)]/30`}>
+      <h2 className="text-sm font-semibold flex items-center gap-2">
+        <Database size={14} className="text-[var(--color-primary)]" /> Import settlement report (CSV)
+        <span className="ml-auto text-[10px] font-normal text-[var(--color-muted)] flex items-center gap-1"><Link2 size={11} /> shared across 3 tabs</span>
+      </h2>
+      <p className="text-xs text-[var(--color-muted)]">
+        Upload the settlement export from Amazon, Flipkart or Meesho. Columns are auto-mapped by header
+        (settlement/order id, gross/order-value, fees/commission, net/payout, date) — no fixed format needed.
+        One import feeds the Sales Consolidator, Payout Calendar and Cash-Cycle tabs at once.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs text-[var(--color-muted)] mb-1">Default channel (if CSV has no channel column)</label>
+          <select value={defaultChannel} onChange={e => setDefaultChannel(e.target.value as Channel)} className={INP}>
+            {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <button onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2.5 text-sm font-medium">
+          <Upload size={13} /> Upload settlement CSV
+        </button>
+        {rows.length > 0 && (
+          <button onClick={() => { setRows([]); setLastMap(null); toast.success("Cleared imported settlements"); }}
+            className="text-xs text-[var(--color-muted)] hover:text-red-400 px-2">Clear imported</button>
+        )}
+        <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={onFile} />
+      </div>
+
+      {lastMap && (
+        <p className="text-[10px] text-[var(--color-muted)]">
+          Auto-mapped columns:{" "}
+          {Object.entries(lastMap).map(([k, v]) => `${k}${v >= 0 ? `→#${v + 1}` : "→(derived)"}`).join("  ·  ")}
+        </p>
+      )}
+
+      {rows.length > 0 && !compact && (
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+          <p className="text-[11px] text-[var(--color-muted)] mb-2">
+            {rows.length} imported row(s) · gross {formatCurrency(Math.round(roll.gross))} · fees {formatCurrency(Math.round(roll.fees))} · net {formatCurrency(Math.round(roll.net))}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {roll.byChannel.map(c => (
+              <span key={c.channel} className="text-[11px] px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-muted)]">
+                {c.channel}: {c.orders} · net {formatCurrency(Math.round(c.net))}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Compact read-only banner reused by Payout Calendar & Cash-Cycle so they show
+// (and use) the imported totals without re-keying. Returns null when empty.
+function ImportedTotalsBanner({ note }: { note: string }) {
+  const [rows] = useFeatureState<ImportedSettlement[]>(IMPORTED_KEY, []);
+  const roll = useMemo(() => rollupImported(rows), [rows]);
+  if (rows.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5 px-4 py-3">
+      <p className="text-xs font-medium flex items-center gap-1.5 mb-1"><Database size={12} className="text-[var(--color-primary)]" /> Using imported settlement data ({rows.length} rows)</p>
+      <p className="text-[11px] text-[var(--color-muted)]">{note}</p>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {roll.byChannel.map(c => (
+          <span key={c.channel} className="text-[11px] px-2 py-1 rounded bg-[var(--color-accent)] text-[var(--color-muted)]">
+            {c.channel}: net {formatCurrency(Math.round(c.net))}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function MarketplacePage() {
   const [tab, setTab] = useState<MktTab>("overview");
@@ -544,8 +795,12 @@ function RtoLossTracker() {
 // ── #4 Multi-channel sales consolidator ────────────────────────────────────────
 type ChannelSales = { id: string; channel: Channel; orders: number; grossSales: number; fees: number; returns: number };
 
+// A consolidated row can come from an imported settlement file or manual entry.
+type ConsolidatedRow = ChannelSales & { source: "imported" | "manual" };
+
 function SalesConsolidator() {
   const [rows, setRows] = useFeatureState<ChannelSales[]>("mkt-channel-sales", []);
+  const [imported] = useFeatureState<ImportedSettlement[]>(IMPORTED_KEY, []);
   const [channel, setChannel] = useState<Channel>("Amazon");
   const [orders, setOrders] = useState("");
   const [gross, setGross] = useState("");
@@ -563,18 +818,38 @@ function SalesConsolidator() {
     toast.success(`${channel} updated`);
   };
 
+  // Merge: imported channel totals are authoritative; manual rows fill any
+  // channel not present in the import, so the same totals are never re-keyed.
+  const merged = useMemo<ConsolidatedRow[]>(() => {
+    const roll = rollupImported(imported);
+    const importedChannels = new Set<string>();
+    const out: ConsolidatedRow[] = roll.byChannel.map(c => {
+      importedChannels.add(c.channel);
+      return {
+        id: `imp-${c.channel}`, channel: c.channel, orders: c.orders,
+        grossSales: c.gross, fees: c.fees, returns: 0, source: "imported",
+      };
+    });
+    for (const r of rows) {
+      if (importedChannels.has(r.channel)) continue;
+      out.push({ ...r, source: "manual" });
+    }
+    return out;
+  }, [imported, rows]);
+
   const net = (r: ChannelSales) => r.grossSales - r.fees - r.returns;
-  const totGross = rows.reduce((s, r) => s + r.grossSales, 0);
-  const totFees = rows.reduce((s, r) => s + r.fees, 0);
-  const totReturns = rows.reduce((s, r) => s + r.returns, 0);
-  const totNet = rows.reduce((s, r) => s + net(r), 0);
-  const totOrders = rows.reduce((s, r) => s + r.orders, 0);
+  const totGross = merged.reduce((s, r) => s + r.grossSales, 0);
+  const totFees = merged.reduce((s, r) => s + r.fees, 0);
+  const totReturns = merged.reduce((s, r) => s + r.returns, 0);
+  const totNet = merged.reduce((s, r) => s + net(r), 0);
+  const totOrders = merged.reduce((s, r) => s + r.orders, 0);
 
   return (
     <div className="space-y-4">
+      <SettlementImportCard />
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Multi-channel Sales Consolidator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Enter each channel's period totals to unify fragmented marketplaces into one revenue-to-net view. Re-adding a channel overwrites its row.</p>
+        <p className="text-xs text-[var(--color-muted)]">Imported settlement channels feed this view automatically. Use the manual form below to add channels you didn't import (re-adding a channel overwrites its manual row).</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
@@ -590,7 +865,7 @@ function SalesConsolidator() {
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
       </div>
 
-      {rows.length > 0 && (
+      {merged.length > 0 && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total gross sales</p><p className="text-xl font-bold tabular-nums">{formatCurrency(Math.round(totGross))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{totOrders} orders</p></div>
@@ -600,23 +875,30 @@ function SalesConsolidator() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead className="border-b border-[var(--color-border)]">
-                  <tr>{["Channel", "Orders", "Gross", "Fees", "Returns", "Net", "Mix %", ""].map(h =>
+                  <tr>{["Channel", "Source", "Orders", "Gross", "Fees", "Returns", "Net", "Mix %", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
-                  {rows.map(r => (
+                  {merged.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.source === "imported" ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.source === "imported" ? "Imported" : "Manual"}</span>
+                      </td>
                       <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.grossSales)}</td>
                       <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.fees)}</td>
                       <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.returns)}</td>
                       <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(net(r)))}</td>
                       <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totNet > 0 ? `${Math.round((net(r) / totNet) * 100)}%` : "—"}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td className="px-4 py-2.5 text-right">
+                        {r.source === "manual"
+                          ? <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                          : <span className="text-[10px] text-[var(--color-muted)]">CSV</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -639,8 +921,11 @@ function addDaysISO(iso: string, days: number): string {
   return d.toISOString().split("T")[0];
 }
 
+const DEFAULT_CYCLE_DAYS: Record<string, number> = { "Amazon": 7, "Flipkart": 10, "Meesho": 15, "ONDC": 7, "D2C / Shopify": 2 };
+
 function PayoutCalendar() {
   const [rows, setRows] = useFeatureState<PayoutCfg[]>("mkt-payout-cfg", []);
+  const [imported] = useFeatureState<ImportedSettlement[]>(IMPORTED_KEY, []);
   const [channel, setChannel] = useState<Channel>("Amazon");
   const [cycleDays, setCycleDays] = useState("7");
   const [lastPayout, setLastPayout] = useState(() => new Date().toISOString().split("T")[0]);
@@ -658,6 +943,30 @@ function PayoutCalendar() {
     toast.success(`${channel} payout cycle saved`);
   };
 
+  // Build payout rows straight from the shared imported settlements: each
+  // imported channel's net becomes the pending amount and its latest settlement
+  // date becomes the "last payout" anchor — no re-keying.
+  const prefillFromImport = () => {
+    try {
+      const roll = rollupImported(imported);
+      if (roll.byChannel.length === 0) { toast.error("Import a settlement CSV first"); return; }
+      setRows(prev => {
+        const kept = prev.filter(r => !roll.byChannel.some(c => c.channel === r.channel));
+        const fromImport: PayoutCfg[] = roll.byChannel.map(c => ({
+          id: crypto.randomUUID(),
+          channel: c.channel,
+          cycleDays: DEFAULT_CYCLE_DAYS[c.channel] ?? 7,
+          lastPayout: c.lastDate || today,
+          pendingAmount: Math.round(c.net),
+        }));
+        return [...kept, ...fromImport];
+      });
+      toast.success(`Prefilled ${roll.byChannel.length} channel(s) from imported settlements`);
+    } catch (err) {
+      toast.error("Could not prefill from imported data");
+    }
+  };
+
   const projected = rows.map(r => {
     const next = addDaysISO(r.lastPayout, r.cycleDays);
     const daysAway = Math.ceil((new Date(next).getTime() - new Date(today).getTime()) / 86400000);
@@ -668,9 +977,10 @@ function PayoutCalendar() {
 
   return (
     <div className="space-y-4">
+      <ImportedTotalsBanner note="Click 'Prefill from imported' below to load each channel's pending amount (its imported net) and last-settlement date automatically." />
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Platform Payout Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)]">Each marketplace settles on its own cycle (Amazon ~7 days, Flipkart ~7–15). Log the cycle and last payout to project when cash lands and how much is still locked.</p>
+        <p className="text-xs text-[var(--color-muted)]">Each marketplace settles on its own cycle (Amazon ~7 days, Flipkart ~7–15). Prefill from your imported settlement file, or log a cycle and last payout manually to project when cash lands and how much is still locked.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
@@ -680,7 +990,12 @@ function PayoutCalendar() {
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Last payout date</label><input type="date" value={lastPayout} onChange={e => setLastPayout(e.target.value)} className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Pending / unsettled (₹)</label><input type="number" value={pending} onChange={e => setPending(e.target.value)} placeholder="180000" className={INP} /></div>
         </div>
-        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
+          {imported.length > 0 && (
+            <button onClick={prefillFromImport} className="flex items-center gap-1.5 border border-[var(--color-primary)]/40 text-[var(--color-primary)] rounded-lg px-4 py-2 text-sm font-medium"><Database size={13} /> Prefill from imported</button>
+          )}
+        </div>
       </div>
 
       {projected.length > 0 && (
@@ -2361,6 +2676,7 @@ function FestivalPlanner() {
 // ── #27 Holding-period / cash-cycle cost calculator ────────────────────────────
 function HoldingCostCalculator() {
   const [rows, setRows] = useFeatureState<{ id: string; channel: Channel; monthlyGmv: number; payoutDays: number }[]>("mkt-holding-rows", []);
+  const [imported] = useFeatureState<ImportedSettlement[]>(IMPORTED_KEY, []);
   const [channel, setChannel] = useState<Channel>("Amazon");
   const [monthlyGmv, setMonthlyGmv] = useState("");
   const [payoutDays, setPayoutDays] = useState("7");
@@ -2372,6 +2688,35 @@ function HoldingCostCalculator() {
     setRows(prev => [...prev.filter(r => r.channel !== channel), { id: crypto.randomUUID(), channel, monthlyGmv: g, payoutDays: Math.round(parseFloat(payoutDays) || 0) }]);
     setMonthlyGmv("");
     toast.success(`${channel} saved`);
+  };
+
+  // Derive monthly GMV per channel from imported gross. If the import spans a
+  // date range we annualise to a 30-day month; otherwise use raw gross as-is.
+  const prefillFromImport = () => {
+    try {
+      const roll = rollupImported(imported);
+      if (roll.byChannel.length === 0) { toast.error("Import a settlement CSV first"); return; }
+      setRows(prev => {
+        const kept = prev.filter(r => !roll.byChannel.some(c => c.channel === r.channel));
+        const fromImport = roll.byChannel.map(c => {
+          let monthly = c.gross;
+          if (c.firstDate && c.lastDate && c.lastDate > c.firstDate) {
+            const spanDays = Math.max(1, Math.round((new Date(c.lastDate).getTime() - new Date(c.firstDate).getTime()) / 86400000) + 1);
+            monthly = (c.gross / spanDays) * 30;
+          }
+          return {
+            id: crypto.randomUUID(),
+            channel: c.channel,
+            monthlyGmv: Math.round(monthly),
+            payoutDays: DEFAULT_CYCLE_DAYS[c.channel] ?? 7,
+          };
+        });
+        return [...kept, ...fromImport];
+      });
+      toast.success(`Prefilled ${roll.byChannel.length} channel(s) from imported settlements`);
+    } catch (err) {
+      toast.error("Could not prefill from imported data");
+    }
   };
 
   const aprPct = (parseFloat(apr) || 0) / 100;
@@ -2386,9 +2731,10 @@ function HoldingCostCalculator() {
 
   return (
     <div className="space-y-4">
+      <ImportedTotalsBanner note="Click 'Prefill from imported' to derive each channel's monthly GMV from imported gross (annualised over the import's date range)." />
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Cash-Cycle / Holding-Period Cost</h2>
-        <p className="text-xs text-[var(--color-muted)]">Every day between a sale and its payout, your money is locked at the marketplace — and if you fund operations on credit, that wait has a real interest cost. Estimate the working capital tied up per channel and what it costs you a year at your borrowing rate.</p>
+        <p className="text-xs text-[var(--color-muted)]">Every day between a sale and its payout, your money is locked at the marketplace — and if you fund operations on credit, that wait has a real interest cost. Prefill GMV from your imported settlement file, or enter it manually per channel.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
@@ -2398,7 +2744,12 @@ function HoldingCostCalculator() {
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Payout lag (days)</label><input type="number" value={payoutDays} onChange={e => setPayoutDays(e.target.value)} placeholder="7" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Borrowing APR %</label><input type="number" value={apr} onChange={e => setApr(e.target.value)} placeholder="18" className={INP} /></div>
         </div>
-        <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add / update channel</button>
+          {imported.length > 0 && (
+            <button onClick={prefillFromImport} className="flex items-center gap-1.5 border border-[var(--color-primary)]/40 text-[var(--color-primary)] rounded-lg px-4 py-2 text-sm font-medium"><Database size={13} /> Prefill from imported</button>
+          )}
+        </div>
       </div>
 
       {enriched.length > 0 && (

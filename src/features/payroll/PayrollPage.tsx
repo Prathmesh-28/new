@@ -23,6 +23,51 @@ interface PayrollRun {
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// ── Statutory salary engine (local, frontend-only) ─────────────────────────────
+// New-regime FY25-26 slabs used for the actual payroll run so TDS reflects the
+// ₹50k standard deduction and the 87A rebate, and PF/ESI/PT are deducted inline.
+const RUN_NEW_SLABS: [number, number][] = [
+  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
+];
+function runSlabTax(taxable: number, bands: [number, number][]): number {
+  let tax = 0, prev = 0;
+  for (const [upTo, rate] of bands) {
+    if (taxable <= prev) break;
+    tax += (Math.min(taxable, upTo) - prev) * rate;
+    prev = upTo;
+  }
+  return tax;
+}
+type StatutoryConfig = { basicPct: number; capPf: boolean };
+type StatutoryLine = {
+  gross: number; basic: number; hra: number; allowances: number;
+  pf: number; esi: number; pt: number; tds: number; totalDeductions: number; net: number;
+};
+// Computes a correct monthly net from a monthly gross + CTC structure.
+function computeStatutoryNet(grossMonthly: number, cfg: StatutoryConfig): StatutoryLine {
+  const gross = Math.max(0, Math.round(grossMonthly));
+  const basic = Math.round(gross * (cfg.basicPct / 100));
+  const hra = Math.round(basic * 0.4);                     // HRA = 40% of Basic
+  const allowances = Math.max(0, gross - basic - hra);     // special allowance balances the structure
+  // PF: 12% of Basic, optionally capped at the ₹15,000 wage ceiling.
+  const pfWage = cfg.capPf ? Math.min(basic, 15000) : basic;
+  const pf = Math.round(pfWage * 0.12);
+  // ESI: 0.75% of gross when gross ≤ ₹21,000.
+  const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+  // Professional Tax: simple ~₹200/mo state slab (nil for very low wages).
+  const pt = gross >= 15000 ? 200 : (gross > 7500 ? 100 : 0);
+  // TDS — new regime with ₹50,000 standard deduction + 87A rebate (≤ ₹7L taxable → nil).
+  const annualGross = gross * 12;
+  const taxable = Math.max(0, annualGross - 50000);
+  let annualTax = runSlabTax(taxable, RUN_NEW_SLABS);
+  if (taxable <= 700000) annualTax = 0;                    // 87A rebate
+  annualTax = Math.round(annualTax * 1.04);                // + 4% health & education cess
+  const tds = Math.round(annualTax / 12);
+  const totalDeductions = pf + esi + pt + tds;
+  const net = Math.max(0, gross - totalDeductions);
+  return { gross, basic, hra, allowances, pf, esi, pt, tds, totalDeductions, net };
+}
+
 function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [form, setForm] = useState({ name: "", email: "", pan: "", bank_account: "", bank_ifsc: "", gross_salary: "", joining_date: "" });
   const [saving, setSaving] = useState(false);
@@ -132,6 +177,11 @@ export default function PayrollPage() {
 
   const [runMonth] = useState(now.getMonth() + 1);
   const [runYear]  = useState(now.getFullYear());
+
+  // CTC structure used by the actual payroll run to deduct PF/ESI/PT/TDS correctly.
+  const [basicPct, setBasicPct] = useState(50);   // Basic defaults to 50% of gross
+  const [capPf, setCapPf]       = useState(true);  // cap PF at the ₹15,000 wage ceiling
+  const statCfg = useMemo<StatutoryConfig>(() => ({ basicPct, capPf }), [basicPct, capPf]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -282,16 +332,48 @@ export default function PayrollPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* CTC structure controls — drive the statutory deductions inside every run */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <span className="font-semibold flex items-center gap-1.5"><Calculator size={12} /> CTC structure</span>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[var(--color-muted)]">Basic % of gross</span>
+                <input type="number" min={20} max={60} value={basicPct}
+                  onChange={e => setBasicPct(Math.min(60, Math.max(20, Number(e.target.value) || 0)))}
+                  className="w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 outline-none focus:border-[var(--color-primary)] tabular-nums" />
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={capPf} onChange={e => setCapPf(e.target.checked)} />
+                <span className="text-[var(--color-muted)]">Cap PF at ₹15,000 wage ceiling</span>
+              </label>
+              <span className="text-[10px] text-[var(--color-muted)]">PF 12% of Basic · ESI 0.75% if gross ≤ ₹21k · PT ~₹200 · TDS new regime w/ ₹50k std deduction + 87A rebate</span>
+            </div>
             {runs.map(run => {
               const expanded = expandRun === run.id;
+              // Recompute the run from the per-employee gross using the CTC structure so
+              // PF/ESI/PT and a correct (std-deduction + 87A) TDS are deducted inline.
+              const lines = (run.breakdown ?? []).map(b => ({ b, calc: computeStatutoryNet(Number(b.gross), statCfg) }));
+              const sum = lines.reduce((a, { calc }) => ({
+                gross: a.gross + calc.gross, pf: a.pf + calc.pf, esi: a.esi + calc.esi,
+                pt: a.pt + calc.pt, tds: a.tds + calc.tds, net: a.net + calc.net,
+              }), { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0 });
+              const hasLines = lines.length > 0;
+              const exportRun = () => {
+                try {
+                  const rows: (string | number)[][] = [["Employee", "Gross", "Basic", "HRA", "Allowances", "PF", "ESI", "PT", "TDS", "Net"]];
+                  lines.forEach(({ b, calc }) => rows.push([b.name, calc.gross, calc.basic, calc.hra, calc.allowances, calc.pf, calc.esi, calc.pt, calc.tds, calc.net]));
+                  rows.push(["TOTAL", sum.gross, "", "", "", sum.pf, sum.esi, sum.pt, sum.tds, sum.net]);
+                  downloadCsvRows(rows, `payroll-${MONTH_NAMES[run.run_month - 1]}-${run.run_year}.csv`);
+                  toast.success("Run exported");
+                } catch (err) { toast.error(err instanceof Error ? err.message : "Export failed"); }
+              };
               return (
                 <div key={run.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm font-semibold">{MONTH_NAMES[run.run_month - 1]} {run.run_year}</p>
                       <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                        {formatCurrency(run.total_gross)} gross · {formatCurrency(run.total_tds)} TDS ·{" "}
-                        <span className="text-green-400 font-semibold">{formatCurrency(run.total_net)} net</span>
+                        {formatCurrency(hasLines ? sum.gross : run.total_gross)} gross · {formatCurrency(hasLines ? (sum.pf + sum.esi + sum.pt + sum.tds) : run.total_tds)} deductions ·{" "}
+                        <span className="text-green-400 font-semibold">{formatCurrency(hasLines ? sum.net : run.total_net)} net</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -304,7 +386,7 @@ export default function PayrollPage() {
                           Disburse
                         </button>
                       )}
-                      {run.breakdown && (
+                      {hasLines && (
                         <button onClick={() => setExpandRun(expanded ? null : run.id)}
                           className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
                           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -312,28 +394,51 @@ export default function PayrollPage() {
                       )}
                     </div>
                   </div>
-                  {expanded && run.breakdown && (
-                    <div className="mt-3 border-t border-[var(--color-border)] pt-3">
-                      <table className="w-full text-xs">
+                  {expanded && hasLines && (
+                    <div className="mt-3 border-t border-[var(--color-border)] pt-3 space-y-2">
+                      <div className="flex justify-end">
+                        <button onClick={exportRun} className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded px-2 py-1">
+                          <Download size={10} /> Export CSV
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                      <table className="w-full text-xs min-w-[620px]">
                         <thead>
                           <tr className="text-[var(--color-muted)]">
                             <th className="text-left pb-1.5">Employee</th>
                             <th className="text-right pb-1.5">Gross</th>
+                            <th className="text-right pb-1.5">PF</th>
+                            <th className="text-right pb-1.5">ESI</th>
+                            <th className="text-right pb-1.5">PT</th>
                             <th className="text-right pb-1.5">TDS</th>
                             <th className="text-right pb-1.5">Net</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
-                          {run.breakdown.map(b => (
-                            <tr key={b.employee_id}>
+                          {lines.map(({ b, calc }) => (
+                            <tr key={b.employee_id} title={`Basic ${formatCurrency(calc.basic)} · HRA ${formatCurrency(calc.hra)} · Allowances ${formatCurrency(calc.allowances)}`}>
                               <td className="py-1">{b.name}</td>
-                              <td className="py-1 text-right tabular-nums">{formatCurrency(b.gross)}</td>
-                              <td className="py-1 text-right tabular-nums text-orange-400">{formatCurrency(b.tds)}</td>
-                              <td className="py-1 text-right tabular-nums text-green-400 font-semibold">{formatCurrency(b.net)}</td>
+                              <td className="py-1 text-right tabular-nums">{formatCurrency(calc.gross)}</td>
+                              <td className="py-1 text-right tabular-nums text-red-400">{calc.pf ? formatCurrency(calc.pf) : "—"}</td>
+                              <td className="py-1 text-right tabular-nums text-red-400">{calc.esi ? formatCurrency(calc.esi) : "—"}</td>
+                              <td className="py-1 text-right tabular-nums text-red-400">{calc.pt ? formatCurrency(calc.pt) : "—"}</td>
+                              <td className="py-1 text-right tabular-nums text-orange-400">{calc.tds ? formatCurrency(calc.tds) : "—"}</td>
+                              <td className="py-1 text-right tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
                             </tr>
                           ))}
+                          <tr className="border-t-2 border-[var(--color-border)] font-semibold">
+                            <td className="py-1.5">Total ({lines.length})</td>
+                            <td className="py-1.5 text-right tabular-nums">{formatCurrency(sum.gross)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pf)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.esi)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pt)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-orange-400">{formatCurrency(sum.tds)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-green-400">{formatCurrency(sum.net)}</td>
+                          </tr>
                         </tbody>
                       </table>
+                      </div>
+                      <p className="text-[10px] text-[var(--color-muted)]">Hover a row for the Basic / HRA / allowance split. Deductions computed live from this CTC structure; the bank payout itself is production-pending.</p>
                     </div>
                   )}
                 </div>

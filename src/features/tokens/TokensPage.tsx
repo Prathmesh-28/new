@@ -1,14 +1,82 @@
 import { useMemo, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { useApp } from "@/context/AppContext";
 
 import { formatCurrency } from "@/lib/utils";
 import {
   Coins, Wallet, GitBranch, Lock, Layers, Boxes, ArrowLeftRight,
   CalendarClock, ClipboardCheck, BookOpen, PieChart, Plus, Copy,
   CheckCircle2, AlertTriangle, ArrowDownRight, ArrowUpRight, Trash2,
+  Download, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+
+// ── Real-store helpers (local to this page; reads store.invoices / store.transactions) ──
+type RealInvoiceOption = { id: string; number: string; customer: string; amount: number; dueDate: string; status: string };
+
+/** Outstanding (pending/overdue) invoices from the shared store, for dropdown pickers. */
+function useOutstandingInvoices(): RealInvoiceOption[] {
+  const { store } = useApp();
+  return useMemo(() => {
+    try {
+      const invs = store.invoices ?? [];
+      return invs
+        .filter(i => i.status === "pending" || i.status === "overdue")
+        .map(i => ({
+          id: i.id,
+          number: i.invoiceNumber || i.id.slice(0, 8),
+          customer: i.customer,
+          amount: i.amount,
+          dueDate: i.dueDate,
+          status: i.status,
+        }))
+        .sort((a, b) => b.amount - a.amount);
+    } catch {
+      return [];
+    }
+  }, [store.invoices]);
+}
+
+/** Distinct counterparties derived from invoices (customers) and expense transactions (vendors). */
+function useCounterparties(): string[] {
+  const { store } = useApp();
+  return useMemo(() => {
+    try {
+      const seen: Record<string, true> = {};
+      const out: string[] = [];
+      const push = (n?: string) => {
+        const name = (n || "").trim();
+        if (!name || seen[name.toLowerCase()]) return;
+        seen[name.toLowerCase()] = true;
+        out.push(name);
+      };
+      (store.invoices ?? []).forEach(i => push(i.customer));
+      (store.transactions ?? []).forEach(t => { if (t.amount < 0) push(t.counterparty); });
+      return out.sort((a, b) => a.localeCompare(b));
+    } catch {
+      return [];
+    }
+  }, [store.invoices, store.transactions]);
+}
+
+/** Client-side JSON download. */
+function downloadJson(filename: string, data: unknown) {
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Designs exported");
+  } catch {
+    toast.error("Could not export designs");
+  }
+}
 
 // ── shared styles (mirrors TaxPage / DebtPage input class) ───────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -267,6 +335,25 @@ function RuleDesigner() {
   const [purpose, setPurpose] = useState("");
   const [saved, setSaved] = useFeatureState<{ id: string; vendor: string; amount: number; trigger: string; condition: string; purpose: string }[]>("tok-rules", []);
 
+  const counterparties = useCounterparties();
+  const outstanding = useOutstandingInvoices();
+
+  // Pre-fill the rule from a real outstanding invoice (amount + a sensible default condition).
+  const prefillFromInvoice = (id: string) => {
+    try {
+      if (!id) return;
+      const inv = outstanding.find(i => i.id === id);
+      if (!inv) return;
+      setVendor(inv.customer);
+      setAmount(String(inv.amount));
+      setTrigger("delivery");
+      setCondition(`Invoice ${inv.number} (${inv.customer}) is delivered & accepted`);
+      toast.success(`Loaded invoice ${inv.number}`);
+    } catch {
+      toast.error("Could not load that invoice");
+    }
+  };
+
   const amt = parseFloat(amount) || 0;
   const triggerVerb: Record<typeof trigger, string> = {
     milestone: "milestone is verified", date: "the date is reached", delivery: "delivery is confirmed", approval: "manager approval is signed",
@@ -294,11 +381,25 @@ function RuleDesigner() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> Programmable-Payment Rule Designer</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose a conditional-payment rule. It outputs a plain-English statement plus a copyable JSON spec you can hand to a rail once it's live.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose a conditional-payment rule. Pick a real outstanding invoice to pre-fill it, or a real counterparty — it outputs a plain-English statement plus a copyable JSON spec you can hand to a rail once it's live.</p>
+        {outstanding.length > 0 && (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-fill from a real outstanding invoice</label>
+            <select defaultValue="" onChange={e => { prefillFromInvoice(e.target.value); e.target.value = ""; }} className={INP}>
+              <option value="">Select an invoice…</option>
+              {outstanding.map(i => (
+                <option key={i.id} value={i.id}>{i.number} · {i.customer} · {formatCurrency(i.amount)} · {i.status}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Pay to (vendor / payee)</label>
-            <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Acme Supplies Pvt Ltd" className={INP} />
+            <input list="tok-rule-counterparties" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Acme Supplies Pvt Ltd" className={INP} />
+            <datalist id="tok-rule-counterparties">
+              {counterparties.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
@@ -456,6 +557,23 @@ function InvoiceTokenizer() {
   const [investors, setInvestors] = useState<InvestorSplit[]>([]);
   const [invName, setInvName] = useState("");
   const [invTokens, setInvTokens] = useState("");
+  const [sourceLabel, setSourceLabel] = useState<string | null>(null);
+
+  const outstanding = useOutstandingInvoices();
+
+  // Load a real outstanding invoice's face value into the tokenizer.
+  const prefillFromInvoice = (id: string) => {
+    try {
+      if (!id) { setSourceLabel(null); return; }
+      const inv = outstanding.find(i => i.id === id);
+      if (!inv) return;
+      setFace(String(inv.amount));
+      setSourceLabel(`${inv.number} · ${inv.customer}`);
+      toast.success(`Loaded invoice ${inv.number}`);
+    } catch {
+      toast.error("Could not load that invoice");
+    }
+  };
 
   const faceV = parseFloat(face) || 0;
   const tokens = Math.max(1, Math.round(parseFloat(tokenCount) || 0));
@@ -477,11 +595,22 @@ function InvoiceTokenizer() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Tokenized-Invoice Simulator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Fractionalize an invoice into N tokens and split it across investors who fund it early at a discount.</p>
+        <p className="text-xs text-[var(--color-muted)]">Pick a real outstanding invoice to fractionalize, or enter a face value by hand. Split it into N tokens across investors who fund it early at a discount.</p>
+        {outstanding.length > 0 && (
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tokenize a real outstanding invoice{sourceLabel ? ` — loaded: ${sourceLabel}` : ""}</label>
+            <select defaultValue="" onChange={e => { prefillFromInvoice(e.target.value); }} className={INP}>
+              <option value="">Select an invoice…</option>
+              {outstanding.map(i => (
+                <option key={i.id} value={i.id}>{i.number} · {i.customer} · {formatCurrency(i.amount)} · {i.status}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice face value (₹)</label>
-            <input type="number" value={face} onChange={e => setFace(e.target.value)} placeholder="1000000" className={INP} />
+            <input type="number" value={face} onChange={e => { setFace(e.target.value); setSourceLabel(null); }} placeholder="1000000" className={INP} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Number of tokens</label>
@@ -917,25 +1046,111 @@ const READINESS_ITEMS: CheckItem[] = [
 
 function ReadinessChecklist() {
   const [done, setDone] = useFeatureState<string[]>("tok-readiness", []);
-  const doneSet = new Set(done);
-  const toggle = (id: string) => setDone(doneSet.has(id) ? done.filter(x => x !== id) : [...done, id]);
-  const completed = READINESS_ITEMS.filter(i => doneSet.has(i.id)).length;
+  // Read-only access to the other tabs' saved specs so we can bundle a shareable brief.
+  const [savedRules] = useFeatureState<{ id: string; vendor: string; amount: number; trigger: string; condition: string; purpose: string }[]>("tok-rules", []);
+  const [escrows] = useFeatureState<Escrow[]>("tok-escrows", []);
+  const [assets] = useFeatureState<TokenAsset[]>("tok-assets", []);
+  const { store } = useApp();
+  // doneList instead of `new Set()` — avoids any lucide global shadowing and keeps it simple.
+  const doneList = Array.isArray(done) ? done : [];
+  const isDoneId = (id: string) => doneList.includes(id);
+  const toggle = (id: string) => setDone(isDoneId(id) ? doneList.filter(x => x !== id) : [...doneList, id]);
+  const completed = READINESS_ITEMS.filter(i => isDoneId(i.id)).length;
   const pct = Math.round((completed / READINESS_ITEMS.length) * 100);
+
+  const buildBrief = () => {
+    const firmName = (() => { try { return store.firm?.name ?? "Your firm"; } catch { return "Your firm"; } })();
+    return {
+      type: "programmable_money_readiness_brief",
+      firm: firmName,
+      generatedAt: new Date().toISOString(),
+      readiness: {
+        completed,
+        total: READINESS_ITEMS.length,
+        percent: pct,
+        items: READINESS_ITEMS.map(i => ({ id: i.id, label: i.label, done: isDoneId(i.id) })),
+      },
+      paymentRules: savedRules,
+      escrows,
+      tokenizedAssets: assets,
+    };
+  };
+
+  const exportDesigns = () => {
+    try {
+      downloadJson(`tokens-readiness-brief-${new Date().toISOString().split("T")[0]}.json`, buildBrief());
+    } catch {
+      toast.error("Could not export designs");
+    }
+  };
+
+  const printBrief = () => {
+    try {
+      const b = buildBrief();
+      const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] || c));
+      const row = (cells: string[]) => `<tr>${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
+      const rulesRows = b.paymentRules.length
+        ? b.paymentRules.map(r => row([esc(formatCurrency(r.amount)), esc(r.vendor), esc(r.condition), esc(r.purpose || "—")])).join("")
+        : row(["—", "No payment rules saved", "", ""]);
+      const escrowRows = b.escrows.length
+        ? b.escrows.map(e => row([esc(`${e.payer} → ${e.payee}`), esc(formatCurrency(e.amount)), esc(e.conditions), esc(e.status)])).join("")
+        : row(["No escrows drafted", "", "", ""]);
+      const assetRows = b.tokenizedAssets.length
+        ? b.tokenizedAssets.map(a => row([esc(a.name), esc(a.kind), esc(formatCurrency(a.faceValue)), esc(String(a.tokenCount))])).join("")
+        : row(["No tokenized assets logged", "", "", ""]);
+      const checklistRows = b.readiness.items.map(i => row([i.done ? "✓" : "○", esc(i.label)])).join("");
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Programmable-Money Readiness Brief</title>
+        <style>
+          body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:32px;font-size:13px}
+          h1{font-size:20px;margin:0 0 4px} h2{font-size:14px;margin:24px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
+          .meta{color:#666;font-size:12px;margin-bottom:8px}
+          table{border-collapse:collapse;width:100%;margin-top:4px} td,th{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:12px}
+          th{background:#f4f4f4} .pct{font-weight:700}
+        </style></head><body>
+        <h1>Programmable-Money Readiness Brief</h1>
+        <div class="meta">${esc(b.firm)} · Generated ${esc(format(new Date(b.generatedAt), "d MMM yyyy, HH:mm"))}</div>
+        <div class="pct">Readiness: ${b.readiness.completed}/${b.readiness.total} (${b.readiness.percent}%)</div>
+        <h2>Readiness checklist</h2>
+        <table><tbody>${checklistRows}</tbody></table>
+        <h2>Payment rules</h2>
+        <table><thead><tr><th>Amount</th><th>Payee</th><th>Condition</th><th>Purpose</th></tr></thead><tbody>${rulesRows}</tbody></table>
+        <h2>Escrows</h2>
+        <table><thead><tr><th>Parties</th><th>Amount</th><th>Release condition</th><th>Status</th></tr></thead><tbody>${escrowRows}</tbody></table>
+        <h2>Tokenized assets</h2>
+        <table><thead><tr><th>Asset</th><th>Kind</th><th>Face value</th><th>Tokens</th></tr></thead><tbody>${assetRows}</tbody></table>
+        </body></html>`;
+      const w = window.open("", "_blank");
+      if (!w) { toast.error("Allow pop-ups to print the brief"); return; }
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      w.print();
+    } catch {
+      toast.error("Could not open printable brief");
+    }
+  };
+
+  const designCount = savedRules.length + escrows.length + assets.length;
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Settlement-Readiness Checklist</h3>
-          <span className="text-xs font-bold tabular-nums">{completed}/{READINESS_ITEMS.length} · {pct}%</span>
+          <div className="flex items-center gap-2">
+            <button onClick={exportDesigns} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Download size={11} /> Export designs</button>
+            <button onClick={printBrief} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Printer size={11} /> Print brief</button>
+            <span className="text-xs font-bold tabular-nums">{completed}/{READINESS_ITEMS.length} · {pct}%</span>
+          </div>
         </div>
+        <p className="text-[11px] text-[var(--color-muted)] mb-2">Bundles {designCount} saved design{designCount === 1 ? "" : "s"} ({savedRules.length} rule{savedRules.length === 1 ? "" : "s"}, {escrows.length} escrow{escrows.length === 1 ? "" : "s"}, {assets.length} asset{assets.length === 1 ? "" : "s"}) plus this checklist into a shareable financing / escrow brief.</p>
         <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#22c55e" : "var(--color-primary)" }} />
         </div>
       </div>
       <div className="space-y-2">
         {READINESS_ITEMS.map(item => {
-          const isDone = doneSet.has(item.id);
+          const isDone = isDoneId(item.id);
           return (
             <button key={item.id} onClick={() => toggle(item.id)}
               className={`${CARD} w-full p-4 text-left flex items-start gap-3 hover:border-[var(--color-primary)]/40 transition-colors`}>

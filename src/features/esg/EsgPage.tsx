@@ -133,7 +133,68 @@ const DIESEL_FACTOR = 2.68;    // kg CO2e / litre
 const PETROL_FACTOR = 2.31;    // kg CO2e / litre
 const LPG_FACTOR = 2.98;       // kg CO2e / kg
 
+// State-specific grid emission factors (kg CO2e / kWh), approximate CEA-style values.
+// Coal-heavy eastern/central grids run high; hydro/renewable-rich southern & northern hill
+// states run low. Defaults to the national average when no state is selected.
+const STATE_GRID_FACTORS: { code: string; label: string; factor: number }[] = [
+  { code: "", label: "National average (CEA)", factor: GRID_FACTOR },
+  { code: "CG", label: "Chhattisgarh", factor: 0.95 },
+  { code: "JH", label: "Jharkhand", factor: 0.92 },
+  { code: "WB", label: "West Bengal", factor: 0.88 },
+  { code: "MP", label: "Madhya Pradesh", factor: 0.85 },
+  { code: "OD", label: "Odisha", factor: 0.82 },
+  { code: "UP", label: "Uttar Pradesh", factor: 0.80 },
+  { code: "MH", label: "Maharashtra", factor: 0.78 },
+  { code: "RJ", label: "Rajasthan", factor: 0.72 },
+  { code: "GJ", label: "Gujarat", factor: 0.70 },
+  { code: "AP", label: "Andhra Pradesh", factor: 0.58 },
+  { code: "TN", label: "Tamil Nadu", factor: 0.65 },
+  { code: "DL", label: "Delhi", factor: 0.63 },
+  { code: "KA", label: "Karnataka", factor: 0.55 },
+  { code: "KL", label: "Kerala", factor: 0.42 },
+  { code: "UK", label: "Uttarakhand", factor: 0.30 },
+  { code: "HP", label: "Himachal Pradesh", factor: 0.20 },
+];
+
 const fmtT = (kg: number) => `${(kg / 1000).toFixed(2)} tCO₂e`;
+
+// Scan the books for expense rows that look like fuel/power, returning estimated
+// activity quantities from spend. Rough India unit prices: diesel ~₹90/L, petrol
+// ~₹105/L, electricity ~₹8/kWh. A starting estimate the user can override.
+function estimateFuelPowerFromBooks(
+  txns: { amount: number; description?: string; category?: string }[],
+): { diesel: number; petrol: number; kwh: number; matched: number } {
+  let dieselSpend = 0, petrolSpend = 0, powerSpend = 0, matched = 0;
+  for (const t of txns) {
+    if (t.amount >= 0) continue; // expenses only
+    const text = `${t.description ?? ""} ${t.category ?? ""}`.toLowerCase();
+    const spend = Math.abs(t.amount);
+    if (/\bdiesel\b|\bhsd\b/.test(text)) { dieselSpend += spend; matched++; }
+    else if (/petrol|\bfuel\b|\bpetro\b/.test(text)) { petrolSpend += spend; matched++; }
+    else if (/electric|\bpower\b|\bgrid\b|discom|\bkwh\b|\bbescom\b|\bmseb\b|\btneb\b/.test(text)) { powerSpend += spend; matched++; }
+  }
+  return {
+    diesel: Math.round(dieselSpend / 90),
+    petrol: Math.round(petrolSpend / 105),
+    kwh: Math.round(powerSpend / 8),
+    matched,
+  };
+}
+
+// Build a CSV string from rows and trigger a client-side Blob download.
+function downloadEsgCsv(rows: string[][], filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = rows.map(r => r.map(esc).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // ── #1 Carbon Footprint Estimator (spend-based, from expense categories) ────────
 function CarbonFootprintEstimator() {
@@ -217,20 +278,42 @@ function CarbonFootprintEstimator() {
 
 // ── #2 Scope 1/2/3 Calculator (activity-based) ──────────────────────────────────
 function ScopeCalculator() {
+  const { store } = useApp();
   // Scope 1 — direct combustion
   const [diesel, setDiesel] = useState("");
   const [petrol, setPetrol] = useState("");
   const [lpg, setLpg] = useState("");
   // Scope 2 — purchased electricity
   const [kwh, setKwh] = useState("");
+  const [stateCode, setStateCode] = useState("");
   // Scope 3 — value chain (spend-based proxy)
   const [purchased, setPurchased] = useState("");
   const [logistics, setLogistics] = useState("");
   const [businessTravel, setBusinessTravel] = useState("");
 
+  // State-specific grid factor, defaulting to national average when unset.
+  const gridFactor = (STATE_GRID_FACTORS.find(s => s.code === stateCode) ?? STATE_GRID_FACTORS[0]).factor;
+
+  // Auto-populate fuel & power from the books as a starting estimate (overridable).
+  const autofill = () => {
+    try {
+      const est = estimateFuelPowerFromBooks(store.transactions ?? []);
+      if (est.matched === 0) {
+        toast.error("No fuel/power expense rows found in your books");
+        return;
+      }
+      if (est.diesel > 0) setDiesel(String(est.diesel));
+      if (est.petrol > 0) setPetrol(String(est.petrol));
+      if (est.kwh > 0) setKwh(String(est.kwh));
+      toast.success(`Pre-filled from ${est.matched} book entr${est.matched === 1 ? "y" : "ies"} — adjust as needed`);
+    } catch {
+      toast.error("Could not estimate from books");
+    }
+  };
+
   const n = (v: string) => parseFloat(v) || 0;
   const scope1 = n(diesel) * DIESEL_FACTOR + n(petrol) * PETROL_FACTOR + n(lpg) * LPG_FACTOR;
-  const scope2 = n(kwh) * GRID_FACTOR;
+  const scope2 = n(kwh) * gridFactor;
   const scope3 =
     (n(purchased) / 1000) * 30 + (n(logistics) / 1000) * 50 + (n(businessTravel) / 1000) * 40;
   const total = scope1 + scope2 + scope3;
@@ -238,12 +321,74 @@ function ScopeCalculator() {
 
   const scopes = [
     { label: "Scope 1 — Direct", kg: scope1, color: "#ef4444", desc: "Fuel burned in your own vehicles & equipment" },
-    { label: "Scope 2 — Energy", kg: scope2, color: "#f97316", desc: "Purchased grid electricity (CEA factor)" },
+    { label: "Scope 2 — Energy", kg: scope2, color: "#f97316", desc: "Purchased grid electricity (state CEA factor)" },
     { label: "Scope 3 — Value chain", kg: scope3, color: "#eab308", desc: "Purchased goods, freight, business travel" },
   ];
 
+  // Export the inventory + intensity as a CSV download, plus a printable summary.
+  const annualRevenue = (store.transactions ?? []).filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const intensity = annualRevenue > 0 ? (total / 1000) / (annualRevenue / 1_00_00_000) : 0;
+  const stateLabel = (STATE_GRID_FACTORS.find(s => s.code === stateCode) ?? STATE_GRID_FACTORS[0]).label;
+
+  const exportCsv = () => {
+    try {
+      if (!has) { toast.error("Enter at least one activity figure first"); return; }
+      const rows: string[][] = [
+        ["Headroom ESG — Scope 1/2/3 GHG Inventory"],
+        ["Generated", new Date().toISOString().slice(0, 10)],
+        ["Grid region", stateLabel, `${gridFactor} kgCO2e/kWh`],
+        [],
+        ["Scope", "Source", "Activity", "Unit", "Emission factor", "tCO2e"],
+        ["Scope 1", "Diesel", diesel || "0", "litres", `${DIESEL_FACTOR} kg/L`, (n(diesel) * DIESEL_FACTOR / 1000).toFixed(3)],
+        ["Scope 1", "Petrol", petrol || "0", "litres", `${PETROL_FACTOR} kg/L`, (n(petrol) * PETROL_FACTOR / 1000).toFixed(3)],
+        ["Scope 1", "LPG", lpg || "0", "kg", `${LPG_FACTOR} kg/kg`, (n(lpg) * LPG_FACTOR / 1000).toFixed(3)],
+        ["Scope 2", "Grid electricity", kwh || "0", "kWh", `${gridFactor} kg/kWh`, (scope2 / 1000).toFixed(3)],
+        ["Scope 3", "Purchased goods", purchased || "0", "INR", "30 kg/1000", ((n(purchased) / 1000) * 30 / 1000).toFixed(3)],
+        ["Scope 3", "Freight & logistics", logistics || "0", "INR", "50 kg/1000", ((n(logistics) / 1000) * 50 / 1000).toFixed(3)],
+        ["Scope 3", "Business travel", businessTravel || "0", "INR", "40 kg/1000", ((n(businessTravel) / 1000) * 40 / 1000).toFixed(3)],
+        [],
+        ["Totals", "", "", "", "", ""],
+        ["Scope 1 total", "", "", "", "", (scope1 / 1000).toFixed(3)],
+        ["Scope 2 total", "", "", "", "", (scope2 / 1000).toFixed(3)],
+        ["Scope 3 total", "", "", "", "", (scope3 / 1000).toFixed(3)],
+        ["Total GHG inventory (tCO2e)", "", "", "", "", (total / 1000).toFixed(3)],
+        ["Annual revenue (INR)", "", "", "", "", String(Math.round(annualRevenue))],
+        ["Carbon intensity (tCO2e / INR crore)", "", "", "", "", intensity.toFixed(3)],
+      ];
+      downloadEsgCsv(rows, `esg-ghg-inventory-${new Date().toISOString().slice(0, 10)}.csv`);
+      toast.success("ESG report CSV downloaded");
+    } catch {
+      toast.error("Export failed");
+    }
+  };
+
+  const printSummary = () => {
+    try {
+      if (!has) { toast.error("Enter at least one activity figure first"); return; }
+      window.print();
+    } catch {
+      toast.error("Print failed");
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <div className={`${CARD} p-3 flex items-center justify-between flex-wrap gap-2`}>
+        <p className="text-xs text-[var(--color-muted)]">
+          Build a GHG Protocol inventory. Auto-fill fuel & power from your books, then refine — values are yours to override.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={autofill} className="flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-lg px-3 py-1.5 text-xs font-medium">
+            <Gauge size={12} /> Auto-fill from books
+          </button>
+          <button onClick={exportCsv} className="flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-lg px-3 py-1.5 text-xs font-medium">
+            <FileText size={12} /> Export ESG report (CSV)
+          </button>
+          <button onClick={printSummary} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-1.5 text-xs font-medium">
+            <ClipboardCheck size={12} /> Print summary
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`${CARD} p-4 space-y-3`}>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Factory size={13} className="text-red-400" /> Scope 1 — Direct</h3>
@@ -263,10 +408,18 @@ function ScopeCalculator() {
         <div className={`${CARD} p-4 space-y-3`}>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Zap size={13} className="text-orange-400" /> Scope 2 — Energy</h3>
           <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">State / grid region</label>
+            <select value={stateCode} onChange={e => setStateCode(e.target.value)} className={INP}>
+              {STATE_GRID_FACTORS.map(s => (
+                <option key={s.code || "national"} value={s.code}>{s.label} — {s.factor} kg/kWh</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Grid electricity (kWh/yr)</label>
             <input type="number" value={kwh} onChange={e => setKwh(e.target.value)} placeholder="0" className={INP} />
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">Grid factor {GRID_FACTOR} kg CO₂e/kWh (CEA India average). Subtract renewable/REC-backed units.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Grid factor {gridFactor} kg CO₂e/kWh ({stateLabel}). Coal-heavy state grids emit more; hydro/renewable grids less. Subtract renewable/REC-backed units.</p>
         </div>
         <div className={`${CARD} p-4 space-y-3`}>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={13} className="text-yellow-400" /> Scope 3 — Value chain (₹)</h3>
