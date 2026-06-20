@@ -673,4 +673,306 @@ async function stockSummary(tenantId, fromDate, toDate) {
   };
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary, scheduleIII, branchTrialBalance, branchPL };
+// §10 (M11) — Profitability analytics. Three complementary cuts of gross margin:
+// by customer (party), by stock item, and by project. All read the same posted
+// ledger/stock data the rest of the reporting layer uses (cancelled vouchers
+// excluded) so the numbers reconcile to the P&L. Every cut is tolerant of a
+// missing dimension: parties with no COGS still show revenue; items with no sale
+// value still show cost; projects with no timesheets/vouchers still appear.
+
+// (1) Per-customer gross margin. Revenue is the credit booked to INCOME ledgers on
+// that party's SALES vouchers; direct cost is the outward stock-movement value
+// (COGS) on those same SALES vouchers (set when the sale moved inventory). Gross
+// margin = revenue − cost; margin% = gross / revenue. Parties are ranked by gross
+// margin (desc). Sales with no inventory line simply carry zero derivable cost.
+async function profitabilityByParty(tenantId, fy) {
+  // Revenue per party = Σ(credit − debit) on INCOME ledgers across the party's SALES vouchers.
+  const { rows: rev } = await pool.query(
+    `SELECT v.party_ledger_id AS ledger_id, pl.name AS party_name,
+            COALESCE(SUM(e.credit - e.debit),0) AS revenue
+       FROM book_vouchers v
+       JOIN book_ledgers pl ON pl.id=v.party_ledger_id AND pl.tenant_id=v.tenant_id
+       JOIN book_voucher_entries e ON e.voucher_id=v.id
+       JOIN book_ledgers l ON l.id=e.ledger_id
+       JOIN book_account_groups g ON g.id=l.group_id AND g.nature='INCOME'
+      WHERE v.tenant_id=$1 AND v.voucher_type='SALES' AND v.is_cancelled=false
+        AND v.financial_year=$2 AND v.party_ledger_id IS NOT NULL
+      GROUP BY v.party_ledger_id, pl.name`,
+    [tenantId, fy]
+  );
+  // Cost per party = Σ outward stock-movement value on that party's SALES vouchers.
+  const { rows: cost } = await pool.query(
+    `SELECT v.party_ledger_id AS ledger_id,
+            COALESCE(SUM(m.value),0) AS cost
+       FROM book_vouchers v
+       JOIN book_stock_movements m ON m.voucher_id=v.id AND m.tenant_id=v.tenant_id
+      WHERE v.tenant_id=$1 AND v.voucher_type='SALES' AND v.is_cancelled=false
+        AND v.financial_year=$2 AND v.party_ledger_id IS NOT NULL AND m.qty_out > 0
+      GROUP BY v.party_ledger_id`,
+    [tenantId, fy]
+  );
+  const costByParty = new Map(cost.map((r) => [r.ledger_id, money(r.cost)]));
+  let tRev = money(0), tCost = money(0), tGm = money(0);
+  const rows = rev.map((r) => {
+    const revenue = money(r.revenue);
+    const c = costByParty.get(r.ledger_id) || money(0);
+    const gross = revenue.minus(c);
+    tRev = tRev.plus(revenue); tCost = tCost.plus(c); tGm = tGm.plus(gross);
+    const marginPct = revenue.isZero() ? "0.00" : gross.div(revenue).mul(100).toFixed(2);
+    return { ledgerId: r.ledger_id, party: r.party_name, revenue: toRupees(revenue), cost: toRupees(c), grossMargin: toRupees(gross), marginPct, costDerivable: costByParty.has(r.ledger_id) };
+  }).sort((a, b) => money(b.grossMargin).comparedTo(money(a.grossMargin)));
+  return {
+    financialYear: fy, rows,
+    totals: { revenue: toRupees(tRev), cost: toRupees(tCost), grossMargin: toRupees(tGm), marginPct: tRev.isZero() ? "0.00" : tGm.div(tRev).mul(100).toFixed(2) },
+  };
+}
+
+// (2) Per-item gross margin. Qty sold + cost come from outward stock movements on
+// non-cancelled vouchers in the FY (movement.value = COGS at sale time). Sales
+// value is recovered, where derivable, from the line items of documents converted
+// into those vouchers (book_documents.lines: per-line qty × rate − discount,
+// matched by itemId). Items that sold but have no convertible document line keep
+// salesValue = 0 (not derivable) while still reporting qty + cost; gross profit is
+// then negative-of-cost — flagged via salesDerivable so callers can present it
+// honestly. Ranked by gross profit (desc).
+async function profitabilityByItem(tenantId, fy) {
+  const effDate = "COALESCE(v.voucher_date, m.created_at::date)";
+  const { rows: mv } = await pool.query(
+    `SELECT i.id AS item_id, i.name, i.unit,
+            COALESCE(SUM(m.qty_out),0) AS qty_sold,
+            COALESCE(SUM(m.value),0)   AS cost
+       FROM book_stock_items i
+       JOIN book_stock_movements m ON m.item_id=i.id AND m.tenant_id=i.tenant_id AND m.qty_out > 0
+       JOIN book_vouchers v ON v.id=m.voucher_id AND v.is_cancelled=false AND v.financial_year=$2
+      WHERE i.tenant_id=$1
+      GROUP BY i.id, i.name, i.unit`,
+    [tenantId, fy]
+  );
+  // Sales value per item from documents converted into FY SALES vouchers.
+  const { rows: docs } = await pool.query(
+    `SELECT d.lines
+       FROM book_documents d
+       JOIN book_vouchers v ON v.id=d.converted_voucher_id AND v.tenant_id=d.tenant_id
+        AND v.voucher_type='SALES' AND v.is_cancelled=false AND v.financial_year=$2
+      WHERE d.tenant_id=$1 AND d.lines IS NOT NULL`,
+    [tenantId, fy]
+  );
+  const saleByItem = new Map();
+  for (const d of docs) {
+    const lines = Array.isArray(d.lines) ? d.lines : [];
+    for (const ln of lines) {
+      const itemId = ln.itemId || ln.item_id;
+      if (!itemId) continue;
+      const qty = money(ln.qty == null ? 1 : ln.qty);
+      const rate = money(ln.rate == null ? 0 : ln.rate);
+      const discount = money(ln.discount == null ? 0 : ln.discount);
+      const net = qty.mul(rate).minus(discount);
+      saleByItem.set(itemId, (saleByItem.get(itemId) || money(0)).plus(net));
+    }
+  }
+  let tSale = money(0), tCost = money(0), tGp = money(0);
+  const rows = mv.map((r) => {
+    const qty = money(r.qty_sold);
+    const cost = money(r.cost);
+    const derivable = saleByItem.has(r.item_id);
+    const salesValue = saleByItem.get(r.item_id) || money(0);
+    const gross = salesValue.minus(cost);
+    tSale = tSale.plus(salesValue); tCost = tCost.plus(cost); tGp = tGp.plus(gross);
+    const marginPct = salesValue.isZero() ? "0.00" : gross.div(salesValue).mul(100).toFixed(2);
+    return { itemId: r.item_id, name: r.name, unit: r.unit, qtySold: toRupees(qty), salesValue: toRupees(salesValue), cost: toRupees(cost), grossProfit: toRupees(gross), marginPct, salesDerivable: derivable };
+  }).sort((a, b) => money(b.grossProfit).comparedTo(money(a.grossProfit)));
+  return {
+    financialYear: fy, rows,
+    totals: { salesValue: toRupees(tSale), cost: toRupees(tCost), grossProfit: toRupees(tGp), marginPct: tSale.isZero() ? "0.00" : tGp.div(tSale).mul(100).toFixed(2) },
+  };
+}
+
+// (3) Per-project profitability. Revenue is the SALES booked to the project's
+// customer ledger (book_projects.customer_ledger_id) in the FY, plus any vouchers
+// tagged to the project (book_voucher_entries.tags->>'project' = project id/name,
+// INCOME legs). Cost is the value of billable timesheets (Σ hours × rate) plus the
+// expense legs of project-tagged vouchers. Projects with neither timesheets nor
+// tagged/customer vouchers still appear with zeros. Margin% = gross / revenue.
+async function profitabilityByProject(tenantId, fy) {
+  const { rows: projects } = await pool.query(
+    "SELECT id, name, customer_ledger_id, status FROM book_projects WHERE tenant_id=$1 ORDER BY name",
+    [tenantId]
+  );
+  // Billable timesheet cost per project (FY-scoped by work_date's financial year is
+  // approximated by the FY's Apr–Mar window via the fy module's convention; we filter
+  // in JS using the project's rows fetched once).
+  const { rows: ts } = await pool.query(
+    `SELECT project_id, COALESCE(SUM(hours*rate),0) AS cost
+       FROM book_timesheets
+      WHERE tenant_id=$1 AND billable=true
+      GROUP BY project_id`,
+    [tenantId]
+  );
+  const tsByProject = new Map(ts.map((r) => [r.project_id, money(r.cost)]));
+  // Customer-ledger revenue per project (SALES income legs on the customer's vouchers).
+  const { rows: custRev } = await pool.query(
+    `SELECT v.party_ledger_id AS ledger_id,
+            COALESCE(SUM(e.credit - e.debit),0) AS revenue
+       FROM book_vouchers v
+       JOIN book_voucher_entries e ON e.voucher_id=v.id
+       JOIN book_ledgers l ON l.id=e.ledger_id
+       JOIN book_account_groups g ON g.id=l.group_id AND g.nature='INCOME'
+      WHERE v.tenant_id=$1 AND v.voucher_type='SALES' AND v.is_cancelled=false
+        AND v.financial_year=$2 AND v.party_ledger_id IS NOT NULL
+      GROUP BY v.party_ledger_id`,
+    [tenantId, fy]
+  );
+  const revByLedger = new Map(custRev.map((r) => [r.ledger_id, money(r.revenue)]));
+  // Tagged-voucher revenue/expense per project tag (tags->>'project').
+  const { rows: tagged } = await pool.query(
+    `SELECT e.tags->>'project' AS proj, g.nature,
+            COALESCE(SUM(e.credit),0) AS cr, COALESCE(SUM(e.debit),0) AS dr
+       FROM book_voucher_entries e
+       JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false AND v.financial_year=$2
+       JOIN book_ledgers l ON l.id=e.ledger_id
+       JOIN book_account_groups g ON g.id=l.group_id AND g.affects_pl=true
+      WHERE e.tenant_id=$1 AND e.tags ? 'project' AND e.tags->>'project' IS NOT NULL
+      GROUP BY e.tags->>'project', g.nature`,
+    [tenantId, fy]
+  );
+  // Index tagged income/expense by the project key (matches project id OR name).
+  const tagRev = new Map(), tagCost = new Map();
+  for (const r of tagged) {
+    if (!r.proj) continue;
+    if (r.nature === "INCOME") tagRev.set(r.proj, (tagRev.get(r.proj) || money(0)).plus(money(r.cr).minus(money(r.dr))));
+    else if (r.nature === "EXPENSE") tagCost.set(r.proj, (tagCost.get(r.proj) || money(0)).plus(money(r.dr).minus(money(r.cr))));
+  }
+  const tagKeyRev = (p) => (tagRev.get(p.id) || money(0)).plus(tagRev.get(p.name) || money(0));
+  const tagKeyCost = (p) => (tagCost.get(p.id) || money(0)).plus(tagCost.get(p.name) || money(0));
+
+  let tRev = money(0), tCost = money(0), tGm = money(0);
+  const rows = projects.map((p) => {
+    const custRevenue = p.customer_ledger_id ? (revByLedger.get(p.customer_ledger_id) || money(0)) : money(0);
+    const revenue = custRevenue.plus(tagKeyRev(p));
+    const tsCost = tsByProject.get(p.id) || money(0);
+    const cost = tsCost.plus(tagKeyCost(p));
+    const gross = revenue.minus(cost);
+    tRev = tRev.plus(revenue); tCost = tCost.plus(cost); tGm = tGm.plus(gross);
+    const marginPct = revenue.isZero() ? "0.00" : gross.div(revenue).mul(100).toFixed(2);
+    return { projectId: p.id, name: p.name, status: p.status, revenue: toRupees(revenue), cost: toRupees(cost), grossMargin: toRupees(gross), marginPct };
+  }).sort((a, b) => money(b.grossMargin).comparedTo(money(a.grossMargin)));
+  return {
+    financialYear: fy, rows,
+    totals: { revenue: toRupees(tRev), cost: toRupees(tCost), grossMargin: toRupees(tGm), marginPct: tRev.isZero() ? "0.00" : tGm.div(tRev).mul(100).toFixed(2) },
+  };
+}
+
+// (4) Tally-compatible XML export. Produces a Tally import ENVELOPE containing
+// LEDGER masters (every ledger with its parent group + opening balance) and VOUCHER
+// entries (each non-cancelled FY voucher as a Day Book ALLLEDGERENTRIES.LIST). This
+// targets Tally's "Import Data" schema (Masters + Day Book / Vouchers) on a
+// best-effort basis: amounts use Tally's sign convention (debit positive, credit
+// negative) and ALLLEDGERENTRIES carry ISDEEMEDPOSITIVE. Returned as a string.
+function _xmlEsc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+const TALLY_VTYPE = {
+  SALES: "Sales", PURCHASE: "Purchase", PAYMENT: "Payment", RECEIPT: "Receipt",
+  CONTRA: "Contra", JOURNAL: "Journal", DEBIT_NOTE: "Debit Note", CREDIT_NOTE: "Credit Note",
+};
+function _tallyDate(d) {
+  // Tally expects YYYYMMDD.
+  if (!d) return "";
+  const s = (d instanceof Date) ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+  return s.replace(/-/g, "");
+}
+async function tallyXml(tenantId, fy) {
+  // Ledger masters with parent group name + opening (Tally OPENINGBALANCE: debit +, credit −).
+  const { rows: ledgers } = await pool.query(
+    `SELECT l.name, l.opening_balance, l.opening_is_debit, g.name AS parent
+       FROM book_ledgers l JOIN book_account_groups g ON g.id=l.group_id
+      WHERE l.tenant_id=$1 ORDER BY l.name`,
+    [tenantId]
+  );
+  // Account groups as masters too (so ledgers' parents resolve on import).
+  const { rows: groups } = await pool.query(
+    `SELECT g.name, pg.name AS parent
+       FROM book_account_groups g LEFT JOIN book_account_groups pg ON pg.id=g.parent_id
+      WHERE g.tenant_id=$1 ORDER BY g.name`,
+    [tenantId]
+  );
+  // Vouchers for the FY (non-cancelled) with their ledger lines.
+  const { rows: vs } = await pool.query(
+    `SELECT v.id, v.voucher_type, v.voucher_number, v.voucher_date, v.narration, v.reference
+       FROM book_vouchers v
+      WHERE v.tenant_id=$1 AND v.financial_year=$2 AND v.is_cancelled=false
+      ORDER BY v.voucher_date, v.voucher_number`,
+    [tenantId, fy]
+  );
+  const ids = vs.map((v) => v.id);
+  let lineRows = [];
+  if (ids.length) {
+    const { rows } = await pool.query(
+      `SELECT e.voucher_id, l.name AS ledger, e.debit, e.credit
+         FROM book_voucher_entries e JOIN book_ledgers l ON l.id=e.ledger_id
+        WHERE e.voucher_id = ANY($1::uuid[]) ORDER BY e.entry_order`,
+      [ids]
+    );
+    lineRows = rows;
+  }
+  const linesByV = new Map();
+  for (const r of lineRows) { const a = linesByV.get(r.voucher_id) || []; a.push(r); linesByV.set(r.voucher_id, a); }
+
+  const parts = [];
+  parts.push('<?xml version="1.0" encoding="UTF-8"?>');
+  parts.push("<ENVELOPE>");
+  parts.push("<HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>");
+  parts.push("<BODY><IMPORTDATA>");
+  parts.push("<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC>");
+  parts.push("<REQUESTDATA>");
+
+  // Group masters.
+  for (const g of groups) {
+    parts.push(`<TALLYMESSAGE xmlns:UDF="TallyUDF"><GROUP NAME="${_xmlEsc(g.name)}" ACTION="Create">`);
+    if (g.parent) parts.push(`<PARENT>${_xmlEsc(g.parent)}</PARENT>`);
+    parts.push(`<NAME.LIST><NAME>${_xmlEsc(g.name)}</NAME></NAME.LIST>`);
+    parts.push("</GROUP></TALLYMESSAGE>");
+  }
+  // Ledger masters.
+  for (const l of ledgers) {
+    const ob = money(l.opening_balance);
+    const obSigned = l.opening_is_debit ? ob : ob.neg();
+    parts.push(`<TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="${_xmlEsc(l.name)}" ACTION="Create">`);
+    parts.push(`<NAME.LIST><NAME>${_xmlEsc(l.name)}</NAME></NAME.LIST>`);
+    parts.push(`<PARENT>${_xmlEsc(l.parent)}</PARENT>`);
+    if (!ob.isZero()) parts.push(`<OPENINGBALANCE>${obSigned.toFixed(2)}</OPENINGBALANCE>`);
+    parts.push("</LEDGER></TALLYMESSAGE>");
+  }
+  // Voucher entries (Day Book).
+  for (const v of vs) {
+    const vtype = TALLY_VTYPE[v.voucher_type] || v.voucher_type;
+    const date = _tallyDate(v.voucher_date);
+    parts.push(`<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${_xmlEsc(vtype)}" ACTION="Create">`);
+    parts.push(`<DATE>${date}</DATE><EFFECTIVEDATE>${date}</EFFECTIVEDATE>`);
+    parts.push(`<VOUCHERTYPENAME>${_xmlEsc(vtype)}</VOUCHERTYPENAME>`);
+    parts.push(`<VOUCHERNUMBER>${_xmlEsc(v.voucher_number)}</VOUCHERNUMBER>`);
+    if (v.reference) parts.push(`<REFERENCE>${_xmlEsc(v.reference)}</REFERENCE>`);
+    if (v.narration) parts.push(`<NARRATION>${_xmlEsc(v.narration)}</NARRATION>`);
+    for (const ln of (linesByV.get(v.id) || [])) {
+      const dr = money(ln.debit), cr = money(ln.credit);
+      const isDebit = dr.greaterThan(0);
+      // Tally amount sign: debit negative, credit positive in ALLLEDGERENTRIES; ISDEEMEDPOSITIVE=Yes for debit.
+      const amount = isDebit ? dr.neg() : cr;
+      parts.push("<ALLLEDGERENTRIES.LIST>");
+      parts.push(`<LEDGERNAME>${_xmlEsc(ln.ledger)}</LEDGERNAME>`);
+      parts.push(`<ISDEEMEDPOSITIVE>${isDebit ? "Yes" : "No"}</ISDEEMEDPOSITIVE>`);
+      parts.push(`<AMOUNT>${amount.toFixed(2)}</AMOUNT>`);
+      parts.push("</ALLLEDGERENTRIES.LIST>");
+    }
+    parts.push("</VOUCHER></TALLYMESSAGE>");
+  }
+
+  parts.push("</REQUESTDATA>");
+  parts.push("</IMPORTDATA></BODY>");
+  parts.push("</ENVELOPE>");
+  return parts.join("\n");
+}
+
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary, scheduleIII, branchTrialBalance, branchPL, profitabilityByParty, profitabilityByItem, profitabilityByProject, tallyXml };

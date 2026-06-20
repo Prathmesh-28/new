@@ -106,4 +106,40 @@ async function dunningDue(tenantId, asOf) {
   return { asOf: od.asOf, reminders: rem, due };
 }
 
-module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee, dunningDue };
+// ── Numbering audit (gaps + duplicates) ──────────────────────────────────────
+// The counter is gap-free by design (book_voucher_counters.next_number), but
+// cancellations and any manual/legacy gaps should still surface as a control
+// report. For each voucher_type in the FY (or just `voucherType` if given) we
+// scan non-cancelled vouchers and report missing numbers in 1..max and any
+// duplicate voucher_numbers. Read-only.
+async function numberGaps(tenantId, fy, voucherType) {
+  const params = [tenantId, fy];
+  let typeFilter = "";
+  if (voucherType) { params.push(voucherType); typeFilter = " AND voucher_type=$3"; }
+  const { rows } = await pool.query(
+    `SELECT voucher_type, voucher_number, COUNT(*)::int AS cnt
+       FROM book_vouchers
+      WHERE tenant_id=$1 AND financial_year=$2 AND is_cancelled=false${typeFilter}
+      GROUP BY voucher_type, voucher_number
+      ORDER BY voucher_type, voucher_number`,
+    params
+  );
+  const byType = new Map();
+  for (const r of rows) {
+    const n = Number(r.voucher_number);
+    let g = byType.get(r.voucher_type);
+    if (!g) { g = { voucherType: r.voucher_type, max: 0, present: new Set(), duplicates: [] }; byType.set(r.voucher_type, g); }
+    if (n > g.max) g.max = n;
+    g.present.add(n);
+    if (Number(r.cnt) > 1) g.duplicates.push(n);
+  }
+  const out = [];
+  for (const g of byType.values()) {
+    const missing = [];
+    for (let n = 1; n <= g.max; n++) if (!g.present.has(n)) missing.push(n);
+    out.push({ voucherType: g.voucherType, max: g.max, missing, duplicates: g.duplicates.sort((a, b) => a - b) });
+  }
+  return out;
+}
+
+module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee, dunningDue, numberGaps };

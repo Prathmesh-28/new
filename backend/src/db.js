@@ -636,6 +636,11 @@ async function initDb() {
     ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS phone TEXT;
     ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS maintain_billwise BOOLEAN NOT NULL DEFAULT false;
 
+    -- Books should-haves (assets): disposal/sale + asset grouping (blocks).
+    ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS disposed_on    DATE;
+    ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS disposal_value NUMERIC(19,4);
+    ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS asset_group    TEXT;
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

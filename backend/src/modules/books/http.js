@@ -688,6 +688,15 @@ router.post("/period/close", canPost, async (req, res) => { try { res.status(201
 router.post("/assets", canPost, async (req, res) => { try { res.status(201).json(await assets.createAsset(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/assets", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res.json(await assets.runDepreciation(tenantOf(req), req.user.id, (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
+router.get("/assets/register", async (req, res) => { try { res.json(await assets.assetRegister(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.post("/assets/:id/dispose", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await assets.disposeAsset(tenantOf(req), req.user.id, { assetId: req.params.id, disposalValue: b.disposalValue, date: b.date, bankLedgerId: b.bankLedgerId })); } catch (e) { fail(res, e); } });
+router.patch("/assets/:id/group", canPost, async (req, res) => { try { res.json(await assets.setAssetGroup(tenantOf(req), req.params.id, (req.body || {}).group)); } catch (e) { fail(res, e); } });
+// Profitability reports + Tally XML export + numbering audit.
+router.get("/reports/profitability/party", async (req, res) => { try { res.json(await reports.profitabilityByParty(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.get("/reports/profitability/item", async (req, res) => { try { res.json(await reports.profitabilityByItem(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.get("/reports/profitability/project", async (req, res) => { try { res.json(await reports.profitabilityByProject(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
+router.get("/reports/tally-xml", async (req, res) => { try { const xml = await reports.tallyXml(tenantOf(req), fyOf(req)); res.type("application/xml").send(xml); } catch (e) { fail(res, e); } });
+router.get("/audit/number-gaps", async (req, res) => { try { res.json(await auto.numberGaps(tenantOf(req), fyOf(req), req.query.voucherType)); } catch (e) { fail(res, e); } });
 
 // ── M8: automation + ops ─────────────────────────────────────────────────────
 router.post("/approval-rules", canPost, async (req, res) => { try { res.status(201).json(await auto.createRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
