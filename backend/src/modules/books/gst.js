@@ -3,7 +3,7 @@
 // is is_input=false; ITC is is_input=true. Taxable value is counted once per line
 // (from CGST/IGST rows) so CGST+SGST pairs don't double-count it.
 const { pool } = require("../../db");
-const { money, toRupees } = require("./money");
+const { money, toRupees, toDb } = require("./money");
 
 // "YYYY-MM" → { from, to } (first … last day of that month, UTC-safe).
 function monthRange(period) {
@@ -178,4 +178,134 @@ async function gstr1Json(tenantId, period) {
     b2b: sec.b2b, b2cl: sec.b2cl, b2cs: sec.b2cs, cdnr: sec.cdnr, exp: sec.exp, hsn: { data: hsn.rows } };
 }
 
-module.exports = { monthRange, gstr1, gstr3b, gstr2bReconcile, gstr9, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, gstr1Json };
+// ── GST rate master (HSN → rate / cess) ──────────────────────────────────────
+// Upsert by (tenant_id, hsn) — the table PK — so there is one current row per HSN.
+async function setGstRate(tenantId, { hsn, rate, cessRate, description } = {}) {
+  if (!hsn) throw new Error("hsn is required");
+  const { rows } = await pool.query(
+    `INSERT INTO book_gst_rates(tenant_id, hsn, rate, cess_rate, description)
+          VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (tenant_id, hsn) DO UPDATE
+        SET rate=EXCLUDED.rate, cess_rate=EXCLUDED.cess_rate, description=EXCLUDED.description
+     RETURNING hsn, rate, cess_rate, description`,
+    [tenantId, String(hsn), toDb(rate || 0), toDb(cessRate || 0), description || null]
+  );
+  const x = rows[0];
+  return { hsn: x.hsn, rate: toRupees(x.rate), cessRate: toRupees(x.cess_rate), description: x.description };
+}
+
+// Latest (and only) rate row for an HSN, or null.
+async function getGstRate(tenantId, hsn) {
+  const { rows } = await pool.query(
+    `SELECT hsn, rate, cess_rate, description FROM book_gst_rates WHERE tenant_id=$1 AND hsn=$2`,
+    [tenantId, String(hsn)]
+  );
+  if (!rows[0]) return null;
+  const x = rows[0];
+  return { hsn: x.hsn, rate: toRupees(x.rate), cessRate: toRupees(x.cess_rate), description: x.description };
+}
+
+async function listGstRates(tenantId) {
+  const { rows } = await pool.query(
+    `SELECT hsn, rate, cess_rate, description FROM book_gst_rates WHERE tenant_id=$1 ORDER BY hsn`,
+    [tenantId]
+  );
+  return rows.map((x) => ({ hsn: x.hsn, rate: toRupees(x.rate), cessRate: toRupees(x.cess_rate), description: x.description }));
+}
+
+// ── GST challan (PMT-06) register ────────────────────────────────────────────
+// A challan is PAID once it has a CIN (challan identification no.) and a paidOn
+// date; until then it sits PENDING (created on the portal, not yet realised).
+async function recordChallan(tenantId, { period, cgst, sgst, igst, cess, cin, bankRef, paidOn } = {}) {
+  if (!period) throw new Error("period is required");
+  const status = cin && paidOn ? "PAID" : "PENDING";
+  const { rows } = await pool.query(
+    `INSERT INTO book_gst_challans(tenant_id, period, cgst, sgst, igst, cess, cin, bank_ref, paid_on, status)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     RETURNING id, period, cgst, sgst, igst, cess, cin, bank_ref, paid_on, status, created_at`,
+    [tenantId, period, toDb(cgst || 0), toDb(sgst || 0), toDb(igst || 0), toDb(cess || 0),
+     cin || null, bankRef || null, paidOn || null, status]
+  );
+  const x = rows[0];
+  return {
+    id: x.id, period: x.period,
+    cgst: toRupees(x.cgst), sgst: toRupees(x.sgst), igst: toRupees(x.igst), cess: toRupees(x.cess),
+    cin: x.cin, bankRef: x.bank_ref, paidOn: x.paid_on, status: x.status, createdAt: x.created_at,
+  };
+}
+
+async function listChallans(tenantId, period) {
+  const params = [tenantId];
+  let where = "tenant_id=$1";
+  if (period) { params.push(period); where += ` AND period=$${params.length}`; }
+  const { rows } = await pool.query(
+    `SELECT id, period, cgst, sgst, igst, cess, cin, bank_ref, paid_on, status, created_at
+       FROM book_gst_challans WHERE ${where} ORDER BY created_at DESC`,
+    params
+  );
+  return rows.map((x) => ({
+    id: x.id, period: x.period,
+    cgst: toRupees(x.cgst), sgst: toRupees(x.sgst), igst: toRupees(x.igst), cess: toRupees(x.cess),
+    cin: x.cin, bankRef: x.bank_ref, paidOn: x.paid_on, status: x.status, createdAt: x.created_at,
+  }));
+}
+
+// Electronic-cash-ledger style net-to-pay: GSTR-3B net liability for the period
+// vs PAID challans recorded against it, per head. netToPay = liability − paid.
+async function gstLiabilityVsPaid(tenantId, period) {
+  const b3 = await gstr3b(tenantId, period);
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(cgst),0) AS cgst, COALESCE(SUM(sgst),0) AS sgst,
+            COALESCE(SUM(igst),0) AS igst, COALESCE(SUM(cess),0) AS cess
+       FROM book_gst_challans WHERE tenant_id=$1 AND period=$2 AND status='PAID'`,
+    [tenantId, period]
+  );
+  const paid = rows[0];
+  const liability = {}, paidOut = {}, netToPay = {};
+  for (const k of ["CGST", "SGST", "IGST", "CESS"]) {
+    const liab = money(b3.netLiability[k]);
+    const pd = money(paid[k.toLowerCase()]);
+    liability[k] = toRupees(liab);
+    paidOut[k] = toRupees(pd);
+    netToPay[k] = toRupees(liab.minus(pd));
+  }
+  return { period, liability, paid: paidOut, netToPay };
+}
+
+// ── Blocked ITC (s.17(5)) report helper ─────────────────────────────────────
+// There is no dedicated "blocked" flag column on book_tax_entries, so blocked
+// credits are identified by supply_type='BLOCKED' on the inward (is_input=true)
+// tax rows. Alternatively pass an explicit list of voucher ids whose input tax
+// should be treated as reversed. Read-only report — it does not post anything.
+async function blockedItcSummary(tenantId, period, voucherIds = null) {
+  const { from, to } = monthRange(period);
+  const params = [tenantId, from, to];
+  let filter = "te.supply_type='BLOCKED'";
+  if (Array.isArray(voucherIds) && voucherIds.length) {
+    params.push(voucherIds);
+    filter = `te.voucher_id = ANY($${params.length}::uuid[])`;
+  }
+  const { rows } = await pool.query(
+    `SELECT te.tax_kind, COALESCE(SUM(te.tax_amount),0) AS amt
+       FROM book_tax_entries te
+       JOIN book_vouchers v ON v.id=te.voucher_id AND v.is_cancelled=false
+      WHERE te.tenant_id=$1 AND te.is_input=true AND v.voucher_date BETWEEN $2 AND $3
+        AND ${filter}
+      GROUP BY te.tax_kind`,
+    params
+  );
+  const byHead = { CGST: money(0), SGST: money(0), IGST: money(0), CESS: money(0) };
+  let total = money(0);
+  for (const r of rows) {
+    if (byHead[r.tax_kind] !== undefined) byHead[r.tax_kind] = money(r.amt);
+    total = total.plus(r.amt);
+  }
+  return {
+    period,
+    basis: Array.isArray(voucherIds) && voucherIds.length ? "VOUCHER_IDS" : "SUPPLY_TYPE_BLOCKED",
+    byHead: r2(byHead),
+    totalBlocked: toRupees(total),
+  };
+}
+
+module.exports = { monthRange, gstr1, gstr3b, gstr2bReconcile, gstr9, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, gstr1Json, setGstRate, getGstRate, listGstRates, recordChallan, listChallans, gstLiabilityVsPaid, blockedItcSummary };

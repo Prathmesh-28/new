@@ -98,6 +98,74 @@ async function confirmLine(tenantId, actorId, lineId, counterLedgerId) {
   }
 }
 
+// Manually reconcile a known bank/cash voucher WITHOUT an imported statement line.
+// We don't carry a per-voucher "reconciled" flag, and bankRecStatement treats any
+// book_bank_line in ('MATCHED','POSTED') as reconciled — so we materialise a single
+// POSTED line (amount = the voucher's net bank-side movement) linked to the voucher.
+// Idempotent: if a book_bank_line already references this voucher, do nothing.
+async function markCleared(tenantId, { voucherId } = {}) {
+  if (!voucherId) throw new PostError("BAD_INPUT", "voucherId required", 400);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Lock the voucher so two concurrent markCleared calls can't both insert.
+    const { rows: vr } = await client.query(
+      "SELECT id, voucher_date FROM book_vouchers WHERE tenant_id=$1 AND id=$2 AND is_cancelled=false FOR UPDATE",
+      [tenantId, voucherId]
+    );
+    const v = vr[0];
+    if (!v) throw new PostError("NOT_FOUND", "Voucher not found", 404);
+    // Already reconciled? bail out idempotently with the existing line.
+    const { rows: existing } = await client.query(
+      "SELECT * FROM book_bank_lines WHERE tenant_id=$1 AND voucher_id=$2",
+      [tenantId, voucherId]
+    );
+    if (existing[0]) { await client.query("COMMIT"); return { ok: true, alreadyCleared: true, lineId: existing[0].id, bankLedgerId: existing[0].bank_ledger_id }; }
+    // Find the voucher's bank/cash-side entry. book_ledgers has no "kind" — banks
+    // carry is_bank=true; cash ledgers live under a Cash group (name ILIKE %cash%).
+    // Net it (debit - credit) so the sign matches imported lines (+inflow/-outflow).
+    const { rows: bankEntries } = await client.query(
+      `SELECT e.ledger_id, COALESCE(SUM(e.debit),0)-COALESCE(SUM(e.credit),0) AS net
+         FROM book_voucher_entries e
+         JOIN book_ledgers l ON l.id=e.ledger_id
+         JOIN book_account_groups g ON g.id=l.group_id
+        WHERE e.tenant_id=$1 AND e.voucher_id=$2 AND (l.is_bank=true OR g.name ILIKE '%cash%')
+        GROUP BY e.ledger_id`,
+      [tenantId, voucherId]
+    );
+    if (bankEntries.length === 0) throw new PostError("BAD_STATE", "Voucher has no bank/cash entry to clear", 409);
+    if (bankEntries.length > 1) throw new PostError("BAD_STATE", "Voucher touches multiple bank/cash ledgers; clear via statement import", 409);
+    const be = bankEntries[0];
+    const { rows: ins } = await client.query(
+      "INSERT INTO book_bank_lines(tenant_id,bank_ledger_id,txn_date,amount,description,reference,status,voucher_id) VALUES($1,$2,$3,$4,$5,$6,'POSTED',$7) RETURNING id",
+      [tenantId, be.ledger_id, v.voucher_date, toDb(money(be.net)), "Manually cleared", null, voucherId]
+    );
+    await client.query("COMMIT");
+    return { ok: true, alreadyCleared: false, lineId: ins[0].id, bankLedgerId: be.ledger_id };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// Read-only rule engine: auto-categorise imported lines by keyword→ledger rules.
+// rules = [{ match, ledgerId }]; match is a case-insensitive substring tested
+// against the line description/reference. First matching rule wins. Pure
+// suggestion — never posts. Returns each line with a suggestedLedgerId (or null)
+// plus the inherited RECEIPT/PAYMENT kind from classifyLine.
+function applyRules(tenantId, lines, rules) {
+  const ls = Array.isArray(lines) ? lines : [];
+  const rs = (Array.isArray(rules) ? rules : []).filter((r) => r && r.match && r.ledgerId);
+  const norm = rs.map((r) => ({ needle: String(r.match).toLowerCase(), ledgerId: r.ledgerId }));
+  return ls.map((l) => {
+    const hay = ((l.description || "") + " " + (l.reference || "")).toLowerCase();
+    const hit = norm.find((r) => hay.includes(r.needle));
+    return { ...l, suggestedLedgerId: hit ? hit.ledgerId : null, suggestedKind: classifyLine(l.amount) };
+  });
+}
+
 async function ignoreLine(tenantId, lineId) {
   await pool.query("UPDATE book_bank_lines SET status='IGNORED' WHERE tenant_id=$1 AND id=$2", [tenantId, lineId]);
   return { ok: true };
@@ -118,4 +186,4 @@ async function bankRecStatement(tenantId, bankLedgerId) {
   return { bankLedgerId, bookBalance: toRupees(bookBal), reconciledStatementBalance: toRupees(reconciled), difference: toRupees(bookBal.minus(reconciled)), unmatchedLines: un[0].n };
 }
 
-module.exports = { classifyLine, daysBetween, lineMatches, importLines, autoMatch, inbox, confirmLine, ignoreLine, bankRecStatement };
+module.exports = { classifyLine, daysBetween, lineMatches, importLines, autoMatch, inbox, confirmLine, ignoreLine, bankRecStatement, markCleared, applyRules };

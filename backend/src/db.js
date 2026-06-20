@@ -694,6 +694,31 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_book_pdc ON book_pdc(tenant_id, status, cheque_date);
 
+    -- Books should-haves (GST depth): HSN→rate master + GST challan (PMT-06) register.
+    CREATE TABLE IF NOT EXISTS book_gst_rates (
+      tenant_id   TEXT NOT NULL,
+      hsn         TEXT NOT NULL,
+      rate        NUMERIC(9,4) NOT NULL DEFAULT 0,
+      cess_rate   NUMERIC(9,4) NOT NULL DEFAULT 0,
+      description TEXT,
+      PRIMARY KEY (tenant_id, hsn)
+    );
+    CREATE TABLE IF NOT EXISTS book_gst_challans (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id  TEXT NOT NULL,
+      period     TEXT NOT NULL,
+      cgst       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      sgst       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      igst       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      cess       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      cin        TEXT,
+      bank_ref   TEXT,
+      paid_on    DATE,
+      status     TEXT NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_gst_challans ON book_gst_challans(tenant_id, period);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

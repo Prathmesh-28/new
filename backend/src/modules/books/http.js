@@ -646,6 +646,13 @@ router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const 
 router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
 router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });
+// GST rate master + challan (PMT-06) + blocked ITC.
+router.post("/gst/rates", canPost, async (req, res) => { try { res.status(201).json(await gst.setGstRate(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/gst/rates", async (req, res) => { try { res.json(await gst.listGstRates(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/gst/challans", canPost, async (req, res) => { try { res.status(201).json(await gst.recordChallan(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/gst/challans", async (req, res) => { try { res.json(await gst.listChallans(tenantOf(req), req.query.period)); } catch (e) { fail(res, e); } });
+router.get("/gst/liability-vs-paid", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstLiabilityVsPaid(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.get("/gst/blocked-itc", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.blockedItcSummary(tenantOf(req), p)); } catch (e) { fail(res, e); } });
 // GSTR-1 statutory sections, HSN summary, portal JSON.
 router.get("/gst/gstr1-sections", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1Sections(tenantOf(req), p)); } catch (e) { fail(res, e); } });
 router.get("/gst/hsn-summary",    async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.hsnSummary(tenantOf(req), p)); } catch (e) { fail(res, e); } });
@@ -667,6 +674,8 @@ router.get("/recon/inbox", async (req, res) => { try { res.json(await recon.inbo
 router.post("/recon/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.confirmLine(tenantOf(req), req.user.id, b.lineId, b.counterLedgerId)); } catch (e) { fail(res, e); } });
 router.post("/recon/ignore", canPost, async (req, res) => { try { res.json(await recon.ignoreLine(tenantOf(req), (req.body || {}).lineId)); } catch (e) { fail(res, e); } });
 router.get("/recon/statement", async (req, res) => { try { if (!req.query.bankLedgerId) return res.status(400).json({ error: "bankLedgerId required" }); res.json(await recon.bankRecStatement(tenantOf(req), req.query.bankLedgerId)); } catch (e) { fail(res, e); } });
+router.post("/recon/mark-cleared", canPost, async (req, res) => { try { res.status(201).json(await recon.markCleared(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/recon/apply-rules", async (req, res) => { try { const b = req.body || {}; res.json(await recon.applyRules(tenantOf(req), b.lines || [], b.rules || [])); } catch (e) { fail(res, e); } });
 
 // ── M5: payment links ────────────────────────────────────────────────────────
 router.post("/payments/links", canPost, async (req, res) => { try { res.status(201).json(await payments.createLink(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
@@ -741,6 +750,7 @@ router.get("/attachments", async (req, res) => { try { res.json(await ops.listAt
 // ── M10: e-invoice, OCR, portal-link minting ─────────────────────────────────
 router.post("/einvoice/:voucherId", canPost, async (req, res) => { try { res.status(202).json(await einvoice.enqueue(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
 router.get("/einvoice/:voucherId", async (req, res) => { try { res.json(await einvoice.status(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
+router.post("/einvoice/:voucherId/cancel", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await einvoice.cancelIrn(tenantOf(req), req.user.id, { voucherId: req.params.voucherId, reason: b.reason, remarks: b.remarks })); } catch (e) { fail(res, e); } });
 router.post("/expenses/ocr", canPost, async (req, res) => { try { res.json(await ocr.parseReceipt({ imageUrl: (req.body || {}).imageUrl })); } catch (e) { fail(res, e); } });
 // Mint a public portal link (the owner shares the returned URL with a customer/vendor).
 router.post("/portal/invoice-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.voucherId) return res.status(400).json({ error: "voucherId required" }); const token = portal.signToken({ kind: "invoice", tenant: tenantOf(req), voucherId: b.voucherId }); res.status(201).json({ token, path: `/api/portal/invoice/${token}` }); } catch (e) { fail(res, e); } });
