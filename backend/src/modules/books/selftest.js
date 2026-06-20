@@ -8,6 +8,7 @@ const { splitGst, buildSalesVoucher, buildPurchaseVoucher, buildCreditNote } = r
 const { NEXT } = require("./documents");
 const { applyInwardWAvg, applyOutwardWAvg, consumeFifo } = require("./inventory");
 const { monthRange } = require("./gst");
+const { classifyLine, daysBetween, lineMatches } = require("./recon");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -80,5 +81,13 @@ assert.ok(eq(short.remaining, "5")); ok("FIFO short stock surfaces remaining 5")
 assert.deepStrictEqual(monthRange("2026-02"), { from: "2026-02-01", to: "2026-02-28" }); ok("monthRange Feb 2026 → 01..28 (non-leap)");
 assert.deepStrictEqual(monthRange("2024-02"), { from: "2024-02-01", to: "2024-02-29" }); ok("monthRange Feb 2024 → 01..29 (leap)");
 assert.deepStrictEqual(monthRange("2026-12"), { from: "2026-12-01", to: "2026-12-31" }); ok("monthRange Dec → 01..31");
+
+// 13. M5 — reconciliation matching.
+assert.strictEqual(classifyLine("500"), "RECEIPT"); ok("inflow → RECEIPT");
+assert.strictEqual(classifyLine("-500"), "PAYMENT"); ok("outflow → PAYMENT");
+assert.strictEqual(daysBetween("2026-06-15", "2026-06-12"), 3); ok("daysBetween = 3");
+assert.ok(lineMatches({ amount: "500", txn_date: "2026-06-15" }, { debit: "500", credit: "0" }, "2026-06-14", 3)); ok("inflow matches a 500 debit within tolerance");
+assert.ok(!lineMatches({ amount: "500", txn_date: "2026-06-15" }, { debit: "500", credit: "0" }, "2026-06-01", 3)); ok("match rejected when out of date tolerance");
+assert.ok(lineMatches({ amount: "-500", txn_date: "2026-06-15" }, { debit: "0", credit: "500" }, "2026-06-15", 3)); ok("outflow matches a 500 credit");
 
 console.log(`\n${n} checks passed.`);

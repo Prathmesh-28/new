@@ -11,6 +11,8 @@ const { financialYearFor } = require("./fy");
 const docs = require("./documents");
 const inv = require("./inventory");
 const gst = require("./gst");
+const recon = require("./recon");
+const payments = require("./payments");
 
 router.use(authenticate);
 
@@ -254,5 +256,18 @@ router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const 
 router.get("/gst/gstr9", async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/gst/tds", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TDS")); } catch (e) { fail(res, e); } });
 router.get("/gst/tcs", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.deductionReport(tenantOf(req), p, "TCS")); } catch (e) { fail(res, e); } });
+
+// ── M5: reconciliation bridge ────────────────────────────────────────────────
+router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });
+router.post("/recon/auto-match", canPost, async (req, res) => { try { res.json(await recon.autoMatch(tenantOf(req), (req.body || {}).toleranceDays || 3)); } catch (e) { fail(res, e); } });
+router.get("/recon/inbox", async (req, res) => { try { res.json(await recon.inbox(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/recon/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.confirmLine(tenantOf(req), req.user.id, b.lineId, b.counterLedgerId)); } catch (e) { fail(res, e); } });
+router.post("/recon/ignore", canPost, async (req, res) => { try { res.json(await recon.ignoreLine(tenantOf(req), (req.body || {}).lineId)); } catch (e) { fail(res, e); } });
+router.get("/recon/statement", async (req, res) => { try { if (!req.query.bankLedgerId) return res.status(400).json({ error: "bankLedgerId required" }); res.json(await recon.bankRecStatement(tenantOf(req), req.query.bankLedgerId)); } catch (e) { fail(res, e); } });
+
+// ── M5: payment links ────────────────────────────────────────────────────────
+router.post("/payments/links", canPost, async (req, res) => { try { res.status(201).json(await payments.createLink(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/payments/links/:id/paid", canPost, async (req, res) => { try { res.status(201).json(await payments.markPaid(tenantOf(req), req.user.id, req.params.id, (req.body || {}).bankLedgerId)); } catch (e) { fail(res, e); } });
+router.get("/payments/links", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_payment_links WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 
 module.exports = router;

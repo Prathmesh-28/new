@@ -298,6 +298,38 @@ const BOOKS_SCHEMA = `
   ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS supply_type        TEXT NOT NULL DEFAULT 'REGULAR';
     -- REGULAR | RCM | SEZ | EXPORT | NIL | EXEMPT | COMPOSITION
   ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS counterparty_gstin TEXT;
+
+  -- ── M5: bank reconciliation bridge + payment links ────────────────────────
+  -- Imported raw bank lines. amount: +inflow / -outflow.
+  CREATE TABLE IF NOT EXISTS book_bank_lines (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    bank_ledger_id  UUID NOT NULL REFERENCES book_ledgers(id),
+    txn_date        DATE NOT NULL,
+    amount          NUMERIC(19,4) NOT NULL,
+    description     TEXT,
+    reference       TEXT,
+    status          TEXT NOT NULL DEFAULT 'UNMATCHED' CHECK (status IN ('UNMATCHED','MATCHED','POSTED','IGNORED')),
+    voucher_id      UUID REFERENCES book_vouchers(id),
+    imported_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_bank_lines ON book_bank_lines(tenant_id, bank_ledger_id, status);
+
+  -- Online collection links (gateway-agnostic; live provider wiring needs keys).
+  CREATE TABLE IF NOT EXISTS book_payment_links (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           TEXT NOT NULL,
+    invoice_voucher_id  UUID REFERENCES book_vouchers(id),
+    party_ledger_id     UUID REFERENCES book_ledgers(id),
+    provider            TEXT NOT NULL DEFAULT 'manual',
+    amount              NUMERIC(19,4) NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'CREATED' CHECK (status IN ('CREATED','PAID','FAILED','CANCELLED')),
+    provider_ref        TEXT,
+    link_url            TEXT,
+    receipt_voucher_id  UUID REFERENCES book_vouchers(id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_paylinks ON book_payment_links(tenant_id, status);
 `;
 
 module.exports = { BOOKS_SCHEMA };
