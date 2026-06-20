@@ -355,6 +355,38 @@ const BOOKS_SCHEMA = `
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, financial_year, ledger_id, period_month)
   );
+
+  -- ── M7: multi-currency, branches/GSTINs, fixed assets ─────────────────────
+  ALTER TABLE book_vouchers ADD COLUMN IF NOT EXISTS currency  TEXT NOT NULL DEFAULT 'INR';
+  ALTER TABLE book_vouchers ADD COLUMN IF NOT EXISTS fx_rate   NUMERIC(19,6) NOT NULL DEFAULT 1;
+  ALTER TABLE book_vouchers ADD COLUMN IF NOT EXISTS branch_id UUID;
+
+  CREATE TABLE IF NOT EXISTS book_branches (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    gstin      TEXT,
+    state_code TEXT,
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+
+  CREATE TABLE IF NOT EXISTS book_fixed_assets (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    cost            NUMERIC(19,4) NOT NULL,
+    salvage         NUMERIC(19,4) NOT NULL DEFAULT 0,
+    acquired_on     DATE NOT NULL,
+    method          TEXT NOT NULL DEFAULT 'SLM' CHECK (method IN ('SLM','WDV')),
+    rate            NUMERIC(9,4) NOT NULL,           -- annual % rate
+    accumulated_dep NUMERIC(19,4) NOT NULL DEFAULT 0,
+    last_dep_on     DATE,
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_assets ON book_fixed_assets(tenant_id, is_active);
 `;
 
 module.exports = { BOOKS_SCHEMA };

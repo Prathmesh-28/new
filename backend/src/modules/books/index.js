@@ -8,6 +8,8 @@ const inventory = require("./inventory");
 const gst = require("./gst");
 const recon = require("./recon");
 const payments = require("./payments");
+const fx = require("./fx");
+const assets = require("./assets");
 const { seedBooks, ledgerIdByName } = require("./seed");
 
 module.exports = {
@@ -20,7 +22,9 @@ module.exports = {
   ...inventory,
   ...gst,
   ...recon,
+  ...assets,
   payments,
+  fx,
   seedBooks,
   ledgerIdByName,
   router: require("./http"),

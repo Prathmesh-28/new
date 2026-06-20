@@ -79,10 +79,11 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   const { rows: vh } = await client.query(
     `INSERT INTO book_vouchers
        (tenant_id, voucher_type, voucher_number, voucher_date, financial_year, narration, reference,
-        party_ledger_id, reverses_voucher_id, idempotency_key, source, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        party_ledger_id, reverses_voucher_id, idempotency_key, source, created_by, currency, fx_rate, branch_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
     [tenantId, voucher.voucherType, number, voucher.voucherDate, fy, voucher.narration || null, voucher.reference || null,
-     voucher.partyLedgerId || null, opts.reversesVoucherId || null, opts.idempotencyKey || null, voucher.source || "api", actorId || null]
+     voucher.partyLedgerId || null, opts.reversesVoucherId || null, opts.idempotencyKey || null, voucher.source || "api", actorId || null,
+     voucher.currency || "INR", voucher.fxRate || 1, voucher.branchId || null]
   );
   const voucherId = vh[0].id;
 

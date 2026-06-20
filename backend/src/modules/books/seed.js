@@ -33,6 +33,8 @@ const DEFAULT_LEDGERS = [
   ["Undeposited Funds", "Current Assets"], ["Sales Returns", "Sales Accounts"], ["Purchase Returns", "Purchase Accounts"],
   // M3: inventory GL ledgers
   ["Stock-in-hand", "Stock-in-hand"], ["Cost of Goods Sold", "Direct Expenses"], ["Stock Adjustment", "Direct Expenses"],
+  // M7: forex + depreciation ledgers
+  ["Forex Gain/Loss", "Indirect Expenses"], ["Depreciation", "Indirect Expenses"], ["Accumulated Depreciation", "Fixed Assets"],
 ];
 
 async function seedBooks(tenantId) {

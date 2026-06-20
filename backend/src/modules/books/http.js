@@ -13,6 +13,8 @@ const inv = require("./inventory");
 const gst = require("./gst");
 const recon = require("./recon");
 const payments = require("./payments");
+const fx = require("./fx");
+const assets = require("./assets");
 
 router.use(authenticate);
 
@@ -277,5 +279,14 @@ router.get("/reports/by-tag", async (req, res) => { try { if (!req.query.dimensi
 router.get("/reports/budget-vs-actual", async (req, res) => { try { res.json(await reports.budgetVsActual(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.post("/budgets", canPost, async (req, res) => { try { res.status(201).json(await reports.createBudget(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/tags", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await reports.createTag(tenantOf(req), b.dimension, b.value)); } catch (e) { fail(res, e); } });
+
+// ── M7: branches/GSTINs, multi-currency, fixed assets ────────────────────────
+router.post("/branches", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.name) return res.status(400).json({ error: "name required" }); const { rows } = await pool.query("INSERT INTO book_branches(tenant_id,name,gstin,state_code) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,name) DO UPDATE SET gstin=EXCLUDED.gstin,state_code=EXCLUDED.state_code RETURNING *", [tenantOf(req), b.name, b.gstin || null, b.stateCode || null]); res.status(201).json(rows[0]); } catch (e) { fail(res, e); } });
+router.get("/branches", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_branches WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
+router.get("/fx/convert", async (req, res) => { try { res.json({ base: fx.fxConvert(req.query.amount || 0, req.query.rate || 1).toFixed(2) }); } catch (e) { fail(res, e); } });
+router.post("/fx/settlement", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await fx.postFxSettlement(tenantOf(req), req.user.id, { partyLedgerId: b.partyLedgerId, gainLoss: b.gainLoss, date: b.date || new Date().toISOString().slice(0, 10) })); } catch (e) { fail(res, e); } });
+router.post("/assets", canPost, async (req, res) => { try { res.status(201).json(await assets.createAsset(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/assets", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
+router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res.json(await assets.runDepreciation(tenantOf(req), req.user.id, (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
 
 module.exports = router;

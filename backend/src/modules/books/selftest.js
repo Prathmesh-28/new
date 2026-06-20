@@ -10,6 +10,8 @@ const { applyInwardWAvg, applyOutwardWAvg, consumeFifo } = require("./inventory"
 const { monthRange } = require("./gst");
 const { classifyLine, daysBetween, lineMatches } = require("./recon");
 const { cashFlowActivity } = require("./reports");
+const { fxConvert, realizedFx } = require("./fx");
+const { depreciationMonthly } = require("./assets");
 
 let n = 0;
 const ok = (name) => { n++; console.log(`  ✓ ${name}`); };
@@ -96,5 +98,11 @@ assert.strictEqual(cashFlowActivity("Fixed Assets"), "INVESTING"); ok("Fixed Ass
 assert.strictEqual(cashFlowActivity("Loans (Liability)"), "FINANCING"); ok("Loans → Financing");
 assert.strictEqual(cashFlowActivity("Sundry Debtors"), "OPERATING"); ok("Debtors → Operating");
 assert.strictEqual(cashFlowActivity("Sales Accounts"), "OPERATING"); ok("Sales → Operating");
+
+// 15. M7 — multi-currency + depreciation.
+assert.ok(eq(fxConvert("100", "83"), "8300")); ok("fxConvert 100 USD @83 → ₹8300");
+assert.ok(eq(realizedFx("100", "80", "83"), "300")); ok("realised FX 100 @80→83 → ₹300 gain");
+assert.ok(eq(depreciationMonthly("SLM", "120000", "0", "10"), "1000")); ok("SLM 10% on 120000 → 1000/month");
+assert.ok(eq(depreciationMonthly("WDV", "120000", "12000", "10"), "900")); ok("WDV 10% on 108000 WDV → 900/month");
 
 console.log(`\n${n} checks passed.`);
