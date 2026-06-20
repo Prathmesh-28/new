@@ -7,11 +7,15 @@ import {
   BookOpen, LayoutGrid, ListTree, FilePlus2, BarChart3, Repeat,
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
   FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
+  Landmark, Tag, CalendarClock,
 } from "lucide-react";
 import BooksReceivablesTab from "./BooksReceivablesTab";
 import BooksGstTab from "./BooksGstTab";
 import BooksAdminTab from "./BooksAdminTab";
 import BooksInventoryTab from "./BooksInventoryTab";
+import BooksTaxFilingTab from "./BooksTaxFilingTab";
+import BooksPricingTab from "./BooksPricingTab";
+import BooksPaymentTermsTab from "./BooksPaymentTermsTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -111,7 +115,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -335,6 +339,9 @@ export default function BooksPage() {
     { id: "gst",       label: "GST & Tax",         icon: <Percent size={14} /> },
     { id: "inventory", label: "Inventory",         icon: <Boxes size={14} /> },
     { id: "controls",  label: "Controls",          icon: <SlidersHorizontal size={14} /> },
+    { id: "taxfiling", label: "Tax Filing",        icon: <Landmark size={14} /> },
+    { id: "pricing",   label: "Pricing",           icon: <Tag size={14} /> },
+    { id: "payterms",  label: "Payment Terms",     icon: <CalendarClock size={14} /> },
   ];
 
   return (
@@ -403,6 +410,9 @@ export default function BooksPage() {
             {tab === "gst" && <BooksGstTab />}
             {tab === "inventory" && <BooksInventoryTab canWrite={canWrite} />}
             {tab === "controls" && <BooksAdminTab />}
+            {tab === "taxfiling" && <BooksTaxFilingTab />}
+            {tab === "pricing" && <BooksPricingTab />}
+            {tab === "payterms" && <BooksPaymentTermsTab />}
           </>
         )}
       </div>

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
   Landmark, Download, RefreshCw, Calculator, FileJson, Receipt, Plus,
+  Percent, Banknote, ShieldAlert, Ban,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,6 +85,40 @@ interface Ledger {
   name: string;
   is_party: boolean;
   is_bank: boolean;
+}
+
+// ── New: GST rate master · PMT-06 challans · liability vs paid · blocked ITC ──
+interface GstRateRow {
+  hsn: string;
+  rate: number | string;
+  cessRate: number | string;
+  description?: string | null;
+}
+interface ChallanRow {
+  id: string;
+  period: string;
+  cgst: string;
+  sgst: string;
+  igst: string;
+  cess: string;
+  cin: string | null;
+  bankRef: string | null;
+  paidOn: string | null;
+  status: string;
+  createdAt?: string;
+}
+type HeadMap = { CGST: string; SGST: string; IGST: string; CESS: string };
+interface LiabilityVsPaid {
+  period: string;
+  liability: HeadMap;
+  paid: HeadMap;
+  netToPay: HeadMap;
+}
+interface BlockedItc {
+  period: string;
+  basis: string;
+  byHead: HeadMap;
+  totalBlocked: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -407,6 +442,21 @@ export default function BooksGstTab() {
         <TdsCalculator />
         <RcmBillForm vendors={vendors} />
       </div>
+
+      {/* LIABILITY vs PAID (PMT-06 net-to-pay) + BLOCKED ITC */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <LiabilityVsPaidCard period={period} />
+        <BlockedItcCard period={period} />
+      </div>
+
+      {/* GST CHALLAN (PMT-06) REGISTER */}
+      <GstChallanCard period={period} />
+
+      {/* GST RATE MASTER (HSN ↔ rate / cess) */}
+      <GstRateMaster />
+
+      {/* E-INVOICE CANCEL (IRN) */}
+      <EinvoiceCancelCard />
     </div>
   );
 }
@@ -614,6 +664,441 @@ function RcmBillForm({ vendors }: { vendors: Ledger[] }) {
           Post RCM bill
         </button>
       </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIABILITY vs PAID — electronic-cash-ledger net-to-pay for the period
+// ─────────────────────────────────────────────────────────────────────────────
+const HEADS = ["CGST", "SGST", "IGST", "CESS"] as const;
+
+function LiabilityVsPaidCard({ period }: { period: string }) {
+  const [data, setData] = useState<LiabilityVsPaid | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setBusy(true);
+      try {
+        const d = await api.get<LiabilityVsPaid>(
+          `/api/books/gst/liability-vs-paid?period=${encodeURIComponent(period)}`,
+        );
+        if (!cancelled) setData(d);
+      } catch (e) {
+        if (!cancelled) toast.error(errMsg(e));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [period]);
+
+  const totalNet = HEADS.reduce((a, h) => a + (Number(data?.netToPay?.[h]) || 0), 0);
+
+  return (
+    <Card title="Net GST to pay (PMT-06)" icon={<Banknote size={15} />}>
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              <th className={thCls}>Head</th>
+              <th className={thR}>Liability</th>
+              <th className={thR}>Paid</th>
+              <th className={thR}>Net to pay</th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <tr><td colSpan={4} className="px-3 py-6 text-center text-[var(--color-muted)]">Loading…</td></tr>
+            ) : (
+              HEADS.map((h) => {
+                const net = Number(data?.netToPay?.[h]) || 0;
+                return (
+                  <tr key={h} className="border-b border-[var(--color-border)] last:border-b-0">
+                    <td className="px-3 py-2.5 font-medium">{h}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{rupee(data?.liability?.[h])}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-green-400">{rupee(data?.paid?.[h])}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${net > 0 ? "text-red-400" : "text-green-400"}`}>
+                      {rupee(data?.netToPay?.[h])}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] mt-2">
+        Net-to-pay this period: <span className={`font-semibold ${totalNet > 0 ? "text-red-400" : "text-green-400"}`}>₹{totalNet.toFixed(2)}</span>. Record a PMT-06 challan below to settle it.
+      </p>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCKED ITC (s.17(5)) — input credit that cannot be claimed
+// ─────────────────────────────────────────────────────────────────────────────
+function BlockedItcCard({ period }: { period: string }) {
+  const [data, setData] = useState<BlockedItc | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setBusy(true);
+      try {
+        const d = await api.get<BlockedItc>(
+          `/api/books/gst/blocked-itc?period=${encodeURIComponent(period)}`,
+        );
+        if (!cancelled) setData(d);
+      } catch (e) {
+        if (!cancelled) toast.error(errMsg(e));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [period]);
+
+  return (
+    <Card title="Blocked ITC — s.17(5)" icon={<ShieldAlert size={15} />}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          {HEADS.map((h) => (
+            <StatCard key={h} label={h} value={rupee(data?.byHead?.[h])} tint="red" />
+          ))}
+        </div>
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm space-y-1">
+          <div className="flex justify-between font-semibold">
+            <span>Total blocked credit</span>
+            <span className="tabular-nums text-red-400">{busy ? "…" : rupee(data?.totalBlocked)}</span>
+          </div>
+          <p className="text-[11px] text-[var(--color-muted)] pt-1">
+            Basis: {data?.basis === "VOUCHER_IDS" ? "explicit vouchers" : "supply_type = BLOCKED"}. This credit is excluded from claimable ITC and must not be set off against output tax.
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GST CHALLAN (PMT-06) REGISTER — record a challan + list for the period
+// ─────────────────────────────────────────────────────────────────────────────
+function GstChallanCard({ period }: { period: string }) {
+  const [rows, setRows] = useState<ChallanRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const [cgst, setCgst] = useState("");
+  const [sgst, setSgst] = useState("");
+  const [igst, setIgst] = useState("");
+  const [cess, setCess] = useState("");
+  const [cin, setCin] = useState("");
+  const [bankRef, setBankRef] = useState("");
+  const [paidOn, setPaidOn] = useState("");
+
+  const load = useCallback(async (p: string) => {
+    setBusy(true);
+    try {
+      const r = await api.get<ChallanRow[]>(`/api/books/gst/challans?period=${encodeURIComponent(p)}`);
+      setRows(Array.isArray(r) ? r : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(period); }, [period, load]);
+
+  const reset = () => {
+    setCgst(""); setSgst(""); setIgst(""); setCess(""); setCin(""); setBankRef(""); setPaidOn("");
+  };
+
+  const submit = async () => {
+    const num = (v: string) => Number(v) || 0;
+    if (num(cgst) + num(sgst) + num(igst) + num(cess) <= 0) {
+      toast.error("Enter at least one tax head above zero");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.post<ChallanRow>("/api/books/gst/challans", {
+        period,
+        cgst: num(cgst),
+        sgst: num(sgst),
+        igst: num(igst),
+        cess: num(cess),
+        cin: cin.trim() || undefined,
+        bankRef: bankRef.trim() || undefined,
+        paidOn: paidOn || undefined,
+      });
+      toast.success(res?.status === "PAID" ? "Challan recorded (PAID)" : "Challan recorded (PENDING)");
+      reset();
+      setOpen(false);
+      await load(period);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="GST challans (PMT-06)" icon={<Receipt size={15} />}>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <p className="text-xs text-[var(--color-muted)]">A challan is marked PAID once it has both a CIN and a paid-on date.</p>
+        <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
+          <Plus size={14} /> New challan
+        </button>
+      </div>
+
+      {open && (
+        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div><label className={labelCls}>CGST</label><input value={cgst} onChange={(e) => setCgst(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} /></div>
+            <div><label className={labelCls}>SGST</label><input value={sgst} onChange={(e) => setSgst(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} /></div>
+            <div><label className={labelCls}>IGST</label><input value={igst} onChange={(e) => setIgst(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} /></div>
+            <div><label className={labelCls}>Cess</label><input value={cess} onChange={(e) => setCess(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} /></div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div><label className={labelCls}>CIN (challan id)</label><input value={cin} onChange={(e) => setCin(e.target.value)} placeholder="optional" className={inputCls} /></div>
+            <div><label className={labelCls}>Bank ref</label><input value={bankRef} onChange={(e) => setBankRef(e.target.value)} placeholder="optional" className={inputCls} /></div>
+            <div><label className={labelCls}>Paid on</label><input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} className={inputCls} /></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => { setOpen(false); reset(); }} className="px-3 py-2 text-sm rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg)]">Cancel</button>
+            <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />} Record challan
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              <th className={thCls}>CIN / Bank ref</th>
+              <th className={thCls}>Paid on</th>
+              <th className={thR}>CGST</th>
+              <th className={thR}>SGST</th>
+              <th className={thR}>IGST</th>
+              <th className={thR}>Cess</th>
+              <th className={thCls}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-[var(--color-muted)]">Loading…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-[var(--color-muted)]">No challans for this period.</td></tr>
+            ) : (
+              rows.map((c) => (
+                <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
+                  <td className="px-3 py-2.5">
+                    <span className="font-mono text-xs">{c.cin || "—"}</span>
+                    {c.bankRef && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{c.bankRef}</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{c.paidOn || "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.cgst)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.sgst)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.igst)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.cess)}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      c.status === "PAID"
+                        ? "bg-green-900/30 text-green-300 border-green-700/40"
+                        : "bg-amber-900/30 text-amber-300 border-amber-700/40"
+                    }`}>{c.status}</span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GST RATE MASTER — HSN/SAC ↔ GST rate + cess (upsert + list)
+// ─────────────────────────────────────────────────────────────────────────────
+function GstRateMaster() {
+  const [rows, setRows] = useState<GstRateRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [hsn, setHsn] = useState("");
+  const [rate, setRate] = useState<number>(18);
+  const [cessRate, setCessRate] = useState("");
+  const [description, setDescription] = useState("");
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await api.get<GstRateRow[]>("/api/books/gst/rates");
+      setRows(Array.isArray(r) ? r : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const submit = async () => {
+    if (!hsn.trim()) {
+      toast.error("Enter an HSN / SAC code");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post<GstRateRow>("/api/books/gst/rates", {
+        hsn: hsn.trim(),
+        rate,
+        cessRate: Number(cessRate) || 0,
+        description: description.trim() || undefined,
+      });
+      toast.success(`Saved rate for HSN ${hsn.trim()}`);
+      setHsn(""); setCessRate(""); setDescription(""); setRate(18);
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="GST rate master (HSN / SAC)" icon={<Percent size={15} />}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end mb-4">
+        <div>
+          <label className={labelCls}>HSN / SAC</label>
+          <input value={hsn} onChange={(e) => setHsn(e.target.value)} placeholder="e.g. 9983" className={`${inputCls} font-mono`} />
+        </div>
+        <div>
+          <label className={labelCls}>GST rate</label>
+          <select value={rate} onChange={(e) => setRate(Number(e.target.value))} className={inputCls}>
+            {GST_RATES.map((r) => (<option key={r} value={r}>{r}%</option>))}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Cess %</label>
+          <input value={cessRate} onChange={(e) => setCessRate(e.target.value)} inputMode="decimal" placeholder="0" className={`${inputCls} font-mono tabular-nums`} />
+        </div>
+        <div className="lg:col-span-1">
+          <label className={labelCls}>Description</label>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
+        </div>
+        <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />} Save rate
+        </button>
+      </div>
+
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border)]">
+              <th className={thCls}>HSN / SAC</th>
+              <th className={thR}>GST rate</th>
+              <th className={thR}>Cess</th>
+              <th className={thCls}>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <tr><td colSpan={4} className="px-3 py-6 text-center text-[var(--color-muted)]">Loading…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={4} className="px-3 py-6 text-center text-[var(--color-muted)]">No rates configured yet.</td></tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.hsn} className="border-b border-[var(--color-border)] last:border-b-0">
+                  <td className="px-3 py-2.5 font-mono text-xs">{r.hsn}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{r.rate}%</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{Number(r.cessRate) ? `${r.cessRate}%` : "—"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.description || "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-INVOICE CANCEL — cancel an IRN within the 24h GSP window
+// ─────────────────────────────────────────────────────────────────────────────
+const CANCEL_REASONS = [
+  { code: "1", label: "1 — Duplicate" },
+  { code: "2", label: "2 — Data entry mistake" },
+  { code: "3", label: "3 — Order cancelled" },
+  { code: "4", label: "4 — Other" },
+] as const;
+
+function EinvoiceCancelCard() {
+  const [voucherId, setVoucherId] = useState("");
+  const [reason, setReason] = useState<string>(CANCEL_REASONS[0].code);
+  const [remarks, setRemarks] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!voucherId.trim()) {
+      toast.error("Enter the voucher id of the e-invoice");
+      return;
+    }
+    if (!window.confirm("Cancel this e-invoice IRN? This is irreversible and only valid within 24h of generation.")) return;
+    setBusy(true);
+    try {
+      const res = await api.post<{ status?: string; configured?: boolean; reason?: string }>(
+        `/api/books/einvoice/${encodeURIComponent(voucherId.trim())}/cancel`,
+        { reason, remarks: remarks.trim() || undefined },
+      );
+      if (res?.configured === false) {
+        toast.error(res.reason || "GSP not configured — cannot cancel");
+      } else {
+        toast.success(res?.status === "CANCELLED" ? "E-invoice cancelled" : "Cancellation submitted");
+        setVoucherId(""); setRemarks("");
+      }
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Cancel e-invoice (IRN)" icon={<Ban size={15} />}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-end">
+        <div className="lg:col-span-1">
+          <label className={labelCls}>Voucher id</label>
+          <input value={voucherId} onChange={(e) => setVoucherId(e.target.value)} placeholder="voucher UUID" className={`${inputCls} font-mono`} />
+        </div>
+        <div>
+          <label className={labelCls}>Reason</label>
+          <select value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls}>
+            {CANCEL_REASONS.map((r) => (<option key={r.code} value={r.code}>{r.label}</option>))}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Remarks</label>
+          <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="optional" className={inputCls} />
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] mt-2">
+        IRN cancellation is only allowed within 24 hours of generation and requires a configured GSP. The credit/debit note flow is used after that window.
+      </p>
+      <button type="button" onClick={submit} disabled={busy} className={`${btnPrimary} mt-3`}>
+        {busy ? <RefreshCw size={14} className="animate-spin" /> : <Ban size={14} />} Cancel IRN
+      </button>
     </Card>
   );
 }

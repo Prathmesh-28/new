@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Boxes, Plus, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Factory,
   ClipboardCheck, AlertTriangle, BarChart3, PackageX, Trash2,
+  Hash, Layers, Package, ScanLine, Search, Wrench,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,7 +75,34 @@ interface StockSummaryRow {
   closingValue?: string | number | null;
 }
 
-type SubTab = "items" | "moves" | "manufacture" | "adjust" | "alerts" | "summary";
+type SubTab =
+  | "items" | "moves" | "manufacture" | "adjust" | "alerts" | "summary"
+  | "serials" | "variants" | "kits" | "barcode";
+
+interface SerialRow {
+  id?: string;
+  serial_no?: string | null;
+  serialNo?: string | null;
+  status?: string | null;
+  rate?: string | number | null;
+  received_date?: string | null;
+  receivedDate?: string | null;
+}
+interface VariantRow {
+  id?: string;
+  name?: string | null;
+  attributes?: Record<string, unknown> | string | null;
+  closing_qty?: string | number | null;
+  closingQty?: string | number | null;
+}
+interface KitComponentRow {
+  id?: string;
+  component_item_id?: string;
+  componentItemId?: string;
+  component_name?: string | null;
+  componentName?: string | null;
+  qty?: string | number | null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -209,6 +237,10 @@ export default function BooksInventoryTab({ canWrite = true }: { canWrite?: bool
     { id: "adjust", label: "Physical adjust", icon: <ClipboardCheck size={14} /> },
     { id: "alerts", label: "Alerts", icon: <AlertTriangle size={14} /> },
     { id: "summary", label: "Stock summary", icon: <BarChart3 size={14} /> },
+    { id: "serials", label: "Serial numbers", icon: <Hash size={14} /> },
+    { id: "variants", label: "Variants", icon: <Layers size={14} /> },
+    { id: "kits", label: "Kits / BOM", icon: <Package size={14} /> },
+    { id: "barcode", label: "Barcode", icon: <ScanLine size={14} /> },
   ];
 
   return (
@@ -249,6 +281,10 @@ export default function BooksInventoryTab({ canWrite = true }: { canWrite?: bool
       )}
       {sub === "alerts" && <AlertsSection />}
       {sub === "summary" && <SummarySection />}
+      {sub === "serials" && <SerialsSection items={items} canWrite={canWrite} />}
+      {sub === "variants" && <VariantsSection items={items} canWrite={canWrite} />}
+      {sub === "kits" && <KitsSection items={items} canWrite={canWrite} onPosted={loadItems} />}
+      {sub === "barcode" && <BarcodeSection items={items} canWrite={canWrite} />}
     </div>
   );
 }
@@ -1025,6 +1061,641 @@ function SummarySection() {
             )}
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SERIAL NUMBERS SECTION — receive serials, issue serials, list per item
+// ─────────────────────────────────────────────────────────────────────────────
+function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
+  const [itemId, setItemId] = useState("");
+  const [serials, setSerials] = useState<SerialRow[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  // receive form
+  const [recSerials, setRecSerials] = useState("");
+  const [recRate, setRecRate] = useState("");
+  const [recDate, setRecDate] = useState(todayIso());
+  const [recSaving, setRecSaving] = useState(false);
+
+  // issue form
+  const [issSerials, setIssSerials] = useState("");
+  const [issDate, setIssDate] = useState(todayIso());
+  const [issSaving, setIssSaving] = useState(false);
+
+  const load = useCallback(async (id: string) => {
+    if (!id) { setSerials([]); return; }
+    setBusy(true);
+    try {
+      const res = await api.get<unknown>(`/api/books/inventory/items/${id}/serials`);
+      setSerials(asArray<SerialRow>(res));
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(itemId);
+  }, [load, itemId]);
+
+  const parseSerials = (raw: string): { serialNo: string }[] =>
+    raw
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((serialNo) => ({ serialNo }));
+
+  const receive = async () => {
+    if (!itemId) { toast.error("Pick an item"); return; }
+    const list = parseSerials(recSerials);
+    if (list.length === 0) { toast.error("Enter at least one serial number"); return; }
+    setRecSaving(true);
+    try {
+      await api.post("/api/books/inventory/receive-serials", {
+        itemId,
+        serials: list,
+        rate: Number(recRate) || 0,
+        date: recDate,
+      });
+      toast.success(`${list.length} serial${list.length === 1 ? "" : "s"} received`);
+      setRecSerials(""); setRecRate("");
+      await load(itemId);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setRecSaving(false);
+    }
+  };
+
+  const issue = async () => {
+    if (!itemId) { toast.error("Pick an item"); return; }
+    const list = parseSerials(issSerials);
+    if (list.length === 0) { toast.error("Enter at least one serial number"); return; }
+    setIssSaving(true);
+    try {
+      await api.post("/api/books/inventory/issue-serials", {
+        itemId,
+        serials: list,
+        date: issDate,
+      });
+      toast.success(`${list.length} serial${list.length === 1 ? "" : "s"} issued`);
+      setIssSerials("");
+      await load(itemId);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setIssSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="max-w-md">
+        <ItemSelect items={items} value={itemId} onChange={setItemId} label="Item (serial-tracked)" />
+      </div>
+
+      {canWrite ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Receive serials (inward)" icon={<ArrowDownToLine size={15} />}>
+            <div className="space-y-3 flex-1">
+              <div>
+                <label className={labelCls}>Serial numbers (one per line or comma-separated)</label>
+                <textarea value={recSerials} onChange={(e) => setRecSerials(e.target.value)} rows={4} placeholder="SN-0001&#10;SN-0002" className={`${inputCls} font-mono`} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Rate (per unit)</label>
+                  <input value={recRate} onChange={(e) => setRecRate(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} />
+                </div>
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={recDate} onChange={(e) => setRecDate(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={receive} disabled={recSaving || !itemId} className={`${btnPrimary} mt-4 w-full`}>
+              {recSaving ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
+              Receive serials
+            </button>
+          </Card>
+
+          <Card title="Issue serials (outward)" icon={<ArrowUpFromLine size={15} />}>
+            <div className="space-y-3 flex-1">
+              <div>
+                <label className={labelCls}>Serial numbers (one per line or comma-separated)</label>
+                <textarea value={issSerials} onChange={(e) => setIssSerials(e.target.value)} rows={4} placeholder="SN-0001&#10;SN-0002" className={`${inputCls} font-mono`} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={issDate} onChange={(e) => setIssDate(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)]">Marks the listed serials as issued / sold.</p>
+            </div>
+            <button type="button" onClick={issue} disabled={issSaving || !itemId} className={`${btnPrimary} mt-4 w-full`}>
+              {issSaving ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpFromLine size={14} />}
+              Issue serials
+            </button>
+          </Card>
+        </div>
+      ) : (
+        <NoWrite what="receive or issue serials" />
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Hash size={15} className="text-[var(--color-primary)]" /> Serials
+            {itemId ? <span className="text-[var(--color-muted)] tabular-nums font-normal">· {serials.length}</span> : null}
+          </h3>
+          <button type="button" onClick={() => void load(itemId)} disabled={!itemId} className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" title="Refresh">
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <Th>Serial no</Th>
+                <Th>Status</Th>
+                <Th right>Rate</Th>
+                <Th right>Received</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {!itemId ? (
+                <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--color-muted)]">Pick an item to view its serials.</td></tr>
+              ) : busy ? (
+                <SkeletonRows cols={4} rows={5} />
+              ) : serials.length === 0 ? (
+                <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--color-muted)]">No serials for this item yet.</td></tr>
+              ) : (
+                serials.map((s, i) => (
+                  <tr key={s.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
+                    <td className="px-3 py-2.5 font-mono text-xs">{s.serial_no ?? s.serialNo ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{(s.status ?? "—").toString().toLowerCase()}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{s.rate != null ? rupee(s.rate) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)] whitespace-nowrap">{s.received_date ?? s.receivedDate ?? "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VARIANTS SECTION — create + list variants under an item
+// ─────────────────────────────────────────────────────────────────────────────
+function VariantsSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
+  const [itemId, setItemId] = useState("");
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const [name, setName] = useState("");
+  const [attrs, setAttrs] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async (id: string) => {
+    if (!id) { setVariants([]); return; }
+    setBusy(true);
+    try {
+      const res = await api.get<unknown>(`/api/books/inventory/items/${id}/variants`);
+      setVariants(asArray<VariantRow>(res));
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(itemId);
+  }, [load, itemId]);
+
+  // Parse "Color: Red, Size: L" -> { Color: "Red", Size: "L" }; falls back to raw JSON.
+  const parseAttrs = (raw: string): Record<string, string> | undefined => {
+    const t = raw.trim();
+    if (!t) return undefined;
+    if (t.startsWith("{")) {
+      try { return JSON.parse(t); } catch { /* fall through */ }
+    }
+    const out: Record<string, string> = {};
+    for (const pair of t.split(",")) {
+      const [k, ...rest] = pair.split(":");
+      if (k && rest.length) out[k.trim()] = rest.join(":").trim();
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  const submit = async () => {
+    if (!itemId) { toast.error("Pick an item"); return; }
+    if (!name.trim()) { toast.error("Enter a variant name"); return; }
+    setSaving(true);
+    try {
+      await api.post(`/api/books/inventory/items/${itemId}/variants`, {
+        name: name.trim(),
+        attributes: parseAttrs(attrs) ?? {},
+      });
+      toast.success(`Variant "${name.trim()}" added`);
+      setName(""); setAttrs("");
+      await load(itemId);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fmtAttrs = (a: VariantRow["attributes"]): string => {
+    if (!a) return "—";
+    if (typeof a === "string") return a;
+    return Object.entries(a).map(([k, v]) => `${k}: ${String(v)}`).join(" · ") || "—";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="max-w-md">
+        <ItemSelect items={items} value={itemId} onChange={setItemId} label="Parent item" />
+      </div>
+
+      {canWrite ? (
+        <Card title="Add variant" icon={<Layers size={15} />}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Variant name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Red / Large" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Attributes (key: value, comma-separated, or JSON)</label>
+              <input value={attrs} onChange={(e) => setAttrs(e.target.value)} placeholder="Color: Red, Size: L" className={inputCls} />
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <button type="button" onClick={submit} disabled={saving || !itemId} className={btnPrimary}>
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+              Add variant
+            </button>
+          </div>
+        </Card>
+      ) : (
+        <NoWrite what="add variants" />
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Layers size={15} className="text-[var(--color-primary)]" /> Variants
+            {itemId ? <span className="text-[var(--color-muted)] tabular-nums font-normal">· {variants.length}</span> : null}
+          </h3>
+          <button type="button" onClick={() => void load(itemId)} disabled={!itemId} className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" title="Refresh">
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <Th>Variant</Th>
+                <Th>Attributes</Th>
+                <Th right>Closing qty</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {!itemId ? (
+                <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">Pick an item to view its variants.</td></tr>
+              ) : busy ? (
+                <SkeletonRows cols={3} rows={4} />
+              ) : variants.length === 0 ? (
+                <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">No variants for this item yet.</td></tr>
+              ) : (
+                variants.map((v, i) => (
+                  <tr key={v.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
+                    <td className="px-3 py-2.5 font-medium">{v.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{fmtAttrs(v.attributes)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">
+                      {(v.closing_qty ?? v.closingQty) != null ? qtyFmt(v.closing_qty ?? v.closingQty) : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KITS SECTION — define a bill-of-materials + build the kit
+// ─────────────────────────────────────────────────────────────────────────────
+interface KitLine { key: string; componentItemId: string; qty: string }
+function newKitLine(): KitLine {
+  return { key: Math.random().toString(36).slice(2), componentItemId: "", qty: "" };
+}
+
+function KitsSection({
+  items, canWrite, onPosted,
+}: {
+  items: Item[];
+  canWrite: boolean;
+  onPosted: () => Promise<void>;
+}) {
+  const [kitItemId, setKitItemId] = useState("");
+  const [components, setComponents] = useState<KitComponentRow[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  // define-kit form
+  const [lines, setLines] = useState<KitLine[]>([newKitLine()]);
+  const [savingKit, setSavingKit] = useState(false);
+
+  // build-kit form
+  const [buildQty, setBuildQty] = useState("");
+  const [buildDate, setBuildDate] = useState(todayIso());
+  const [building, setBuilding] = useState(false);
+
+  const load = useCallback(async (id: string) => {
+    if (!id) { setComponents([]); return; }
+    setBusy(true);
+    try {
+      // backend exposes the components on the item; tolerate either a kit list shape or 404
+      const res = await api.get<unknown>(`/api/books/inventory/items/${id}/kit`);
+      setComponents(asArray<KitComponentRow>(res));
+    } catch {
+      setComponents([]);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(kitItemId);
+  }, [load, kitItemId]);
+
+  const setLine = (key: string, patch: Partial<KitLine>) =>
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const addLine = () => setLines((ls) => [...ls, newKitLine()]);
+  const removeLine = (key: string) =>
+    setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.key !== key) : ls));
+
+  const saveKit = async () => {
+    if (!kitItemId) { toast.error("Pick the kit item"); return; }
+    const comps = lines
+      .filter((l) => l.componentItemId && (Number(l.qty) || 0) > 0)
+      .map((l) => ({ componentItemId: l.componentItemId, qty: Number(l.qty) || 0 }));
+    if (comps.length === 0) { toast.error("Add at least one component"); return; }
+    setSavingKit(true);
+    try {
+      await api.post(`/api/books/inventory/items/${kitItemId}/kit`, { components: comps });
+      toast.success("Kit definition saved");
+      setLines([newKitLine()]);
+      await load(kitItemId);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSavingKit(false);
+    }
+  };
+
+  const buildKit = async () => {
+    if (!kitItemId) { toast.error("Pick the kit item"); return; }
+    if ((Number(buildQty) || 0) <= 0) { toast.error("Enter a build quantity above zero"); return; }
+    setBuilding(true);
+    try {
+      await api.post("/api/books/inventory/build-kit", {
+        kitItemId,
+        qty: Number(buildQty) || 0,
+        date: buildDate,
+      });
+      toast.success("Kit built — components consumed, kit stock added");
+      setBuildQty("");
+      await Promise.all([load(kitItemId), onPosted()]);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  const compName = (c: KitComponentRow): string => {
+    if (c.component_name ?? c.componentName) return (c.component_name ?? c.componentName) as string;
+    const id = c.component_item_id ?? c.componentItemId;
+    return items.find((i) => i.id === id)?.name ?? (id ? `#${id}` : "—");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="max-w-md">
+        <ItemSelect items={items} value={kitItemId} onChange={setKitItemId} label="Kit item (finished good)" />
+      </div>
+
+      {canWrite ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Define kit (bill of materials)" icon={<Wrench size={15} />}>
+            <div className="space-y-2 flex-1">
+              {lines.map((l) => (
+                <div key={l.key} className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <select value={l.componentItemId} onChange={(e) => setLine(l.key, { componentItemId: e.target.value })} className={inputCls}>
+                      <option value="">Component item…</option>
+                      {items.filter((i) => i.id !== kitItemId).map((i) => <option key={i.id} value={i.id}>{itemName(i)}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-24">
+                    <input value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} inputMode="decimal" placeholder="Qty" className={`${inputCls} text-right tabular-nums`} />
+                  </div>
+                  <button type="button" onClick={() => removeLine(l.key)} disabled={lines.length <= 1} className="px-2 py-2.5 text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30" title="Remove">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addLine} className={btnGhost}>
+                <Plus size={14} /> Add component
+              </button>
+            </div>
+            <button type="button" onClick={saveKit} disabled={savingKit || !kitItemId} className={`${btnPrimary} mt-4 w-full`}>
+              {savingKit ? <RefreshCw size={14} className="animate-spin" /> : <Wrench size={14} />}
+              Save kit definition
+            </button>
+          </Card>
+
+          <Card title="Build kit" icon={<Package size={15} />}>
+            <div className="space-y-3 flex-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Build quantity</label>
+                  <input value={buildQty} onChange={(e) => setBuildQty(e.target.value)} inputMode="decimal" placeholder="0" className={`${inputCls} font-mono tabular-nums`} />
+                </div>
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={buildDate} onChange={(e) => setBuildDate(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                Consumes each component (qty × build quantity) and adds the assembled kit to stock.
+              </p>
+            </div>
+            <button type="button" onClick={buildKit} disabled={building || !kitItemId} className={`${btnPrimary} mt-4 w-full`}>
+              {building ? <RefreshCw size={14} className="animate-spin" /> : <Package size={14} />}
+              Build kit
+            </button>
+          </Card>
+        </div>
+      ) : (
+        <NoWrite what="define or build kits" />
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Package size={15} className="text-[var(--color-primary)]" /> Components
+            {kitItemId ? <span className="text-[var(--color-muted)] tabular-nums font-normal">· {components.length}</span> : null}
+          </h3>
+          <button type="button" onClick={() => void load(kitItemId)} disabled={!kitItemId} className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30" title="Refresh">
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <Th>Component</Th>
+                <Th right>Qty per kit</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {!kitItemId ? (
+                <tr><td colSpan={2} className="px-3 py-8 text-center text-[var(--color-muted)]">Pick a kit item to view its components.</td></tr>
+              ) : busy ? (
+                <SkeletonRows cols={2} rows={4} />
+              ) : components.length === 0 ? (
+                <tr><td colSpan={2} className="px-3 py-8 text-center text-[var(--color-muted)]">No kit defined for this item yet.</td></tr>
+              ) : (
+                components.map((c, i) => (
+                  <tr key={c.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
+                    <td className="px-3 py-2.5 font-medium">{compName(c)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{qtyFmt(c.qty)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BARCODE SECTION — assign a barcode to an item + lookup by code
+// ─────────────────────────────────────────────────────────────────────────────
+function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
+  // assign
+  const [itemId, setItemId] = useState("");
+  const [code, setCode] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // lookup
+  const [lookupCode, setLookupCode] = useState("");
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [looking, setLooking] = useState(false);
+
+  const assign = async () => {
+    if (!itemId) { toast.error("Pick an item"); return; }
+    if (!code.trim()) { toast.error("Enter a barcode"); return; }
+    setSaving(true);
+    try {
+      await api.post(`/api/books/inventory/items/${itemId}/barcode`, { barcode: code.trim() });
+      toast.success("Barcode assigned");
+      setCode("");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const lookup = async () => {
+    const c = lookupCode.trim();
+    if (!c) { toast.error("Enter a barcode to look up"); return; }
+    setLooking(true);
+    setResult(null);
+    try {
+      const res = await api.get<unknown>(`/api/books/inventory/barcode/${encodeURIComponent(c)}`);
+      const obj = (res && typeof res === "object" && !Array.isArray(res)) ? (res as Record<string, unknown>) : null;
+      if (!obj || Object.keys(obj).length === 0) {
+        toast.error("No item found for that barcode");
+      } else {
+        setResult(obj);
+      }
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const resName = result
+    ? String(result.name ?? result.item_name ?? result.itemName ?? "—")
+    : "—";
+  const resUnit = result ? (result.unit ?? null) : null;
+  const resQty = result ? (result.closing_qty ?? result.current_qty ?? result.qty ?? null) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {canWrite ? (
+          <Card title="Assign barcode" icon={<ScanLine size={15} />}>
+            <div className="space-y-3 flex-1">
+              <ItemSelect items={items} value={itemId} onChange={setItemId} />
+              <div>
+                <label className={labelCls}>Barcode</label>
+                <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Scan or type code" className={`${inputCls} font-mono`} />
+              </div>
+            </div>
+            <button type="button" onClick={assign} disabled={saving || !itemId} className={`${btnPrimary} mt-4 w-full`}>
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : <ScanLine size={14} />}
+              Assign barcode
+            </button>
+          </Card>
+        ) : (
+          <div><NoWrite what="assign barcodes" /></div>
+        )}
+
+        <Card title="Lookup by barcode" icon={<Search size={15} />}>
+          <div className="space-y-3 flex-1">
+            <div>
+              <label className={labelCls}>Barcode</label>
+              <input
+                value={lookupCode}
+                onChange={(e) => setLookupCode(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void lookup(); }}
+                placeholder="Scan or type code"
+                className={`${inputCls} font-mono`}
+              />
+            </div>
+            {result && (
+              <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Item</span><span className="font-medium">{resName}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Unit</span><span>{resUnit ? String(resUnit) : "—"}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Closing qty</span><span className="tabular-nums">{resQty != null ? qtyFmt(resQty as string | number) : "—"}</span></div>
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={lookup} disabled={looking} className={`${btnPrimary} mt-4 w-full`}>
+            {looking ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+            Lookup
+          </button>
+        </Card>
       </div>
     </div>
   );
