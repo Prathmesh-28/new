@@ -41,4 +41,58 @@ async function listAttachments(tenantId, entityType, entityId) {
   return rows;
 }
 
-module.exports = { createExpense, createProject, logTime, billableSummary, addAttachment, listAttachments };
+// ── Period lock / close (the WRITE side; posting-engine already enforces the read) ──
+async function setPeriodStatus(tenantId, actorId, fy, month, status) {
+  if (!["OPEN", "LOCKED", "CLOSED"].includes(status)) throw new PostError("BAD_INPUT", "status must be OPEN/LOCKED/CLOSED", 400);
+  if (!fy || month == null) throw new PostError("BAD_INPUT", "financial_year and period_month required", 400);
+  const { rows } = await pool.query(
+    `INSERT INTO book_periods(tenant_id,financial_year,period_month,status,locked_by,locked_at)
+       VALUES($1,$2,$3,$4,$5, CASE WHEN $4='OPEN' THEN NULL ELSE now() END)
+     ON CONFLICT(tenant_id,financial_year,period_month)
+       DO UPDATE SET status=EXCLUDED.status, locked_by=$5,
+                     locked_at = CASE WHEN $4='OPEN' THEN NULL ELSE now() END
+     RETURNING *`,
+    [tenantId, fy, month, status, actorId || null]
+  );
+  return rows[0];
+}
+async function listPeriods(tenantId, fy) {
+  const { rows } = await pool.query("SELECT * FROM book_periods WHERE tenant_id=$1 AND financial_year=$2 ORDER BY period_month", [tenantId, fy]);
+  return rows;
+}
+
+// ── Audit-log viewer (book_audit_log was write-only) ─────────────────────────
+async function readAuditLog(tenantId, { entity, entityId, limit } = {}) {
+  const params = [tenantId];
+  let where = "a.tenant_id=$1";
+  if (entity)   { params.push(entity);   where += ` AND a.entity=$${params.length}`; }
+  if (entityId) { params.push(entityId); where += ` AND a.entity_id=$${params.length}`; }
+  params.push(Math.min(Number(limit) || 200, 1000));
+  const { rows } = await pool.query(
+    `SELECT a.id, a.actor_id, u.email AS actor_email, a.action, a.entity, a.entity_id, a.detail, a.created_at
+       FROM book_audit_log a LEFT JOIN users u ON u.id=a.actor_id
+      WHERE ${where} ORDER BY a.id DESC LIMIT $${params.length}`,
+    params
+  );
+  return rows;
+}
+
+// ── Editable / bulk opening balances (was settable only at ledger creation) ───
+async function setOpeningBalances(tenantId, entries) {
+  if (!Array.isArray(entries) || !entries.length) throw new PostError("BAD_INPUT", "entries[] required", 400);
+  const updated = [];
+  for (const e of entries) {
+    if (!e.ledgerId) continue;
+    const { rows } = await pool.query(
+      `UPDATE book_ledgers SET opening_balance=$3, opening_is_debit=$4
+         WHERE tenant_id=$1 AND id=$2 RETURNING id,name,opening_balance,opening_is_debit`,
+      [tenantId, e.ledgerId, toDb(e.openingBalance ?? e.opening_balance ?? 0), (e.openingIsDebit ?? e.opening_is_debit) !== false]
+    );
+    if (rows[0]) updated.push(rows[0]);
+  }
+  // A balanced opening trial balance should net to ~0 (debit openings − credit openings).
+  const openingNet = updated.reduce((s, r) => s + (r.opening_is_debit ? Number(r.opening_balance) : -Number(r.opening_balance)), 0);
+  return { updated, openingNet, balanced: Math.abs(openingNet) < 0.005 };
+}
+
+module.exports = { createExpense, createProject, logTime, billableSummary, addAttachment, listAttachments, setPeriodStatus, listPeriods, readAuditLog, setOpeningBalances };

@@ -20,6 +20,7 @@ const ops = require("./ops");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const portal = require("./portal");
+const cc = require("./costcentres");
 
 router.use(authenticate);
 
@@ -79,7 +80,7 @@ router.post("/ledgers", canPost, async (req, res) => {
 });
 router.patch("/ledgers/:id", canPost, async (req, res) => {
   try {
-    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active"];
+    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit"];
     const sets = [], vals = [];
     for (const k of allowed) if (k in (req.body || {})) { sets.push(`${k}=$${sets.length + 1}`); vals.push(req.body[k]); }
     if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
@@ -88,6 +89,38 @@ router.patch("/ledgers/:id", canPost, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     res.json(rows[0]);
   } catch (e) { fail(res, e); }
+});
+
+// Bulk / editable opening balances (onboarding + auditor corrections).
+router.post("/opening-balances", canPost, async (req, res) => {
+  try { res.json(await ops.setOpeningBalances(tenantOf(req), (req.body || {}).entries)); } catch (e) { fail(res, e); }
+});
+
+// ── Cost centres (master + cost-centre-wise P&L) ─────────────────────────────
+router.get("/cost-centres", async (req, res) => {
+  try { res.json(await cc.listCostCentres(tenantOf(req))); } catch (e) { fail(res, e); }
+});
+router.post("/cost-centres", canPost, async (req, res) => {
+  try { res.status(201).json(await cc.createCostCentre(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); }
+});
+router.patch("/cost-centres/:id", canPost, async (req, res) => {
+  try { res.json(await cc.updateCostCentre(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); }
+});
+router.get("/cost-centres/report", async (req, res) => {
+  try { res.json(await cc.costCentreReport(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); }
+});
+
+// ── Period lock / close (write side) + list ──────────────────────────────────
+router.get("/periods", async (req, res) => {
+  try { res.json(await ops.listPeriods(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); }
+});
+router.post("/periods/status", canPost, async (req, res) => {
+  try { const b = req.body || {}; res.json(await ops.setPeriodStatus(tenantOf(req), req.user.id, b.financial_year || fyOf(req), b.period_month, b.status)); } catch (e) { fail(res, e); }
+});
+
+// ── Audit-log viewer ─────────────────────────────────────────────────────────
+router.get("/audit", async (req, res) => {
+  try { res.json(await ops.readAuditLog(tenantOf(req), { entity: req.query.entity, entityId: req.query.entityId, limit: req.query.limit })); } catch (e) { fail(res, e); }
 });
 
 // ── Vouchers ─────────────────────────────────────────────────────────────────

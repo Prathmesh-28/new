@@ -171,6 +171,19 @@ const BOOKS_SCHEMA = `
     locked_at      TIMESTAMPTZ,
     PRIMARY KEY (tenant_id, financial_year, period_month)
   );
+  -- Cost-centre master (Tally-style). Vouchers already carry cost_centre_id; this is
+  -- the master + categories that make department/branch/project-wise P&L possible.
+  CREATE TABLE IF NOT EXISTS book_cost_centres (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    parent_id  UUID,
+    category   TEXT,
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_cost_centres ON book_cost_centres(tenant_id);
   CREATE TABLE IF NOT EXISTS book_voucher_counters (
     tenant_id      TEXT NOT NULL,
     voucher_type   TEXT NOT NULL,
