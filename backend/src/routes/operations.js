@@ -51,22 +51,46 @@ router.patch("/orders/:id/status", authenticate, canWrite, async (req, res) => {
   const valid = ["pending","confirmed","processing","dispatched","delivered","cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: "Invalid status" });
 
-  const { rows } = await pool.query(
-    "UPDATE orders SET status=$1, updated_at=now() WHERE id=$2 AND tenant_id=$3 RETURNING *",
-    [status, req.params.id, req.user.tenant_id]
-  );
-  if (!rows[0]) return res.status(404).json({ error: "Not found" });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  // When confirmed → create a revenue transaction automatically
-  if (status === "confirmed") {
-    await pool.query(
-      `INSERT INTO transactions(tenant_id, amount, description_raw, category, transaction_date, source)
-       VALUES($1,$2,$3,'revenue',CURRENT_DATE,'operations') ON CONFLICT DO NOTHING`,
-      [req.user.tenant_id, rows[0].total_value, `Order ${rows[0].order_number} - ${rows[0].buyer_name}`]
+    // Lock the row and capture the prior status so we only book revenue once.
+    const { rows: priorRows } = await client.query(
+      "SELECT status FROM orders WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+      [req.params.id, req.user.tenant_id]
     );
-  }
+    if (!priorRows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Not found" });
+    }
+    const priorStatus = priorRows[0].status;
 
-  res.json(rows[0]);
+    const { rows } = await client.query(
+      "UPDATE orders SET status=$1, updated_at=now() WHERE id=$2 AND tenant_id=$3 RETURNING *",
+      [status, req.params.id, req.user.tenant_id]
+    );
+
+    // When confirmed → create a revenue transaction automatically, but only on the
+    // first transition into "confirmed". A deterministic external_id + the
+    // (tenant_id, source, external_id) unique index dedupes any re-confirm.
+    if (status === "confirmed" && priorStatus !== "confirmed") {
+      await client.query(
+        `INSERT INTO transactions(tenant_id, amount, description_raw, category, transaction_date, source, external_id)
+         VALUES($1,$2,$3,'revenue',CURRENT_DATE,'operations',$4)
+         ON CONFLICT (tenant_id, source, external_id) DO NOTHING`,
+        [req.user.tenant_id, rows[0].total_value, `Order ${rows[0].order_number} - ${rows[0].buyer_name}`, `order-${rows[0].id}-revenue`]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // DELETE /api/operations/orders/:id
@@ -173,31 +197,56 @@ router.patch("/procurement/:id/status", authenticate, canWrite, async (req, res)
   const valid = ["draft","approved","ordered","received","cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: "Invalid status" });
 
-  const { rows } = await pool.query(
-    "UPDATE procurement_orders SET status=$1, updated_at=now() WHERE id=$2 AND tenant_id=$3 RETURNING *",
-    [status, req.params.id, req.user.tenant_id]
-  );
-  if (!rows[0]) return res.status(404).json({ error: "Not found" });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  // When received → create expense transaction + update inventory
-  if (status === "received") {
-    await pool.query(
-      `INSERT INTO transactions(tenant_id, amount, description_raw, category, transaction_date, source)
-       VALUES($1,$2,$3,'expense',CURRENT_DATE,'operations')`,
-      [req.user.tenant_id, -Math.abs(rows[0].total_value), `Procurement from ${rows[0].supplier_name}`]
+    // Lock the PO and capture its prior status so the expense + inventory
+    // side-effects only fire on the first transition into "received".
+    const { rows: priorRows } = await client.query(
+      "SELECT status FROM procurement_orders WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+      [req.params.id, req.user.tenant_id]
     );
-    // Update inventory quantities
-    const { rows: items } = await pool.query("SELECT * FROM procurement_items WHERE po_id=$1", [rows[0].id]);
-    for (const item of items) {
-      await pool.query(
-        `UPDATE inventory SET quantity = quantity + $1, updated_at=now()
-         WHERE tenant_id=$2 AND (product_name=$3 OR sku=$4)`,
-        [item.quantity, req.user.tenant_id, item.product_name, item.sku]
-      );
+    if (!priorRows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Not found" });
     }
-  }
+    const priorStatus = priorRows[0].status;
 
-  res.json(rows[0]);
+    const { rows } = await client.query(
+      "UPDATE procurement_orders SET status=$1, updated_at=now() WHERE id=$2 AND tenant_id=$3 RETURNING *",
+      [status, req.params.id, req.user.tenant_id]
+    );
+
+    // When received → create expense transaction + update inventory, but only
+    // the first time. Re-marking a row already "received" is a no-op so we never
+    // double-book the expense or re-add the same stock.
+    if (status === "received" && priorStatus !== "received") {
+      await client.query(
+        `INSERT INTO transactions(tenant_id, amount, description_raw, category, transaction_date, source, external_id)
+         VALUES($1,$2,$3,'expense',CURRENT_DATE,'operations',$4)
+         ON CONFLICT (tenant_id, source, external_id) DO NOTHING`,
+        [req.user.tenant_id, -Math.abs(rows[0].total_value), `Procurement from ${rows[0].supplier_name}`, `po-${rows[0].id}-expense`]
+      );
+      // Update inventory quantities
+      const { rows: items } = await client.query("SELECT * FROM procurement_items WHERE po_id=$1", [rows[0].id]);
+      for (const item of items) {
+        await client.query(
+          `UPDATE inventory SET quantity = quantity + $1, updated_at=now()
+           WHERE tenant_id=$2 AND (product_name=$3 OR sku=$4)`,
+          [item.quantity, req.user.tenant_id, item.product_name, item.sku]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────

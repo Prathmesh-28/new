@@ -80,6 +80,8 @@ interface Lead {
   escalated: boolean | null;
   converted_deal_id: string | null;
   lost_reason: string | null;
+  value?: number | null;
+  expected_close?: string | null;
 }
 
 interface Task {
@@ -670,7 +672,12 @@ function LeadDrawer({ lead, canWrite, onClose, onChanged }: {
   const convert = async () => {
     setBusy(true);
     try {
-      await api.post(`/api/crm/leads/${lead.id}/convert`, {});
+      // Carry the lead's value (and expected close) onto the new deal so it isn't ₹0.
+      const value = lead.value != null ? Number(lead.value) : 0;
+      await api.post(`/api/crm/leads/${lead.id}/convert`, {
+        value,
+        expectedClose: lead.expected_close || undefined,
+      });
       toast.success("Lead converted to deal — account + contact created");
       onChanged();
       onClose();

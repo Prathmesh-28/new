@@ -17,6 +17,7 @@ import { differenceInDays, parseISO } from "date-fns";
 import { toast } from "sonner";
 import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data/types";
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
+import { api } from "@/lib/api";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
@@ -118,10 +119,15 @@ export default function OperationsPage() {
     setShowOrderForm(false);
   };
 
-  const handleStatusChange = (o: Order, status: Order["status"]) => {
+  const handleStatusChange = async (o: Order, status: Order["status"]) => {
     updateOrder({ ...o, status, updatedAt: new Date().toISOString() });
-    if (status === "confirmed") toast.success("Order confirmed — revenue transaction created");
-    else toast.success(`Order ${status}`);
+    try {
+      await api.patch(`/api/operations/orders/${o.id}/status`, { status });
+      if (status === "confirmed") toast.success("Order confirmed — revenue transaction created");
+      else toast.success(`Order ${status}`);
+    } catch {
+      toast.error(`Couldn't update order status on the server`);
+    }
   };
 
   const handleAddInventory = () => {
@@ -662,7 +668,15 @@ export default function OperationsPage() {
                   <div className="flex gap-2">
                     {po.status === "draft"    && <button onClick={() => updateProcurement({ ...po, status: "approved" })} className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-1 rounded">Approve</button>}
                     {po.status === "approved" && <button onClick={() => updateProcurement({ ...po, status: "ordered" })}  className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">Mark Ordered</button>}
-                    {po.status === "ordered"  && <button onClick={() => updateProcurement({ ...po, status: "received" })} className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded">Mark Received</button>}
+                    {po.status === "ordered"  && <button onClick={async () => {
+                      updateProcurement({ ...po, status: "received" });
+                      try {
+                        await api.patch(`/api/operations/procurement/${po.id}/status`, { status: "received" });
+                        toast.success("Marked received — expense recorded & inventory updated");
+                      } catch {
+                        toast.error("Couldn't mark received on the server");
+                      }
+                    }} className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded">Mark Received</button>}
                   </div>
                 </div>
               ))}

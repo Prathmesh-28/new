@@ -137,6 +137,11 @@ export default function SalesPage() {
 // ── shared deal model (pipeline + forecast + leaderboard read from it) ───────────
 const STAGES = ["enquiry", "quoted", "negotiation", "won", "lost"] as const;
 type Stage = (typeof STAGES)[number];
+// Open pipeline is a linear order; Won/Lost are terminal and only reachable via an
+// explicit action (never the › arrow). Keeping these separate stops the forward arrow
+// on a Won deal from silently flipping it to Lost.
+const OPEN_STAGES = ["enquiry", "quoted", "negotiation"] as const;
+const isTerminal = (s: Stage) => s === "won" || s === "lost";
 const STAGE_LABEL: Record<Stage, string> = {
   enquiry: "Enquiry", quoted: "Quoted", negotiation: "Negotiation", won: "Won", lost: "Lost",
 };
@@ -231,11 +236,15 @@ function PipelineBoard() {
     }
   };
 
+  // Move within the OPEN pipeline only. Won/Lost are terminal: the forward arrow is
+  // disabled once a deal leaves the open stages, so it can never flip Won → Lost.
   const move = async (id: string, dir: 1 | -1) => {
     const target = deals.find(d => d.id === id);
-    if (!target) return;
-    const i = STAGES.indexOf(target.stage);
-    const next = STAGES[Math.min(STAGES.length - 1, Math.max(0, i + dir))];
+    if (!target || isTerminal(target.stage)) return;
+    const openOrder = OPEN_STAGES as readonly Stage[];
+    const i = openOrder.indexOf(target.stage);
+    if (i === -1) return;
+    const next = openOrder[Math.min(openOrder.length - 1, Math.max(0, i + dir))];
     if (next === target.stage) return;
     setDeals(deals.map(d => d.id === id ? { ...d, stage: next } : d));
     if (!target.crmId) return; // local-only deal: optimistic cache is the source of truth
@@ -245,6 +254,42 @@ function PipelineBoard() {
       // revert on failure so the board reflects the server
       setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: target.stage } : d));
       toast.error("Couldn't move the deal — reverted");
+    }
+  };
+
+  // #1 / #3 Explicit Won / Lost decision. Lost requires a reason (the CRM backend
+  // rejects a LOST move without lost_reason), so prompt for one and send it through.
+  const decide = async (id: string, outcome: "won" | "lost") => {
+    const target = deals.find(d => d.id === id);
+    if (!target || target.stage === outcome) return;
+    let lostReason: string | undefined;
+    if (outcome === "lost") {
+      const reason = window.prompt("Why was this deal lost? (required)");
+      if (!reason || !reason.trim()) { toast.error("A reason is required to mark a deal Lost"); return; }
+      lostReason = reason.trim();
+    }
+    setDeals(deals.map(d => d.id === id ? { ...d, stage: outcome } : d));
+    if (!target.crmId) { toast.success(outcome === "won" ? "Deal marked Won" : "Deal marked Lost"); return; }
+    try {
+      await api.post(`/api/crm/deals/${target.crmId}/stage`,
+        outcome === "lost" ? { stage: "LOST", lostReason } : { stage: STAGE_TO_CRM.won });
+      toast.success(outcome === "won" ? "Deal marked Won" : "Deal marked Lost");
+    } catch {
+      setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: target.stage } : d));
+      toast.error("Couldn't update the deal — reverted");
+    }
+  };
+
+  // #2 Delete: CRM-backed deals must be removed on the server too, or they reappear
+  // on the next mount-merge from /api/crm/deals. Local-only deals just drop from cache.
+  const removeDeal = async (d: Deal) => {
+    if (!d.crmId) { setDeals(deals.filter(x => x.id !== d.id)); return; }
+    try {
+      await api.delete(`/api/crm/deals/${d.crmId}`);
+      setDeals(prev => prev.filter(x => x.id !== d.id));
+      toast.success("Deal deleted");
+    } catch {
+      toast.error("Couldn't delete the deal — it may still be on the server");
     }
   };
 
@@ -315,11 +360,22 @@ function PipelineBoard() {
                   <div className="flex items-center justify-between mt-1.5">
                     <span className="text-[9px] text-[var(--color-muted)]">{d.source}</span>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => move(d.id, -1)} disabled={STAGES.indexOf(d.stage) === 0}
+                      {/* ‹ › only walk the OPEN pipeline; both are disabled on a terminal deal */}
+                      <button onClick={() => move(d.id, -1)}
+                        disabled={isTerminal(d.stage) || (OPEN_STAGES as readonly Stage[]).indexOf(d.stage) === 0}
                         className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30">‹</button>
-                      <button onClick={() => move(d.id, 1)} disabled={STAGES.indexOf(d.stage) === STAGES.length - 1}
+                      <button onClick={() => move(d.id, 1)}
+                        disabled={isTerminal(d.stage) || (OPEN_STAGES as readonly Stage[]).indexOf(d.stage) === OPEN_STAGES.length - 1}
                         className="text-[10px] text-[var(--color-primary)] hover:underline disabled:opacity-30">›</button>
-                      <button onClick={() => setDeals(deals.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
+                      {!isTerminal(d.stage) && (
+                        <>
+                          <button onClick={() => decide(d.id, "won")} title="Mark Won"
+                            className="text-[var(--color-muted)] hover:text-green-400"><CheckCircle2 size={11} /></button>
+                          <button onClick={() => decide(d.id, "lost")} title="Mark Lost"
+                            className="text-[var(--color-muted)] hover:text-red-400"><XCircle size={11} /></button>
+                        </>
+                      )}
+                      <button onClick={() => removeDeal(d)} title="Delete deal" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
                     </div>
                   </div>
                 </div>
@@ -328,7 +384,7 @@ function PipelineBoard() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Use ‹ › to move a deal between stages. Weighted forecast applies a close probability per stage (enquiry 10% → negotiation 60% → won 100%).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Use ‹ › to move a deal through the open pipeline; mark it Won or Lost explicitly with the ✓ / ✕ buttons (Lost needs a reason). Weighted forecast applies a close probability per stage (enquiry 10% → negotiation 60% → won 100%).</p>
     </div>
   );
 }
@@ -339,14 +395,35 @@ function DealTracker() {
   const today = new Date();
 
   // Inline stage change persists to /api/crm for backend-linked deals (optimistic).
+  // Moving to LOST needs a reason (the CRM backend rejects a LOST move without one).
   const changeStage = async (d: Deal, next: Stage) => {
+    if (next === d.stage) return;
+    let lostReason: string | undefined;
+    if (next === "lost") {
+      const reason = window.prompt("Why was this deal lost? (required)");
+      if (!reason || !reason.trim()) { toast.error("A reason is required to mark a deal Lost"); return; }
+      lostReason = reason.trim();
+    }
     setDeals(deals.map(x => x.id === d.id ? { ...x, stage: next } : x));
     if (!d.crmId) return;
     try {
-      await api.post(`/api/crm/deals/${d.crmId}/stage`, { stage: STAGE_TO_CRM[next] });
+      await api.post(`/api/crm/deals/${d.crmId}/stage`,
+        next === "lost" ? { stage: "LOST", lostReason } : { stage: STAGE_TO_CRM[next] });
     } catch {
       setDeals(prev => prev.map(x => x.id === d.id ? { ...x, stage: d.stage } : x));
       toast.error("Couldn't update the stage — reverted");
+    }
+  };
+
+  // CRM-backed deals must delete on the server too (else they reappear on reload).
+  const removeDeal = async (d: Deal) => {
+    if (!d.crmId) { setDeals(deals.filter(x => x.id !== d.id)); return; }
+    try {
+      await api.delete(`/api/crm/deals/${d.crmId}`);
+      setDeals(prev => prev.filter(x => x.id !== d.id));
+      toast.success("Deal deleted");
+    } catch {
+      toast.error("Couldn't delete the deal — it may still be on the server");
     }
   };
 
@@ -386,7 +463,7 @@ function DealTracker() {
                   <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>
                     {format(parseISO(d.expectedClose), "d MMM yyyy")}{overdue ? ` · ${Math.abs(days)}d overdue` : ""}
                   </td>
-                  <td className="px-4 py-2.5 text-right"><button onClick={() => setDeals(deals.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  <td className="px-4 py-2.5 text-right"><button onClick={() => removeDeal(d)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                 </tr>
               );
             })}

@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import { computeFinancialSnapshot, dcfValuation, dilution } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -12,6 +14,25 @@ const INDUSTRY_MULTIPLES: Record<string, number> = {
   "Services": 2, "Retail": 1.2, "Healthcare": 4, "Logistics": 2,
 };
 
+// Backend-shaped capital raise (rows from GET /api/capital/raises). Capital raises
+// now persist to Postgres — CapitalPage no longer writes the local store — so the
+// dilution simulator / cap-table read here from the API and only fall back to the
+// store when the API returns nothing (e.g. offline).
+interface ApiRaise {
+  id: string;
+  name: string;
+  raise_type: string;
+  target_amount: number | string;
+  raised_amount: number | string;
+  status: "draft" | "active" | "closed" | "funded";
+  closes_at?: string | null;
+  created_at?: string;
+}
+const toNum = (v: number | string | null | undefined): number => {
+  const n = typeof v === "string" ? parseFloat(v) : (v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function ValuationPage() {
   const { store } = useApp();
   const navigate = useNavigate();
@@ -21,6 +42,37 @@ export default function ValuationPage() {
   const baseFcf = Math.max(snap.monthlyNet, 0) * 12;
   const defaultMultiple = INDUSTRY_MULTIPLES[store.firm.industry] ?? 3;
 
+  // Live raises from Postgres; null until the first fetch settles. When non-empty
+  // these drive the headline + dilution simulator; otherwise we fall back to the
+  // local store so the page keeps working offline / before the backend responds.
+  const [apiRaises, setApiRaises] = useState<ApiRaise[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.get<ApiRaise[]>("/api/capital/raises")
+      .then(rows => { if (alive) setApiRaises(Array.isArray(rows) ? rows : []); })
+      .catch(() => {
+        if (!alive) return;
+        setApiRaises([]); // fall through to store-based figures
+        toast.error("Couldn't load capital raises — showing local data");
+      });
+    return () => { alive = false; };
+  }, []);
+
+  // Prefer API raises; fall back to the local store only when the API has none.
+  const useApiRaises = !!apiRaises && apiRaises.length > 0;
+  const activeApiRaise = useApiRaises
+    ? apiRaises!.find(r => r.status === "active" || r.status === "draft") ?? apiRaises![0]
+    : undefined;
+  // Total committed across all live raises (raised_amount is the committed-investor sum).
+  const apiRaisedSoFar = useApiRaises ? apiRaises!.reduce((s, r) => s + toNum(r.raised_amount), 0) : 0;
+  const storeRaisedSoFar = store.capitalInvestments.filter(i => i.status === "confirmed").reduce((s, i) => s + i.amount, 0);
+  const raisedSoFar = useApiRaises ? apiRaisedSoFar : storeRaisedSoFar;
+  // Count of raises (API) or confirmed investments (store fallback), for the headline sub-label.
+  const raisesCount = useApiRaises ? apiRaises!.length : store.capitalInvestments.length;
+  const raisesCountLabel = useApiRaises
+    ? `${raisesCount} live raise${raisesCount === 1 ? "" : "s"}`
+    : `${raisesCount} investment(s) confirmed`;
+
   const [multiple, setMultiple] = useState(defaultMultiple);
   const [growth, setGrowth] = useState(() => Math.round(Math.min(60, Math.max(5, (snap.revenueGrowthPct ?? 2) * 12))));
   const [discount, setDiscount] = useState(22);
@@ -28,6 +80,14 @@ export default function ValuationPage() {
     const active = store.capitalRaises.find(r => r.status === "active" || r.status === "draft");
     return active?.targetAmount ?? 5_000_000;
   });
+  // Once raises load from the API, seed the simulator from the live active/draft
+  // raise's target (only if the user hasn't dragged the slider off the default yet).
+  const [raiseTouched, setRaiseTouched] = useState(false);
+  useEffect(() => {
+    if (raiseTouched) return;
+    const target = activeApiRaise ? toNum(activeApiRaise.target_amount) : 0;
+    if (target > 0) setRaiseAmount(target);
+  }, [activeApiRaise, raiseTouched]);
 
   const dcf = useMemo(
     () => dcfValuation({ baseAnnualFcf: baseFcf > 0 ? baseFcf : annualRevenue * 0.1, growthPct: growth, discountPct: discount }),
@@ -43,8 +103,6 @@ export default function ValuationPage() {
   };
 
   const dil = dilution(range.mid, raiseAmount);
-
-  const raisedSoFar = store.capitalInvestments.filter(i => i.status === "confirmed").reduce((s, i) => s + i.amount, 0);
 
   const valuationBars = [
     { name: `Revenue × ${multiple}x`, value: Math.round(multipleVal), fill: "#3b82f6" },
@@ -98,7 +156,7 @@ export default function ValuationPage() {
           { label: "Annual Revenue (run-rate)", value: formatAmount(annualRevenue), sub: "3-month average × 12", color: "text-[var(--color-text)]" },
           { label: "Indicative Valuation", value: formatAmount(range.mid), sub: `Range ${formatAmount(range.low)} – ${formatAmount(range.high)}`, color: "text-[var(--color-primary)]" },
           { label: "Implied Multiple", value: annualRevenue > 0 ? `${(range.mid / annualRevenue).toFixed(1)}x` : "—", sub: `Industry median ${defaultMultiple}x (${store.firm.industry || "general"})`, color: "text-blue-400" },
-          { label: "Raised So Far", value: formatAmount(raisedSoFar), sub: `${store.capitalInvestments.length} investment(s) confirmed`, color: "text-green-400" },
+          { label: "Raised So Far", value: formatAmount(raisedSoFar), sub: raisesCountLabel, color: "text-green-400" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -219,7 +277,7 @@ export default function ValuationPage() {
               <span className="text-[var(--color-muted)]">Amount to raise</span>
               <strong>{formatAmount(raiseAmount)}</strong>
             </div>
-            <input type="range" min={500000} max={50000000} step={500000} value={raiseAmount} onChange={e => setRaiseAmount(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
+            <input type="range" min={500000} max={50000000} step={500000} value={raiseAmount} onChange={e => { setRaiseTouched(true); setRaiseAmount(Number(e.target.value)); }} className="w-full accent-[var(--color-primary)]" />
           </div>
           <div className="grid grid-cols-3 gap-3 flex-1 w-full">
             {[

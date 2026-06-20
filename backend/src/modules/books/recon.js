@@ -58,20 +58,44 @@ async function inbox(tenantId) {
 
 // One-tap confirm: build the suggested RECEIPT/PAYMENT against a counter ledger and post.
 async function confirmLine(tenantId, actorId, lineId, counterLedgerId) {
-  const { rows: lr } = await pool.query("SELECT * FROM book_bank_lines WHERE tenant_id=$1 AND id=$2", [tenantId, lineId]);
-  const line = lr[0];
-  if (!line) throw new PostError("NOT_FOUND", "Bank line not found", 404);
-  if (line.status === "POSTED") throw new PostError("BAD_STATE", "Line already posted", 409);
   if (!counterLedgerId) throw new PostError("BAD_INPUT", "counterLedgerId required", 400);
-  const amt = money(line.amount);
-  const isReceipt = amt.greaterThan(0);
-  const abs = toDb(amt.abs());
-  const entries = isReceipt
-    ? [{ ledgerId: line.bank_ledger_id, debit: abs, credit: "0" }, { ledgerId: counterLedgerId, debit: "0", credit: abs }]
-    : [{ ledgerId: counterLedgerId, debit: abs, credit: "0" }, { ledgerId: line.bank_ledger_id, debit: "0", credit: abs }];
-  const r = await postVoucher(tenantId, actorId, { voucherType: isReceipt ? "RECEIPT" : "PAYMENT", voucherDate: line.txn_date, narration: line.description || "Bank reconciliation", reference: line.reference, source: "import" }, entries);
-  await pool.query("UPDATE book_bank_lines SET status='POSTED', voucher_id=$2 WHERE id=$1", [lineId, r.voucherId]);
-  return r;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Lock the line so concurrent confirms can't both read it as UNMATCHED and double-post.
+    const { rows: lr } = await client.query("SELECT * FROM book_bank_lines WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, lineId]);
+    const line = lr[0];
+    if (!line) throw new PostError("NOT_FOUND", "Bank line not found", 404);
+    // Reject any line that isn't still UNMATCHED — MATCHED lines already carry a voucher,
+    // POSTED/IGNORED are terminal — re-posting any of them would double-count cash.
+    if (line.status !== "UNMATCHED") throw new PostError("BAD_STATE", "Line already " + line.status, 409);
+    const amt = money(line.amount);
+    const isReceipt = amt.greaterThan(0);
+    const abs = toDb(amt.abs());
+    const entries = isReceipt
+      ? [{ ledgerId: line.bank_ledger_id, debit: abs, credit: "0" }, { ledgerId: counterLedgerId, debit: "0", credit: abs }]
+      : [{ ledgerId: counterLedgerId, debit: abs, credit: "0" }, { ledgerId: line.bank_ledger_id, debit: "0", credit: abs }];
+    const r = await postVoucher(
+      tenantId,
+      actorId,
+      { voucherType: isReceipt ? "RECEIPT" : "PAYMENT", voucherDate: line.txn_date, narration: line.description || "Bank reconciliation", reference: line.reference, source: "import" },
+      entries,
+      { idempotencyKey: "recon:" + lineId }
+    );
+    // Conditional update: only flip to POSTED if the row is still UNMATCHED.
+    const { rowCount } = await client.query(
+      "UPDATE book_bank_lines SET status='POSTED', voucher_id=$2 WHERE id=$1 AND status='UNMATCHED'",
+      [lineId, r.voucherId]
+    );
+    if (rowCount !== 1) throw new PostError("BAD_STATE", "Line already posted", 409);
+    await client.query("COMMIT");
+    return r;
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 async function ignoreLine(tenantId, lineId) {

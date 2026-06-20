@@ -5,6 +5,7 @@ import { formatCurrency, generateId } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers, CalendarCheck, FileWarning, TicketPercent, Ban, Eraser, History, Hourglass, Trophy, Coins, Target, Wallet, Calculator, CalendarRange, Siren, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import type { Invoice } from "@/data/types";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -215,9 +216,33 @@ export default function ReceivablesPage() {
     window.open(mailto, "_blank");
   };
 
-  const handleMarkPaid = (inv: Invoice) => {
+  // Backend-origin invoices are mirrored from the /api/invoices DB; route their
+  // status/delete through the API so Receivables stays in sync with the ledger.
+  // Store-origin (manual / CSV import) invoices stay KV-only.
+  const handleMarkPaid = async (inv: Invoice) => {
     updateInvoice({ ...inv, status: "paid" });
+    if (inv.source === "backend") {
+      try {
+        await api.patch(`/api/invoices/${inv.id}`, { status: "paid" });
+      } catch {
+        toast.error("Marked paid locally, but failed to sync to the ledger");
+        return;
+      }
+    }
     toast.success(`Invoice from ${inv.customer} marked as paid`);
+  };
+
+  const handleDelete = async (inv: Invoice) => {
+    deleteInvoice(inv.id);
+    if (inv.source === "backend") {
+      try {
+        await api.delete(`/api/invoices/${inv.id}`);
+      } catch {
+        toast.error("Deleted locally, but failed to sync to the ledger");
+        return;
+      }
+    }
+    toast.success("Invoice deleted");
   };
 
   return (
@@ -318,7 +343,7 @@ export default function ReceivablesPage() {
         <KanbanPipeline
           withDays={withDays}
           isReadOnly={isReadOnly}
-          onMarkPaid={id => { const inv = invoices.find(i => i.id === id); if (inv) { updateInvoice({ ...inv, status: "paid" }); toast.success("Marked paid"); } }}
+          onMarkPaid={id => { const inv = invoices.find(i => i.id === id); if (inv) handleMarkPaid(inv); }}
           onChase={inv => { const msg = chaseMessage(inv, inv.daysOverdue); window.open(`mailto:?subject=${encodeURIComponent(`Payment reminder: ${formatCurrency(inv.amount)}`)}&body=${encodeURIComponent(msg)}`, "_blank"); }}
         />
       )}
@@ -358,7 +383,7 @@ export default function ReceivablesPage() {
                       className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-green-400 hover:bg-green-950/20 transition-colors">
                       <CheckCircle2 size={13} />
                     </button>
-                    <button onClick={() => deleteInvoice(inv.id)} title="Delete"
+                    <button onClick={() => handleDelete(inv)} title="Delete"
                       className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 hover:bg-red-950/20 transition-colors">
                       <X size={13} />
                     </button>
@@ -400,7 +425,7 @@ export default function ReceivablesPage() {
                 </div>
                 <p className="text-sm font-medium text-[var(--color-muted)]">{formatCurrency(inv.amount)}</p>
                 {!isReadOnly && (
-                  <button onClick={() => deleteInvoice(inv.id)}
+                  <button onClick={() => handleDelete(inv)}
                     className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors">
                     <X size={13} />
                   </button>
@@ -755,7 +780,7 @@ function normalise(s: string): string {
 }
 
 function CashApplication() {
-  const { store } = useApp();
+  const { store, updateInvoice } = useApp();
   const invoices = store.invoices ?? [];
   const transactions = store.transactions ?? [];
   // applied = invoiceId -> txnId user has confirmed
@@ -793,9 +818,23 @@ function CashApplication() {
   const matched = matches.filter(m => m.invoiceId);
   const unmatched = matches.filter(m => !m.invoiceId);
 
-  const apply = (m: CashMatch) => {
+  const apply = async (m: CashMatch) => {
     if (!m.invoiceId) return;
     setApplied(prev => ({ ...prev, [m.invoiceId!]: m.txnId }));
+    // Recording the match should also settle the invoice. Mark it paid in the
+    // KV store, and for backend-origin invoices sync the status to the ledger.
+    const inv = invoices.find(i => i.id === m.invoiceId);
+    if (inv && inv.status !== "paid") {
+      updateInvoice({ ...inv, status: "paid" });
+      if (inv.source === "backend") {
+        try {
+          await api.patch(`/api/invoices/${inv.id}`, { status: "paid" });
+        } catch {
+          toast.error("Receipt applied, but failed to sync paid status to the ledger");
+          return;
+        }
+      }
+    }
     toast.success(`Applied ${formatCurrency(m.amount)} to ${m.invoiceLabel}`);
   };
 

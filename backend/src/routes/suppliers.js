@@ -55,8 +55,12 @@ router.get("/marketplace", authenticate, async (req, res) => {
       const daysEarly = Math.max(7, termsDays);
       const saving = Math.round(invoiceAmount * (discount / 100));
       const due = new Date(today.getTime() + daysEarly * 86400000);
+      // Stable, unique offer id derived from the supplier name (NOT the array index),
+      // so the same vendor's offer keeps the same id across refetches and can't be
+      // double-booked by a stale/reordered list.
+      const slug = encodeURIComponent(String(r.supplier_name).toLowerCase()).slice(0, 60);
       return {
-        id: `vendor-${i}-${encodeURIComponent(r.supplier_name).slice(0, 40)}`,
+        id: `vendor-${slug}`,
         supplier_name: r.supplier_name,
         invoice_amount: invoiceAmount,
         early_pay_discount: discount,
@@ -94,14 +98,36 @@ router.post("/pay-early", authenticate, canWrite, async (req, res) => {
     const discPct = Number(discount) || 0;
     const desc = `Early payment to ${vendor}${discPct ? ` (${discPct}% discount, saved ₹${savedAmt})` : ""}`;
 
+    // Idempotency: a deterministic external_id keyed on vendor + current period (month)
+    // means a given vendor's early-pay for a period can be booked at most once. Combined
+    // with the unique index on (tenant_id, source, external_id), repeat clicks no-op.
+    const period = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const vendorKey = vendor.toLowerCase().replace(/\s+/g, "-").slice(0, 80);
+    const externalId = `earlypay-${vendorKey}-${period}`;
+
     // Outflow => negative amount, in the procurement bucket.
+    // ON CONFLICT DO NOTHING so a duplicate (same tenant/source/external_id) is not booked twice.
     const { rows } = await pool.query(
       `INSERT INTO transactions
-         (tenant_id, amount, description_raw, merchant_name, category, transaction_date, source)
-       VALUES ($1, $2, $3, $4, 'procurement', CURRENT_DATE, 'early-pay')
+         (tenant_id, amount, description_raw, merchant_name, category, transaction_date, source, external_id)
+       VALUES ($1, $2, $3, $4, 'procurement', CURRENT_DATE, 'early-pay', $5)
+       ON CONFLICT (tenant_id, source, external_id) DO NOTHING
        RETURNING id, amount, transaction_date`,
-      [tenantId, -payable, desc, vendor]
+      [tenantId, -payable, desc, vendor, externalId]
     );
+
+    // No row returned => the conflict fired: this vendor's early-pay for the period
+    // was already recorded. Report success idempotently without double-booking.
+    if (!rows.length) {
+      return res.json({
+        success: true,
+        already_paid: true,
+        amount_paid: payable,
+        saving: savedAmt,
+        supplier_name: vendor,
+        message: `Early payment to ${vendor} for this period was already recorded — not booked again.`,
+      });
+    }
 
     res.json({
       success: true,

@@ -564,9 +564,9 @@ export default function InvestorPage() {
       const equityPct = result.equity_pct ?? (amt / commitRaise.target_amount) * 100;
       addCapitalInvestment({
         id: result.id, raiseId: commitRaise.id, investorEmail: user.email,
-        amount: amt, equityPct, status: "confirmed", createdAt: new Date().toISOString(),
+        amount: amt, equityPct, status: "committed", createdAt: new Date().toISOString(),
       });
-      toast.success("Investment committed! You'll receive a confirmation email.");
+      toast.success("Your interest has been recorded.");
       setCommitRaise(null); setCommitAmount(""); setAgreed(false);
       loadRaises();
     } catch (err) {

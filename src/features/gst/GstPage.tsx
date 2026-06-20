@@ -13,6 +13,7 @@ import { addDays, format } from "date-fns";
 interface Liability { month: number; year: number; output_tax: number; input_tax_credit: number; net_liability: number; breakdown: Record<string, number>; }
 interface GstReturn  { id: string; return_type: string; period_month: number; period_year: number; output_tax: number; input_tax_credit: number; net_liability: number; status: string; filed_at?: string; gstn_arn?: string; }
 interface CalDate    { label: string; due: string; penalty: string; }
+interface RcmEntry   { id: string; desc: string; supplier: string; amount: number; rate: number; date: string; }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -45,7 +46,7 @@ export default function GstPage() {
   }, [ewayValue, ewayDist, ewayOdc, ewayCancelled]);
 
   // ── RCM state ──
-  const [rcmEntries, setRcmEntries] = useState<{ id: string; desc: string; supplier: string; amount: number; rate: number; date: string }[]>([]);
+  const [rcmEntries, setRcmEntries] = useFeatureState<RcmEntry[]>("gst-rcm-register", []);
   const [rcmDesc, setRcmDesc]       = useState("");
   const [rcmSupplier, setRcmSupplier] = useState("");
   const [rcmAmount, setRcmAmount]   = useState("");
@@ -2123,10 +2124,11 @@ function Gstr3bAutoPrep() {
     const inwardGross = txns.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
     const inwardTaxable = Math.round(inwardGross / (1 + rate));
     const itc = inwardGross - inwardTaxable;
-    const half = (n: number) => Math.round(n / 2);
+    const half = (n: number) => Math.floor(n / 2);
+    const sgstOf = (n: number) => n - half(n);
     const net = Math.max(0, outputTax - itc);
     const itcCarry = Math.max(0, itc - outputTax);
-    return { outwardGross, outwardTaxable, outputTax, inwardGross, inwardTaxable, itc, half, net, itcCarry };
+    return { outwardGross, outwardTaxable, outputTax, inwardGross, inwardTaxable, itc, half, sgstOf, net, itcCarry };
   }, [store.transactions, period, rate]);
 
   const downloadCsv = () => {
@@ -2134,9 +2136,9 @@ function Gstr3bAutoPrep() {
       ["GSTR-3B Draft", period],
       [],
       ["Table", "Particulars", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax"],
-      ["3.1(a)", "Outward taxable supplies", data.outwardTaxable, data.half(data.outputTax), data.half(data.outputTax), 0, data.outputTax],
-      ["4(A)(5)", "ITC — all other ITC", data.inwardTaxable, data.half(data.itc), data.half(data.itc), 0, data.itc],
-      ["5.1", "Net tax payable (in cash)", "", data.half(data.net), data.half(data.net), 0, data.net],
+      ["3.1(a)", "Outward taxable supplies", data.outwardTaxable, data.half(data.outputTax), data.sgstOf(data.outputTax), 0, data.outputTax],
+      ["4(A)(5)", "ITC — all other ITC", data.inwardTaxable, data.half(data.itc), data.sgstOf(data.itc), 0, data.itc],
+      ["5.1", "Net tax payable (in cash)", "", data.half(data.net), data.sgstOf(data.net), 0, data.net],
       ["", "ITC carried forward", "", "", "", "", data.itcCarry],
     ];
     const csv = rows.map(r => r.join(",")).join("\n");
@@ -2180,9 +2182,9 @@ function Gstr3bAutoPrep() {
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)] text-xs">
-            <tr><td className="px-4 py-2.5 font-mono">3.1(a)</td><td className="px-4 py-2.5">Outward taxable supplies</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.outwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.outputTax)}</td></tr>
-            <tr><td className="px-4 py-2.5 font-mono">4(A)(5)</td><td className="px-4 py-2.5">All other ITC</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.inwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.itc)}</td></tr>
-            <tr className="bg-[var(--color-accent)]/40"><td className="px-4 py-2.5 font-mono">5.1</td><td className="px-4 py-2.5 font-semibold">Tax payable in cash</td><td className="px-4 py-2.5" /><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums font-bold text-[var(--color-primary)]">{fc(data.net)}</td></tr>
+            <tr><td className="px-4 py-2.5 font-mono">3.1(a)</td><td className="px-4 py-2.5">Outward taxable supplies</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.outwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.sgstOf(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.outputTax)}</td></tr>
+            <tr><td className="px-4 py-2.5 font-mono">4(A)(5)</td><td className="px-4 py-2.5">All other ITC</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.inwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.sgstOf(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.itc)}</td></tr>
+            <tr className="bg-[var(--color-accent)]/40"><td className="px-4 py-2.5 font-mono">5.1</td><td className="px-4 py-2.5 font-semibold">Tax payable in cash</td><td className="px-4 py-2.5" /><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.sgstOf(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums font-bold text-[var(--color-primary)]">{fc(data.net)}</td></tr>
           </tbody>
         </table>
       </div>

@@ -542,6 +542,13 @@ async function moveStage(tenantId, actorId, dealId, stage, opts = {}) {
   return rows[0];
 }
 
+// Delete a deal (tenant-scoped). Returns { ok:true } even if already gone so the
+// client can safely remove its optimistic cache row.
+async function deleteDeal(tenantId, dealId) {
+  const { rows } = await pool.query("DELETE FROM crm_deals WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, dealId]);
+  return { ok: true, deleted: rows.length };
+}
+
 // Win → mark WON + create/link a Sundry-Debtors customer ledger in the books.
 async function winDeal(tenantId, actorId, dealId) {
   const deal = await moveStage(tenantId, actorId, dealId, "WON");
@@ -735,7 +742,7 @@ module.exports = {
   // leads
   createLead, listLeads, getLead, setLeadStatus, setLeadLostReason, convertLead, refreshLeadSla,
   // deals
-  createDeal, listDeals, getDeal, moveStage, winDeal, pipeline, setPrimaryContact,
+  createDeal, listDeals, getDeal, moveStage, winDeal, deleteDeal, pipeline, setPrimaryContact,
   // tasks / notes
   createTask, listTasks, setTaskStatus, completeTask, createNote, listNotes,
   // activities / status / timeline

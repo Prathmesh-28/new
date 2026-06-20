@@ -615,6 +615,10 @@ async function initDb() {
     -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.
     ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS upi_id TEXT;
 
+    -- Per-employee payroll-run breakdown (PF/ESI/PT/TDS → net) persisted so it
+    -- survives reload instead of being recomputed/lost.
+    ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS breakdown JSONB;
+
     -- Vendor master (vendors page): a real profile per vendor, not just a txn string.
     CREATE TABLE IF NOT EXISTS vendor_master (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

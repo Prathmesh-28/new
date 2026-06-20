@@ -5,14 +5,22 @@ const { authenticate } = require("../middleware/auth");
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
+// New-regime FY25-26 slabs (matches the frontend computeStatutoryNet engine):
+// ₹75,000 standard deduction, 87A rebate (≤ ₹7L taxable → nil), + 4% cess.
+const TDS_STD_DEDUCTION = 75000;
+const NEW_REGIME_SLABS = [
+  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
+];
 function computeTds(grossAnnual) {
-  // Simplified new tax regime slab (FY 2024-25)
-  if (grossAnnual <= 300000)  return 0;
-  if (grossAnnual <= 600000)  return (grossAnnual - 300000) * 0.05;
-  if (grossAnnual <= 900000)  return 15000 + (grossAnnual - 600000) * 0.10;
-  if (grossAnnual <= 1200000) return 45000 + (grossAnnual - 900000) * 0.15;
-  if (grossAnnual <= 1500000) return 90000 + (grossAnnual - 1200000) * 0.20;
-  return 150000 + (grossAnnual - 1500000) * 0.30;
+  const taxable = Math.max(0, grossAnnual - TDS_STD_DEDUCTION);
+  let tax = 0, prev = 0;
+  for (const [upTo, rate] of NEW_REGIME_SLABS) {
+    if (taxable <= prev) break;
+    tax += (Math.min(taxable, upTo) - prev) * rate;
+    prev = upTo;
+  }
+  if (taxable <= 700000) tax = 0;        // 87A rebate
+  return tax * 1.04;                     // + 4% health & education cess
 }
 
 // GET /api/payroll/employees — salary + PAN is sensitive; restrict reads to
@@ -94,18 +102,9 @@ router.post("/run", authenticate, canWrite, async (req, res) => {
   const total_tds   = employees.reduce((s, e) => s + parseFloat(e.tds_monthly),  0);
   const total_net   = parseFloat((total_gross - total_tds).toFixed(2));
 
-  const { rows: [run] } = await pool.query(
-    `INSERT INTO payroll_runs(tenant_id, run_month, run_year, total_gross, total_tds, total_net, status)
-     VALUES($1,$2,$3,$4,$5,$6,'draft')
-     ON CONFLICT(tenant_id, run_month, run_year)
-     DO UPDATE SET total_gross=$4, total_tds=$5, total_net=$6, status='draft'
-     RETURNING *`,
-    [req.user.tenant_id, m, y, total_gross, total_tds, total_net]
-  );
-
-  // In production: call Setu Payout API for each employee
-  // SETU_CLIENT_ID / SETU_SECRET / SETU_PAYOUT_URL env vars
-  // For now, just return the run with employee breakdown
+  // Per-employee breakdown persisted so the run survives reload. The frontend
+  // re-derives PF/ESI/PT/net from `gross` via its single computeStatutoryNet
+  // engine, so we store the raw gross + employer-recorded TDS here.
   const breakdown = employees.map(e => ({
     employee_id: e.id, name: e.name,
     gross: parseFloat(e.gross_salary),
@@ -114,7 +113,18 @@ router.post("/run", authenticate, canWrite, async (req, res) => {
     bank_account: e.bank_account, bank_ifsc: e.bank_ifsc,
   }));
 
-  res.status(201).json({ ...run, breakdown });
+  const { rows: [run] } = await pool.query(
+    `INSERT INTO payroll_runs(tenant_id, run_month, run_year, total_gross, total_tds, total_net, breakdown, status)
+     VALUES($1,$2,$3,$4,$5,$6,$7,'draft')
+     ON CONFLICT(tenant_id, run_month, run_year)
+     DO UPDATE SET total_gross=$4, total_tds=$5, total_net=$6, breakdown=$7, status='draft'
+     RETURNING *`,
+    [req.user.tenant_id, m, y, total_gross, total_tds, total_net, JSON.stringify(breakdown)]
+  );
+
+  // In production: call Setu Payout API for each employee
+  // SETU_CLIENT_ID / SETU_SECRET / SETU_PAYOUT_URL env vars
+  res.status(201).json(run);
 });
 
 // POST /api/payroll/runs/:id/disburse — mark as disbursed (production: trigger Setu bulk payout)

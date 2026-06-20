@@ -152,10 +152,34 @@ export default function ConnectorsPage() {
 
   const handleSync = async (c: BankConnector) => {
     setSyncing(c.id);
-    await new Promise(r => setTimeout(r, 1400));
-    updateConnector({ ...c, lastSync: new Date().toISOString(), status: "connected" });
-    toast.success("Sync triggered — data will appear shortly.");
-    setSyncing(null);
+    try {
+      const res = await api.post<{ ok?: boolean; synced?: number; status?: string; last_sync?: string }>(`/api/connectors/${c.id}/sync`, {});
+      // Backend marks the connector connected with a fresh last_sync on success.
+      updateConnector({
+        ...c,
+        status: (res.status as BankConnector["status"]) ?? "connected",
+        lastSync: res.last_sync ?? new Date().toISOString(),
+      });
+      toast.success(
+        typeof res.synced === "number"
+          ? `Sync complete — ${res.synced} transaction${res.synced === 1 ? "" : "s"} pulled.`
+          : "Sync complete."
+      );
+    } catch (err) {
+      // Surface the real backend error (e.g. 503 "Set AA_CLIENT_ID…") — never fake a synced state.
+      const raw = err instanceof Error ? err.message : String(err);
+      let msg = raw;
+      const jsonStart = raw.indexOf("{");
+      if (jsonStart !== -1) {
+        try {
+          const parsed = JSON.parse(raw.slice(jsonStart));
+          if (parsed?.error) msg = String(parsed.error);
+        } catch { /* keep the raw message */ }
+      }
+      toast.error(`Sync failed: ${msg}`);
+    } finally {
+      setSyncing(null);
+    }
   };
 
   const handleDisconnect = (c: BankConnector) => {

@@ -25,7 +25,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 
 // ── Statutory salary engine (local, frontend-only) ─────────────────────────────
 // New-regime FY25-26 slabs used for the actual payroll run so TDS reflects the
-// ₹50k standard deduction and the 87A rebate, and PF/ESI/PT are deducted inline.
+// ₹75k standard deduction and the 87A rebate, and PF/ESI/PT are deducted inline.
 const RUN_NEW_SLABS: [number, number][] = [
   [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
 ];
@@ -56,9 +56,9 @@ function computeStatutoryNet(grossMonthly: number, cfg: StatutoryConfig): Statut
   const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
   // Professional Tax: simple ~₹200/mo state slab (nil for very low wages).
   const pt = gross >= 15000 ? 200 : (gross > 7500 ? 100 : 0);
-  // TDS — new regime with ₹50,000 standard deduction + 87A rebate (≤ ₹7L taxable → nil).
+  // TDS — new regime FY25-26 with ₹75,000 standard deduction + 87A rebate (≤ ₹7L taxable → nil).
   const annualGross = gross * 12;
-  const taxable = Math.max(0, annualGross - 50000);
+  const taxable = Math.max(0, annualGross - 75000);
   let annualTax = runSlabTax(taxable, RUN_NEW_SLABS);
   if (taxable <= 700000) annualTax = 0;                    // 87A rebate
   annualTax = Math.round(annualTax * 1.04);                // + 4% health & education cess
@@ -131,16 +131,13 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
           {form.gross_salary && (
             <p className="text-xs text-[var(--color-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2">
               Estimated monthly TDS: <strong className="text-[var(--color-text)]">
-                {formatCurrency(Math.max(0, (() => {
-                  const ann = parseFloat(form.gross_salary) * 12;
-                  let tds = 0;
-                  if (ann > 300000) tds = Math.min(ann - 300000, 300000) * 0.05;
-                  if (ann > 600000) tds += Math.min(ann - 600000, 300000) * 0.10;
-                  if (ann > 900000) tds += Math.min(ann - 900000, 300000) * 0.15;
-                  if (ann > 1200000) tds += Math.min(ann - 1200000, 300000) * 0.20;
-                  if (ann > 1500000) tds += (ann - 1500000) * 0.30;
-                  return tds / 12;
-                })()))}
+                {formatCurrency((() => {
+                  try {
+                    // Route through the single statutory engine (₹75k std deduction
+                    // + 87A rebate) so the preview matches the run / slip / Form 16.
+                    return computeStatutoryNet(parseFloat(form.gross_salary) || 0, { basicPct: 50, capPf: true }).tds;
+                  } catch { return 0; }
+                })())}
               </strong> (new tax regime)
             </p>
           )}
@@ -230,9 +227,13 @@ export default function PayrollPage() {
   };
 
   const disburse = async (runId: string) => {
-    await api.post(`/api/payroll/runs/${runId}/disburse`, {}).catch(() => toast.error("Failed to disburse"));
-    toast.success("Payroll marked as disbursed");
-    load();
+    try {
+      await api.post(`/api/payroll/runs/${runId}/disburse`, {});
+      toast.success("Payroll marked as disbursed");
+      load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to disburse");
+    }
   };
 
   const totalMonthly = employees.filter(e => e.status === "active").reduce((s, e) => s + parseFloat(String(e.gross_salary)), 0);
@@ -302,7 +303,8 @@ export default function PayrollPage() {
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {employees.map(e => {
-                  const net = parseFloat(String(e.gross_salary)) - parseFloat(String(e.tds_monthly));
+                  // Single statutory engine so PF/ESI/PT/TDS/net match the run, slip & Form 16.
+                  const calc = computeStatutoryNet(parseFloat(String(e.gross_salary)) || 0, statCfg);
                   return (
                     <tr key={e.id} className="hover:bg-white/2">
                       <td className="px-4 py-3">
@@ -311,8 +313,8 @@ export default function PayrollPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.email ?? "—"}</td>
                       <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(parseFloat(String(e.gross_salary)))}</td>
-                      <td className="px-4 py-3 tabular-nums text-orange-400">{formatCurrency(parseFloat(String(e.tds_monthly)))}</td>
-                      <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(net)}</td>
+                      <td className="px-4 py-3 tabular-nums text-orange-400">{formatCurrency(calc.tds)}</td>
+                      <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${e.status === "active" ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                           {e.status}
@@ -345,7 +347,7 @@ export default function PayrollPage() {
                 <input type="checkbox" checked={capPf} onChange={e => setCapPf(e.target.checked)} />
                 <span className="text-[var(--color-muted)]">Cap PF at ₹15,000 wage ceiling</span>
               </label>
-              <span className="text-[10px] text-[var(--color-muted)]">PF 12% of Basic · ESI 0.75% if gross ≤ ₹21k · PT ~₹200 · TDS new regime w/ ₹50k std deduction + 87A rebate</span>
+              <span className="text-[10px] text-[var(--color-muted)]">PF 12% of Basic · ESI 0.75% if gross ≤ ₹21k · PT ~₹200 · TDS new regime w/ ₹75k std deduction + 87A rebate</span>
             </div>
             {runs.map(run => {
               const expanded = expandRun === run.id;
@@ -508,16 +510,19 @@ export default function PayrollPage() {
           </div>
         );
 
-        const gross     = parseFloat(String(emp.gross_salary));
-        const basic     = Math.round(gross * 0.50);
-        const hra       = Math.round(gross * 0.20);
-        const special   = Math.round(gross * 0.20);
-        const transport = Math.round(gross * 0.10);
-        const pf        = Math.round(basic * 0.12);
-        const profTax   = gross > 15000 ? 200 : 0;
-        const tds       = Math.round(parseFloat(String(emp.tds_monthly)));
-        const totalDeductions = pf + profTax + tds;
-        const net       = gross - totalDeductions;
+        // Single statutory engine so the slip's PF/ESI/PT/TDS/net match the
+        // Employees tab, the run, and Form 16 (incl. ESI + capped PF + ₹75k std deduction).
+        const slipCalc  = computeStatutoryNet(parseFloat(String(emp.gross_salary)) || 0, statCfg);
+        const gross     = slipCalc.gross;
+        const basic     = slipCalc.basic;
+        const hra       = slipCalc.hra;
+        const special   = slipCalc.allowances;
+        const pf        = slipCalc.pf;
+        const esi       = slipCalc.esi;
+        const profTax   = slipCalc.pt;
+        const tds       = slipCalc.tds;
+        const totalDeductions = slipCalc.totalDeductions;
+        const net       = slipCalc.net;
         const monthName = MONTH_NAMES[slipMonth - 1];
 
         return (
@@ -591,7 +596,6 @@ export default function PayrollPage() {
                         ["Basic Salary",          basic],
                         ["House Rent Allowance",  hra],
                         ["Special Allowance",     special],
-                        ["Transport Allowance",   transport],
                       ].map(([label, val]) => (
                         <tr key={label as string} className="border-b border-gray-100">
                           <td className="py-1 text-gray-600">{label as string}</td>
@@ -611,6 +615,7 @@ export default function PayrollPage() {
                     <tbody>
                       {[
                         ["Provident Fund (12%)", pf],
+                        ["ESI (0.75%)",          esi],
                         ["Professional Tax",    profTax],
                         ["TDS (Income Tax)",    tds],
                       ].map(([label, val]) => (

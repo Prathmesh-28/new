@@ -152,21 +152,33 @@ async function runRecurringDue(tenantId, actorId, asOf) {
   const generated = [];
   for (const r of rows) {
     const tmpl = r.template || {};
-    try {
-      let res = null;
-      if (r.template_kind === "SALES_INVOICE") {
-        const m = buildSalesVoucher({ ...tmpl, date: today }, await salesCtx(tenantId, tmpl.customerLedgerId));
-        res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
-      } else if (r.template_kind === "BILL") {
-        const m = buildPurchaseVoucher({ ...tmpl, date: today }, await purchaseCtx(tenantId, tmpl.vendorLedgerId));
-        res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
-      } else if (r.template_kind === "JOURNAL") {
-        res = await postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: today, narration: tmpl.narration || r.name, source: "api" }, tmpl.entries || []);
+    // Catch up EVERY missed period (e.g. after downtime): generate one voucher
+    // per period dated at that period's date, advancing next_run from the stored
+    // anchor — not from today — so nothing is silently dropped. Cap to avoid runaway.
+    let runDate = r.next_run instanceof Date ? r.next_run.toISOString().slice(0, 10) : String(r.next_run).slice(0, 10);
+    let iterations = 0;
+    const MAX_CATCHUP = 60;
+    while (runDate <= today && iterations < MAX_CATCHUP) {
+      iterations++;
+      try {
+        let res = null;
+        if (r.template_kind === "SALES_INVOICE") {
+          const m = buildSalesVoucher({ ...tmpl, date: runDate }, await salesCtx(tenantId, tmpl.customerLedgerId));
+          res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+        } else if (r.template_kind === "BILL") {
+          const m = buildPurchaseVoucher({ ...tmpl, date: runDate }, await purchaseCtx(tenantId, tmpl.vendorLedgerId));
+          res = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+        } else if (r.template_kind === "JOURNAL") {
+          res = await postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: runDate, narration: tmpl.narration || r.name, source: "api" }, tmpl.entries || []);
+        }
+        const nextRun = advanceDate(runDate, r.frequency);
+        await pool.query("UPDATE book_recurring SET last_run=$2, next_run=$3 WHERE id=$1", [r.id, runDate, nextRun]);
+        generated.push({ recurring: r.id, name: r.name, period: runDate, voucher: res });
+        runDate = nextRun;
+      } catch (e) {
+        generated.push({ recurring: r.id, name: r.name, period: runDate, error: e.message });
+        break; // stop catching up this template on first failure to avoid duplicating on retry
       }
-      await pool.query("UPDATE book_recurring SET last_run=$2, next_run=$3 WHERE id=$1", [r.id, today, advanceDate(today, r.frequency)]);
-      generated.push({ recurring: r.id, name: r.name, voucher: res });
-    } catch (e) {
-      generated.push({ recurring: r.id, name: r.name, error: e.message });
     }
   }
   return { asOf: today, generated };

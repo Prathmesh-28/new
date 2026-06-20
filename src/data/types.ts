@@ -240,7 +240,7 @@ export interface CapitalInvestment {
   investorEmail: string;
   amount: number;
   equityPct: number;
-  status: "pending" | "confirmed";
+  status: "pending" | "committed" | "confirmed";
   createdAt: string;
 }
 
