@@ -18,6 +18,7 @@ const tds = require("./tds");
 const ewaybill = require("./ewaybill");
 const importer = require("./importer");
 const closing = require("./closing");
+const ledgersadmin = require("./ledgersadmin");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -42,6 +43,7 @@ module.exports = {
   ...tds,
   ...importer,
   ...closing,
+  ...ledgersadmin,
   ewaybill,
   payments,
   fx,

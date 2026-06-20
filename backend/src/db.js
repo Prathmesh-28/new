@@ -630,6 +630,12 @@ async function initDb() {
     ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS gst_registration_type TEXT;
     ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(19,4);
 
+    -- Books should-haves (masters): party contact (for statements/dunning delivery)
+    -- + bill-wise tracking flag.
+    ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS phone TEXT;
+    ALTER TABLE book_ledgers ADD COLUMN IF NOT EXISTS maintain_billwise BOOLEAN NOT NULL DEFAULT false;
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

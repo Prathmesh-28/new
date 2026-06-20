@@ -12,6 +12,7 @@ const tds = require("./tds");
 const ewb = require("./ewaybill");
 const importer = require("./importer");
 const closing = require("./closing");
+const ledgersadmin = require("./ledgersadmin");
 const { financialYearFor } = require("./fy");
 const { money, toRupees } = require("./money");
 const email = require("../../lib/email");
@@ -97,7 +98,7 @@ router.post("/ledgers", canPost, async (req, res) => {
 });
 router.patch("/ledgers/:id", canPost, async (req, res) => {
   try {
-    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit", "gst_registration_type", "credit_limit"];
+    const allowed = ["name", "group_id", "gstin", "pan", "state_code", "billing_address", "credit_period_days", "account_number", "ifsc", "is_active", "opening_balance", "opening_is_debit", "gst_registration_type", "credit_limit", "email", "phone", "maintain_billwise"];
     const sets = [], vals = [];
     for (const k of allowed) if (k in (req.body || {})) { sets.push(`${k}=$${sets.length + 1}`); vals.push(req.body[k]); }
     if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
@@ -105,6 +106,32 @@ router.patch("/ledgers/:id", canPost, async (req, res) => {
     const { rows } = await pool.query(`UPDATE book_ledgers SET ${sets.join(",")} WHERE tenant_id=$${vals.length - 1} AND id=$${vals.length} RETURNING *`, vals);
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     res.json(rows[0]);
+  } catch (e) { fail(res, e); }
+});
+
+// Ledger cleanup — merge duplicates / delete unused.
+router.post("/ledgers/merge", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ledgersadmin.mergeLedger(tenantOf(req), b.fromId, b.toId)); } catch (e) { fail(res, e); } });
+router.delete("/ledgers/:id", canPost, async (req, res) => { try { res.json(await ledgersadmin.deleteLedger(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+// Group rename / reparent / delete.
+router.patch("/groups/:id", canPost, async (req, res) => {
+  try {
+    const b = req.body || {}; const sets = [], vals = [];
+    for (const k of ["name", "parent_id"]) if (k in b) { sets.push(`${k}=$${sets.length + 1}`); vals.push(b[k]); }
+    if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
+    vals.push(tenantOf(req), req.params.id);
+    const { rows } = await pool.query(`UPDATE book_account_groups SET ${sets.join(",")} WHERE tenant_id=$${vals.length - 1} AND id=$${vals.length} AND is_system=false RETURNING *`, vals);
+    if (!rows[0]) return res.status(404).json({ error: "Group not found or is a system group" });
+    res.json(rows[0]);
+  } catch (e) { fail(res, e); }
+});
+router.delete("/groups/:id", canPost, async (req, res) => {
+  try {
+    const t = tenantOf(req);
+    const { rows: u } = await pool.query("SELECT 1 FROM book_ledgers WHERE tenant_id=$1 AND group_id=$2 LIMIT 1", [t, req.params.id]);
+    if (u[0]) return res.status(409).json({ error: "Group has ledgers — move them first", code: "IN_USE" });
+    const { rows } = await pool.query("DELETE FROM book_account_groups WHERE tenant_id=$1 AND id=$2 AND is_system=false RETURNING id", [t, req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: "Group not found or is a system group" });
+    res.json({ ok: true, deleted: rows[0].id });
   } catch (e) { fail(res, e); }
 });
 
