@@ -23,6 +23,8 @@ const subs = require("./subscriptions");
 const importers = require("./importers");
 const usage = require("./usage");
 const demoseed = require("./demoseed");
+const itr = require("./itr");
+const billofentry = require("./billofentry");
 const validators = require("../../lib/validators");
 // Reject a malformed GSTIN/PAN (checksum-verified) before it hits the ledger.
 const badId = (b) => {
@@ -719,6 +721,23 @@ router.post("/tds/compute", async (req, res) => { try { res.json(tds.computeTds(
 router.get("/documents/:id/eway/payload", async (req, res) => { try { res.json(await ewb.buildEwbPayload(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/documents/:id/eway/generate", canPost, async (req, res) => { try { res.json(await ewb.generateEwayBill(tenantOf(req), req.user.id, req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/documents/:id/eway/status", async (req, res) => { try { res.json(await ewb.ewbStatus(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+// ── Wave A1 (depth): e-way lifecycle, GSTR-9/9C + GSTR-1 extras, ITR JSON, Bill-of-Entry/ITC-04 ──
+router.post("/documents/:id/eway/update-vehicle", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ewb.updateVehicle(tenantOf(req), req.user.id, { voucherId: req.params.id, vehicleNo: b.vehicleNo, vehicleType: b.vehicleType, transMode: b.transMode, transDocNo: b.transDocNo, transDocDate: b.transDocDate, reasonCode: b.reasonCode, reasonRem: b.reasonRem })); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/eway/update-transporter", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ewb.updateTransporter(tenantOf(req), req.user.id, { voucherId: req.params.id, transporterId: b.transporterId })); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/eway/extend", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ewb.extendValidity(tenantOf(req), req.user.id, { voucherId: req.params.id, remainingDistance: b.remainingDistance, consignmentStatus: b.consignmentStatus, transitType: b.transitType, vehicleNo: b.vehicleNo, vehicleType: b.vehicleType, transMode: b.transMode, transDocNo: b.transDocNo, transDocDate: b.transDocDate, reasonCode: b.reasonCode, reasonRem: b.reasonRem })); } catch (e) { fail(res, e); } });
+router.post("/documents/:id/eway/cancel", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ewb.cancelEwb(tenantOf(req), req.user.id, { voucherId: req.params.id, reasonCode: b.reasonCode, reasonRem: b.reasonRem })); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr9", canPost, async (req, res) => { try { res.json(await gst.gstr9(tenantOf(req), req.body && req.body.fy ? String(req.body.fy) : fyOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr9c", canPost, async (req, res) => { try { res.json(await gst.gstr9c(tenantOf(req), req.body && req.body.fy ? String(req.body.fy) : fyOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr9c", async (req, res) => { try { res.json(await gst.gstr9c(tenantOf(req), fyOf(req), {})); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr1-doc-issue", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1DocIssue(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr1-advances", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr1Advances(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr1-json", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period || !/^\d{4}-\d{2}$/.test(b.period)) return res.status(400).json({ error: "period=YYYY-MM required" }); res.json(await gst.gstr1Json(tenantOf(req), b.period, b)); } catch (e) { fail(res, e); } });
+router.post("/tax/itr-json", async (req, res) => { try { const b = req.body || {}; res.json(await itr.buildItrJson(tenantOf(req), { ay: b.ay, regime: b.regime, form: b.form, entityType: b.entityType, otherIncome: b.otherIncome, capitalGains: b.capitalGains, deductions: b.deductions, deductionsBreakup: b.deductionsBreakup, rateRegime: b.rateRegime, companyRate25: b.companyRate25 })); } catch (e) { fail(res, e); } });
+router.get("/tax/itr-forms", async (_req, res) => { try { res.json(itr.listForms()); } catch (e) { fail(res, e); } });
+router.post("/boe", canPost, async (req, res) => { try { res.status(201).json(await billofentry.createBoe(tenantOf(req), req.user.id, req.body || {}, { idempotencyKey: idem(req) })); } catch (e) { fail(res, e); } });
+router.get("/boe", async (req, res) => { try { res.json(await billofentry.listBoe(tenantOf(req), { from: req.query.from, to: req.query.to, vendorLedgerId: req.query.vendorLedgerId })); } catch (e) { fail(res, e); } });
+router.post("/itc04", canPost, async (req, res) => { try { res.status(201).json(await billofentry.createItc04Challan(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/itc04", async (req, res) => { try { res.json(await billofentry.listItc04Challans(tenantOf(req), { direction: req.query.direction, from: req.query.from, to: req.query.to, jobWorkerGstin: req.query.jobWorkerGstin })); } catch (e) { fail(res, e); } });
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });

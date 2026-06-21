@@ -868,6 +868,78 @@ async function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_book_usage_dedup ON book_usage_events(tenant_id, dedup_key) WHERE dedup_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_book_usage ON book_usage_events(tenant_id, subscription_id, metric, event_time);
 
+    -- ── Books Wave A1 (depth): tax / GST / compliance ──────────────────────────
+    -- Deductor TAN + first-class TDS section (24Q/26Q/27EQ + 26AS matching).
+    ALTER TABLE tenant_profile   ADD COLUMN IF NOT EXISTS tan         TEXT;
+    ALTER TABLE book_tax_entries ADD COLUMN IF NOT EXISTS tds_section TEXT;
+    -- Income-tax: advance-tax / self-assessment challan register (feeds ITR credits).
+    CREATE TABLE IF NOT EXISTS book_advance_tax (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id  TEXT NOT NULL,
+      kind       TEXT NOT NULL DEFAULT 'ADVANCE' CHECK (kind IN ('ADVANCE','SELF_ASSESSMENT')),
+      bsr_code   TEXT,
+      challan_no TEXT,
+      paid_on    DATE,
+      amount     NUMERIC(19,4) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_advance_tax ON book_advance_tax(tenant_id, paid_on);
+    -- e-invoice cancel + e-way bill lifecycle fields on book_einvoices.
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS cancel_reason       TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS cancel_remarks      TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS cancelled_at        TIMESTAMPTZ;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_valid_upto     TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_status         TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_vehicle_no     TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_transporter_id TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_cancel_reason  TEXT;
+    ALTER TABLE book_einvoices ADD COLUMN IF NOT EXISTS eway_cancelled_at   TIMESTAMPTZ;
+    -- Imports: Bill of Entry (customs + import IGST) + ITC-04 job-work challans.
+    CREATE TABLE IF NOT EXISTS book_bill_of_entry (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id           TEXT NOT NULL,
+      boe_no              TEXT NOT NULL,
+      boe_date            DATE NOT NULL,
+      port_code           TEXT,
+      vendor_ledger_id    UUID REFERENCES book_ledgers(id),
+      assessable_value    NUMERIC(19,4) NOT NULL DEFAULT 0,
+      bcd                 NUMERIC(19,4) NOT NULL DEFAULT 0,
+      sws                 NUMERIC(19,4) NOT NULL DEFAULT 0,
+      import_igst         NUMERIC(19,4) NOT NULL DEFAULT 0,
+      landed_cost         NUMERIC(19,4) NOT NULL DEFAULT 0,
+      customs_payable     NUMERIC(19,4) NOT NULL DEFAULT 0,
+      hsn_sac             TEXT,
+      reference           TEXT,
+      narration           TEXT,
+      voucher_id          UUID REFERENCES book_vouchers(id),
+      created_by          UUID,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, boe_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_boe_date   ON book_bill_of_entry(tenant_id, boe_date);
+    CREATE INDEX IF NOT EXISTS idx_book_boe_vendor ON book_bill_of_entry(tenant_id, vendor_ledger_id);
+    CREATE TABLE IF NOT EXISTS book_itc04_challans (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id           TEXT NOT NULL,
+      direction           TEXT NOT NULL CHECK (direction IN ('SENT','RECEIVED')),
+      challan_no          TEXT NOT NULL,
+      challan_date        DATE NOT NULL,
+      job_worker_gstin    TEXT,
+      job_worker_name     TEXT,
+      item_description    TEXT,
+      hsn_sac             TEXT,
+      qty                 NUMERIC(19,4) NOT NULL DEFAULT 0,
+      uom                 TEXT,
+      taxable_value       NUMERIC(19,4) NOT NULL DEFAULT 0,
+      goods_type          TEXT NOT NULL DEFAULT 'INPUT' CHECK (goods_type IN ('INPUT','CAPITAL_GOODS')),
+      original_challan_no TEXT,
+      narration           TEXT,
+      created_by          UUID,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_itc04_dir ON book_itc04_challans(tenant_id, direction, challan_date);
+    CREATE INDEX IF NOT EXISTS idx_book_itc04_jw  ON book_itc04_challans(tenant_id, job_worker_gstin);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

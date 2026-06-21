@@ -94,10 +94,10 @@ async function setKitComponents(tenantId, kitItemId, components) {
     }
 
     await client.query("UPDATE book_stock_items SET is_kit=true WHERE tenant_id=$1 AND id=$2", [tenantId, kitItemId]);
-    await client.query("DELETE FROM book_item_components WHERE tenant_id=$1 AND kit_item_id=$2", [tenantId, kitItemId]);
+    await client.query("DELETE FROM book_item_components WHERE tenant_id=$1 AND parent_item_id=$2", [tenantId, kitItemId]);
     for (const c of clean) {
       await client.query(
-        "INSERT INTO book_item_components(tenant_id, kit_item_id, component_item_id, qty) VALUES($1,$2,$3,$4)",
+        "INSERT INTO book_item_components(tenant_id, parent_item_id, component_item_id, qty) VALUES($1,$2,$3,$4)",
         [tenantId, kitItemId, c.componentItemId, c.qty]
       );
     }
@@ -117,7 +117,7 @@ async function getKitComponents(tenantId, kitItemId) {
     `SELECT c.component_item_id, c.qty, i.name, i.unit
        FROM book_item_components c
        JOIN book_stock_items i ON i.id = c.component_item_id AND i.tenant_id = c.tenant_id
-      WHERE c.tenant_id=$1 AND c.kit_item_id=$2
+      WHERE c.tenant_id=$1 AND c.parent_item_id=$2
       ORDER BY i.name`,
     [tenantId, kitItemId]
   );

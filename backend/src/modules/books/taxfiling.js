@@ -43,17 +43,19 @@ function esc(s) {
 
 // Pull the deductor (tenant) identity once. TAN/PAN may be blank if the profile
 // isn't filled in — we surface placeholders so the user knows what to complete,
-// rather than fabricating a number.
+// rather than fabricating a number. TAN is now a first-class tenant_profile column
+// (the deductor's Tax Deduction & Collection Account Number); the e-TDS statement
+// and Form 16A are invalid without it.
 async function _deductor(tenantId) {
   const { rows } = await pool.query(
-    "SELECT company_name, legal_name, gstin, pan, address, city, state, pincode, phone FROM tenant_profile WHERE tenant_id=$1",
+    "SELECT company_name, legal_name, gstin, pan, tan, address, city, state, pincode, phone FROM tenant_profile WHERE tenant_id=$1",
     [tenantId]
   );
   const p = rows[0] || {};
   return {
-    tan: p.tan || "",                        // tenant_profile has no TAN column yet; left blank for the user
+    tan: (p.tan || "").toUpperCase(),
     name: p.legal_name || p.company_name || tenantId,
-    pan: p.pan || "",
+    pan: (p.pan || "").toUpperCase(),
     address: [p.address, p.city, p.state, p.pincode].filter(Boolean).join(", "),
     phone: p.phone || "",
   };
@@ -61,19 +63,19 @@ async function _deductor(tenantId) {
 
 // Fetch every TDS/TCS withholding row in [from,to], joined to its party ledger for
 // PAN/name and to the voucher for date. `kind` is 'TDS' or 'TCS'. For TDS we are
-// the deductor on purchases/payments; the tax_amount is what we withheld. Section
-// is carried on the tax row's place_of_supply? No — the section isn't a column on
-// book_tax_entries, so we read it from the voucher narration/reference convention
-// used at posting (the TDS poster stamps "§<section>" into the rate? No). We store
-// the section in the tax row's hsn_sac field at posting time (the TDS/TCS poster
-// reuses hsn_sac to carry the section code, since HSN is irrelevant to a tax-only
-// row). rate is the deduction rate.
+// the deductor on purchases/payments; the tax_amount is what we withheld.
+//
+// The TDS/TCS SECTION is now a FIRST-CLASS dimension: book_tax_entries.tds_section.
+// Historically the section was overloaded onto hsn_sac (HSN is irrelevant to a
+// tax-only row), so we COALESCE(tds_section, hsn_sac) to stay backward-compatible
+// with rows posted before the dedicated column existed. rate is the deduction rate.
 async function _withholdingRows(tenantId, kind, from, to, partyLedgerId) {
   const params = [tenantId, kind, from, to];
   let partyClause = "";
   if (partyLedgerId) { params.push(partyLedgerId); partyClause = `AND v.party_ledger_id=$${params.length}`; }
   const { rows } = await pool.query(
-    `SELECT te.id, te.rate, te.taxable_value, te.tax_amount, te.hsn_sac AS section,
+    `SELECT te.id, te.rate, te.taxable_value, te.tax_amount,
+            COALESCE(te.tds_section, te.hsn_sac) AS section,
             v.voucher_date, v.voucher_number, v.reference,
             l.id AS party_id, l.name AS party_name, l.pan AS party_pan, l.gstin AS party_gstin
        FROM book_tax_entries te
@@ -88,78 +90,149 @@ async function _withholdingRows(tenantId, kind, from, to, partyLedgerId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (1) NSDL e-TDS/TCS quarterly statement TEXT (RPU flat-file).
+// (1) NSDL e-TDS/TCS quarterly statement TEXT (RPU/FVU flat-file).
 //
-// Best-effort to the NSDL RPU/FVU schema: a caret(^)-delimited, line-feed
-// terminated flat file made of fixed record types in order —
-//   FH  File Header        (1 per file: record type, count of batches, file type,
-//                           upload type, RPU version, FVU version, file creation date)
-//   BH  Batch Header        (1 per batch: TAN, form, FY, quarter, deductor name/PAN)
-//   CD  Challan Detail       (collapsed here to one summary challan row)
-//   DD  Deductee/Collectee Detail (one per withholding row: PAN, name, section,
-//                           amount paid/received, tax deducted/collected, date)
-//   FT  File Total           (record count)
-// This is NOT a validated FVU file — it's a human-readable RPU-shaped export the
-// user imports into the official RPU before generating the .fvu. Form '26Q' is
-// non-salary TDS; '27EQ' is TCS.
+// A correctly STRUCTURED, MULTI-CHALLAN flat file ported from the NSDL e-TDS/TCS
+// File Validation Utility (FVU) record layout — written from the schema, not copied.
+// It is a caret(^)-delimited, line-feed-terminated file of fixed record types, each
+// numbered by its 1-based line position (NSDL's "Line No." is the first field of
+// every record and the FVU validates it strictly). Record types, in order:
+//
+//   FH  File Header        — 1 per file: line#, "FH", count of BATCHES in the file,
+//                            file type (NS1 = regular), upload type "R", FY, form,
+//                            file-creation date, count of total records.
+//   BH  Batch Header        — 1 per batch (one batch per statement): line#, "BH",
+//                            batch number, count of CHALLAN records in this batch,
+//                            form, TAN, deductor PAN, deductor name, FY, quarter.
+//   CD  Challan Detail       — 1 per DEPOSIT CHALLAN: line#, "CD", batch#, challan#,
+//                            section, TDS/TCS, surcharge, cess, interest, others,
+//                            total deposited, BSR code, deposit date, challan serial,
+//                            count of DEDUCTEE records under this challan.
+//   DD  Deductee Detail      — 1 per withholding row, NESTED under its challan:
+//                            line#, "DD", batch#, challan#, deductee#, PAN, name,
+//                            section, amount paid/credited, tax deducted/collected,
+//                            rate, date of payment/credit, reference.
+//   FT  File Total           — 1 per file: line#, "FT", total record count, batch
+//                            count, challan count, deductee count.
+//
+// Challans are grouped the way a deductor actually deposits: ONE challan per
+// (section, deposit-month) — i.e. the monthly remittance for a given section. Each
+// challan then carries exactly its own deductee rows, and we VALIDATE that the
+// emitted deductee-record count equals the input row count and that each challan's
+// declared deductee count matches the rows nested under it (throwing FVU_COUNT_MISMATCH
+// otherwise). This is an RPU-import-shaped artifact, not a digitally-validated .fvu.
+//
+// Form '24Q' is salary TDS, '26Q' is non-salary TDS, '27EQ' is TCS.
 async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
   const f = String(form || "26Q").toUpperCase();
-  if (!["26Q", "27EQ"].includes(f)) {
-    throw new PostError("BAD_FORM", `form must be 26Q (TDS) or 27EQ (TCS), got ${form}`, 422);
+  if (!["24Q", "26Q", "27EQ"].includes(f)) {
+    throw new PostError("BAD_FORM", `form must be 24Q (salary TDS), 26Q (non-salary TDS) or 27EQ (TCS), got ${form}`, 422);
   }
   const kind = f === "27EQ" ? "TCS" : "TDS";
   const { q, from, to } = quarterRange(quarter, fy);
   const ded = await _deductor(tenantId);
+  if (!ded.tan) throw new PostError("TAN_NOT_SET", "Deductor TAN is not set on the company profile — set it before generating an e-TDS statement", 422);
   const rows = await _withholdingRows(tenantId, kind, from, to);
 
   const SEP = "^";
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const partyLabel = kind === "TCS" ? "Collectee" : "Deductee";
-  const totalBase = sum(rows.map((r) => r.taxable_value));
+  const ymd = (d) => String(d).slice(0, 10).replace(/-/g, "");
+  const depositMonth = (d) => String(d).slice(0, 7); // YYYY-MM
   const totalTax = sum(rows.map((r) => r.tax_amount));
 
+  // ── Group withholding rows into challans: one challan per (section, deposit-month).
+  // A Map preserves first-seen order, which is voucher_date order (the query sorts).
+  const challanMap = new Map();
+  for (const r of rows) {
+    const section = String(r.section || "").toUpperCase();
+    const key = `${section}|${depositMonth(r.voucher_date)}`;
+    if (!challanMap.has(key)) {
+      challanMap.set(key, { section, month: depositMonth(r.voucher_date), deductees: [] });
+    }
+    challanMap.get(key).deductees.push(r);
+  }
+  const challans = [...challanMap.values()];
+
+  // ── Emit the flat file. Line numbers are 1-based and assigned as we push.
   const lines = [];
-  // FH — File Header
-  lines.push([
-    "FH", "1", f, "Regular", "RPU-besteffort", "Headroom",
-    today, ded.tan || "TANNOTSET",
-  ].join(SEP));
-  // BH — Batch Header (deductor identity + period)
-  lines.push([
-    "BH", "1", f, fy, q, ded.tan || "TANNOTSET",
-    ded.name, ded.pan || "PANNOTSET", String(rows.length),
-    toRupees(totalTax),
-  ].join(SEP));
-  // CD — single summary Challan Detail (one challan covering the quarter's tax)
-  lines.push([
-    "CD", "1", toRupees(totalTax), "0.00", "0.00", toRupees(totalTax),
-    "0000000", today,
-  ].join(SEP));
-  // DD — one Deductee/Collectee Detail per withholding row
-  rows.forEach((r, i) => {
-    lines.push([
-      "DD", String(i + 1),
-      (r.party_pan || "PANNOTAVBL").toUpperCase(),
-      r.party_name || "",
-      (r.section || "").toUpperCase(),
-      toRupees(r.taxable_value),
-      toRupees(r.tax_amount),
-      toRupees(r.rate),
-      String(r.voucher_date).slice(0, 10).replace(/-/g, ""),
-      r.reference || "",
-    ].join(SEP));
+  const push = (fields) => { lines.push([String(lines.length + 1)].concat(fields).join(SEP)); };
+
+  // Placeholder for FH (needs the final record count) — patched after the body.
+  lines.push(""); // reserve line 1 for FH
+
+  // BH — Batch Header (single batch covering this statement)
+  push(["BH", "1", String(challans.length), f, ded.tan, ded.pan || "PANNOTAVBL", ded.name, fy, q]);
+
+  let emittedDeductees = 0;
+  challans.forEach((c, ci) => {
+    const challanNo = String(ci + 1);
+    const challanTax = sum(c.deductees.map((d) => d.tax_amount));
+    // Deposit date = 7th of the month following the deposit month (CBDT due date) —
+    // the deductor edits this to the actual challan date in the RPU before validating.
+    const [yy, mm] = c.month.split("-").map(Number);
+    const dueDate = new Date(Date.UTC(mm === 12 ? yy + 1 : yy, mm === 12 ? 0 : mm, 7));
+    const challanDate = dueDate.toISOString().slice(0, 10).replace(/-/g, "");
+    // CD — Challan Detail: section, TDS/TCS, surcharge, cess, interest, others, total,
+    // BSR code, deposit date, challan serial, deductee count.
+    push([
+      "CD", "1", challanNo, c.section, toRupees(challanTax), "0.00", "0.00",
+      "0.00", "0.00", toRupees(challanTax), "0000000", challanDate, "00000",
+      String(c.deductees.length),
+    ]);
+    // DD — Deductee Detail rows nested under this challan.
+    c.deductees.forEach((r, di) => {
+      emittedDeductees += 1;
+      push([
+        "DD", "1", challanNo, String(di + 1),
+        (r.party_pan || "PANNOTAVBL").toUpperCase(),
+        r.party_name || "",
+        c.section,
+        toRupees(r.taxable_value),
+        toRupees(r.tax_amount),
+        toRupees(r.rate),
+        ymd(r.voucher_date),
+        r.reference || "",
+      ]);
+    });
   });
-  // FT — File Total (record count = FH+BH+CD+DDs)
-  lines.push(["FT", String(lines.length + 1)].join(SEP));
+
+  // FT — File Total: total record count, batch count, challan count, deductee count.
+  // Record count INCLUDES the FH line we reserved at index 0.
+  const totalRecords = lines.length + 1;
+  push(["FT", String(totalRecords), "1", String(challans.length), String(emittedDeductees)]);
+
+  // FH — File Header, now that we know the total record count. Patch line 1.
+  lines[0] = ["1", "FH", "1", "NS1", "R", fy, f, today, String(totalRecords)].join(SEP);
+
+  // ── Validate record counts: every deductee row must be emitted exactly once, and
+  // each challan's declared count must equal the rows nested under it.
+  if (emittedDeductees !== rows.length) {
+    throw new PostError("FVU_COUNT_MISMATCH", `e-TDS deductee count ${emittedDeductees} ≠ ${rows.length} withholding rows`, 500);
+  }
+  const challanDeducteeSum = challans.reduce((a, c) => a + c.deductees.length, 0);
+  if (challanDeducteeSum !== emittedDeductees) {
+    throw new PostError("FVU_COUNT_MISMATCH", `challan deductee total ${challanDeducteeSum} ≠ emitted ${emittedDeductees}`, 500);
+  }
 
   const content = lines.join("\n") + "\n";
-  const fileName = `${f}_${fy.replace(/[^0-9-]/g, "")}_${q}_${(ded.tan || "TAN").replace(/[^A-Z0-9]/gi, "")}.txt`;
+  const fileName = `${f}_${fy.replace(/[^0-9-]/g, "")}_${q}_${ded.tan.replace(/[^A-Z0-9]/gi, "")}.txt`;
 
   return {
     form: f,
     quarter: q,
     fileName,
     content,
+    challanCount: challans.length,
+    deducteeCount: emittedDeductees,
+    totalTax: toRupees(totalTax),
+    challans: challans.map((c, ci) => ({
+      challanNo: ci + 1,
+      section: c.section,
+      depositMonth: c.month,
+      tax: toRupees(sum(c.deductees.map((d) => d.tax_amount))),
+      deductees: c.deductees.length,
+    })),
     rows: rows.map((r) => ({
       party: r.party_name,
       pan: r.party_pan || null,
@@ -365,10 +438,12 @@ async function reconcile26AS(tenantId, { rows } = {}) {
   }
 
   // (b) The tenant's TDS suffered in the books: TDS tax rows with is_input=true
-  // (tax credit asset). Carry section (hsn_sac), period (YYYY-MM of voucher_date),
-  // amounts, and the counterparty party PAN/name/gstin for display.
+  // (tax credit asset). Carry section (first-class tds_section, falling back to the
+  // legacy hsn_sac overload), period (YYYY-MM of voucher_date), amounts, and the
+  // counterparty party PAN/name/gstin for display.
   const { rows: bookRows } = await pool.query(
-    `SELECT te.id, te.taxable_value, te.tax_amount, te.hsn_sac AS section,
+    `SELECT te.id, te.taxable_value, te.tax_amount,
+            COALESCE(te.tds_section, te.hsn_sac) AS section,
             to_char(v.voucher_date,'YYYY-MM') AS period,
             v.id AS voucher_id, l.name AS party_name, l.pan AS party_pan, l.gstin AS party_gstin
        FROM book_tax_entries te

@@ -126,6 +126,20 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
     { ledgerId: tdsPayableLedgerId, debit: "0", credit: toDb(tdsAmount) },
   ];
 
+  // Tax side-record: the authoritative TDS breakdown captured at posting time. The
+  // section is now a FIRST-CLASS dimension (tdsSection) rather than overloaded onto
+  // hsn_sac — we still set hsnSac too so a posting-engine that hasn't yet learned the
+  // new column keeps storing the section (backward-compat; the read path COALESCEs).
+  const taxes = [{
+    taxKind: "TDS",
+    rate: tds.rate,
+    taxableValue: toDb(gross),
+    taxAmount: toDb(tdsAmount),
+    tdsSection: tds.section,
+    hsnSac: tds.section,
+    isInput: false,
+  }];
+
   return {
     tds: {
       section: tds.section,
@@ -137,6 +151,7 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
       panAvailable: !!panAvailable,
     },
     entries,
+    taxes,
   };
 }
 
@@ -215,6 +230,18 @@ function buildTcsCollection({ customerLedgerId, tcsPayableLedgerId, amount, sect
     { ledgerId: tcsPayableLedgerId, debit: "0", credit: toDb(tcsAmount) },
   ];
 
+  // Tax side-record (TCS). Section carried first-class on tdsSection (the 27EQ filer
+  // reads it), with hsnSac mirrored for backward-compat. See buildTdsDeduction.
+  const taxes = [{
+    taxKind: "TCS",
+    rate: tcs.rate,
+    taxableValue: toDb(amt),
+    taxAmount: toDb(tcsAmount),
+    tdsSection: tcs.section,
+    hsnSac: tcs.section,
+    isInput: false,
+  }];
+
   return {
     tcs: {
       section: tcs.section,
@@ -225,6 +252,7 @@ function buildTcsCollection({ customerLedgerId, tcsPayableLedgerId, amount, sect
       panAvailable: !!panAvailable,
     },
     entries,
+    taxes,
   };
 }
 

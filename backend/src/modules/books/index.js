@@ -30,6 +30,8 @@ const subscriptions = require("./subscriptions");
 const importers = require("./importers");
 const usage = require("./usage");
 const demoseed = require("./demoseed");
+const itr = require("./itr");
+const billofentry = require("./billofentry");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -65,6 +67,8 @@ module.exports = {
   ...subscriptions,
   ...importers,
   ...usage,
+  ...billofentry,
+  itr,
   ewaybill,
   payments,
   fx,

@@ -84,10 +84,14 @@ function _ensureCancelCols() {
 }
 
 // GSP IRN cancellation window: 24h from IRN generation (the ack date).
-const CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Source of truth lives in gsp.js; mirror it here for the pre-flight check.
+const CANCEL_WINDOW_MS = gsp.CANCEL_WINDOW_MS || 24 * 60 * 60 * 1000;
+// IRP cancel reason codes: 1 = Duplicate, 2 = Data entry mistake.
+const _reasonCode = (r) => { const n = Number(r); return n === 1 || n === 2 ? n : 2; };
 
 // Cancel a registered e-invoice within the allowed window. Honest about config:
 // with no GSP keys we never fabricate a cancellation — mirror enqueue/status.
+//   reason: IRP CnlRsn code (1 Duplicate / 2 Data entry mistake; defaults to 2)
 async function cancelIrn(tenantId, actorId, { voucherId, reason, remarks } = {}) {
   if (!voucherId) { const e = new Error("voucherId required"); e.code = "BAD_REQUEST"; throw e; }
   const { rows } = await pool.query("SELECT * FROM book_einvoices WHERE tenant_id=$1 AND voucher_id=$2", [tenantId, voucherId]);
@@ -104,17 +108,18 @@ async function cancelIrn(tenantId, actorId, { voucherId, reason, remarks } = {})
   // Honest config gate — never fabricate a cancellation without a real GSP.
   if (!gsp.isConfigured()) return { configured: false, reason: "GSP not configured — set GSP_BASE_URL / GSP_API_KEY" };
 
-  // Stubbed GSP cancel (gsp.cancelInvoice when present; otherwise a guarded no-op
-  // that still requires real config above, so we never fake a successful cancel).
+  // Real GSP cancel: build the IRP cancel payload (Irn, CnlRsn 1/2, CnlRem) and
+  // let the connector re-enforce the 24h window against the ack date.
+  const reasonCode = _reasonCode(reason);
   if (typeof gsp.cancelInvoice === "function") {
-    await gsp.cancelInvoice({ irn: row.irn, cnlRsn: reason || null, cnlRem: remarks || null });
+    await gsp.cancelInvoice(tenantId, { irn: row.irn, reasonCode, remark: remarks || null, ackDt: row.ack_date });
   }
 
   await _ensureCancelCols();
   const { rows: upd } = await pool.query(
     "UPDATE book_einvoices SET status='CANCELLED', cancel_reason=$3, cancel_remarks=$4, cancelled_at=now(), error=NULL, updated_at=now() " +
     "WHERE tenant_id=$1 AND voucher_id=$2 RETURNING voucher_id, status, irn, cancel_reason, cancel_remarks, cancelled_at",
-    [tenantId, voucherId, reason || null, remarks || null]
+    [tenantId, voucherId, String(reasonCode), remarks || null]
   );
   return { ...upd[0], configured: true, actorId };
 }
