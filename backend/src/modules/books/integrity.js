@@ -269,13 +269,13 @@ async function leafOnlyCheck(tenantId, opts = {}) {
             COUNT(e.id) AS postings
        FROM book_ledgers l
        JOIN book_account_groups g ON g.id=l.group_id
+       LEFT JOIN book_voucher_entries e ON e.ledger_id=l.id AND e.tenant_id=l.tenant_id
       WHERE l.tenant_id=$1
         AND EXISTS (SELECT 1 FROM book_account_groups c WHERE c.tenant_id=l.tenant_id AND c.parent_id=g.id)
         AND EXISTS (
           SELECT 1 FROM book_voucher_entries e2
             JOIN book_vouchers v ON v.id=e2.voucher_id
            WHERE e2.ledger_id=l.id AND e2.tenant_id=l.tenant_id AND ${movementFilter})
-       LEFT JOIN book_voucher_entries e ON e.ledger_id=l.id AND e.tenant_id=l.tenant_id
       GROUP BY l.id, l.name, g.id, g.name
       ORDER BY COUNT(e.id) DESC`,
     params

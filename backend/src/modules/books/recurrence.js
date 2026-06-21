@@ -27,6 +27,20 @@ const MAX_CATCHUP = 120; // hard cap so a long-dormant recurrence can't runaway-
 
 // ── Date helpers (UTC, ISO yyyy-mm-dd; never JS-local to avoid TZ drift) ────────
 const iso = (d) => d.toISOString().slice(0, 10);
+// Format a DATE value as it was READ BACK from pg. node-postgres parses a bare
+// DATE into a JS Date at LOCAL midnight; calling toISOString() on that converts to
+// UTC and rolls back a day in negative-offset zones (UTC midnight → previous local
+// day). So format Dates from their LOCAL components, and slice strings directly.
+const dateField = (v) => {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).slice(0, 10);
+};
 const parse = (s) => {
   // accepts 'yyyy-mm-dd' or a Date; always anchored to UTC midnight.
   if (s instanceof Date) return new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
@@ -187,13 +201,13 @@ function rowToRec(r) {
     name: r.name,
     template_kind: r.template_kind,
     template: r.template,
-    start: r.start_date instanceof Date ? iso(r.start_date) : (r.start_date ? String(r.start_date).slice(0, 10) : null),
+    start: dateField(r.start_date),
     repetition: {
       type: r.rep_type, moment: r.rep_moment, skip: r.rep_skip, weekend: r.rep_weekend,
     },
-    end: { kind: r.end_kind, date: r.end_date instanceof Date ? iso(r.end_date) : (r.end_date ? String(r.end_date).slice(0, 10) : null), count: r.end_count },
-    next_run: r.next_run instanceof Date ? iso(r.next_run) : (r.next_run ? String(r.next_run).slice(0, 10) : null),
-    last_run: r.last_run instanceof Date ? iso(r.last_run) : (r.last_run ? String(r.last_run).slice(0, 10) : null),
+    end: { kind: r.end_kind, date: dateField(r.end_date), count: r.end_count },
+    next_run: dateField(r.next_run),
+    last_run: dateField(r.last_run),
     occurrences_done: Number(r.occurrences_done || 0),
     active: r.active,
     created_at: r.created_at,
@@ -222,7 +236,10 @@ async function createRecurrence(tenantId, actorId, b = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   const { rep, end } = validateInput(b);
   const momentStr = rep.type === "ndom" ? `${rep.moment.nth},${rep.moment.weekday}` : (rep.moment == null ? null : String(rep.moment));
-  const nextRun = computeNextRun(b.start, rep, end);
+  // Pass the RAW user repetition to computeNextRun: nextOccurrences()
+  // re-normalizes internally, and feeding it the already-normalized `rep` (whose
+  // ndom moment is now an object) would double-normalize "3rd Friday" into "1st Sunday".
+  const nextRun = computeNextRun(b.start, b.repetition || {}, end);
   const { rows } = await pool.query(
     `INSERT INTO book_recurrences
        (tenant_id, name, template_kind, template, start_date, rep_type, rep_moment, rep_skip, rep_weekend,
@@ -267,7 +284,8 @@ async function updateRecurrence(tenantId, id, b = {}) {
   // Recompute next_run from last_run (or start) so schedule edits take effect but
   // already-materialised periods aren't re-fired.
   const fromForNext = existing.last_run ? iso(addDays(parse(existing.last_run), 1)) : merged.start;
-  const nextRun = computeNextRun(fromForNext, rep, end) || computeNextRun(merged.start, rep, end);
+  // RAW repetition (see createRecurrence): avoid double-normalizing ndom moment.
+  const nextRun = computeNextRun(fromForNext, merged.repetition || {}, end) || computeNextRun(merged.start, merged.repetition || {}, end);
   const { rows } = await pool.query(
     `UPDATE book_recurrences SET
        name=$3, template_kind=$4, template=$5::jsonb, start_date=$6,

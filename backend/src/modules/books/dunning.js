@@ -30,7 +30,13 @@ function ymd(d) {
   return d.toISOString().slice(0, 10);
 }
 function parseYmd(s) {
-  const d = new Date(`${String(s).slice(0, 10)}T00:00:00.000Z`);
+  // pg returns DATE columns as JS Date objects constructed at LOCAL midnight, so
+  // toISOString() shifts a day in +tz zones; read the local components instead.
+  // Otherwise String(date).slice(0,10) yields "Wed Apr 01" → invalid.
+  const str = s instanceof Date
+    ? `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`
+    : String(s).slice(0, 10);
+  const d = new Date(`${str}T00:00:00.000Z`);
   if (isNaN(d.getTime())) throw new PostError("BAD_INPUT", `invalid date ${s}`, 400);
   return d;
 }

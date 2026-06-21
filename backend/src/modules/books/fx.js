@@ -222,9 +222,9 @@ async function settlePosition(tenantId, actorId, { partyLedgerId, currency, kind
 //   ERPNext's revaluation carries it before revaluing.
 async function openPosition(tenantId, { partyLedgerId, currency } = {}) {
   const params = [tenantId];
-  const where = ["tenant_id=$1", "fc_amount > fc_settled"];
-  if (partyLedgerId) { params.push(partyLedgerId); where.push(`party_ledger_id=$${params.length}`); }
-  if (currency) { params.push(String(currency).toUpperCase()); where.push(`currency=$${params.length}`); }
+  const where = ["p.tenant_id=$1", "p.fc_amount > p.fc_settled"];
+  if (partyLedgerId) { params.push(partyLedgerId); where.push(`p.party_ledger_id=$${params.length}`); }
+  if (currency) { params.push(String(currency).toUpperCase()); where.push(`p.currency=$${params.length}`); }
   const { rows } = await pool.query(
     `SELECT p.party_ledger_id,
             l.name AS party_name,

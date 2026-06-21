@@ -52,6 +52,11 @@ const FILTERS = {
   has_utr: (line) => !!(line.utr && String(line.utr).trim()),
   has_txn_ref: (line) => !!(line.txn_ref && String(line.txn_ref).trim()),
   net_positive: (line) => gt(line.net, 0),
+  // A UTR-bearing line MUST find its deposit by its own UTR (exact or band). If none
+  // carries that UTR the line is genuinely MISSING_DEPOSIT — it must NOT fall through
+  // to a UTR-agnostic amount-only rule and steal an unrelated line's same-amount
+  // deposit. So the amount-only bank rules apply only to lines that lost their UTR.
+  no_utr: (line) => gt(line.net, 0) && !(line.utr && String(line.utr).trim()),
 };
 
 // IDENTIFIERS (How): given a line, which candidates are plausible counterparts?
@@ -98,9 +103,13 @@ function validateBand(line, cand, target, toleranceDays, band) {
 const DEFAULT_RULES = [
   { name: "bank-by-utr-exact",   priority: 100, filter: "has_utr",     identify: "by_utr",     target: "NET",   validate: "exact", scope: "BANK" },
   { name: "receipt-by-ref-exact",priority: 90,  filter: "has_txn_ref", identify: "by_txn_ref", target: "GROSS", validate: "exact", scope: "RECEIPT" },
-  { name: "bank-by-amount",      priority: 50,  filter: "net_positive",identify: "by_amount",  target: "NET",   validate: "exact", scope: "BANK" },
+  // UTR-confined band: a line's OWN-UTR deposit that is a near-miss (SHORT/OVER) must
+  // beat any UTR-agnostic exact-NET deposit belonging to an UNRELATED line. Ranked just
+  // below UTR-exact and above the amount-only rules so own-UTR always wins its band.
+  { name: "bank-by-utr-band",    priority: 80,  filter: "has_utr",     identify: "by_utr",     target: "NET",   validate: "band",  scope: "BANK" },
+  { name: "bank-by-amount",      priority: 50,  filter: "no_utr",      identify: "by_amount",  target: "NET",   validate: "exact", scope: "BANK" },
   { name: "receipt-by-amount",   priority: 40,  filter: "always",      identify: "by_amount",  target: "GROSS", validate: "exact", scope: "RECEIPT" },
-  { name: "bank-by-amount-band", priority: 20,  filter: "net_positive",identify: "by_amount",  target: "NET",   validate: "band",  scope: "BANK" },
+  { name: "bank-by-amount-band", priority: 20,  filter: "no_utr",      identify: "by_amount",  target: "NET",   validate: "band",  scope: "BANK" },
 ];
 
 // §M.2 — run the rule set for ONE line against ONE pool of candidates of a given
@@ -237,7 +246,14 @@ async function reconcile(tenantId, opts = {}) {
   // Mutable pools so a candidate is consumed by at most one line (beancount 1:1 leg).
   const bankPool = bankRows.map((r) => ({ ...r, amount: money(r.amount).toFixed(4) }));
   const rcptPool = rcptRows.map((r) => ({ ...r, amount: money(r.amount).toFixed(4) }));
-  const usedBank = new Set(bankPool.filter((b) => b.settlement_line_id).map((b) => b.id));
+  // Idempotency: a bank line already stamped (settlement_line_id) is owned by THAT
+  // line. We must NOT blanket-exclude it — on a re-run the very line being matched has
+  // to re-admit its own deposit as a candidate, or it loses its match and corrupts.
+  // So remember the owner per bank line; the per-line candidate filter (below) admits a
+  // stamped line iff it is owned by the line currently being matched, excludes it
+  // otherwise. usedBank then only tracks lines consumed within THIS run.
+  const ownerByBank = new Map(bankPool.filter((b) => b.settlement_line_id).map((b) => [b.id, b.settlement_line_id]));
+  const usedBank = new Set();
   const usedRcpt = new Set();
 
   let posted = 0, exceptions = 0;
@@ -248,8 +264,14 @@ async function reconcile(tenantId, opts = {}) {
       const prof = profileFor(line.provider);
       const fee = classifyFee(line, prof);
 
-      // (a) bank deposit of NET
-      const bankCands = bankPool.filter((b) => !usedBank.has(b.id));
+      // (a) bank deposit of NET. A bank line stamped to ANOTHER line stays excluded;
+      // a line stamped to THIS line is re-admitted (idempotent re-run); within this run,
+      // usedBank prevents two lines consuming the same deposit.
+      const bankCands = bankPool.filter((b) => {
+        if (usedBank.has(b.id)) return false;
+        const owner = ownerByBank.get(b.id);
+        return !owner || owner === line.id;
+      });
       const bankHit = selectMatch(line, bankCands, "BANK", opts);
       // (b) booked receipt of GROSS
       const rcptCands = rcptPool.filter((r) => !usedRcpt.has(r.id));

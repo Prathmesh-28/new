@@ -13,13 +13,18 @@ function monthRange(period) {
   return { from: `${period}-01`, to: `${period}-${String(last).padStart(2, "0")}` };
 }
 
-// India FY "YYYY-YYYY" → { from:'YYYY-04-01', to:'YYYY+1-03-31' } and its 12 "YYYY-MM" periods.
+// India FY → { from:'YYYY-04-01', to:'YYYY+1-03-31' } and its 12 "YYYY-MM" periods.
+// Accepts the canonical system FY "YYYY-YY" (e.g. "2024-25") and legacy "YYYY-YYYY".
+// FY starts 1 Apr of the start year and ends 31 Mar of the next year.
 function fyRange(fy) {
   const p = String(fy || "").split("-");
-  if (p.length !== 2 || !/^\d{4}$/.test(p[0]) || !/^\d{4}$/.test(p[1])) {
-    throw new PostError("BAD_FY", "financial year must be 'YYYY-YYYY'", 400);
+  if (p.length !== 2 || !/^\d{4}$/.test(p[0]) || !/^\d{2}(\d{2})?$/.test(p[1])) {
+    throw new PostError("BAD_FY", "financial year must be 'YYYY-YY' or 'YYYY-YYYY'", 400);
   }
-  const a = Number(p[0]), b = Number(p[1]);
+  const a = Number(p[0]);
+  // Start year is always p[0]; the FY always spans p[0] → p[0]+1 regardless of the
+  // 2- or 4-digit end notation, so derive b from a (ignore mismatched end input).
+  const b = a + 1;
   const periods = [];
   for (let i = 0; i < 12; i++) {
     const mAbs = 4 + i;                         // Apr(4) … Mar(15)

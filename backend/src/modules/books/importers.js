@@ -264,16 +264,28 @@ function parseCsv(content) {
     if (exact >= 0) return exact;
     return header.findIndex((h) => names.some((n) => h.includes(n)));
   };
+  // EXACT-only match: short needles like "cr"/"dr"/"amt" would otherwise collide
+  // with longer headers via substring (e.g. "description" includes "cr", so a plain
+  // Date,Description,Amount,Reference CSV would treat Description as the credit
+  // column and money("SWIGGYORDER") would throw a DecimalError). Debit/credit/amount
+  // must bind to a real header token, never a substring of an unrelated column.
+  const exactFind = (...names) => header.findIndex((h) => names.includes(h));
   const iDate = find("date", "txn date", "value date", "posted");
-  const iAmt = find("amount", "value", "transaction");
-  const iDebit = find("debit", "withdrawal", "dr");
-  const iCredit = find("credit", "deposit", "cr");
+  const iAmt = exactFind("amount", "amt");
+  const iDebit = exactFind("debit", "withdrawal", "dr");
+  const iCredit = exactFind("credit", "deposit", "cr");
   const iDesc = find("description", "narration", "particulars", "payee", "details", "memo");
   const iRef = find("reference", "ref", "cheque", "chq", "utr");
   const rows = [];
   for (let r = 1; r < lines.length; r++) {
     const cols = splitCsvLine(lines[r]);
-    const cleanNum = (v) => s(v).replace(/[, ]/g, "");
+    // Only treat a cell as a number when it actually looks numeric; otherwise a
+    // stray text cell that slipped into a debit/credit/amount column would make
+    // money() throw a DecimalError. Non-numeric → "" → parsed as ZERO below.
+    const cleanNum = (v) => {
+      const t = s(v).replace(/[, ]/g, "");
+      return /^[+-]?\d*\.?\d+$/.test(t) ? t : "";
+    };
     let a;
     if (iDebit >= 0 || iCredit >= 0) {
       const dr = iDebit >= 0 ? cleanNum(cols[iDebit]) : "";

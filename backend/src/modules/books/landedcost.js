@@ -201,12 +201,52 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
     revaluations.push(await reposting.repostFromDate(tenantId, { itemId, fromDate: date, actorId, reason: "landed cost" }));
   }
 
+  // 4. COGS true-up for the ALREADY-ISSUED share of the freight.
+  // The charge voucher (step 1) debited the FULL charge to the Stock Adjustment wash
+  // account. The repost correction (step 3) only Dr Stock-in-hand by the CLOSING-stock
+  // valuation delta — i.e. the freight on the stock that is still on hand. Any of the
+  // received stock that was ISSUED before this LCV carries its share of the freight
+  // straight into COGS (the historical issue under-stated cost). That consumed share
+  // is otherwise STRANDED as a Dr balance in Stock Adjustment with no offsetting leg.
+  // So post ONE additional correction Dr Cost of Goods Sold / Cr Stock Adjustment for
+  // Σ consumedShare, where consumedShare = apportionedCharge * issuedQty / receivedQty.
+  // Net result: Stock Adjustment Dr(full charge) = Cr(closing delta) + Cr(COGS share)
+  // washes to ZERO, and total capitalised = Stock-in-hand delta + COGS share = charge.
+  let consumedTotal = money(0);
+  for (const [itemId, addl] of perItem) {
+    if (!gt(addl, 0)) continue;
+    const { rows: agg } = await pool.query(
+      "SELECT COALESCE(SUM(qty_in),0) AS recd, COALESCE(SUM(qty_out),0) AS issued FROM book_stock_movements WHERE tenant_id=$1 AND item_id=$2 AND posting_date>=$3::date",
+      [tenantId, itemId, date]
+    );
+    const received = money(agg[0].recd);
+    const issued = money(agg[0].issued);
+    if (!gt(received, 0) || !gt(issued, 0)) continue;
+    // Clamp issued to received (can't consume more of THIS receipt window than received).
+    const consumedQty = gt(issued, received) ? received : issued;
+    const consumed = money(toDb(addl.mul(consumedQty).div(received)));
+    consumedTotal = consumedTotal.plus(consumed);
+  }
+
+  let cogsCorrection = null;
+  if (gt(consumedTotal, 0)) {
+    const cogsLedger = await ledgerIdByName(tenantId, "Cost of Goods Sold");
+    if (!cogsLedger) throw new PostError("NOT_SEEDED", "Cost of Goods Sold ledger missing — seed the books first", 422);
+    cogsCorrection = await postVoucher(tenantId, actorId,
+      { voucherType: "JOURNAL", voucherDate: date, reference: input.reference || null,
+        narration: `Landed cost COGS true-up (freight on issued stock ${toDb(consumedTotal)})`, source: "landed-cost" },
+      [{ ledgerId: cogsLedger, debit: toDb(consumedTotal), credit: "0" },
+       { ledgerId: adjLedger, debit: "0", credit: toDb(consumedTotal) }]);
+  }
+
   return {
     voucher: posted,
     totalCharge: toDb(totalCharge),
     charges: perCharge,
     perItem: Array.from(perItem.entries()).map(([itemId, amt]) => ({ itemId, appliedAmount: toDb(amt) })),
     revaluations,
+    cogsCorrection,
+    consumedShare: toDb(consumedTotal),
   };
 }
 

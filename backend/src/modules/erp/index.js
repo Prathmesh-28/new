@@ -403,6 +403,42 @@ async function listWorkOrders(tenantId) {
   return (await pool.query("SELECT * FROM erp_work_orders WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 }
 
+// A manufacturing flow moves value between Stock-in-hand and Work-in-Progress.
+// Every books.issue/receive writes a stock-ledger entry whose voucher_id is NOT
+// NULL, so we must post a balanced JOURNAL voucher and thread its id through.
+// The WIP ledger is created lazily under the Stock-in-hand group (idempotent).
+const MFG_ACTOR = null; // these flows are system-initiated; created_by may be null
+// NOTE: uses `pool` (auto-commit), NOT the caller's open transaction — books.postVoucher
+// runs on its own connection and must be able to SELECT this ledger, so it has to be
+// committed before we post the backing journal.
+async function ensureWipLedger(tenantId) {
+  const { rows: ex } = await pool.query("SELECT id FROM book_ledgers WHERE tenant_id=$1 AND name=$2", [tenantId, "Work-in-Progress"]);
+  if (ex[0]) return ex[0].id;
+  const { rows: grp } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2", [tenantId, "Stock-in-hand"]);
+  if (!grp[0]) throw new ErpError("Stock-in-hand group missing — seed books first", 422);
+  const { rows } = await pool.query(
+    "INSERT INTO book_ledgers(tenant_id,name,group_id) VALUES($1,$2,$3) ON CONFLICT(tenant_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id",
+    [tenantId, "Work-in-Progress", grp[0].id]
+  );
+  return rows[0].id;
+}
+// Post a balanced JOURNAL voucher for a manufacturing stock move and return its id.
+// `lines` is [{ ledgerId, debit, credit }] (strings via ./money). We post via the
+// public books.postVoucher so the GL stays the single source of truth.
+async function postMfgJournal(tenantId, narration, lines) {
+  const v = await books.postVoucher(tenantId, MFG_ACTOR,
+    { voucherType: "JOURNAL", voucherDate: new Date().toISOString().slice(0, 10), narration, source: "api" },
+    lines);
+  return v.voucherId || v.id || (v.voucher && v.voucher.id);
+}
+// Rewrite the two debit/credit amounts of a 2-line JOURNAL voucher to the actual
+// COGS once it is known (issue/receive COGS is only known after the stock move).
+// Keeps the GL exactly equal to the stock-ledger entry it backs.
+async function setMfgJournalAmount(client, voucherId, amount) {
+  const amt = toDb(money(amount));
+  await client.query("UPDATE book_voucher_entries SET debit = CASE WHEN debit > 0 THEN $2::numeric ELSE 0 END, credit = CASE WHEN credit > 0 THEN $2::numeric ELSE 0 END WHERE voucher_id=$1", [voucherId, amt]);
+}
+
 // Material transfer for manufacture: issue each required component into WIP via
 // books.issue (which moves stock + posts COGS). Tracks transferred_qty and flips
 // the WO to IN_PROCESS (NOT_STARTED → IN_PROCESS). raw_material_cost accumulates
@@ -418,15 +454,25 @@ async function transferMaterials(tenantId, id) {
     const { rows: items } = await client.query("SELECT * FROM erp_work_order_items WHERE tenant_id=$1 AND work_order_id=$2", [tenantId, id]);
     if (!items.length) throw new ErpError("Work order has no required items", 422);
 
+    // Stock-journal voucher backing the issue SLEs: Dr WIP / Cr Stock-in-hand.
+    // Posted up-front (so books.issue has a real voucher_id), amount corrected to
+    // the actual COGS once all components are issued. Keeps the GL balanced.
+    const wipLed = await ensureWipLedger(tenantId);
+    const stockLed = await books.ledgerIdByName(tenantId, "Stock-in-hand");
+    const journalId = await postMfgJournal(tenantId, `WO ${id} material transfer to WIP`,
+      [{ ledgerId: wipLed, debit: "1", credit: "0" }, { ledgerId: stockLed, debit: "0", credit: "1" }]);
+
     let rmCost = money(0);
     for (const it of items) {
       const pending = money(it.required_qty).minus(it.transferred_qty);
       if (!pending.gt(0)) continue;
       // books.issue guards negative stock unless item.allow_negative — never bypass.
-      const out = await books.issue(tenantId, it.item_id, Number(pending.toFixed(6)), { warehouseId: wo.warehouse_id });
+      const out = await books.issue(tenantId, it.item_id, Number(pending.toFixed(6)), { warehouseId: wo.warehouse_id, voucherId: journalId });
       rmCost = rmCost.plus(out.cogs || 0);
       await client.query("UPDATE erp_work_order_items SET transferred_qty=required_qty WHERE id=$1", [it.id]);
     }
+    // Correct the journal to the real value moved into WIP (Dr WIP = Cr Stock = rmCost).
+    await setMfgJournalAmount(client, journalId, rmCost.gt(0) ? rmCost : money(0));
     const { rows } = await client.query(
       "UPDATE erp_work_orders SET material_transferred=qty, raw_material_cost=$3, status='IN_PROCESS', started_at=COALESCE(started_at, now()) WHERE tenant_id=$1 AND id=$2 RETURNING *",
       [tenantId, id, toDb(rmCost)]
@@ -454,19 +500,31 @@ async function manufacture(tenantId, id, opts = {}) {
 
     const { rows: items } = await client.query("SELECT * FROM erp_work_order_items WHERE tenant_id=$1 AND work_order_id=$2", [tenantId, id]);
 
-    // Components not yet transferred get issued now (skip-transfer).
+    const wipLed = await ensureWipLedger(tenantId);
+    const stockLed = await books.ledgerIdByName(tenantId, "Stock-in-hand");
+
+    // Components not yet transferred get issued now (skip-transfer). Back any such
+    // issues with a Dr WIP / Cr Stock-in-hand journal so the SLE has a voucher_id.
     let rmCost = money(wo.raw_material_cost);
+    let skipTransferCost = money(0);
+    let skipJournalId = null;
     for (const it of items) {
       const toConsume = money(it.required_qty).minus(it.consumed_qty);
       if (!toConsume.gt(0)) continue;
       const notYetTransferred = money(it.required_qty).minus(it.transferred_qty);
       if (notYetTransferred.gt(0)) {
-        const out = await books.issue(tenantId, it.item_id, Number(notYetTransferred.toFixed(6)), { warehouseId: wo.warehouse_id });
+        if (!skipJournalId) {
+          skipJournalId = await postMfgJournal(tenantId, `WO ${id} skip-transfer issue to WIP`,
+            [{ ledgerId: wipLed, debit: "1", credit: "0" }, { ledgerId: stockLed, debit: "0", credit: "1" }]);
+        }
+        const out = await books.issue(tenantId, it.item_id, Number(notYetTransferred.toFixed(6)), { warehouseId: wo.warehouse_id, voucherId: skipJournalId });
         rmCost = rmCost.plus(out.cogs || 0);
+        skipTransferCost = skipTransferCost.plus(out.cogs || 0);
         await client.query("UPDATE erp_work_order_items SET transferred_qty=required_qty WHERE id=$1", [it.id]);
       }
       await client.query("UPDATE erp_work_order_items SET consumed_qty=required_qty WHERE id=$1", [it.id]);
     }
+    if (skipJournalId) await setMfgJournalAmount(client, skipJournalId, skipTransferCost.gt(0) ? skipTransferCost : money(0));
 
     // operating cost: prefer actual (from job cards) else planned.
     const { rows: opAgg } = await client.query(
@@ -478,7 +536,15 @@ async function manufacture(tenantId, id, opts = {}) {
     const rate = produceQty > 0 ? totalCogs.div(produceQty) : money(0);
 
     // Receive finished good at rolled cost (component + operating) per unit.
-    await books.receive(tenantId, wo.finished_item_id, produceQty, Number(rate.toFixed(6)), { warehouseId: wo.warehouse_id });
+    // Back the receipt SLE with a Dr Stock-in-hand(FG) / Cr WIP journal at the FG
+    // receipt value (= totalCogs), then correct to the exact value received.
+    const fgValue = totalCogs;
+    const fgJournalId = await postMfgJournal(tenantId, `WO ${id} finished-good receipt`,
+      [{ ledgerId: stockLed, debit: toDb(fgValue.gt(0) ? fgValue : money(1)), credit: "0" },
+       { ledgerId: wipLed, debit: "0", credit: toDb(fgValue.gt(0) ? fgValue : money(1)) }]);
+    await books.receive(tenantId, wo.finished_item_id, produceQty, Number(rate.toFixed(6)), { warehouseId: wo.warehouse_id, voucherId: fgJournalId });
+    const fgRecvValue = money(produceQty).mul(Number(rate.toFixed(6)));
+    await setMfgJournalAmount(client, fgJournalId, fgRecvValue.gt(0) ? fgRecvValue : money(0));
 
     const newProduced = money(wo.produced_qty).plus(produceQty);
     const completed = newProduced.gte(wo.qty);
