@@ -9,6 +9,7 @@ import { Database, Upload, Download, FileSpreadsheet, Sparkles, Pencil, Trash2, 
 import { toast } from "sonner";
 import { format } from "date-fns";
 import TransactionImportModal from "@/components/TransactionImportModal";
+import MigrationWizard from "@/components/MigrationWizard";
 import type { Transaction } from "@/data/types";
 
 function downloadCsv(name: string, content: string) {
@@ -23,6 +24,7 @@ export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
+  const [showMigrate, setShowMigrate] = useState(false);
   const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive" | "profiler" | "csv-json" | "number-clean" | "gstin-check" | "pivot" | "statement-parse" | "range-export" | "paste-dupes" | "json-fmt">("overview");
 
   if (!canAccess("data")) return <Navigate to="/dashboard" replace />;
@@ -181,6 +183,21 @@ export default function DataPage() {
           </div>
         </div>
 
+        {/* Migrate / switch from Tally */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <ArrowLeftRight size={15} className="text-[var(--color-primary)]" />
+            <p className="text-sm font-semibold">Switch from Tally / bring your data</p>
+          </div>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Already on Tally or a spreadsheet? Import your Masters export (one XML file → ledgers + stock items) or upload CSVs for ledgers, items and opening invoices — validated row-by-row.</p>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={!editable} onClick={() => setShowMigrate(true)}
+              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
+              <ArrowLeftRight size={13} /> Migrate data
+            </button>
+          </div>
+        </div>
+
         {/* Bulk edit */}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <div className="flex items-center gap-2 mb-2">
@@ -222,6 +239,7 @@ export default function DataPage() {
           onImport={handleImport}
         />
       )}
+      {showMigrate && <MigrationWizard onClose={() => setShowMigrate(false)} />}
     </div>
   );
 }
