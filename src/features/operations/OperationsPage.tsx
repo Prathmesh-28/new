@@ -19,6 +19,7 @@ import type { Order, OrderSource, InventoryItem, ProcurementOrder } from "@/data
 import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
+import EmptyState from "@/components/EmptyState";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
   | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
@@ -327,11 +328,13 @@ export default function OperationsPage() {
           )}
 
           {orders.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-              <ShoppingCart size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-              <p className="text-sm text-[var(--color-muted)] mb-4">No orders yet. Add manually or connect WhatsApp to capture them automatically.</p>
-              <button onClick={() => setShowOrderForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Add First Order</button>
-            </div>
+            <EmptyState
+              icon={ShoppingCart}
+              title="No orders yet"
+              description="Capture your first sales order manually, or connect WhatsApp/email to pull orders in automatically."
+              ctaText="Add your first order"
+              onCta={() => setShowOrderForm(true)}
+            />
           ) : (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">

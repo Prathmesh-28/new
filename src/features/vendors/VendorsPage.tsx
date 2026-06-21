@@ -3,6 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { api } from "@/lib/api";
+import EmptyState from "@/components/EmptyState";
 import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
@@ -573,15 +574,25 @@ export default function VendorsPage() {
           </div>
 
           {filtered.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-              <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-              <p className="text-sm text-[var(--color-muted)] mb-3">{masterLoading ? "Loading vendor directory…" : "No vendors yet. Add a vendor profile or import transactions to populate the directory."}</p>
-              {!masterLoading && (
-                <button onClick={() => setProfileEdit({ record: null })} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 inline-flex items-center gap-1.5">
-                  <Plus size={13} /> Add your first vendor
-                </button>
-              )}
-            </div>
+            masterLoading ? (
+              <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+                <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+                <p className="text-sm text-[var(--color-muted)]">Loading vendor directory…</p>
+              </div>
+            ) : vendors.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="No vendors yet"
+                description="Add your first vendor to track spend, payment terms, GSTIN and MSME status — or import your expense transactions to auto-build the directory."
+                ctaText="Add a vendor"
+                onCta={() => setProfileEdit({ record: null })}
+              />
+            ) : (
+              <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+                <Search size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+                <p className="text-sm text-[var(--color-muted)]">No vendors match your search or filter.</p>
+              </div>
+            )
           ) : (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
               <table className="w-full text-sm min-w-[620px]">

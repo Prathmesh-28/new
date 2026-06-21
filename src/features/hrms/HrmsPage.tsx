@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, Fragment } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import EmptyState from "@/components/EmptyState";
 import {
   Users, UserPlus, CalendarCheck, Plane, Wallet, Plus, RefreshCw,
   CheckCircle2, XCircle, FileText, Layers, Trash2, Play, Eye,
@@ -363,6 +364,15 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
         </div>
       )}
 
+      {!loading && employees.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No employees yet"
+          description="Add your first employee to start tracking attendance, leave and payroll — or bulk-upload your whole team at once via /api/hrms/employees/bulk."
+          ctaText={canWrite ? "Add an employee" : undefined}
+          onCta={canWrite ? () => setOpen(true) : undefined}
+        />
+      ) : (
       <div className={`${cardCls} overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -372,7 +382,6 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
             </tr></thead>
             <tbody>
               {loading ? <SkeletonRows cols={canWrite ? 5 : 4} />
-                : employees.length === 0 ? <EmptyRow cols={canWrite ? 5 : 4} text="No employees yet." />
                 : employees.map((emp) => (
                   <tr key={emp.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]/40">
                     <td className="px-3 py-2.5 font-medium">{emp.name}</td>
@@ -392,6 +401,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

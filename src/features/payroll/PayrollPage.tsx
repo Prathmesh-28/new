@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
+import SharedEmptyState from "@/components/EmptyState";
 
 // Roles allowed to write payroll/HRMS data — mirrors the backend hrms WRITE_ROLES gate.
 const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
@@ -318,11 +319,13 @@ export default function PayrollPage() {
         <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading…</div>
       ) : tab === "employees" ? (
         employees.length === 0 ? (
-          <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
-            <Users size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-            <p className="text-sm text-[var(--color-muted)]">No employees yet. Add your first employee to start tracking payroll.</p>
-            <button onClick={() => setShowAdd(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">Add Employee</button>
-          </div>
+          <SharedEmptyState
+            icon={Users}
+            title="No employees yet"
+            description="Add your team members to capture their salary, then run payroll to compute TDS, PF and net pay each month."
+            ctaText="Add employee"
+            onCta={() => setShowAdd(true)}
+          />
         ) : (
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
             <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border)]">

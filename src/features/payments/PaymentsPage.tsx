@@ -1,5 +1,6 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "@/context/AppContext";
+import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
@@ -361,6 +362,7 @@ function PaymentLinkBuilder() {
   const [allowPartial, setAllowPartial] = useState(false);
   const [expiryDays, setExpiryDays] = useState("7");
   const [vpa, setVpa] = useState("");
+  const amountRef = useRef<HTMLInputElement>(null);
 
   // Live backend wiring: real hosted links + settlement reconciliation.
   const [ledgers, setLedgers] = useState<LedgerLite[]>([]);
@@ -489,7 +491,7 @@ function PaymentLinkBuilder() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Base amount ₹</label>
-            <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="10000" className={INP} />
+            <input ref={amountRef} type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="10000" className={INP} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">GST %</label>
@@ -585,7 +587,13 @@ function PaymentLinkBuilder() {
       {!apiAvailable ? (
         <p className="text-xs text-[var(--color-muted)] px-1">Books backend unavailable — manual UPI links above still work. Links will appear here once you're online and the chart of accounts is set up.</p>
       ) : links.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No live links yet. Create one on the left — it'll show here with a copyable URL and a mark-paid action.</p>
+        <EmptyState
+          icon={Link2}
+          title="No payment links yet"
+          description="Create a branded UPI / card payment link to collect from a customer — it appears here with a copyable URL, a WhatsApp share, and a mark-paid action."
+          ctaText="Create a payment link"
+          onCta={() => { amountRef.current?.focus(); amountRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}
+        />
       ) : (
         <div className="space-y-2">
           {links.map(link => {

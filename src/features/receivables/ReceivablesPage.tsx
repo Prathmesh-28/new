@@ -6,6 +6,7 @@ import { differenceInDays, format, parseISO } from "date-fns";
 import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award, Gauge, Banknote, Link2, PieChart, MailCheck, TrendingUp, Repeat, ShieldAlert, Percent, CalendarClock, Flame, Layers, CalendarCheck, FileWarning, TicketPercent, Ban, Eraser, History, Hourglass, Trophy, Coins, Target, Wallet, Calculator, CalendarRange, Siren, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import EmptyState from "@/components/EmptyState";
 import type { Invoice } from "@/data/types";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -393,20 +394,14 @@ export default function ReceivablesPage() {
             ))}
           </div>
         </div>
-      ) : view === "list" ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <Clock size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <h2 className="text-base font-semibold mb-1">No outstanding invoices</h2>
-          <p className="text-sm text-[var(--color-muted)] mb-5 max-w-xs mx-auto">
-            Add invoices to track receivables and get reminders before they go overdue.
-          </p>
-          {!isReadOnly && (
-            <button onClick={() => setShowAdd(true)}
-              className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
-              Add First Invoice
-            </button>
-          )}
-        </div>
+      ) : pending.length === 0 ? (
+        <EmptyState
+          icon={Clock}
+          title="No outstanding receivables"
+          description="Once you raise an invoice it shows up here so you can track aging and chase overdue payments before they slip."
+          ctaText="Raise an invoice"
+          ctaHref="/invoices"
+        />
       ) : null}
 
       {/* Paid invoices */}

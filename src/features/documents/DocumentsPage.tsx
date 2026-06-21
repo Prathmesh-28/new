@@ -452,17 +452,18 @@ export default function DocumentsPage() {
 
           {loading ? (
             <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading documents…</div>
+          ) : docs.length === 0 ? (
+            <EmptyState
+              icon={FolderOpen}
+              title="No documents yet"
+              description="Upload your GST certificate, bank statements, PAN, licenses and payroll registers to keep every compliance document in one searchable place."
+              ctaText="Upload document"
+              onCta={() => setShowUpload(true)}
+            />
           ) : filtered.length === 0 && (
             <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
               <File size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-              <p className="text-sm text-[var(--color-muted)]">
-                {docs.length === 0 ? "No documents yet" : "No documents match your search"}
-              </p>
-              {docs.length === 0 && (
-                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm mx-auto">
-                  Upload your GST certificate, bank statements, PAN, licenses and payroll registers to keep every compliance document in one searchable place.
-                </p>
-              )}
+              <p className="text-sm text-[var(--color-muted)]">No documents match your search</p>
             </div>
           )}
 

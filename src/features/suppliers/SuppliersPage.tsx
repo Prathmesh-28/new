@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeCheck, Plus, Trash2, Search, Percent, LineChart, Timer, GitCompare, PieChart, ClipboardCheck, Handshake, ListOrdered, FileCheck, Microscope, CalendarClock, Truck, CalendarDays, Scale, ShieldCheck, Boxes, Wallet, CalendarRange, Copy, Warehouse, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
+import EmptyState from "@/components/EmptyState";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -238,6 +239,7 @@ type ScoreRow = {
 };
 function SupplierScorecard() {
   const [rows, setRows] = useFeatureState<ScoreRow[]>("supplier-scorecards", []);
+  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [qualityPct, setQualityPct] = useState("");
   const [otifPct, setOtifPct] = useState("");
@@ -277,7 +279,7 @@ function SupplierScorecard() {
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Supplier Scorecard (Quality / OTIF / Price)</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">Rate and rank suppliers on delivery KPIs. Composite = Quality 35% + OTIF 35% + Price 20% + Responsiveness 10%. Use it to consolidate spend on A-grade vendors.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Supplier name *" className={INP} />
+          <input ref={nameRef} value={name} onChange={e => setName(e.target.value)} placeholder="Supplier name *" className={INP} />
           <input type="number" value={qualityPct} onChange={e => setQualityPct(e.target.value)} placeholder="Quality % (0-100)" className={INP} />
           <input type="number" value={otifPct} onChange={e => setOtifPct(e.target.value)} placeholder="OTIF % (0-100)" className={INP} />
           <input type="number" value={priceIndex} onChange={e => setPriceIndex(e.target.value)} placeholder="Price index (100=mkt)" className={INP} />
@@ -325,6 +327,15 @@ function SupplierScorecard() {
           </table>
         </div>
       </>}
+      {ranked.length === 0 && (
+        <EmptyState
+          icon={Award}
+          title="No suppliers rated yet"
+          description="Add your first supplier above to score it on quality, OTIF, price and responsiveness — then consolidate spend on your A-grade vendors."
+          ctaText="Rate a supplier"
+          onCta={() => nameRef.current?.focus()}
+        />
+      )}
       <p className="text-[10px] text-[var(--color-muted)]">Price index normalises cost to market (100 = at-market, 150 = 50% dearer). Re-score quarterly off GRN rejection rates and PO-vs-delivery data to keep the ranking objective.</p>
     </div>
   );

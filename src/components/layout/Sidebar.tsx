@@ -123,9 +123,9 @@ const PRIMARY_NAV: Record<string, string[]> = {
   super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "admin", "settings"],
   owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "settings"],
   finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "forecast", "health"],
-  accountant:         ["dashboard", "transactions", "gst", "tax", "compliance", "statements"],
+  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "compliance", "advisor", "statements"],
   sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "analytics"],
-  operations_manager: ["dashboard", "operations", "vendors", "suppliers", "spend", "documents"],
+  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "spend", "documents"],
   viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "benchmarks"],
   investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
 };

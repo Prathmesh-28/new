@@ -3,6 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { percentiles } from "@/lib/finance";
+import EmptyState from "@/components/EmptyState";
 import {
   TrendingUp, TrendingDown, AlertTriangle, Repeat, Eye, ChevronRight,
   PieChart, CreditCard, CalendarClock, Wallet, Copy, Building2, Trash2,
@@ -35,7 +36,7 @@ const CAT_LABEL: Record<string, string> = {
 };
 
 export default function SpendPage() {
-  const { store } = useApp();
+  const { store, loading } = useApp();
   const navigate  = useNavigate();
   const today     = new Date();
 
@@ -169,6 +170,16 @@ export default function SpendPage() {
         </p>
       </div>
 
+      {store.transactions.length === 0 && !loading ? (
+        <EmptyState
+          icon={PieChart}
+          title="No transactions to analyze yet"
+          description="Spend Intelligence finds duplicate vendors, creeping subscriptions and category overspend from your transactions. Add or import some to get started."
+          ctaText="Import transactions"
+          ctaHref="/transactions"
+        />
+      ) : (
+      <>
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -374,6 +385,8 @@ export default function SpendPage() {
           Connect accounts <ChevronRight size={11} />
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }

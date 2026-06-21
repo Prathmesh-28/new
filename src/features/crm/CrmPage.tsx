@@ -8,6 +8,7 @@ import {
   CheckCircle2, Mail, Phone, Globe, X, Clock, AlertTriangle, ShieldCheck,
   ListChecks, StickyNote, Send, Gauge, Timer,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -524,6 +525,15 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       )}
 
       {/* BOARD */}
+      {(pipeline?.openCount ?? 0) === 0 && (pipeline?.wonCount ?? 0) === 0 && (pipeline?.lostCount ?? 0) === 0 ? (
+        <EmptyState
+          icon={KanbanSquare}
+          title="No deals in your pipeline yet"
+          description="Track every opportunity from qualification to won. Add your first deal, or import leads and convert the qualified ones into deals."
+          ctaText={canWrite ? "Add a deal" : undefined}
+          onCta={canWrite ? () => setOpen(true) : undefined}
+        />
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {BOARD_STAGES.map((s) => {
           const bucket = pipeline?.stages?.[s];
@@ -604,6 +614,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -591,9 +591,9 @@ export default function CollectionsPage() {
           {sorted.length === 0 && displayData.length === 0 && (
             <EmptyState
               icon={PhoneCall}
-              title="No outstanding receivables"
-              description="When customers owe you money, overdue invoices appear here so you can chase them. Create your first invoice to start tracking collections."
-              ctaText="Create an invoice"
+              title="Nothing overdue right now"
+              description="Collections tracks unpaid and overdue invoices so you can chase the customers who owe you. Raise an invoice and it shows up here as it ages past its due date."
+              ctaText="Go to Invoices"
               ctaHref="/invoices"
             />
           )}

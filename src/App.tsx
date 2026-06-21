@@ -12,6 +12,7 @@ import InviteBanner from "@/components/InviteBanner";
 import AppTopMeta from "@/components/AppTopMeta";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
+import ReadOnlyBanner from "@/components/ReadOnlyBanner";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
 import NotificationBell from "@/components/NotificationBell";
@@ -210,6 +211,7 @@ function AppShell() {
       <div className="flex-1 flex flex-col min-w-0">
         <OfflineBanner />
         <TenantSwitcher />
+        <ReadOnlyBanner />
         <PreviewBanner />
         <NotificationBell />
         {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}

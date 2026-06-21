@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
+import EmptyState from "@/components/EmptyState";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import {
@@ -115,11 +116,13 @@ export default function BankingPage() {
           </div>
 
           {accounts.length === 0 ? (
-            <div className={`${CARD} border-dashed p-10 text-center`}>
-              <Wallet size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
-              <p className="text-sm font-medium mb-1">No bank accounts linked yet</p>
-              <p className="text-xs text-[var(--color-muted)]">Connect or import accounts from the Data module — balances and reconciliation populate automatically.</p>
-            </div>
+            <EmptyState
+              icon={Landmark}
+              title="No bank accounts yet"
+              description="Add a bank account or import a statement to see consolidated balances, reconciliation and idle-cash alerts across every bank."
+              ctaText="Add a bank account or import a statement"
+              ctaHref="/data"
+            />
           ) : (
             <div className={`${CARD} overflow-hidden`}>
               <div className="px-5 py-3 border-b border-[var(--color-border)]">
