@@ -13,6 +13,7 @@ import AppTopMeta from "@/components/AppTopMeta";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import ReadOnlyBanner from "@/components/ReadOnlyBanner";
+import HeadroomAssistant from "@/components/HeadroomAssistant";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
 import NotificationBell from "@/components/NotificationBell";
@@ -296,6 +297,7 @@ function AppShell() {
         </main>
       </div>
       <CommandPalette open={paletteOpen} onClose={closePalette} />
+      <HeadroomAssistant />
     </div>
   );
 }
