@@ -7,7 +7,8 @@
 //   https://github.com/jseutter/ofxparse — SGML tag scan + DTPOSTED/TRNAMT mapping.
 // QIF, MT940 (SWIFT) and camt.053 (ISO-20022) follow the published format specs;
 // the XML walk is a deliberate light regex scan so we add no XML dependency.
-const { money, toDb } = require("./money");
+const crypto = require("crypto");
+const { money, toDb, ZERO } = require("./money");
 
 // ── shared helpers ───────────────────────────────────────────────────────────
 const s = (v) => (v == null ? "" : String(v).trim());
@@ -253,7 +254,16 @@ function parseCsv(content) {
   const lines = text.split("\n").filter((l) => l.trim() !== "");
   if (!lines.length) return [];
   const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
-  const find = (...names) => header.findIndex((h) => names.some((n) => h.includes(n)));
+  // Prefer an EXACT header match before a substring match. Without this, short
+  // needles collide with longer headers — e.g. "description" CONTAINS "cr"/"dr",
+  // so a debit/credit bank export with a Description column would mis-map the
+  // amount onto the narration. Exact-first lets the importconfig column map (which
+  // rewrites headers to the canonical tokens) bind unambiguously.
+  const find = (...names) => {
+    const exact = header.findIndex((h) => names.some((n) => h === n));
+    if (exact >= 0) return exact;
+    return header.findIndex((h) => names.some((n) => h.includes(n)));
+  };
   const iDate = find("date", "txn date", "value date", "posted");
   const iAmt = find("amount", "value", "transaction");
   const iDebit = find("debit", "withdrawal", "dr");
@@ -268,9 +278,15 @@ function parseCsv(content) {
     if (iDebit >= 0 || iCredit >= 0) {
       const dr = iDebit >= 0 ? cleanNum(cols[iDebit]) : "";
       const cr = iCredit >= 0 ? cleanNum(cols[iCredit]) : "";
-      if (cr) a = money(cr).abs();
-      else if (dr) a = money(dr).abs().neg();
-      else a = money(0);
+      // Banks fill the unused side with "0" (not blank), so test the NUMERIC value,
+      // not string-truthiness — otherwise a {debit:5000, credit:0} row would read as
+      // a zero credit and lose the withdrawal. Non-zero wins; credit takes priority
+      // only when both are non-zero (rare; a contra line).
+      const crv = cr ? money(cr).abs() : ZERO;
+      const drv = dr ? money(dr).abs() : ZERO;
+      if (crv.greaterThan(0)) a = crv;
+      else if (drv.greaterThan(0)) a = drv.neg();
+      else a = ZERO;
     } else {
       a = money(iAmt >= 0 ? cleanNum(cols[iAmt]) : 0);
     }
@@ -285,6 +301,7 @@ function parseCsv(content) {
 }
 
 // ── dispatcher ────────────────────────────────────────────────────────────────
+const FORMATS = ["ofx", "qfx", "qif", "camt053", "camt", "mt940", "csv"];
 function parseStatement(format, content) {
   switch (s(format).toLowerCase()) {
     case "ofx":
@@ -298,4 +315,25 @@ function parseStatement(format, content) {
   }
 }
 
-module.exports = { parseOfx, parseQif, parseCamt053, parseMt940, parseStatement };
+// ── stable per-line hash (idempotent re-import) ──────────────────────────────
+// Firefly-III's data-importer dedups by a content hash so re-uploading the same
+// statement skips lines already imported. We hash the *normalized* line — the
+// fields recon stores — so two parses of the same file (or the same line in an
+// overlapping export) collapse to one hash. A bank's own unique id (FITID, NtryRef,
+// MT940 ref) is the strongest signal, so when present we fold it in; otherwise we
+// fall back to date|amount|description which is stable across re-parses.
+//
+// SHA-256 of a canonical string. Salting with bankLedgerId keeps the same line on
+// two different accounts distinct (a transfer appears on both statements).
+function lineHash(bankLedgerId, line) {
+  const date = s(line.date || line.txn_date);
+  const amount = amt(line.amount);            // canonical 4dp string
+  const desc = s(line.description).replace(/\s+/g, " ").toLowerCase();
+  const ref = s(line.reference);
+  // Reference, when the bank supplies one, is the authoritative dedup key; we keep
+  // date+amount alongside it so a reused/blank ref can't collide unrelated lines.
+  const canonical = [String(bankLedgerId || ""), date, amount, ref, desc].join("|");
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+module.exports = { parseOfx, parseQif, parseCamt053, parseMt940, parseStatement, lineHash, normDate, FORMATS };

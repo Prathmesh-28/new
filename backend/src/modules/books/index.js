@@ -32,6 +32,14 @@ const usage = require("./usage");
 const demoseed = require("./demoseed");
 const itr = require("./itr");
 const billofentry = require("./billofentry");
+const reposting = require("./reposting");
+const landedcost = require("./landedcost");
+const rules = require("./rules");
+const importcfg = require("./importconfig");
+const dunning = require("./dunning");
+const integrity = require("./integrity");
+const settlement = require("./settlement");
+const recurrence = require("./recurrence");
 const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const gsp = require("./gsp");
@@ -68,7 +76,15 @@ module.exports = {
   ...importers,
   ...usage,
   ...billofentry,
+  ...reposting,
+  ...landedcost,
+  ...importcfg,
+  ...dunning,
   itr,
+  rules,
+  integrity,
+  settlement,
+  recurrence,
   ewaybill,
   payments,
   fx,

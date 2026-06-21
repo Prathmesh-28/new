@@ -4,6 +4,7 @@
 const { pool } = require("../../db");
 const { money, toDb, toRupees, eq } = require("./money");
 const { postVoucher, PostError } = require("./posting-engine");
+const rulesEngine = require("./rules");
 
 // ── Pure helpers (testable) ──────────────────────────────────────────────────
 const classifyLine = (amount) => (money(amount).greaterThan(0) ? "RECEIPT" : "PAYMENT");
@@ -21,15 +22,43 @@ function lineMatches(line, entry, voucherDate, toleranceDays) {
 // ── Import + match ───────────────────────────────────────────────────────────
 async function importLines(tenantId, bankLedgerId, lines) {
   if (!bankLedgerId || !Array.isArray(lines)) throw new PostError("BAD_INPUT", "bankLedgerId and lines[] required", 400);
+  // Build normalised row objects the TransactionRules engine understands, run the
+  // tenant's active rule_groups/rules over them, then persist the result. This
+  // replaces the old read-only keyword matcher with a full Firefly-III-style engine:
+  // import now auto-categorises (category / suggested ledger / tags / flag).
+  const rowObjs = lines.map((l) => ({
+    bank_ledger_id: bankLedgerId,
+    txn_date: l.date,
+    amount: toDb(l.amount),
+    description: l.description || null,
+    reference: l.reference || null,
+    category: null,
+    suggested_ledger_id: null,
+    tags: [],
+    flagged: false,
+  }));
+  const { rows: categorised, fired } = await rulesEngine.applyRules(tenantId, rowObjs);
+  // Map each row index → the LAST rule that fired on it (the one whose actions stuck).
+  const lastRuleByRow = {};
+  for (const f of fired) lastRuleByRow[f.index] = f.ruleId;
+
   let inserted = 0;
-  for (const l of lines) {
+  for (let i = 0; i < categorised.length; i++) {
+    const r = categorised[i];
     await pool.query(
-      "INSERT INTO book_bank_lines(tenant_id,bank_ledger_id,txn_date,amount,description,reference) VALUES($1,$2,$3,$4,$5,$6)",
-      [tenantId, bankLedgerId, l.date, toDb(l.amount), l.description || null, l.reference || null]
+      `INSERT INTO book_bank_lines
+         (tenant_id,bank_ledger_id,txn_date,amount,description,reference,category,suggested_ledger_id,tags,flagged,applied_rule_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        tenantId, bankLedgerId, r.txn_date, toDb(r.amount), r.description, r.reference,
+        r.category || null, r.suggested_ledger_id || null,
+        Array.isArray(r.tags) ? r.tags : [], !!r.flagged,
+        lastRuleByRow[i] || null,
+      ]
     );
     inserted += 1;
   }
-  return { inserted };
+  return { inserted, autoCategorised: fired.length };
 }
 
 async function autoMatch(tenantId, toleranceDays = 3) {

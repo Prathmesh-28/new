@@ -25,6 +25,14 @@ const usage = require("./usage");
 const demoseed = require("./demoseed");
 const itr = require("./itr");
 const billofentry = require("./billofentry");
+const reposting = require("./reposting");
+const landedcost = require("./landedcost");
+const rules = require("./rules");
+const importcfg = require("./importconfig");
+const dunning = require("./dunning");
+const integrity = require("./integrity");
+const settlement = require("./settlement");
+const recurrence = require("./recurrence");
 const validators = require("../../lib/validators");
 // Reject a malformed GSTIN/PAN (checksum-verified) before it hits the ledger.
 const badId = (b) => {
@@ -738,6 +746,47 @@ router.post("/boe", canPost, async (req, res) => { try { res.status(201).json(aw
 router.get("/boe", async (req, res) => { try { res.json(await billofentry.listBoe(tenantOf(req), { from: req.query.from, to: req.query.to, vendorLedgerId: req.query.vendorLedgerId })); } catch (e) { fail(res, e); } });
 router.post("/itc04", canPost, async (req, res) => { try { res.status(201).json(await billofentry.createItc04Challan(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/itc04", async (req, res) => { try { res.json(await billofentry.listItc04Challans(tenantOf(req), { direction: req.query.direction, from: req.query.from, to: req.query.to, jobWorkerGstin: req.query.jobWorkerGstin })); } catch (e) { fail(res, e); } });
+// ── Wave A2 (depth): reposting, landed cost, FX revaluation, auto-FIFO, rules, import configs, dunning, payment retry, integrity, settlement, recurrence ──
+router.post("/inventory/repost", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.itemId && !b.allOpen && !b.fromDate) return res.status(400).json({ error: "fromDate (and itemId or allOpen) required" }); res.json(await reposting.repostFromDate(tenantOf(req), { itemId: b.itemId, warehouseId: b.warehouseId, fromDate: b.fromDate, allOpen: !!b.allOpen, actorId: req.user.id, reason: b.reason })); } catch (e) { fail(res, e); } });
+router.post("/inventory/repost/recover", canPost, async (req, res) => { try { res.json(await reposting.recoverFailedReposts(tenantOf(req), req.user.id)); } catch (e) { fail(res, e); } });
+router.get("/inventory/repost", async (req, res) => { try { res.json(await reposting.listRepostRuns(tenantOf(req), { itemId: req.query.itemId, status: req.query.status })); } catch (e) { fail(res, e); } });
+router.post("/inventory/landed-cost", canPost, async (req, res) => { try { res.status(201).json(await landedcost.createLandedCost(tenantOf(req), req.user.id, req.body || {}, { idempotencyKey: idem(req) })); } catch (e) { fail(res, e); } });
+router.get("/inventory/landed-cost", async (req, res) => { try { res.json(await landedcost.listLandedCost(tenantOf(req), { from: req.query.from, to: req.query.to })); } catch (e) { fail(res, e); } });
+router.post("/fx/revalue-all", canPost, async (req, res) => { try { const b = req.body || {}; const asOf = b.asOf || b.asOfDate || req.query.asOf; if (!asOf) return res.status(400).json({ error: "asOf (as-of date) required" }); res.json(await fx.revalueAll(tenantOf(req), req.user.id, asOf)); } catch (e) { fail(res, e); } });
+router.get("/fx/open-position", async (req, res) => { try { res.json(await fx.openPosition(tenantOf(req), { partyLedgerId: req.query.partyLedgerId, currency: req.query.currency })); } catch (e) { fail(res, e); } });
+router.post("/billwise/auto-allocate", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await billwise.autoAllocate(tenantOf(req), req.user.id, { partyLedgerId: b.partyLedgerId, receiptVoucherId: b.receiptVoucherId, amount: b.amount })); } catch (e) { fail(res, e); } });
+router.get("/rules/groups", async (req, res) => { try { res.json(await rules.listRuleGroups(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/rules/groups", canPost, async (req, res) => { try { res.status(201).json(await rules.createRuleGroup(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/rules", async (req, res) => { try { res.json(await rules.listRules(tenantOf(req), req.query.groupId)); } catch (e) { fail(res, e); } });
+router.post("/rules", canPost, async (req, res) => { try { res.status(201).json(await rules.createRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/rules/:id", canPost, async (req, res) => { try { res.json(await rules.updateRule(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/rules/:id", canPost, async (req, res) => { try { res.json(await rules.deleteRule(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/rules/apply", async (req, res) => { try { res.json(await rules.applyRules(tenantOf(req), (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.get("/import-configs", async (req, res) => { try { res.json(await importcfg.listConfigs(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/import-configs/:id", async (req, res) => { try { res.json(await importcfg.getConfig(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/import-configs", canPost, async (req, res) => { try { res.status(201).json(await importcfg.createConfig(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/import-configs/:id", canPost, async (req, res) => { try { res.json(await importcfg.updateConfig(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/import-configs/:id", canPost, async (req, res) => { try { res.json(await importcfg.deleteConfig(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/import-configs/:id/run", canPost, async (req, res) => { try { res.status(201).json(await importcfg.runImport(tenantOf(req), { configId: req.params.id, content: (req.body || {}).content })); } catch (e) { fail(res, e); } });
+router.get("/dunning/procedure", async (req, res) => { try { res.json(await dunning.listDunningLevels(tenantOf(req), req.query.procedure)); } catch (e) { fail(res, e); } });
+router.post("/dunning/procedure", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await dunning.setDunningProcedure(tenantOf(req), { name: b.name || b.procedure, levels: b.levels })); } catch (e) { fail(res, e); } });
+router.get("/dunning/due", async (req, res) => { try { res.json(await dunning.dueDunnings(tenantOf(req), { asOfDate: req.query.asOf, procedure: req.query.procedure })); } catch (e) { fail(res, e); } });
+router.post("/dunning/run", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await dunning.generateDunnings(tenantOf(req), b.asOf || b.asOfDate, { procedure: b.procedure, actorId: req.user.id, dryRun: !!b.dryRun })); } catch (e) { fail(res, e); } });
+router.get("/payments/retry-policy", (req, res) => { try { res.json(payments.retryPolicy()); } catch (e) { fail(res, e); } });
+router.post("/payments/classify-decline", (req, res) => { try { const { provider, code } = req.body || {}; if (!code) return res.status(400).json({ error: "code required" }); res.json(payments.classifyDecline(provider, code)); } catch (e) { fail(res, e); } });
+router.post("/integrity/assert-balance", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await integrity.assertBalance(tenantOf(req), { ledgerId: b.ledgerId, asOfDate: b.asOfDate, expected: b.expected, tolerance: b.tolerance, isDebit: b.isDebit, dir: b.dir, note: b.note })); } catch (e) { fail(res, e); } });
+router.post("/integrity/pad-opening", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await integrity.padOpening(tenantOf(req), req.user.id, { ledgerId: b.ledgerId, asOfDate: b.asOfDate, target: b.target, isDebit: b.isDebit, dir: b.dir, narration: b.narration }, { idempotencyKey: idem(req) })); } catch (e) { fail(res, e); } });
+router.get("/integrity/checks", async (req, res) => { try { res.json(await integrity.runChecks(tenantOf(req), { fy: req.query.fy, from: req.query.from, to: req.query.to, limit: req.query.limit })); } catch (e) { fail(res, e); } });
+router.post("/settlement/ingest", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await settlement.ingestPayout(tenantOf(req), { provider: b.provider, rows: b.rows })); } catch (e) { fail(res, e); } });
+router.post("/settlement/reconcile", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await settlement.reconcile(tenantOf(req), { toleranceDays: b.toleranceDays, feeBand: b.feeBand })); } catch (e) { fail(res, e); } });
+router.get("/settlement/exceptions", async (req, res) => { try { res.json(await settlement.listExceptions(tenantOf(req), { status: req.query.status, kind: req.query.kind, limit: req.query.limit })); } catch (e) { fail(res, e); } });
+router.get("/recurrences", async (req, res) => { try { res.json(await recurrence.listRecurrences(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/recurrences", canPost, async (req, res) => { try { res.status(201).json(await recurrence.createRecurrence(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/recurrences/:id", async (req, res) => { try { res.json(await recurrence.getRecurrence(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.patch("/recurrences/:id", canPost, async (req, res) => { try { res.json(await recurrence.updateRecurrence(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/recurrences/:id", canPost, async (req, res) => { try { res.json(await recurrence.deleteRecurrence(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/recurrences/:id/preview", async (req, res) => { try { res.json(await recurrence.preview(tenantOf(req), req.params.id, req.query.count)); } catch (e) { fail(res, e); } });
+router.post("/recurrences/run", canPost, async (req, res) => { try { res.json(await recurrence.runDue(tenantOf(req), (req.body || {}).asOf, req.user.id)); } catch (e) { fail(res, e); } });
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });

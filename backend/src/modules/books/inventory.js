@@ -6,6 +6,21 @@ const { money, toDb, gt } = require("./money");
 const { PostError, postVoucher } = require("./posting-engine");
 const { ledgerIdByName } = require("./seed");
 
+// Lazy require to break the inventory ↔ reposting cycle (reposting.js requires
+// this module for valuation primitives). Auto-trigger when a back-dated movement
+// was inserted: recompute every downstream SLE and post the GL correction. Best
+// effort — a repost failure is logged but never fails the original movement (the
+// movement is already committed; repost is a follow-up correction that can be
+// re-run via POST /inventory/repost).
+async function _maybeRepost(tenantId, itemId, warehouseId, fromDate, actorId) {
+  try {
+    const reposting = require("./reposting");
+    await reposting.repostFromDate(tenantId, { itemId, warehouseId, fromDate, actorId, reason: "back-dated movement" });
+  } catch (e) {
+    console.error("[inventory] auto-repost failed (run POST /inventory/repost to recover):", e.message);
+  }
+}
+
 // ── Pure valuation ───────────────────────────────────────────────────────────
 function applyInwardWAvg(prev, qtyIn, rateIn) {
   const qty = money(prev.qty).plus(qtyIn);
@@ -64,10 +79,25 @@ async function priceFor(tenantId, itemId, priceListId) {
 }
 
 // ── Movements (valuation + balances) ─────────────────────────────────────────
-async function _movement(client, tenantId, itemId, { qtyIn = 0, qtyOut = 0, rate = 0, value, voucherId = null, warehouseId = null }) {
-  await client.query(
-    "INSERT INTO book_stock_movements(tenant_id,voucher_id,item_id,qty_in,qty_out,rate,value,warehouse_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
-    [tenantId, voucherId, itemId, toDb(qtyIn), toDb(qtyOut), toDb(rate), toDb(value), warehouseId]
+// Stock-Ledger-Entry (SLE) persistence — ported in spirit from ERPNext's
+// stock_ledger_entry: every movement stores a method-derived `rate` plus a DUAL
+// running balance (qty_after / value_after) AND a snapshot of the FIFO cost
+// queue ([{qty,rate}], oldest-first) as it stood right after this movement. This
+// makes outgoing rate reconstructable and lets reposting.js recompute downstream
+// rows chronologically without re-deriving from scratch. `postingDate` is the
+// chronological key reposting orders on (falls back to today).
+//
+// callers pass qtyAfter / valueAfter (item-level running balance after this row)
+// and fifoQueue (array of {qty,rate}); when omitted the columns are left NULL and
+// the row still records the basic movement (back-compat).
+async function _movement(client, tenantId, itemId, { qtyIn = 0, qtyOut = 0, rate = 0, value, voucherId = null, warehouseId = null, postingDate = null, qtyAfter = null, valueAfter = null, fifoQueue = null }) {
+  const date = postingDate || new Date().toISOString().slice(0, 10);
+  const { rows } = await client.query(
+    `INSERT INTO book_stock_movements(tenant_id,voucher_id,item_id,qty_in,qty_out,rate,value,warehouse_id,posting_date,qty_after,value_after,fifo_queue)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+    [tenantId, voucherId, itemId, toDb(qtyIn), toDb(qtyOut), toDb(rate), toDb(value), warehouseId, date,
+     qtyAfter == null ? null : toDb(qtyAfter), valueAfter == null ? null : toDb(valueAfter),
+     fifoQueue == null ? null : JSON.stringify(fifoQueue.map((l) => ({ qty: toDb(l.qty), rate: toDb(l.rate) })))]
   );
   if (warehouseId) {
     await client.query(
@@ -76,10 +106,37 @@ async function _movement(client, tenantId, itemId, { qtyIn = 0, qtyOut = 0, rate
       [tenantId, itemId, warehouseId, toDb(money(qtyIn).minus(qtyOut))]
     );
   }
+  return rows[0].id;
+}
+
+// Snapshot the current FIFO queue for an item (oldest-first), as [{qty,rate}].
+// Used to persist a per-movement queue snapshot on FIFO items.
+async function _fifoQueueSnapshot(client, tenantId, itemId) {
+  const { rows } = await client.query(
+    "SELECT qty_remaining AS qty, rate FROM book_stock_lots WHERE tenant_id=$1 AND item_id=$2 AND qty_remaining>0 ORDER BY received_on, id",
+    [tenantId, itemId]
+  );
+  return rows.map((r) => ({ qty: r.qty, rate: r.rate }));
+}
+
+// Did we just insert a movement BEFORE the latest existing one for this item?
+// If so the running balances on later rows are stale and must be reposted.
+// Returns true when a strictly-later movement exists for the same item.
+async function _isBackdated(client, tenantId, itemId, postingDate, selfMovementId) {
+  const { rows } = await client.query(
+    `SELECT 1 FROM book_stock_movements
+      WHERE tenant_id=$1 AND item_id=$2 AND id <> $4
+        AND (posting_date > $3::date OR (posting_date = $3::date AND created_at > (SELECT created_at FROM book_stock_movements WHERE id=$4)))
+      LIMIT 1`,
+    [tenantId, itemId, postingDate || new Date().toISOString().slice(0, 10), selfMovementId]
+  );
+  return rows.length > 0;
 }
 
 async function receive(tenantId, itemId, qty, rate, opts = {}) {
+  const date = opts.date || new Date().toISOString().slice(0, 10);
   const client = await pool.connect();
+  let backdated = false;
   try {
     await client.query("BEGIN");
     const { rows: ir } = await client.query("SELECT * FROM book_stock_items WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, itemId]);
@@ -88,16 +145,22 @@ async function receive(tenantId, itemId, qty, rate, opts = {}) {
     const next = applyInwardWAvg({ qty: item.current_qty, value: item.current_value }, qty, rate);
     await client.query("UPDATE book_stock_items SET current_qty=$2, current_value=$3 WHERE id=$1", [itemId, toDb(next.qty), toDb(next.value)]);
     if (item.valuation_method === "FIFO") {
-      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,warehouse_id,in_movement_id,qty_remaining,rate,received_on,batch_no,mfg_date,expiry_date) VALUES($1,$2,$3,gen_random_uuid(),$4,$5,$6,$7,$8,$9)", [tenantId, itemId, opts.warehouseId || null, toDb(qty), toDb(rate), opts.date || new Date().toISOString().slice(0, 10), opts.batchNo || null, opts.mfgDate || null, opts.expiryDate || null]);
+      await client.query("INSERT INTO book_stock_lots(tenant_id,item_id,warehouse_id,in_movement_id,qty_remaining,rate,received_on,batch_no,mfg_date,expiry_date) VALUES($1,$2,$3,gen_random_uuid(),$4,$5,$6,$7,$8,$9)", [tenantId, itemId, opts.warehouseId || null, toDb(qty), toDb(rate), date, opts.batchNo || null, opts.mfgDate || null, opts.expiryDate || null]);
     }
-    await _movement(client, tenantId, itemId, { qtyIn: qty, rate, value: money(qty).mul(rate), voucherId: opts.voucherId, warehouseId: opts.warehouseId });
+    const fifoQueue = item.valuation_method === "FIFO" ? await _fifoQueueSnapshot(client, tenantId, itemId) : null;
+    const mvId = await _movement(client, tenantId, itemId, { qtyIn: qty, rate, value: money(qty).mul(rate), voucherId: opts.voucherId, warehouseId: opts.warehouseId, postingDate: date, qtyAfter: next.qty, valueAfter: next.value, fifoQueue });
+    backdated = await _isBackdated(client, tenantId, itemId, date, mvId);
     await client.query("COMMIT");
+    // A back-dated inward shifts the WAvg/FIFO basis of every later movement — repost.
+    if (backdated && !opts.skipRepost) await _maybeRepost(tenantId, itemId, opts.warehouseId || null, date, opts.actorId);
     return { qty: toDb(next.qty), value: toDb(next.value), avg: toDb(next.avg) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
 async function issue(tenantId, itemId, qty, opts = {}) {
+  const date = opts.date || new Date().toISOString().slice(0, 10);
   const client = await pool.connect();
+  let backdated = false;
   try {
     await client.query("BEGIN");
     const { rows: ir } = await client.query("SELECT * FROM book_stock_items WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, itemId]);
@@ -112,7 +175,7 @@ async function issue(tenantId, itemId, qty, opts = {}) {
       if (gt(qty, whQty)) throw new PostError("NEGATIVE_STOCK", `Only ${whQty} ${item.unit} of ${item.name} in that warehouse`, 409);
     }
 
-    let cogs;
+    let cogs, qtyAfter, valueAfter;
     if (item.valuation_method === "FIFO") {
       // FEFO (first-expiry-first-out) when opts.fefo: expiring lots leave first;
       // lots with no expiry sort last. Otherwise plain FIFO by received_on.
@@ -123,20 +186,27 @@ async function issue(tenantId, itemId, qty, opts = {}) {
       cogs = r.cogs;
       for (const c of r.consumed) await client.query("UPDATE book_stock_lots SET qty_remaining = qty_remaining - $2 WHERE id=$1", [c.id, toDb(c.take)]);
       await client.query("UPDATE book_stock_items SET current_qty=current_qty-$2, current_value=current_value-$3 WHERE id=$1", [itemId, toDb(qty), toDb(cogs)]);
+      qtyAfter = money(item.current_qty).minus(qty);
+      valueAfter = money(item.current_value).minus(cogs);
     } else {
       const out = applyOutwardWAvg({ qty: item.current_qty, value: item.current_value }, qty);
       cogs = out.cogs;
+      qtyAfter = out.qty; valueAfter = out.value;
       await client.query("UPDATE book_stock_items SET current_qty=$2, current_value=$3 WHERE id=$1", [itemId, toDb(out.qty), toDb(out.value)]);
     }
-    await _movement(client, tenantId, itemId, { qtyOut: qty, rate: money(qty).greaterThan(0) ? money(cogs).div(qty) : money(0), value: cogs, voucherId: opts.voucherId, warehouseId: opts.warehouseId });
+    const fifoQueue = item.valuation_method === "FIFO" ? await _fifoQueueSnapshot(client, tenantId, itemId) : null;
+    const mvId = await _movement(client, tenantId, itemId, { qtyOut: qty, rate: money(qty).greaterThan(0) ? money(cogs).div(qty) : money(0), value: cogs, voucherId: opts.voucherId, warehouseId: opts.warehouseId, postingDate: date, qtyAfter, valueAfter, fifoQueue });
+    backdated = await _isBackdated(client, tenantId, itemId, date, mvId);
     await client.query("COMMIT");
+    if (backdated && !opts.skipRepost) await _maybeRepost(tenantId, itemId, opts.warehouseId || null, date, opts.actorId);
     return { cogs: toDb(cogs) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
 // Move stock between warehouses (no P&L impact) at current avg cost.
-async function transfer(tenantId, itemId, fromWh, toWh, qty) {
+async function transfer(tenantId, itemId, fromWh, toWh, qty, opts = {}) {
   if (!fromWh || !toWh || fromWh === toWh) throw new PostError("BAD_INPUT", "distinct fromWh and toWh required", 400);
+  const date = opts.date || new Date().toISOString().slice(0, 10);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -144,8 +214,10 @@ async function transfer(tenantId, itemId, fromWh, toWh, qty) {
     if (!br[0] || gt(qty, br[0].qty)) throw new PostError("NEGATIVE_STOCK", "Not enough stock in source warehouse", 409);
     const { rows: ir } = await client.query("SELECT current_qty, current_value FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
     const avg = money(ir[0].current_qty).greaterThan(0) ? money(ir[0].current_value).div(ir[0].current_qty) : money(0);
-    await _movement(client, tenantId, itemId, { qtyOut: qty, rate: avg, value: money(qty).mul(avg), warehouseId: fromWh });
-    await _movement(client, tenantId, itemId, { qtyIn: qty, rate: avg, value: money(qty).mul(avg), warehouseId: toWh });
+    // Item-level qty/value unchanged (a transfer nets to zero at item level).
+    const qtyAfter = money(ir[0].current_qty), valueAfter = money(ir[0].current_value);
+    await _movement(client, tenantId, itemId, { qtyOut: qty, rate: avg, value: money(qty).mul(avg), warehouseId: fromWh, postingDate: date, qtyAfter, valueAfter });
+    await _movement(client, tenantId, itemId, { qtyIn: qty, rate: avg, value: money(qty).mul(avg), warehouseId: toWh, postingDate: date, qtyAfter, valueAfter });
     await client.query("COMMIT");
     return { ok: true };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
@@ -386,4 +458,5 @@ module.exports = {
   receive, issue, transfer, postStockValueJournal, lowStock, itemLedger,
   nearExpiry, setUomConversions, convertQty, stockEntry, physicalAdjust,
   receiveSerials, issueSerials, listSerials, buildKit,
+  _movement, _fifoQueueSnapshot, // exposed for reposting.js / landedcost.js
 };

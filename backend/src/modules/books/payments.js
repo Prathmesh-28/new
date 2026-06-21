@@ -1,11 +1,46 @@
 // §9.3-adjacent — online collection links. Gateway-agnostic record; a live
 // provider (Razorpay/Cashfree) would mint a hosted link when keys are present.
 // markPaid posts a RECEIPT and allocates it against the invoice.
+const crypto = require("crypto");
 const { pool } = require("../../db");
 const { money, toDb } = require("./money");
 const { postVoucher, PostError } = require("./posting-engine");
 const { ledgerIdByName } = require("./seed");
 const razorpay = require("../../lib/razorpay");
+const retry = require("./paymentretry");
+
+// ── Provider-abstraction seam ────────────────────────────────────────────────
+// One thin interface every gateway implements; the rest of this module talks to a
+// provider only through {key, isConfigured, webhookSecret, verifyWebhook}. Razorpay is
+// the live path (HMAC-SHA256 today, but we verify with the configured algo below);
+// Cashfree is a STUB gated on its own keys so it stays inert until those exist — no
+// silent half-wired second gateway.
+const PROVIDERS = {
+  razorpay: {
+    key: "razorpay",
+    isConfigured: () => razorpay.isConfigured(),
+    webhookSecret: () => (process.env.RAZORPAY_WEBHOOK_SECRET || "").trim() || null,
+    // Razorpay signs the raw body; some accounts are provisioned for SHA512. We accept
+    // either by trying SHA512 first (the prompt's hardening target) then SHA256.
+    sigHeader: "x-razorpay-signature",
+    algos: ["sha512", "sha256"],
+  },
+  cashfree: {
+    key: "cashfree",
+    // STUB: only "configured" when its own keys are present, so this never activates by
+    // accident. Wiring the live API (orders, payouts) is intentionally not done here.
+    isConfigured: () => !!((process.env.CASHFREE_APP_ID || "").trim() && (process.env.CASHFREE_SECRET_KEY || "").trim()),
+    webhookSecret: () => (process.env.CASHFREE_WEBHOOK_SECRET || "").trim() || null,
+    sigHeader: "x-webhook-signature",
+    algos: ["sha256"],
+  },
+};
+
+function providerFor(name) {
+  const p = PROVIDERS[String(name || "razorpay").toLowerCase()];
+  if (!p) throw new PostError("BAD_INPUT", `Unknown payment provider '${name}'`, 400);
+  return p;
+}
 
 async function createLink(tenantId, { invoiceVoucherId, partyLedgerId, amount, provider }) {
   if (amount == null) throw new PostError("BAD_INPUT", "amount required", 400);
@@ -80,4 +115,104 @@ async function markPaid(tenantId, actorId, linkId, bankLedgerId) {
   return { id: link.id, status: "PAID", receipt: r };
 }
 
-module.exports = { createLink, markPaid, markPaidByProviderRef };
+// ── Hardened webhook handling ────────────────────────────────────────────────
+// FAIL CLOSED at every gate: no secret → reject; bad signature → reject; replayed
+// event_id → ack-but-skip; stale (out-of-order) update → ack-but-skip.
+
+// HMAC verify over the EXACT raw bytes the gateway signed (server.js captures
+// req.rawBody). Tries each algo the provider may use (SHA512 then SHA256) with a
+// constant-time compare so a length/timing oracle can't leak the secret.
+function verifySignature(provider, rawBody, signature) {
+  const secret = provider.webhookSecret();
+  if (!secret) return { ok: false, reason: "webhook_not_configured" };
+  if (!signature) return { ok: false, reason: "missing_signature" };
+  const payload = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody == null ? "" : rawBody));
+  const got = Buffer.from(String(signature));
+  for (const algo of provider.algos) {
+    const expected = Buffer.from(crypto.createHmac(algo, secret).update(payload).digest("hex"));
+    if (expected.length === got.length && crypto.timingSafeEqual(expected, got)) return { ok: true, algo };
+  }
+  return { ok: false, reason: "invalid_signature" };
+}
+
+// Idempotency + ordering store. Returns a verdict the caller acts on:
+//   {accept:true}                       → first time we've seen this event_id; process it.
+//   {accept:false, reason:'duplicate'}  → already processed (≥24h retention) — ack, skip.
+//   {accept:false, reason:'stale'}      → an OLDER update than one we've already applied
+//                                          for this resource — ack, skip (ordering guard).
+// `updatedAt` is the gateway's own event/resource timestamp (epoch seconds, ms, or ISO).
+async function recordWebhookEvent(provider, eventId, resourceKey, updatedAt, eventType) {
+  if (!eventId) return { accept: false, reason: "missing_event_id" };
+  const updTs = toEpochMs(updatedAt);
+  const upd = updTs == null ? null : new Date(updTs).toISOString();
+  // INSERT … ON CONFLICT DO NOTHING is the idempotency claim: exactly one inserter wins.
+  const ins = await pool.query(
+    `INSERT INTO book_payment_webhook_events(provider, event_id, event_type, resource_key, updated_at)
+     VALUES($1,$2,$3,$4,$5) ON CONFLICT (provider, event_id) DO NOTHING RETURNING id`,
+    [provider.key, String(eventId), eventType || null, resourceKey || null, upd]
+  );
+  if (ins.rowCount === 0) return { accept: false, reason: "duplicate" };
+  // Ordering guard: if we've already applied a NEWER update for this resource, this
+  // event is stale even though its event_id is new (gateways can deliver out of order).
+  if (resourceKey && updTs != null) {
+    const { rows } = await pool.query(
+      `SELECT max(updated_at) AS latest FROM book_payment_webhook_events
+       WHERE provider=$1 AND resource_key=$2 AND id<>$3 AND updated_at IS NOT NULL`,
+      [provider.key, resourceKey, ins.rows[0].id]
+    );
+    const latest = rows[0] && rows[0].latest ? new Date(rows[0].latest).getTime() : null;
+    if (latest != null && latest > updTs) return { accept: false, reason: "stale", latest: new Date(latest).toISOString() };
+  }
+  return { accept: true, id: ins.rows[0].id };
+}
+
+function toEpochMs(t) {
+  if (t == null || t === "") return null;
+  if (typeof t === "number" || /^\d+$/.test(String(t))) {
+    const n = Number(t);
+    return n < 1e12 ? n * 1000 : n; // seconds → ms heuristic
+  }
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d.getTime();
+}
+
+// Internal webhook entry point (POST /payments/webhook/verify). Verifies the signature,
+// dedupes/orders via the event store, and — on a settlement event — posts the receipt
+// through the existing idempotent markPaidByProviderRef. Never throws to the caller for
+// a replay/stale event: those are acknowledged (200) so the gateway stops retrying.
+async function handleWebhook({ providerName, headers, rawBody, body }) {
+  const provider = providerFor(providerName);
+  const sig = verifySignature(provider, rawBody, headers && (headers[provider.sigHeader] || headers[provider.sigHeader.toLowerCase()]));
+  if (!sig.ok) {
+    const http = sig.reason === "webhook_not_configured" ? 503 : 403;
+    throw new PostError(sig.reason.toUpperCase(), sig.reason, http);
+  }
+  const evt = body || {};
+  // Extract a provider-agnostic event id + the settled resource ref + update timestamp.
+  const eventId = evt.id || evt.event_id || (headers && (headers["x-razorpay-event-id"] || headers["x-webhook-id"])) || null;
+  const eventType = evt.event || evt.type || null;
+  const payment = evt.payload && (evt.payload.payment_link || evt.payload.payment) && (evt.payload.payment_link?.entity || evt.payload.payment?.entity);
+  const resourceRef = (payment && (payment.id || payment.reference_id)) || evt.reference_id || evt.order_id || null;
+  const updatedAt = (payment && (payment.updated_at || payment.created_at)) || evt.created_at || evt.created || null;
+
+  const verdict = await recordWebhookEvent(provider, eventId, resourceRef, updatedAt, eventType);
+  if (!verdict.accept) return { ok: true, skipped: verdict.reason };
+
+  // Settlement events post a receipt; everything else is acknowledged + recorded only.
+  const isPaid = /paid|captured|success/i.test(String(eventType || "")) || (payment && /paid|captured/i.test(String(payment.status || "")));
+  if (isPaid && resourceRef) {
+    const settled = await markPaidByProviderRef(resourceRef);
+    return { ok: true, event_id: eventId, settled: !!settled, voucherId: settled && settled.voucherId };
+  }
+  return { ok: true, event_id: eventId, settled: false };
+}
+
+// Thin pass-throughs so HTTP routes don't import paymentretry directly.
+const classifyDecline = (provider, code) => retry.classifyDecline(provider, code);
+const retryPolicy = () => retry.retryPolicy();
+
+module.exports = {
+  createLink, markPaid, markPaidByProviderRef,
+  PROVIDERS, providerFor, verifySignature, recordWebhookEvent, handleWebhook,
+  classifyDecline, retryPolicy,
+};

@@ -135,9 +135,47 @@ async function ledgerStatement(tenantId, ledgerId, fy) {
   return { ledger: lg[0].name, financialYear: fy, openingBalance: toRupees(lg[0].opening_is_debit ? money(lg[0].opening_balance) : money(lg[0].opening_balance).neg()), entries: out, closingBalance: toRupees(running) };
 }
 
-// §10 (M6) — Cash Flow Statement (direct, activity-classified). Cash/bank movement
-// in the period, each voucher's cash leg attributed to Operating/Investing/Financing
-// by its counter legs' groups. Reconciles to the net change in cash.
+// §10 (M6) — Cash Flow Statement (TRUE indirect method). Ported from the logic in
+// ERPNext's Cash Flow report and Tryton's account_statement: rather than guessing each
+// voucher's activity from hardcoded group names, we reconstruct the statement the way
+// an accountant does — start from net profit, reverse non-cash charges, then explain the
+// rest of the period's cash movement through the actual MOVEMENT of every balance-sheet
+// account between two dates, each account routed to Operating / Investing / Financing by
+// its ROOT TYPE + nature (not by a hardcoded leaf-group name, so it survives renames).
+//
+//   Operating = Net profit
+//             + non-cash add-backs (depreciation / amortisation / provision charges)
+//             − Δ(operating current assets: debtors, inventory, prepaid, advances, …)
+//             + Δ(operating current liabilities: creditors, duties & taxes, provisions, …)
+//   Investing = − Δ(non-current assets: fixed assets, CWIP, investments, …)
+//   Financing =   Δ(equity) + Δ(borrowings: secured/unsecured loans, bank OD, …)
+//
+// Working-capital signs come straight from debit-positive movement: an asset whose
+// debit balance rose used cash (outflow); a liability whose credit balance rose
+// released cash (inflow). The three buckets are constructed to RECONCILE to the actual
+// net movement of cash & cash-equivalents in the window; `reconciles`/`unexplained`
+// surface any residual (e.g. an opening-balance asymmetry) instead of hiding it.
+
+// Cash-flow activity for a balance-sheet account, decided from its nature and the NAME
+// of the PRIMARY (root) group it rolls up to. We classify by root type so a leaf-group
+// rename (e.g. "Sundry Debtors" → "Trade Receivables") can't misroute the account: the
+// root primary groups are the 15 system groups seeded in §5.1 and are stable. Falls back
+// to nature alone if a root is itself renamed, so nothing is silently dropped.
+//   FINANCING ← EQUITY of any kind, and "loan/borrowing" liability roots.
+//   INVESTING ← "non-current" asset roots (fixed assets, investments, branches, misc).
+//   OPERATING ← everything else on the balance sheet (working capital).
+const _FINANCING_LIAB_ROOTS = new Set(["Loans (Liability)"]);                 // secured/unsecured/bank-OD live under this
+const _INVESTING_ASSET_ROOTS = new Set(["Fixed Assets", "Investments", "Branch / Divisions", "Misc. Expenses (Asset)"]);
+function _bsActivity(nature, rootName) {
+  if (nature === "EQUITY") return "FINANCING";
+  if (nature === "LIABILITY") return _FINANCING_LIAB_ROOTS.has(rootName) ? "FINANCING" : "OPERATING";
+  if (nature === "ASSET") return _INVESTING_ASSET_ROOTS.has(rootName) ? "INVESTING" : "OPERATING";
+  return "OPERATING";
+}
+
+// Legacy name-based classifier kept for callers/selftest that map a single group name to
+// an activity. The indirect statement above does NOT depend on this — it uses root type +
+// nature — but the mapping is preserved so existing behaviour and tests are unchanged.
 const INVESTING_GROUPS = new Set(["Fixed Assets", "Investments"]);
 const FINANCING_GROUPS = new Set(["Capital Account", "Reserves & Surplus", "Loans (Liability)", "Secured Loans", "Unsecured Loans", "Bank OD A/c"]);
 function cashFlowActivity(groupName) {
@@ -145,39 +183,128 @@ function cashFlowActivity(groupName) {
   if (FINANCING_GROUPS.has(groupName)) return "FINANCING";
   return "OPERATING";
 }
-const isCashRow = (r) => r.is_bank || r.group_name === "Cash-in-hand";
 
-async function cashFlow(tenantId, from, to) {
-  const { rows: vids } = await pool.query(
-    `SELECT DISTINCT v.id FROM book_vouchers v
-       JOIN book_voucher_entries e ON e.voucher_id=v.id
-       JOIN book_ledgers l ON l.id=e.ledger_id
-       LEFT JOIN book_account_groups g ON g.id=l.group_id
-      WHERE v.tenant_id=$1 AND v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3 AND (l.is_bank OR g.name='Cash-in-hand')`,
+// Per-ledger signed MOVEMENT (Δ debit-positive) over [from,to], with each ledger's
+// nature, P&L flag, whether it is cash/cash-equivalent, and the NAME of its primary
+// (root) group resolved via a recursive walk up parent_id. One round-trip; cancelled
+// vouchers excluded so the result reconciles to the ledger.
+async function _ledgerMovements(tenantId, from, to) {
+  const { rows } = await pool.query(
+    `WITH RECURSIVE roots AS (
+        SELECT id, name, parent_id, name AS root_name
+          FROM book_account_groups WHERE tenant_id=$1 AND parent_id IS NULL
+        UNION ALL
+        SELECT g.id, g.name, g.parent_id, r.root_name
+          FROM book_account_groups g JOIN roots r ON g.parent_id = r.id
+       )
+       SELECT l.id, l.name, l.is_bank, g.nature, g.affects_pl,
+              r.root_name AS root_name,
+              COALESCE(SUM(CASE WHEN v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3 THEN e.debit  ELSE 0 END),0) AS dr,
+              COALESCE(SUM(CASE WHEN v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3 THEN e.credit ELSE 0 END),0) AS cr
+         FROM book_ledgers l
+         JOIN book_account_groups g ON g.id = l.group_id
+         JOIN roots r ON r.id = g.id
+         LEFT JOIN book_voucher_entries e ON e.ledger_id = l.id AND e.tenant_id = l.tenant_id
+         LEFT JOIN book_vouchers v ON v.id = e.voucher_id
+        WHERE l.tenant_id = $1
+        GROUP BY l.id, l.name, l.is_bank, g.nature, g.affects_pl, r.root_name`,
     [tenantId, from, to]
   );
-  const buckets = { OPERATING: money(0), INVESTING: money(0), FINANCING: money(0) };
-  let net = money(0);
-  if (vids.length) {
-    const { rows } = await pool.query(
-      `SELECT e.voucher_id, e.debit, e.credit, l.is_bank, g.name AS group_name
-         FROM book_voucher_entries e JOIN book_ledgers l ON l.id=e.ledger_id LEFT JOIN book_account_groups g ON g.id=l.group_id
-        WHERE e.voucher_id = ANY($1::uuid[])`,
-      [vids.map((v) => v.id)]
-    );
-    const byV = new Map();
-    for (const r of rows) { const a = byV.get(r.voucher_id) || []; a.push(r); byV.set(r.voucher_id, a); }
-    for (const [, ents] of byV) {
-      const cashDelta = ents.filter(isCashRow).reduce((s, r) => s.plus(money(r.debit)).minus(money(r.credit)), money(0));
-      if (cashDelta.isZero()) continue;
-      net = net.plus(cashDelta);
-      const counters = ents.filter((r) => !isCashRow(r)).map((r) => ({ activity: cashFlowActivity(r.group_name), weight: money(r.debit).plus(money(r.credit)) }));
-      const total = counters.reduce((s, c) => s.plus(c.weight), money(0));
-      if (total.isZero()) { buckets.OPERATING = buckets.OPERATING.plus(cashDelta); continue; }
-      for (const c of counters) buckets[c.activity] = buckets[c.activity].plus(cashDelta.mul(c.weight).div(total));
+  return rows.map((r) => ({
+    ledgerId: r.id, name: r.name, nature: r.nature, affectsPl: r.affects_pl,
+    rootName: r.root_name,
+    // Cash & cash-equivalents: any bank ledger, or a ledger rooted in the Cash-in-hand
+    // family. Bank OD is intentionally NOT cash here — it's a borrowing (financing).
+    isCash: r.is_bank || r.root_name === "Cash-in-hand" || r.name === "Cash-in-hand",
+    delta: money(r.dr).minus(money(r.cr)), // debit-positive movement in the window
+  }));
+}
+
+// Heuristic to recognise non-cash P&L charges to add back (depreciation, amortisation,
+// provision/impairment write-offs). Driven by ledger/root NAME keywords — robust to the
+// account sitting under any expense group. Only EXPENSE-nature ledgers are considered.
+function _isNonCashCharge(name, rootName) {
+  const s = `${name} ${rootName}`.toLowerCase();
+  return /\b(deprecia|amorti[sz]|impair|provision|written?\s*off|write[-\s]?off|bad\s*debt)\b/.test(s);
+}
+
+async function cashFlow(tenantId, from, to) {
+  const moves = await _ledgerMovements(tenantId, from, to);
+
+  // (0) Oracle — actual net change in cash & cash-equivalents over the window.
+  let netCash = money(0);
+  for (const m of moves) if (m.isCash) netCash = netCash.plus(m.delta);
+
+  // (1) Net profit for the period = −Σ signed-movement of P&L ledgers (income is credit,
+  // expense is debit; debit-positive movement of P&L nets to −profit).
+  let netProfit = money(0);
+  let nonCashAddBacks = money(0);
+  const nonCashLines = [];
+  for (const m of moves) {
+    if (!m.affectsPl) continue;
+    netProfit = netProfit.minus(m.delta); // credit (income) raises profit, debit (expense) lowers it
+    // Non-cash EXPENSE charges (depreciation etc.) are added back to operating cash.
+    if (m.nature === "EXPENSE" && !m.delta.isZero() && _isNonCashCharge(m.name, m.rootName)) {
+      const charge = m.delta; // expense is debit-positive
+      nonCashAddBacks = nonCashAddBacks.plus(charge);
+      nonCashLines.push({ name: m.name, amount: toRupees(charge) });
     }
   }
-  return { from, to, operating: toRupees(buckets.OPERATING), investing: toRupees(buckets.INVESTING), financing: toRupees(buckets.FINANCING), netCashFlow: toRupees(net) };
+
+  // (2) Working-capital movements + investing + financing, from the actual MOVEMENT of
+  // every non-cash balance-sheet ledger, routed by root type + nature.
+  let wcChange = money(0);          // net cash effect of working-capital movements
+  let investing = money(0);          // outflow negative
+  let financing = money(0);          // inflow positive
+  const wcLines = [], investLines = [], financeLines = [];
+  for (const m of moves) {
+    if (m.affectsPl || m.isCash || m.delta.isZero()) continue;
+    const activity = _bsActivity(m.nature, m.rootName);
+    if (activity === "INVESTING") {
+      // Asset acquired (debit ↑, delta>0) ⇒ cash outflow; disposal ⇒ inflow.
+      const cashEffect = m.delta.neg();
+      investing = investing.plus(cashEffect);
+      investLines.push({ name: m.name, root: m.rootName, amount: toRupees(cashEffect) });
+    } else if (activity === "FINANCING") {
+      // Equity/borrowing raised (credit ↑, delta<0) ⇒ inflow; repaid/withdrawn ⇒ outflow.
+      const cashEffect = m.delta.neg();
+      financing = financing.plus(cashEffect);
+      financeLines.push({ name: m.name, root: m.rootName, amount: toRupees(cashEffect) });
+    } else {
+      // Operating working capital. A current asset rising (delta>0) consumes cash; a
+      // current liability rising (delta<0) provides cash — both captured by −delta.
+      const cashEffect = m.delta.neg();
+      wcChange = wcChange.plus(cashEffect);
+      wcLines.push({ name: m.name, root: m.rootName, nature: m.nature, amount: toRupees(cashEffect) });
+    }
+  }
+
+  const operating = netProfit.plus(nonCashAddBacks).plus(wcChange);
+  const computed = operating.plus(investing).plus(financing);
+  // Residual the three activity buckets fail to explain vs the real cash movement (should
+  // be ~0 for a self-balancing ledger; surfaced rather than absorbed silently).
+  const unexplained = netCash.minus(computed);
+
+  return {
+    from, to,
+    operating: toRupees(operating),
+    investing: toRupees(investing),
+    financing: toRupees(financing),
+    netCashFlow: toRupees(netCash),
+    // Indirect-method detail so the UI can present the full reconciliation.
+    detail: {
+      netProfit: toRupees(netProfit),
+      nonCashAddBacks: toRupees(nonCashAddBacks),
+      nonCashItems: nonCashLines,
+      workingCapitalChange: toRupees(wcChange),
+      workingCapital: wcLines,
+      investingItems: investLines,
+      financingItems: financeLines,
+    },
+    computedCashFlow: toRupees(computed),
+    unexplained: toRupees(unexplained),
+    reconciles: eq(netCash, computed),
+  };
 }
 
 // §10.7 — Branch-scoped closings. Same shape as _ledgerClosings but every movement

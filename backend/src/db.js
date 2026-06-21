@@ -940,6 +940,160 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_book_itc04_dir ON book_itc04_challans(tenant_id, direction, challan_date);
     CREATE INDEX IF NOT EXISTS idx_book_itc04_jw  ON book_itc04_challans(tenant_id, job_worker_gstin);
 
+    -- ── Books Wave A2 (depth): GL / inventory / payments ────────────────────────
+    -- (1) Persistent Stock-Ledger-Entry columns + reposting journal (back-dated recompute).
+    ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS posting_date DATE;
+    ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS qty_after    NUMERIC(19,4);
+    ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS value_after  NUMERIC(19,4);
+    ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS fifo_queue   JSONB;
+    ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS reposted_at  TIMESTAMPTZ;
+    UPDATE book_stock_movements SET posting_date = created_at::date WHERE posting_date IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_book_stock_mv_chron ON book_stock_movements(tenant_id, item_id, posting_date, created_at, id);
+    CREATE TABLE IF NOT EXISTS book_repost_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      item_id UUID NOT NULL REFERENCES book_stock_items(id), warehouse_id UUID, from_date DATE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','REWRITTEN','POSTED','FAILED')),
+      voucher_id UUID REFERENCES book_vouchers(id), detail JSONB, created_by UUID,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, item_id, from_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_repost_runs_status ON book_repost_runs(tenant_id, status, updated_at);
+    -- Landed-cost voucher header + per-item apportionment lines.
+    CREATE TABLE IF NOT EXISTS book_landed_cost_vouchers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      voucher_id UUID NOT NULL REFERENCES book_vouchers(id), lcv_date DATE NOT NULL,
+      reference TEXT, narration TEXT, total_charge NUMERIC(19,4) NOT NULL DEFAULT 0,
+      charges JSONB, created_by UUID, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_lcv ON book_landed_cost_vouchers(tenant_id, lcv_date);
+    CREATE TABLE IF NOT EXISTS book_landed_cost_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      lcv_id UUID NOT NULL REFERENCES book_vouchers(id), item_id UUID NOT NULL REFERENCES book_stock_items(id),
+      applied_amount NUMERIC(19,4) NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_lci ON book_landed_cost_items(tenant_id, lcv_id);
+    -- (2) FX per-party foreign-currency open-position subledger (exchange-rate revaluation).
+    CREATE TABLE IF NOT EXISTS book_fx_open_position (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      party_ledger_id UUID NOT NULL REFERENCES book_ledgers(id), currency TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('RECEIVABLE','PAYABLE')),
+      fc_amount NUMERIC(19,4) NOT NULL CHECK (fc_amount > 0), booked_rate NUMERIC(18,6) NOT NULL CHECK (booked_rate > 0),
+      fc_settled NUMERIC(19,4) NOT NULL DEFAULT 0 CHECK (fc_settled >= 0), booked_date DATE NOT NULL,
+      ref_voucher_id UUID REFERENCES book_vouchers(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_fx_open_pos ON book_fx_open_position(tenant_id, party_ledger_id, currency, kind, booked_date);
+    CREATE INDEX IF NOT EXISTS idx_book_fx_open_pos_live ON book_fx_open_position(tenant_id, currency) WHERE fc_amount > fc_settled;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_book_fx_open_pos_ref ON book_fx_open_position(tenant_id, ref_voucher_id) WHERE ref_voucher_id IS NOT NULL;
+    -- (5) Transaction rules engine (Firefly-III style) + categorisation slots on bank lines.
+    CREATE TABLE IF NOT EXISTS book_rule_groups (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL, name TEXT NOT NULL,
+      description TEXT, order_index INTEGER NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (tenant_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_rule_groups ON book_rule_groups(tenant_id, order_index);
+    CREATE TABLE IF NOT EXISTS book_rules (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      group_id UUID NOT NULL REFERENCES book_rule_groups(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT,
+      strict_mode TEXT NOT NULL DEFAULT 'AND' CHECK (strict_mode IN ('AND','OR')), is_active BOOLEAN NOT NULL DEFAULT true,
+      stop_processing BOOLEAN NOT NULL DEFAULT false, order_index INTEGER NOT NULL DEFAULT 0,
+      triggers JSONB NOT NULL DEFAULT '[]', actions JSONB NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_rules ON book_rules(tenant_id, group_id, order_index);
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS category            TEXT;
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS suggested_ledger_id UUID REFERENCES book_ledgers(id);
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS tags                TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS flagged             BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS applied_rule_id     UUID REFERENCES book_rules(id);
+    -- (6) Bank-statement importer Configuration + hash-based idempotent dedup.
+    CREATE TABLE IF NOT EXISTS book_import_configs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL, name TEXT NOT NULL,
+      format TEXT NOT NULL CHECK (format IN ('ofx','qfx','qif','camt053','camt','mt940','csv')),
+      bank_ledger_id UUID REFERENCES book_ledgers(id), date_format TEXT,
+      mappings JSONB NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (tenant_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_import_configs ON book_import_configs(tenant_id, bank_ledger_id);
+    CREATE TABLE IF NOT EXISTS book_import_hashes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      bank_ledger_id UUID REFERENCES book_ledgers(id),
+      config_id UUID REFERENCES book_import_configs(id) ON DELETE SET NULL,
+      line_hash TEXT NOT NULL, imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, bank_ledger_id, line_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_import_hashes ON book_import_hashes(tenant_id, bank_ledger_id);
+    -- (7) Dunning ladder config + run history (tenant_id TEXT to match the rest of the schema).
+    CREATE TABLE IF NOT EXISTS book_dunning_levels (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      procedure TEXT NOT NULL DEFAULT 'Default', level INTEGER NOT NULL, name TEXT NOT NULL,
+      min_overdue_days INTEGER NOT NULL, interest_pct NUMERIC(9,4) NOT NULL DEFAULT 0,
+      fee NUMERIC(19,4) NOT NULL DEFAULT 0, tone TEXT NOT NULL DEFAULT 'firm',
+      subject TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT book_dunning_levels_uq UNIQUE (tenant_id, procedure, level)
+    );
+    CREATE TABLE IF NOT EXISTS book_dunning_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL, voucher_id UUID NOT NULL,
+      party_ledger_id UUID, procedure TEXT NOT NULL DEFAULT 'Default', level INTEGER NOT NULL, level_name TEXT,
+      tone TEXT, as_of_date DATE NOT NULL, days_overdue INTEGER NOT NULL, outstanding NUMERIC(19,4) NOT NULL,
+      interest NUMERIC(19,4) NOT NULL DEFAULT 0, fee NUMERIC(19,4) NOT NULL DEFAULT 0, total_due NUMERIC(19,4) NOT NULL,
+      subject TEXT, body TEXT, created_by UUID, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- (8) Payment webhook idempotency + ordering store.
+    CREATE TABLE IF NOT EXISTS book_payment_webhook_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), provider TEXT NOT NULL, event_id TEXT NOT NULL,
+      event_type TEXT, resource_key TEXT, updated_at TIMESTAMPTZ, received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_book_pay_webhook_evt ON book_payment_webhook_events(provider, event_id);
+    CREATE INDEX IF NOT EXISTS idx_book_pay_webhook_resource ON book_payment_webhook_events(provider, resource_key, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_book_pay_webhook_received ON book_payment_webhook_events(received_at);
+    -- (9) Balance-assertion / reconciliation integrity layer.
+    CREATE TABLE IF NOT EXISTS book_balance_assertions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      ledger_id UUID NOT NULL REFERENCES book_ledgers(id), as_of_date DATE NOT NULL,
+      expected_signed NUMERIC(19,4) NOT NULL, actual_signed NUMERIC(19,4) NOT NULL, diff_signed NUMERIC(19,4) NOT NULL,
+      tolerance NUMERIC(19,4) NOT NULL DEFAULT 0, passed BOOLEAN NOT NULL, note TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_assertions_ledger ON book_balance_assertions(tenant_id, ledger_id, as_of_date);
+    CREATE INDEX IF NOT EXISTS idx_book_assertions_failed ON book_balance_assertions(tenant_id, passed, created_at DESC);
+    -- (10) PSP settlement reconciliation lines + exceptions.
+    CREATE TABLE IF NOT EXISTS book_settlement_lines (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL, provider TEXT NOT NULL,
+      financial_year TEXT NOT NULL, ext_key TEXT NOT NULL, txn_ref TEXT, order_id TEXT, utr TEXT,
+      gross NUMERIC(19,4) NOT NULL, fee NUMERIC(19,4) NOT NULL DEFAULT 0, tax NUMERIC(19,4) NOT NULL DEFAULT 0,
+      net NUMERIC(19,4) NOT NULL, settled_on DATE,
+      status TEXT NOT NULL DEFAULT 'EXPECTED' CHECK (status IN ('EXPECTED','POSTED','CANCELLED')),
+      bank_line_id UUID REFERENCES book_bank_lines(id), receipt_voucher_id UUID REFERENCES book_vouchers(id),
+      raw JSONB, reconciled_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, provider, ext_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_settlement_lines ON book_settlement_lines(tenant_id, provider, status);
+    CREATE INDEX IF NOT EXISTS idx_book_settlement_lines_utr ON book_settlement_lines(tenant_id, utr);
+    CREATE TABLE IF NOT EXISTS book_settlement_exceptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL,
+      settlement_line_id UUID NOT NULL REFERENCES book_settlement_lines(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('FEE','SHORT','OVER','MISSING_DEPOSIT','MISSING_RECEIPT')),
+      status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','RESOLVED','IGNORED')),
+      amount NUMERIC(19,4), detail JSONB, resolved_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (tenant_id, settlement_line_id, kind)
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_settlement_exc ON book_settlement_exceptions(tenant_id, status, kind);
+    ALTER TABLE book_bank_lines ADD COLUMN IF NOT EXISTS settlement_line_id UUID REFERENCES book_settlement_lines(id);
+    CREATE INDEX IF NOT EXISTS idx_book_bank_lines_settle ON book_bank_lines(tenant_id, settlement_line_id);
+    -- (11) Firefly-III-style recurrence model.
+    CREATE TABLE IF NOT EXISTS book_recurrences (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id TEXT NOT NULL, name TEXT NOT NULL,
+      template_kind TEXT NOT NULL CHECK (template_kind IN ('SALES_INVOICE','BILL','JOURNAL')),
+      template JSONB NOT NULL DEFAULT '{}'::jsonb, start_date DATE NOT NULL,
+      rep_type TEXT NOT NULL CHECK (rep_type IN ('daily','weekly','monthly','yearly','ndom')),
+      rep_moment TEXT, rep_skip INTEGER NOT NULL DEFAULT 0,
+      rep_weekend TEXT NOT NULL DEFAULT 'do-nothing' CHECK (rep_weekend IN ('do-nothing','skip','prev-workday','next-workday')),
+      end_kind TEXT NOT NULL DEFAULT 'none' CHECK (end_kind IN ('none','date','count')), end_date DATE, end_count INTEGER,
+      next_run DATE, last_run DATE, occurrences_done INTEGER NOT NULL DEFAULT 0, active BOOLEAN NOT NULL DEFAULT true,
+      created_by UUID, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_recurrences ON book_recurrences(tenant_id, active, next_run);
+
     -- Books Wave-6: dated exchange-rate master (multi-currency + forex gain/loss).
     CREATE TABLE IF NOT EXISTS book_fx_rates (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

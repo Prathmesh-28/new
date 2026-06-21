@@ -150,4 +150,118 @@ async function allocateBill(tenantId, { sourceVoucherId, targetVoucherId, amount
   }
 }
 
-module.exports = { openBills, allocateBill };
+// (3) AUTO-FIFO — apply ONE receipt/payment (or credit/debit-note) to a party's
+// OLDEST open bills first, until the source's unapplied amount is exhausted or no
+// open bills remain. Each match writes the SAME book_allocations link the manual
+// allocateBill path uses, with identical invariants (same party, never over a
+// bill's outstanding, never over the source's available). Mirrors
+// payterms.autoApply, but driven by a single named source instead of FIFO-matching
+// every credit for the party.
+//
+// Logic ported from ERPNext payment_ledger_entry FIFO (frappe/erpnext: a payment's
+// unallocated amount is consumed against outstanding invoices in voucher-date
+// order) and Tryton account.move.line reconcile (oldest-line-first draining).
+//
+// Args: { partyLedgerId, receiptVoucherId, amount? }
+//   - receiptVoucherId: the source RECEIPT/PAYMENT/CREDIT_NOTE/DEBIT_NOTE.
+//   - amount (optional): caps how much of the source to distribute this run; when
+//     omitted, the source's full unapplied capacity is used. Must be > 0 and not
+//     exceed the source's available amount.
+async function autoAllocate(tenantId, actorId, { partyLedgerId, receiptVoucherId, amount } = {}) {
+  if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
+  if (!partyLedgerId) throw new PostError("BAD_INPUT", "partyLedgerId required", 422);
+  if (!receiptVoucherId) throw new PostError("BAD_INPUT", "receiptVoucherId required", 422);
+  const cap = amount == null || amount === "" ? null : money(amount);
+  if (cap !== null && !cap.greaterThan(0)) throw new PostError("BAD_AMOUNT", "amount must be positive", 422);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Lock the source plus every open bill for this party so concurrent runs
+    // cannot both consume the same headroom.
+    await client.query(
+      `SELECT id FROM book_vouchers
+        WHERE tenant_id=$1 AND is_cancelled=false
+          AND (id=$3 OR (party_ledger_id=$2 AND voucher_type IN ('SALES','PURCHASE')))
+        FOR UPDATE`,
+      [tenantId, partyLedgerId, receiptVoucherId]
+    );
+
+    // Resolve + validate the source.
+    const { rows: srow } = await client.query(
+      `SELECT id, voucher_type, party_ledger_id, is_cancelled,
+              COALESCE((SELECT SUM(e.debit)  FROM book_voucher_entries e WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS party_debit,
+              COALESCE((SELECT SUM(e.credit) FROM book_voucher_entries e WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS party_credit,
+              COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.tenant_id=$1 AND a.source_voucher_id=v.id),0) AS applied
+         FROM book_vouchers v
+        WHERE v.tenant_id=$1 AND v.id=$2`,
+      [tenantId, receiptVoucherId]
+    );
+    const src = srow[0];
+    if (!src) throw new PostError("NOT_FOUND", "Source voucher not found", 404);
+    if (src.is_cancelled) throw new PostError("CANCELLED", "Source voucher is cancelled", 409);
+    if (!src.party_ledger_id || src.party_ledger_id !== partyLedgerId) {
+      throw new PostError("CROSS_PARTY", "Source voucher belongs to a different party", 422);
+    }
+
+    // capacity is whichever party side the source carries; a party CREDIT settles
+    // SALES receivables, a party DEBIT settles PURCHASE payables.
+    const credit = money(src.party_credit);
+    const debit = money(src.party_debit);
+    const capacity = credit.greaterThan(0) ? credit : debit;
+    const settles = credit.greaterThan(0) ? "SALES" : "PURCHASE";
+    let available = capacity.minus(money(src.applied));
+    if (!available.greaterThan(0)) throw new PostError("NO_SOURCE_FUNDS", "Source voucher has no unallocated amount on this party", 422);
+    if (cap !== null) {
+      if (cap.greaterThan(available)) {
+        throw new PostError("OVER_ALLOCATION", `Amount ${toRupees(cap)} exceeds source available ${toRupees(available)}`, 422);
+      }
+      available = cap; // distribute at most the requested amount this run
+    }
+
+    // Open bills the source can settle (matching type), oldest first.
+    const { rows: bills } = await client.query(
+      `SELECT v.id, v.voucher_type, v.voucher_number,
+              ${grossSideExpr("v")} AS gross,
+              COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.tenant_id=v.tenant_id AND a.target_voucher_id=v.id),0) AS allocated
+         FROM book_vouchers v
+        WHERE v.tenant_id=$1 AND v.party_ledger_id=$2
+          AND v.voucher_type=$3 AND v.is_cancelled=false
+        ORDER BY v.voucher_date ASC, v.voucher_number ASC`,
+      [tenantId, partyLedgerId, settles]
+    );
+
+    const allocated = [];
+    for (const b of bills) {
+      if (!available.greaterThan(0)) break;
+      const outstanding = money(b.gross).minus(money(b.allocated));
+      if (!outstanding.greaterThan(0)) continue;
+      const amt = outstanding.lessThan(available) ? outstanding : available;
+      if (!amt.greaterThan(0)) continue;
+      await client.query(
+        `INSERT INTO book_allocations(tenant_id, source_voucher_id, target_voucher_id, amount, created_by)
+         VALUES($1,$2,$3,$4,$5)`,
+        [tenantId, receiptVoucherId, b.id, toDb(amt), actorId || null]
+      );
+      available = available.minus(amt);
+      allocated.push({
+        sourceVoucherId: receiptVoucherId,
+        targetVoucherId: b.id,
+        targetType: b.voucher_type,
+        targetNumber: b.voucher_number,
+        amount: toRupees(amt),
+      });
+    }
+
+    await client.query("COMMIT");
+    return { ok: true, settles, allocated, sourceRemaining: toRupees(available) };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { openBills, allocateBill, autoAllocate };
