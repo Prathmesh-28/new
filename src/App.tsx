@@ -208,14 +208,16 @@ function AppShell() {
   return (
     <div className="flex min-h-screen bg-[var(--color-bg)]">
       <Sidebar onOpenSearch={openPalette} />
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* pt-12 clears the fixed 48px mobile top bar so the banner strips below
+          (offline / client-view / read-only / preview) aren't hidden behind it;
+          no offset on md+ where the desktop sidebar is used. */}
+      <div className="flex-1 flex flex-col min-w-0 pt-12 md:pt-0">
         <OfflineBanner />
         <TenantSwitcher />
         <ReadOnlyBanner />
         <PreviewBanner />
         <NotificationBell />
-        {/* pt-16 offsets the fixed mobile top bar; no offset needed on md+ */}
-        <main className="flex-1 px-5 py-5 pt-16 md:p-6 md:pt-6 overflow-auto">
+        <main className="flex-1 px-5 py-5 md:p-6 overflow-auto">
           <AppTopMeta />
           <InviteBanner />
           <ErrorBoundary>
