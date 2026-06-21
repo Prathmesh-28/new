@@ -8,6 +8,7 @@ import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRig
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
 import { format, addMonths, setDate, isBefore, addDays, isToday } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
@@ -1992,6 +1993,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingChecklist />
       {showBreachWarning && fcRisk && (
         <button onClick={() => navigate("/forecast")}
           className="w-full text-left bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4 hover:bg-red-950/30 transition-colors">
